@@ -1,0 +1,145 @@
+import { redirect } from '@sveltejs/kit';
+import { toastStore } from './stores/toast';
+import { getAccessTokenFromCookies, syncCookiesToServer, refreshAccessToken } from './utils/cookies';
+import type { Cookies } from '@sveltejs/kit';
+
+const USE_AUTH_TESTING = false;
+
+export const API_BASE_URL = USE_AUTH_TESTING
+  ? 'https://smile-design-manhattan-api-git-new-auth-evancoppas-projects.vercel.app'
+  : 'https://smile-design-manhattan-api.vercel.app';
+
+export interface AuthInfo {
+  token?: string;
+  user?: any;
+}
+
+export async function authenticatedFetch(
+  url: string, 
+  options: RequestInit = {}, 
+  authInfo?: AuthInfo,
+  serverCookies?: Cookies
+): Promise<Response> {
+  let token: string | undefined;
+  
+  if (authInfo?.token) {
+    token = authInfo.token;
+  } else if (serverCookies) {
+    token = serverCookies.get('accessToken') || undefined;
+  } else {
+    token = getAccessTokenFromCookies() || undefined;
+  }
+  
+  if (!token) {
+    throw new Error('No authentication token available');
+  }
+  
+  const makeRequest = async (accessToken: string): Promise<Response> => {
+    const headers = {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${accessToken}`,
+      ...options.headers,
+    };
+
+    return fetch(url, {
+      ...options,
+      headers,
+      credentials: 'include'
+    });
+  };
+
+  try {
+    const response = await makeRequest(token);
+    
+    if (response.ok) {
+      return response;
+    }
+    
+    if (response.status === 401 || response.status === 403) {
+      if (!serverCookies) {
+        const newToken = await refreshAccessToken();
+        
+        if (newToken) {
+          const retryResponse = await makeRequest(newToken);
+          if (retryResponse.ok) {
+            return retryResponse;
+          }
+        }
+        
+        const syncSuccess = await syncCookiesToServer();
+        
+        if (syncSuccess) {
+          const currentToken = getAccessTokenFromCookies();
+          
+          if (currentToken) {
+            const retryResponse = await makeRequest(currentToken);
+            if (retryResponse.ok) {
+              return retryResponse;
+            }
+            
+            if (retryResponse.status === 401 || retryResponse.status === 403) {
+              toastStore.error('Session expired. Please login again.', { duration: 5000 });
+            }
+            
+            return retryResponse;
+          }
+        } else {
+          toastStore.error('Session expired. Please login again.', { duration: 5000 });
+        }
+      }
+    }
+    
+    return response;
+    
+  } catch (fetchError) {
+    throw fetchError;
+  }
+}
+
+export async function fetchPublicPractices(): Promise<Response> {
+  return await fetch(`${API_BASE_URL}/practices/public`);
+}
+
+export async function fetchPublicTreatmentPlan(
+  lastName: string,
+  practiceCode: string,
+  uuid?: string
+): Promise<Response> {
+  const params = new URLSearchParams({
+    lastName: encodeURIComponent(lastName),
+    practiceCode: encodeURIComponent(practiceCode)
+  });
+  
+  if (uuid) {
+    params.append('uuid', uuid);
+  }
+  
+  return await fetch(`${API_BASE_URL}/plans/public?${params.toString()}`);
+}
+
+export async function getPublicTreatmentPlan(uuid: string): Promise<Response> {
+  return await fetch(`${API_BASE_URL}/public/treatment-plan/${uuid}`);
+}
+
+function preprocessHTMLForPDF(html: string): string {
+  const baseURL = 'https://guaranteeth-slides.vercel.app';
+  
+  html = html.replace(/src="(\/_app\/immutable\/assets\/[^"]+)"/g, `src="${baseURL}$1"`);
+  html = html.replace(/src="(\/src\/lib\/[^"]+\.(jpg|jpeg|png|gif|svg|webp))"/gi, `src="${baseURL}$1"`);
+  html = html.replace(/src="(\/[^"]+(?<!data:)[^"]*\.(jpg|jpeg|png|gif|svg|webp))"/gi, `src="${baseURL}$1"`);
+  html = html.replace(/url\(["']?(\/_app\/immutable\/assets\/[^)]+)["']?\)/g, `url(${baseURL}$1)`);
+  html = html.replace(/url\(["']?(\/src\/lib\/[^)]+\.(jpg|jpeg|png|gif|svg|webp))["']?\)/gi, `url(${baseURL}$1)`);
+  html = html.replace(/url\(["']?(\/[^)]+(?<!data:)[^)]*\.(jpg|jpeg|png|gif|svg|webp))["']?\)/gi, `url(${baseURL}$1)`);
+  
+  return html;
+}
+
+export async function generatePDF(html: string): Promise<Response> {
+  const processedHTML = preprocessHTMLForPDF(html);
+  
+  return await fetch('https://pdf-gen-pi.vercel.app/api/pdf', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ html: processedHTML })
+  });
+}
