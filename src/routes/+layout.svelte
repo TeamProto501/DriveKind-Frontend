@@ -32,6 +32,9 @@
 		{#if data.session}
 			<span class="text-sm text-gray-600">Welcome, {data.session.user.email}</span>
 		{:else}
+			<a href="/signup" class="px-4 py-2 border border-indigo-600 text-indigo-600 rounded-md hover:bg-indigo-50 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+				Sign Up
+			</a>
 			<a href="/login" class="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500">
 				Sign In
 			</a>
