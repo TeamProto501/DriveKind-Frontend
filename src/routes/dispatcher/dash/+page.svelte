@@ -7,8 +7,8 @@
   <div class="mb-4 flex flex-col gap-1">
     <h1 class="text-3xl font-bold">Dispatcher Dashboard</h1>
     <p class="text-gray-500 text-sm">
-      Welcome to Your Admin Dashboard. This is where you can see all clients and
-      drivers.
+      Welcome to Dispatcher Dashboard. This is where you handle requests and see
+      information about clients and drivers
     </p>
   </div>
 
@@ -59,6 +59,36 @@
           <h3 class="mx-auto">Drivers</h3>
         </div>
       </button>
+      <button
+        type="button"
+        class="flex flex-row"
+        onclick={() => (selectedTab = "volunteers")}
+        aria-label="Select Volunteers Tab"
+      >
+        <div
+          class="flex flex-row px-4 pb-4 pt-2 border-b-4 {selectedTab ===
+          'volunteers'
+            ? 'border-black'
+            : 'border-gray-300'} text-center"
+        >
+          <h3 class="mx-auto">Volunteers</h3>
+        </div>
+      </button>
+      <button
+        type="button"
+        class="flex flex-row"
+        onclick={() => (selectedTab = "request")}
+        aria-label="Select Request Tab"
+      >
+        <div
+          class="flex flex-row px-4 pb-4 pt-2 border-b-4 {selectedTab ===
+          'request'
+            ? 'border-black'
+            : 'border-gray-300'} text-center"
+        >
+          <h3 class="mx-auto">Request</h3>
+        </div>
+      </button>
     </div>
 
     <div class="flex flex-row justify-between gap-2 ml-auto">
@@ -74,16 +104,16 @@
         /></button
       >
       <button
-        class="m-auto h-8 w-16 rounded-md bg-white border-1 border-gray-200 drop-shadow-xs hover:scale-110 transition duration-300"
-        aria-label="Action Button">Cols</button
+        class="m-auto h-8 w-32 rounded-md bg-white border-1 border-gray-200 drop-shadow-xs hover:scale-110 transition duration-300"
+        aria-label="Action Button">New Request</button
       >
       <button
         class="m-auto h-8 w-16 rounded-md bg-white border-1 border-gray-200 drop-shadow-xs hover:scale-110 transition duration-300"
         aria-label="Action Button">Filters</button
       >
       <button
-        class="m-auto h-8 w-16 rounded-md bg-white border-1 border-gray-200 drop-shadow-xs hover:scale-110 transition duration-300"
-        aria-label="Action Button">Add</button
+        class="m-auto h-8 w-24 rounded-md bg-white border-1 border-gray-200 drop-shadow-xs hover:scale-110 transition duration-300"
+        aria-label="Action Button">Add Client</button
       >
 
       <button
