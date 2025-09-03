@@ -110,14 +110,14 @@
 					</div>
 					<div class="flex items-center space-x-3">
 						<button
-							on:click={createBackup}
+							onclick={createBackup}
 							class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
 						>
 							<Download class="w-4 h-4 mr-2" />
 							Create Backup
 						</button>
 						<button
-							on:click={restoreBackup}
+							onclick={restoreBackup}
 							class="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
 						>
 							<Upload class="w-4 h-4 mr-2" />
@@ -236,20 +236,20 @@
 						<div class="px-6 py-4 space-y-4">
 							<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
 								<div>
-									<label class="block text-sm font-medium text-gray-700">Database Connection Pool</label>
-									<input type="number" value="20" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm" />
+									<label for="db-pool" class="block text-sm font-medium text-gray-700">Database Connection Pool</label>
+									<input id="db-pool" type="number" value="20" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm" />
 								</div>
 								<div>
-									<label class="block text-sm font-medium text-gray-700">Query Timeout (seconds)</label>
-									<input type="number" value="30" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm" />
+									<label for="query-timeout" class="block text-sm font-medium text-gray-700">Query Timeout (seconds)</label>
+									<input id="query-timeout" type="number" value="30" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm" />
 								</div>
 								<div>
-									<label class="block text-sm font-medium text-gray-700">Max Backup Size (GB)</label>
-									<input type="number" value="10" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm" />
+									<label for="max-backup-size" class="block text-sm font-medium text-gray-700">Max Backup Size (GB)</label>
+									<input id="max-backup-size" type="number" value="10" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm" />
 								</div>
 								<div>
-									<label class="block text-sm font-medium text-gray-700">Auto Backup Frequency</label>
-									<select class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+									<label for="backup-frequency" class="block text-sm font-medium text-gray-700">Auto Backup Frequency</label>
+									<select id="backup-frequency" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
 										<option>Daily</option>
 										<option>Weekly</option>
 										<option>Monthly</option>
@@ -319,7 +319,7 @@
 						<h3 class="text-lg font-medium text-gray-900 mb-4">Quick Actions</h3>
 						<div class="space-y-3">
 							<button
-								on:click={optimizeDatabase}
+								onclick={optimizeDatabase}
 								class="w-full flex items-center justify-center px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
 							>
 								<RefreshCw class="w-4 h-4 mr-2" />

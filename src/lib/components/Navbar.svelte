@@ -208,7 +208,7 @@
 					{#if moreNavItems.length > 0}
 						<div class="relative more-dropdown">
 							<button
-								on:click={toggleMoreDropdown}
+								onclick={toggleMoreDropdown}
 								class="px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 flex items-center space-x-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100"
 								title="More"
 							>
@@ -227,7 +227,7 @@
 											<a
 												href={item.href}
 												class="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-												on:click={() => isMoreDropdownOpen = false}
+												onclick={() => isMoreDropdownOpen = false}
 											>
 												<IconComponent class="w-4 h-4 mr-2" />
 												{item.label}
@@ -248,7 +248,7 @@
 					{#if quickActions.length > 0}
 						<div class="relative quick-actions">
 							<button
-								on:click={toggleQuickActions}
+								onclick={toggleQuickActions}
 								class="p-1.5 rounded text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors duration-200"
 								title="Quick Actions"
 							>
@@ -265,7 +265,7 @@
 											<a
 												href={action.href}
 												class="flex items-center px-3 py-2 text-sm text-gray-700 hover:bg-gray-100"
-												on:click={() => isQuickActionsOpen = false}
+												onclick={() => isQuickActionsOpen = false}
 											>
 												<span class="mr-2">{action.icon}</span>
 												{action.label}
@@ -287,7 +287,7 @@
 					<!-- User Profile Dropdown -->
 					<div class="relative profile-dropdown">
 						<button
-							on:click={toggleProfileDropdown}
+							onclick={toggleProfileDropdown}
 							class="flex items-center space-x-2 p-1.5 rounded hover:bg-gray-100 transition-colors duration-200"
 						>
 							<div class="w-7 h-7 bg-blue-600 rounded-full flex items-center justify-center text-white text-sm font-medium">
@@ -317,7 +317,7 @@
 									<a 
 										href="/profile" 
 										class="flex items-center px-3 py-2 text-sm text-gray-700 hover:bg-gray-100"
-										on:click={() => isProfileDropdownOpen = false}
+										onclick={() => isProfileDropdownOpen = false}
 									>
 										<User class="w-4 h-4 mr-2" />
 										Profile Settings
@@ -325,7 +325,7 @@
 									<a 
 										href="/help" 
 										class="flex items-center px-3 py-2 text-sm text-gray-700 hover:bg-gray-100"
-										on:click={() => isProfileDropdownOpen = false}
+										onclick={() => isProfileDropdownOpen = false}
 									>
 										<HelpCircle class="w-4 h-4 mr-2" />
 										Help & Support
@@ -368,7 +368,7 @@
 				
 				<!-- Mobile menu button -->
 				<button
-					on:click={toggleMobileMenu}
+					onclick={toggleMobileMenu}
 					class="md:hidden p-1.5 rounded text-gray-400 hover:text-gray-600 hover:bg-gray-100 mobile-menu"
 				>
 					<span class="sr-only">Open menu</span>
@@ -393,7 +393,7 @@
 						class="flex items-center px-3 py-2 rounded-md text-base font-medium transition-colors duration-200 {isActiveRoute(item.href) 
 							? 'bg-blue-100 text-blue-700' 
 							: 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'}"
-						on:click={() => isMobileMenuOpen = false}
+						onclick={() => isMobileMenuOpen = false}
 					>
 						<IconComponent class="w-5 h-5 mr-3" />
 						{item.label}
@@ -417,7 +417,7 @@
 							<a
 								href={action.href}
 								class="flex items-center px-3 py-2 rounded-md text-base font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100"
-								on:click={() => isMobileMenuOpen = false}
+								onclick={() => isMobileMenuOpen = false}
 							>
 								<span class="mr-3">{action.icon}</span>
 								{action.label}
