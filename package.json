@@ -17,6 +17,7 @@
 		"@sveltejs/adapter-vercel": "^5.10.2",
 		"@sveltejs/kit": "^2.16.0",
 		"@sveltejs/vite-plugin-svelte": "^5.0.0",
+		"@tailwindcss/postcss": "^4.1.13",
 		"@tsconfig/svelte": "^5.0.5",
 		"autoprefixer": "^10.4.20",
 		"bits-ui": "^2.9.6",
@@ -33,7 +34,6 @@
 		"@supabase/ssr": "^0.7.0",
 		"@supabase/supabase-js": "^2.56.1",
 		"@sveltejs/adapter-node": "^5.2.12",
-		"@tailwindcss/postcss": "^4.1.12",
 		"flowbite-svelte": "^1.13.7",
 		"install": "^0.13.0",
 		"npm": "^11.5.2"
