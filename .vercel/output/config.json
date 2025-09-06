@@ -1,0 +1,67 @@
+{
+	"version": 3,
+	"routes": [
+		{
+			"src": "/_app/immutable/.+",
+			"headers": {
+				"cache-control": "public, immutable, max-age=31536000"
+			}
+		},
+		{
+			"handle": "filesystem"
+		},
+		{
+			"src": "^/?(?:/__data.json)?$",
+			"dest": "/"
+		},
+		{
+			"src": "^/admin/audit/?(?:/__data.json)?$",
+			"dest": "/admin/audit"
+		},
+		{
+			"src": "^/admin/config/?(?:/__data.json)?$",
+			"dest": "/admin/config"
+		},
+		{
+			"src": "^/admin/dash/?(?:/__data.json)?$",
+			"dest": "/admin/dash"
+		},
+		{
+			"src": "^/admin/database/?(?:/__data.json)?$",
+			"dest": "/admin/database"
+		},
+		{
+			"src": "^/admin/reports/?(?:/__data.json)?$",
+			"dest": "/admin/reports"
+		},
+		{
+			"src": "^/admin/users/?(?:/__data.json)?$",
+			"dest": "/admin/users"
+		},
+		{
+			"src": "^/dispatcher/dashboard/?(?:/__data.json)?$",
+			"dest": "/dispatcher/dashboard"
+		},
+		{
+			"src": "^/help/?(?:/__data.json)?$",
+			"dest": "/help"
+		},
+		{
+			"src": "^/login/?(?:/__data.json)?$",
+			"dest": "/login"
+		},
+		{
+			"src": "^/profile/?(?:/__data.json)?$",
+			"dest": "/profile"
+		},
+		{
+			"src": "^/signup/?(?:/__data.json)?$",
+			"dest": "/signup"
+		},
+		{
+			"src": "/.*",
+			"dest": "/![-]/catchall"
+		}
+	],
+	"overrides": {}
+}
