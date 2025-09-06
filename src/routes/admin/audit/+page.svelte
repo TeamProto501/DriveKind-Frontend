@@ -272,6 +272,7 @@
 						<button
 							onclick={closeModal}
 							class="text-gray-400 hover:text-gray-600 transition-colors"
+							aria-label="Close modal"
 						>
 							<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
@@ -282,40 +283,40 @@
 					<div class="space-y-4">
 						<div class="grid grid-cols-2 gap-4">
 							<div>
-								<label class="block text-sm font-medium text-gray-700">Log ID</label>
-								<p class="mt-1 text-sm text-gray-900">#{selectedLog.id}</p>
+								<label for="log-id" class="block text-sm font-medium text-gray-700">Log ID</label>
+								<p id="log-id" class="mt-1 text-sm text-gray-900">#{selectedLog.id}</p>
 							</div>
 							<div>
-								<label class="block text-sm font-medium text-gray-700">Timestamp</label>
-								<p class="mt-1 text-sm text-gray-900">{selectedLog.timestamp}</p>
+								<label for="log-timestamp" class="block text-sm font-medium text-gray-700">Timestamp</label>
+								<p id="log-timestamp" class="mt-1 text-sm text-gray-900">{selectedLog.timestamp}</p>
 							</div>
 							<div>
-								<label class="block text-sm font-medium text-gray-700">User</label>
-								<p class="mt-1 text-sm text-gray-900">{selectedLog.user}</p>
+								<label for="log-user" class="block text-sm font-medium text-gray-700">User</label>
+								<p id="log-user" class="mt-1 text-sm text-gray-900">{selectedLog.user}</p>
 							</div>
 							<div>
-								<label class="block text-sm font-medium text-gray-700">IP Address</label>
-								<p class="mt-1 text-sm text-gray-900">{selectedLog.ipAddress}</p>
+								<label for="log-ip" class="block text-sm font-medium text-gray-700">IP Address</label>
+								<p id="log-ip" class="mt-1 text-sm text-gray-900">{selectedLog.ipAddress}</p>
 							</div>
 							<div>
-								<label class="block text-sm font-medium text-gray-700">Action</label>
-								<p class="mt-1 text-sm text-gray-900">{selectedLog.action}</p>
+								<label for="log-action" class="block text-sm font-medium text-gray-700">Action</label>
+								<p id="log-action" class="mt-1 text-sm text-gray-900">{selectedLog.action}</p>
 							</div>
 							<div>
-								<label class="block text-sm font-medium text-gray-700">Resource</label>
-								<p class="mt-1 text-sm text-gray-900">{selectedLog.resource}</p>
+								<label for="log-resource" class="block text-sm font-medium text-gray-700">Resource</label>
+								<p id="log-resource" class="mt-1 text-sm text-gray-900">{selectedLog.resource}</p>
 							</div>
 							<div>
-								<label class="block text-sm font-medium text-gray-700">Status</label>
-								<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {getStatusColor(selectedLog.status)}">
+								<label for="log-status" class="block text-sm font-medium text-gray-700">Status</label>
+								<span id="log-status" class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {getStatusColor(selectedLog.status)}">
 									{selectedLog.status}
 								</span>
 							</div>
 						</div>
 						
 						<div>
-							<label class="block text-sm font-medium text-gray-700">Details</label>
-							<p class="mt-1 text-sm text-gray-900 bg-gray-50 p-3 rounded-md">{selectedLog.details}</p>
+							<label for="log-details" class="block text-sm font-medium text-gray-700">Details</label>
+							<p id="log-details" class="mt-1 text-sm text-gray-900 bg-gray-50 p-3 rounded-md">{selectedLog.details}</p>
 						</div>
 					</div>
 					
