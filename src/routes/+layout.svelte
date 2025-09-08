@@ -5,6 +5,7 @@
   import { supabase } from "$lib/supabase";
   import Navbar from "$lib/components/Navbar.svelte";
   import type { LayoutData } from "./$types";
+  import * as Sidebar from "$lib/components/ui/sidebar/index.js";
   setContext("session", data.session);
 
   onMount(() => {
@@ -21,6 +22,8 @@
   });
 </script>
 
-<Navbar {data} />
-
-{@render children()}
+<Sidebar.Provider>
+  <Navbar {data} />
+  <Sidebar.Trigger />
+  {@render children()}
+</Sidebar.Provider>

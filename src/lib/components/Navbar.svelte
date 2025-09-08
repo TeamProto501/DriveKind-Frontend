@@ -35,7 +35,7 @@
   // Get session from context (passed from layout)
   let { data } = $props();
   setContext("session", data.session);
-
+  import * as Sidebar from "./ui/sidebar/index.js";
   // User state
   let userProfile = $state<Profile | null>(null);
   let userRoles = $state<RoleEnum[]>([]);
@@ -180,11 +180,11 @@
 </script>
 
 <!-- Main Navigation Bar -->
-<nav class="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-50">
+<!-- <nav class="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-50">
   <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-    <div class="flex justify-between items-center h-16">
-      <!-- Logo and Brand -->
-      <div class="flex items-center">
+    <div class="flex justify-between items-center h-16"> -->
+<!-- Logo and Brand -->
+<!-- <div class="flex items-center">
         <a href="/" class="flex items-center space-x-3">
           <div
             class="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center"
@@ -195,10 +195,10 @@
             <h1 class="text-xl font-semibold text-gray-900">DriveKind</h1>
           </div>
         </a>
-      </div>
+      </div> -->
 
-      <!-- Desktop Navigation -->
-      {#if data.session && !isLoading}
+<!-- Desktop Navigation -->
+<!-- {#if data.session && !isLoading}
         <div class="hidden md:flex items-center space-x-1">
           {#each mainNavItems as item}
             {@const IconComponent = getIconComponent(item.icon)}
@@ -257,13 +257,13 @@
             </div>
           {/if}
         </div>
-      {/if}
+      {/if} -->
 
-      <!-- Right side - User menu and actions -->
-      <div class="flex items-center space-x-2">
-        {#if data.session && !isLoading}
-          <!-- Quick Actions Dropdown -->
-          {#if quickActions.length > 0}
+<!-- Right side - User menu and actions -->
+<!-- <div class="flex items-center space-x-2">
+        {#if data.session && !isLoading} -->
+<!-- Quick Actions Dropdown -->
+<!-- {#if quickActions.length > 0}
             <div class="relative quick-actions">
               <button
                 onclick={toggleQuickActions}
@@ -297,21 +297,21 @@
                 </div>
               {/if}
             </div>
-          {/if}
+          {/if} -->
 
-          <!-- Notifications -->
-          <button
+<!-- Notifications -->
+<!--  <button
             class="p-1.5 rounded text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors duration-200 relative"
           >
-            <Bell class="w-4 h-4" />
-            <!-- Notification badge -->
-            <span
+            <Bell class="w-4 h-4" /> -->
+<!-- Notification badge -->
+<!-- <span
               class="absolute top-0 right-0 block h-2 w-2 rounded-full bg-red-400 ring-2 ring-white"
             ></span>
-          </button>
+          </button> -->
 
-          <!-- User Profile Dropdown -->
-          <div class="relative profile-dropdown">
+<!-- User Profile Dropdown -->
+<!-- <div class="relative profile-dropdown">
             <button
               onclick={toggleProfileDropdown}
               class="flex items-center space-x-2 p-1.5 rounded hover:bg-gray-100 transition-colors duration-200"
@@ -326,9 +326,9 @@
                 <p class="text-xs text-gray-500">{userRoles[0]}</p>
               </div>
               <ChevronDown class="w-4 h-4 text-gray-400" />
-            </button>
+            </button> -->
 
-            {#if isProfileDropdownOpen}
+<!-- {#if isProfileDropdownOpen}
               <div
                 class="absolute right-0 mt-2 w-56 bg-white rounded-md shadow-lg ring-1 ring-black ring-opacity-5 divide-y divide-gray-100"
               >
@@ -344,8 +344,8 @@
                       </span>
                     {/each}
                   </div>
-                </div>
-                <div class="py-1">
+                </div> -->
+<!-- <div class="py-1">
                   <a
                     href="/profile"
                     class="flex items-center px-3 py-2 text-sm text-gray-700 hover:bg-gray-100"
@@ -384,9 +384,9 @@
               </div>
             {/if}
           </div>
-        {:else}
-          <!-- Sign in/Sign up buttons for non-authenticated users -->
-          <div class="flex items-center space-x-2">
+        {:else} -->
+<!-- Sign in/Sign up buttons for non-authenticated users -->
+<!-- <div class="flex items-center space-x-2">
             <a
               href="/signup"
               class="px-3 py-1.5 bg-blue-600 text-white text-sm font-medium rounded hover:bg-blue-700 transition-colors duration-200"
@@ -400,10 +400,10 @@
               Sign In
             </a>
           </div>
-        {/if}
+        {/if} -->
 
-        <!-- Mobile menu button -->
-        <button
+<!-- Mobile menu button -->
+<!-- <button
           onclick={toggleMobileMenu}
           class="md:hidden p-1.5 rounded text-gray-400 hover:text-gray-600 hover:bg-gray-100 mobile-menu"
         >
@@ -416,10 +416,10 @@
         </button>
       </div>
     </div>
-  </div>
+  </div> -->
 
-  <!-- Mobile Navigation Menu -->
-  {#if data.session && !isLoading && isMobileMenuOpen}
+<!-- Mobile Navigation Menu -->
+<!-- {#if data.session && !isLoading && isMobileMenuOpen}
     <div class="md:hidden border-t border-gray-200 bg-white mobile-menu">
       <div class="px-2 pt-2 pb-3 space-y-1">
         {#each navigationItems as item}
@@ -444,10 +444,10 @@
             {/if}
           </a>
         {/each}
-      </div>
+      </div> -->
 
-      <!-- Quick Actions in Mobile Menu -->
-      {#if quickActions.length > 0}
+<!-- Quick Actions in Mobile Menu -->
+<!-- {#if quickActions.length > 0}
         <div class="px-2 pt-2 pb-3 border-t border-gray-200">
           <h3
             class="px-3 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wider"
@@ -467,10 +467,10 @@
             {/each}
           </div>
         </div>
-      {/if}
+      {/if} -->
 
-      <!-- User Profile in Mobile Menu -->
-      <div class="pt-4 pb-3 border-t border-gray-200">
+<!-- User Profile in Mobile Menu -->
+<!-- <div class="pt-4 pb-3 border-t border-gray-200">
         <div class="flex items-center px-5">
           <div
             class="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center text-white font-medium"
@@ -503,10 +503,10 @@
       </div>
     </div>
   {/if}
-</nav>
+</nav> -->
 
 <!-- Emergency Contact Banner for Clients (when not logged in) -->
-{#if !data.session}
+<!-- {#if !data.session}
   <div class="bg-green-600 text-white">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
       <div class="flex items-center justify-center space-x-3">
@@ -521,10 +521,10 @@
       </div>
     </div>
   </div>
-{/if}
+{/if} -->
 
 <!-- Loading State -->
-{#if isLoading}
+<!-- {#if isLoading}
   <div class="bg-white shadow-sm border-b border-gray-200">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
       <div class="flex justify-between items-center h-16">
@@ -542,4 +542,39 @@
       </div>
     </div>
   </div>
-{/if}
+{/if} -->
+<Sidebar.Root>
+  <Sidebar.Content>
+    <!--Sidebar Group for Admin-->
+    <Sidebar.Group>
+      <Sidebar.GroupLabel>Admin</Sidebar.GroupLabel>
+      <Sidebar.GroupContent>
+        {#each mainNavItems as item}
+          <Sidebar.MenuItem>
+            <Sidebar.MenuButton>
+              {@const IconComponent = getIconComponent(item.icon)}
+              <a
+                href={item.href}
+                class="px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 flex items-center space-x-2 {isActiveRoute(
+                  item.href
+                )
+                  ? 'bg-blue-100 text-blue-700'
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'}"
+              >
+                <IconComponent class="w-4 h-4" />
+                <span>{item.label}</span>
+                {#if item.badge}
+                  <span
+                    class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800"
+                  >
+                    {item.badge}
+                  </span>
+                {/if}
+              </a>
+            </Sidebar.MenuButton>
+          </Sidebar.MenuItem>
+        {/each}
+      </Sidebar.GroupContent>
+    </Sidebar.Group>
+  </Sidebar.Content>
+</Sidebar.Root>
