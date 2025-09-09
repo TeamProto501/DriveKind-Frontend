@@ -1,5 +1,9 @@
 <script lang="ts">
-  let { children, data } = $props();
+  let {
+    children,
+    data,
+    roles,
+  }: { children: any; data: any; roles: { name: string }[] } = $props();
   import { setContext, onMount } from "svelte";
   import { invalidateAll } from "$app/navigation";
   import { supabase } from "$lib/supabase";
@@ -20,10 +24,14 @@
       subscription.unsubscribe();
     };
   });
+
+  const sample = {
+    roles: [{ name: "Admin" }, { name: "Dispatcher" }],
+  };
 </script>
 
 <Sidebar.Provider>
-  <Navbar {data} />
+  <Navbar {data} roles={sample.roles} />
 
   {@render children()}
 </Sidebar.Provider>

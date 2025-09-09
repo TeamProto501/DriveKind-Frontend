@@ -33,7 +33,8 @@
   } from "$lib/navigation";
   import type { RoleEnum, Profile, Organization } from "$lib/types";
   // Get session from context (passed from layout)
-  let { data } = $props();
+  let { data, roles }: { data: any; roles: { name: string }[] } = $props();
+  let activeRole = $state(roles[0]);
   setContext("session", data.session);
   import * as Sidebar from "./ui/sidebar/index.js";
   import * as DropdownMenu from "./ui/dropdown-menu/index.js";
@@ -546,29 +547,31 @@
 {/if} -->
 <Sidebar.Root class="bg-gray-100">
   <Sidebar.Content>
-    <!--Sidebar Group for Admin-->
-    <Sidebar.Group>
+    <Sidebar.Header>
       <Sidebar.Menu>
         <Sidebar.MenuItem>
           <DropdownMenu.Root>
             <DropdownMenu.Trigger>
               <Sidebar.MenuButton>
-                Switch Menu <ChevronDown class="ml-auto" />
+                {activeRole.name}
+                <ChevronDown class="ml-auto" />
               </Sidebar.MenuButton>
             </DropdownMenu.Trigger>
             <DropdownMenu.Content
               class="w-(--bits-dropdown-menu-anchor-width) bg-white"
             >
-              <DropdownMenu.Item>
-                <span>Admin</span>
-              </DropdownMenu.Item>
-              <DropdownMenu.Item>
-                <span>Dispatcher</span>
-              </DropdownMenu.Item>
+              {#each roles as role, index (role.name)}
+                <DropdownMenu.Item onSelect={() => (activeRole = role)}>
+                  <span>{role.name}</span>
+                </DropdownMenu.Item>
+              {/each}
             </DropdownMenu.Content>
           </DropdownMenu.Root>
         </Sidebar.MenuItem>
       </Sidebar.Menu>
+    </Sidebar.Header>
+    <!--Sidebar Group for Admin-->
+    <Sidebar.Group>
       <Sidebar.GroupLabel>Admin</Sidebar.GroupLabel>
       <Sidebar.GroupContent>
         {#each mainNavItems as item}
