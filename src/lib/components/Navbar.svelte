@@ -38,6 +38,7 @@
   setContext("session", data.session);
   import * as Sidebar from "./ui/sidebar/index.js";
   import * as DropdownMenu from "./ui/dropdown-menu/index.js";
+  import SidebarFooter from "./ui/sidebar/sidebar-footer.svelte";
 
   // User state
   let userProfile = $state<Profile | null>(null);
@@ -556,29 +557,22 @@
 {/if} -->
 <Sidebar.Root class="bg-gray-100">
   <Sidebar.Content>
-    <Sidebar.Header>
-      <Sidebar.Menu>
-        <Sidebar.MenuItem>
-          <DropdownMenu.Root>
-            <DropdownMenu.Trigger>
-              <Sidebar.MenuButton>
-                {activeRole.name}
-                <ChevronDown class="ml-auto" />
-              </Sidebar.MenuButton>
-            </DropdownMenu.Trigger>
-            <DropdownMenu.Content
-              class="w-(--bits-dropdown-menu-anchor-width) bg-white"
-            >
-              {#each roles as role, index (role.name)}
-                <DropdownMenu.Item onSelect={() => selectRoles(role.name)}>
-                  <span>{role.name}</span>
-                </DropdownMenu.Item>
-              {/each}
-            </DropdownMenu.Content>
-          </DropdownMenu.Root>
-        </Sidebar.MenuItem>
-      </Sidebar.Menu>
-    </Sidebar.Header>
+    <Sidebar.Header
+      ><div class="flex justify-center mt-4">
+        <a href="/" class="flex items-center space-x-3">
+          <div
+            class="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center"
+          >
+            <span class="text-white font-bold text-lg">DK</span>
+          </div>
+          <div class="hidden sm:block items-center">
+            <h1 class="text-xl font-semibold text-gray-900 text-center">
+              DriveKind
+            </h1>
+          </div>
+        </a>
+      </div></Sidebar.Header
+    >
     {#if activeRole.name == "Admin"}
       <Sidebar.Group>
         <Sidebar.GroupLabel>Admin</Sidebar.GroupLabel>
@@ -644,4 +638,27 @@
     {/if}
     <!--Sidebar Group for Admin-->
   </Sidebar.Content>
+  <SidebarFooter>
+    <Sidebar.Menu>
+      <Sidebar.MenuItem>
+        <DropdownMenu.Root>
+          <DropdownMenu.Trigger>
+            <Sidebar.MenuButton>
+              Current Role: {activeRole.name}
+              <ChevronDown class="ml-auto" />
+            </Sidebar.MenuButton>
+          </DropdownMenu.Trigger>
+          <DropdownMenu.Content
+            class="w-(--bits-dropdown-menu-anchor-width) bg-white"
+          >
+            {#each roles as role, index (role.name)}
+              <DropdownMenu.Item onSelect={() => selectRoles(role.name)}>
+                <span>{role.name}</span>
+              </DropdownMenu.Item>
+            {/each}
+          </DropdownMenu.Content>
+        </DropdownMenu.Root>
+      </Sidebar.MenuItem>
+    </Sidebar.Menu>
+  </SidebarFooter>
 </Sidebar.Root>
