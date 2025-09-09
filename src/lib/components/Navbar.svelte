@@ -36,6 +36,7 @@
   let { data } = $props();
   setContext("session", data.session);
   import * as Sidebar from "./ui/sidebar/index.js";
+  import * as DropdownMenu from "./ui/dropdown-menu/index.js";
   // User state
   let userProfile = $state<Profile | null>(null);
   let userRoles = $state<RoleEnum[]>([]);
@@ -543,10 +544,31 @@
     </div>
   </div>
 {/if} -->
-<Sidebar.Root>
+<Sidebar.Root class="bg-gray-100">
   <Sidebar.Content>
     <!--Sidebar Group for Admin-->
     <Sidebar.Group>
+      <Sidebar.Menu>
+        <Sidebar.MenuItem>
+          <DropdownMenu.Root>
+            <DropdownMenu.Trigger>
+              <Sidebar.MenuButton>
+                Switch Menu <ChevronDown class="ml-auto" />
+              </Sidebar.MenuButton>
+            </DropdownMenu.Trigger>
+            <DropdownMenu.Content
+              class="w-(--bits-dropdown-menu-anchor-width) bg-white"
+            >
+              <DropdownMenu.Item>
+                <span>Admin</span>
+              </DropdownMenu.Item>
+              <DropdownMenu.Item>
+                <span>Dispatcher</span>
+              </DropdownMenu.Item>
+            </DropdownMenu.Content>
+          </DropdownMenu.Root>
+        </Sidebar.MenuItem>
+      </Sidebar.Menu>
       <Sidebar.GroupLabel>Admin</Sidebar.GroupLabel>
       <Sidebar.GroupContent>
         {#each mainNavItems as item}

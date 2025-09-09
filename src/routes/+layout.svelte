@@ -24,6 +24,6 @@
 
 <Sidebar.Provider>
   <Navbar {data} />
-  <Sidebar.Trigger />
+
   {@render children()}
 </Sidebar.Provider>
