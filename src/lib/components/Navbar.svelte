@@ -33,11 +33,12 @@
   } from "$lib/navigation";
   import type { RoleEnum, Profile, Organization } from "$lib/types";
   // Get session from context (passed from layout)
-  let { data, roles }: { data: any; roles: { name: string }[] } = $props();
-  let activeRole = $state(roles[0]);
+  let { data, roles }: { data: any; roles: { name: RoleEnum }[] } = $props();
+  let activeRole = $state<{ name: RoleEnum }>(roles[0]);
   setContext("session", data.session);
   import * as Sidebar from "./ui/sidebar/index.js";
   import * as DropdownMenu from "./ui/dropdown-menu/index.js";
+
   // User state
   let userProfile = $state<Profile | null>(null);
   let userRoles = $state<RoleEnum[]>([]);
@@ -52,9 +53,9 @@
   let logoutLoading = $state(false);
 
   // Get navigation items based on user roles using runes
-  const navigationItems = $derived(getNavigationItems(userRoles));
-  const quickActions = $derived(getQuickActions(userRoles));
-  const defaultRoute = $derived(getDefaultRoute(userRoles));
+  const navigationItems = $derived(getNavigationItems([activeRole.name]));
+  const quickActions = $derived(getQuickActions([activeRole.name]));
+  const defaultRoute = $derived(getDefaultRoute([activeRole.name]));
 
   // Split navigation items for main nav and more dropdown
   const mainNavItems = $derived(navigationItems.slice(0, 6));
@@ -136,7 +137,15 @@
     };
     return iconMap[icon] || Home;
   }
-
+  function selectRoles(role: RoleEnum) {
+    activeRole = { name: role };
+    console.log("rolechanged");
+    if (userRoles.includes(role)) {
+      userRoles = userRoles.filter((r) => r !== role);
+    } else {
+      userRoles = [...userRoles, role];
+    }
+  }
   // Load mock user data on mount
   onMount(() => {
     // Simulate loading user data
@@ -561,7 +570,7 @@
               class="w-(--bits-dropdown-menu-anchor-width) bg-white"
             >
               {#each roles as role, index (role.name)}
-                <DropdownMenu.Item onSelect={() => (activeRole = role)}>
+                <DropdownMenu.Item onSelect={() => selectRoles(role.name)}>
                   <span>{role.name}</span>
                 </DropdownMenu.Item>
               {/each}
@@ -570,36 +579,69 @@
         </Sidebar.MenuItem>
       </Sidebar.Menu>
     </Sidebar.Header>
+    {#if activeRole.name == "Admin"}
+      <Sidebar.Group>
+        <Sidebar.GroupLabel>Admin</Sidebar.GroupLabel>
+        <Sidebar.GroupContent>
+          {#each mainNavItems as item}
+            <Sidebar.MenuItem>
+              <Sidebar.MenuButton>
+                {@const IconComponent = getIconComponent(item.icon)}
+                <a
+                  href={item.href}
+                  class="px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 flex items-center space-x-2 {isActiveRoute(
+                    item.href
+                  )
+                    ? 'bg-blue-100 text-blue-700'
+                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'}"
+                >
+                  <IconComponent class="w-4 h-4" />
+                  <span>{item.label}</span>
+                  {#if item.badge}
+                    <span
+                      class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800"
+                    >
+                      {item.badge}
+                    </span>
+                  {/if}
+                </a>
+              </Sidebar.MenuButton>
+            </Sidebar.MenuItem>
+          {/each}
+        </Sidebar.GroupContent>
+      </Sidebar.Group>
+    {:else if activeRole.name == "Dispatcher"}
+      <Sidebar.Group>
+        <Sidebar.GroupLabel>Dispatcher</Sidebar.GroupLabel>
+        <Sidebar.GroupContent>
+          {#each mainNavItems as item}
+            <Sidebar.MenuItem>
+              <Sidebar.MenuButton>
+                {@const IconComponent = getIconComponent(item.icon)}
+                <a
+                  href={item.href}
+                  class="px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 flex items-center space-x-2 {isActiveRoute(
+                    item.href
+                  )
+                    ? 'bg-blue-100 text-blue-700'
+                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'}"
+                >
+                  <IconComponent class="w-4 h-4" />
+                  <span>{item.label}</span>
+                  {#if item.badge}
+                    <span
+                      class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800"
+                    >
+                      {item.badge}
+                    </span>
+                  {/if}
+                </a>
+              </Sidebar.MenuButton>
+            </Sidebar.MenuItem>
+          {/each}
+        </Sidebar.GroupContent>
+      </Sidebar.Group>
+    {/if}
     <!--Sidebar Group for Admin-->
-    <Sidebar.Group>
-      <Sidebar.GroupLabel>Admin</Sidebar.GroupLabel>
-      <Sidebar.GroupContent>
-        {#each mainNavItems as item}
-          <Sidebar.MenuItem>
-            <Sidebar.MenuButton>
-              {@const IconComponent = getIconComponent(item.icon)}
-              <a
-                href={item.href}
-                class="px-3 py-2 rounded-md text-sm font-medium transition-colors duration-200 flex items-center space-x-2 {isActiveRoute(
-                  item.href
-                )
-                  ? 'bg-blue-100 text-blue-700'
-                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'}"
-              >
-                <IconComponent class="w-4 h-4" />
-                <span>{item.label}</span>
-                {#if item.badge}
-                  <span
-                    class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800"
-                  >
-                    {item.badge}
-                  </span>
-                {/if}
-              </a>
-            </Sidebar.MenuButton>
-          </Sidebar.MenuItem>
-        {/each}
-      </Sidebar.GroupContent>
-    </Sidebar.Group>
   </Sidebar.Content>
 </Sidebar.Root>

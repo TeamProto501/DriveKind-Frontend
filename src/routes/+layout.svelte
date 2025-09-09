@@ -1,9 +1,10 @@
 <script lang="ts">
+  import type { RoleEnum } from "$lib/types";
   let {
     children,
     data,
     roles,
-  }: { children: any; data: any; roles: { name: string }[] } = $props();
+  }: { children: any; data: any; roles: { name: RoleEnum }[] } = $props();
   import { setContext, onMount } from "svelte";
   import { invalidateAll } from "$app/navigation";
   import { supabase } from "$lib/supabase";
@@ -28,10 +29,11 @@
   const sample = {
     roles: [{ name: "Admin" }, { name: "Dispatcher" }],
   };
+  const userRoles: RoleEnum[] = sample.roles.map((r) => r.name as RoleEnum);
 </script>
 
 <Sidebar.Provider>
-  <Navbar {data} roles={sample.roles} />
+  <Navbar {data} roles={[{ name: "Admin" }, { name: "Dispatcher" }]} />
 
   {@render children()}
 </Sidebar.Provider>
