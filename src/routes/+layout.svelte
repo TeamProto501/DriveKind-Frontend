@@ -11,6 +11,7 @@
   import Navbar from "$lib/components/Navbar.svelte";
   import type { LayoutData } from "./$types";
   import * as Sidebar from "$lib/components/ui/sidebar/index.js";
+  import { page } from "$app/stores";
   setContext("session", data.session);
 
   onMount(() => {
@@ -33,7 +34,8 @@
 </script>
 
 <Sidebar.Provider>
-  <Navbar {data} roles={[{ name: "Admin" }, { name: "Dispatcher" }]} />
-
+  {#if $page.route.id !== "/login"}
+    <Navbar {data} roles={[{ name: "Admin" }, { name: "Dispatcher" }]} />
+  {/if}
   {@render children()}
 </Sidebar.Provider>
