@@ -1,0 +1,485 @@
+we can pull this 
+
+@https://github.com/TeamProto501/DriveKind-Frontend.git 
+
+pull this FR-01 branch 
+
+also we need to use this @https://github.com/TeamProto501/DriveKind-API.git 
+
+link this tofether and 
+
+we so had slit updata in data station  here u go
+
+-- ========================================================
+-- FUNCTION: Check if current user is a Super Admin
+-- ========================================================
+CREATE OR REPLACE FUNCTION is_super_admin()
+RETURNS BOOLEAN AS $$
+BEGIN
+    RETURN EXISTS (
+        SELECT 1
+        FROM userroles ur
+        JOIN roles ro ON ur.role_id = ro.role_id
+        WHERE ur.user_id = auth.uid()
+          AND ro.name = 'Super Admin'
+    );
+END;
+$$ LANGUAGE plpgsql STABLE;
+
+-- ========================================================
+-- ORGANIZATION
+-- ========================================================
+ALTER TABLE organization ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS org_select_policy ON organization;
+DROP POLICY IF EXISTS org_modify_policy ON organization;
+
+CREATE POLICY org_select_policy
+ON organization FOR SELECT
+USING (
+    is_super_admin() OR
+    EXISTS (
+        SELECT 1
+        FROM profile p
+        JOIN userroles ur ON ur.user_id = p.user_id
+        JOIN roles ro2 ON ur.role_id = ro2.role_id
+        WHERE p.org_id = organization.org_id
+          AND p.user_id = auth.uid()
+          AND ro2.name = 'Admin'
+    )
+);
+
+CREATE POLICY org_modify_policy
+ON organization FOR ALL
+USING (is_super_admin());
+
+-- ========================================================
+-- PROFILE
+-- ========================================================
+ALTER TABLE profile ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS profile_select_policy ON profile;
+DROP POLICY IF EXISTS profile_modify_policy ON profile;
+
+CREATE POLICY profile_select_policy
+ON profile FOR SELECT
+USING (
+    is_super_admin() OR
+    user_id = auth.uid() OR
+    EXISTS (
+        SELECT 1
+        FROM profile p
+        JOIN userroles ur ON ur.user_id = p.user_id
+        JOIN roles ro3 ON ur.role_id = ro3.role_id
+        WHERE p.org_id = profile.org_id
+          AND p.user_id = auth.uid()
+          AND ro3.name = 'Admin'
+    )
+);
+
+CREATE POLICY profile_modify_policy
+ON profile FOR UPDATE
+USING (
+    is_super_admin() OR
+    user_id = auth.uid()
+);
+
+-- ========================================================
+-- ROLES
+-- ========================================================
+ALTER TABLE roles ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS roles_manage_policy ON roles;
+
+CREATE POLICY roles_manage_policy
+ON roles FOR ALL
+USING (
+    is_super_admin() OR
+    EXISTS (
+        SELECT 1
+        FROM userroles ur
+        JOIN roles ro4 ON ur.role_id = ro4.role_id
+        WHERE ur.user_id = auth.uid()
+          AND ro4.name = 'Admin'
+    )
+);
+
+-- ========================================================
+-- USERROLES
+-- ========================================================
+ALTER TABLE userroles ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS userroles_manage_policy ON userroles;
+
+CREATE POLICY userroles_manage_policy
+ON userroles FOR ALL
+USING (
+    is_super_admin() OR
+    EXISTS (
+        SELECT 1
+        FROM userroles ur
+        JOIN roles ro5 ON ur.role_id = ro5.role_id
+        JOIN profile p ON ur.user_id = p.user_id
+        WHERE ur.user_id = auth.uid()
+          AND ro5.name = 'Admin'
+    )
+);
+
+-- ========================================================
+-- CLIENTS
+-- ========================================================
+ALTER TABLE clients ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS clients_select_policy ON clients;
+DROP POLICY IF EXISTS clients_modify_policy ON clients;
+
+CREATE POLICY clients_select_policy
+ON clients FOR SELECT
+USING (
+    is_super_admin() OR
+    user_id = auth.uid() OR
+    EXISTS (
+        SELECT 1
+        FROM profile p
+        JOIN userroles ur ON ur.user_id = p.user_id
+        JOIN roles ro6 ON ur.role_id = ro6.role_id
+        WHERE p.org_id = (
+            SELECT p2.org_id FROM profile p2 WHERE p2.user_id = clients.user_id
+        )
+        AND p.user_id = auth.uid()
+        AND ro6.name = 'Admin'
+    )
+);
+
+CREATE POLICY clients_modify_policy
+ON clients FOR UPDATE
+USING (
+    is_super_admin() OR user_id = auth.uid()
+);
+
+-- ========================================================
+-- DRIVERS
+-- ========================================================
+ALTER TABLE drivers ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS drivers_select_policy ON drivers;
+DROP POLICY IF EXISTS drivers_modify_policy ON drivers;
+
+CREATE POLICY drivers_select_policy
+ON drivers FOR SELECT
+USING (
+    is_super_admin() OR
+    user_id = auth.uid() OR
+    EXISTS (
+        SELECT 1
+        FROM profile p
+        JOIN userroles ur ON ur.user_id = p.user_id
+        JOIN roles ro7 ON ur.role_id = ro7.role_id
+        WHERE p.org_id = (
+            SELECT p2.org_id FROM profile p2 WHERE p2.user_id = drivers.user_id
+        )
+        AND p.user_id = auth.uid()
+        AND ro7.name = 'Admin'
+    )
+);
+
+CREATE POLICY drivers_modify_policy
+ON drivers FOR UPDATE
+USING (
+    is_super_admin() OR user_id = auth.uid()
+);
+
+-- ========================================================
+-- VOLUNTEERS
+-- ========================================================
+ALTER TABLE volunteers ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS volunteers_select_policy ON volunteers;
+DROP POLICY IF EXISTS volunteers_modify_policy ON volunteers;
+
+CREATE POLICY volunteers_select_policy
+ON volunteers FOR SELECT
+USING (
+    is_super_admin() OR
+    user_id = auth.uid() OR
+    EXISTS (
+        SELECT 1
+        FROM profile p
+        JOIN userroles ur ON ur.user_id = p.user_id
+        JOIN roles ro8 ON ur.role_id = ro8.role_id
+        WHERE p.org_id = (
+            SELECT p2.org_id FROM profile p2 WHERE p2.user_id = volunteers.user_id
+        )
+        AND p.user_id = auth.uid()
+        AND ro8.name = 'Admin'
+    )
+);
+
+CREATE POLICY volunteers_modify_policy
+ON volunteers FOR UPDATE
+USING (
+    is_super_admin() OR user_id = auth.uid()
+);
+
+-- ========================================================
+-- RIDES
+-- ========================================================
+ALTER TABLE rides ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS rides_policy ON rides;
+
+CREATE POLICY rides_policy
+ON rides FOR ALL
+USING (
+    is_super_admin() OR
+    EXISTS (
+        SELECT 1
+        FROM profile p
+        JOIN userroles ur ON ur.user_id = p.user_id
+        JOIN roles ro9 ON ur.role_id = ro9.role_id
+        WHERE p.org_id = rides.org_id
+          AND p.user_id = auth.uid()
+          AND (ro9.name = 'Admin' OR ro9.name = 'Dispatcher')
+    )
+);
+
+-- ========================================================
+-- COMPLETEDRIDES
+-- ========================================================
+ALTER TABLE completedrides ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS completedrides_policy ON completedrides;
+
+CREATE POLICY completedrides_policy
+ON completedrides FOR ALL
+USING (
+    is_super_admin() OR
+    EXISTS (
+        SELECT 1
+        FROM rides ri
+        JOIN profile p ON p.org_id = ri.org_id
+        JOIN userroles ur ON ur.user_id = p.user_id
+        JOIN roles ro10 ON ur.role_id = ro10.role_id
+        WHERE ri.ride_id = completedrides.ride_id
+          AND p.user_id = auth.uid()
+          AND (ro10.name = 'Admin' OR ro10.name = 'Dispatcher')
+    )
+);
+
+-- ========================================================
+-- CALLS
+-- ========================================================
+ALTER TABLE calls ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS calls_policy ON calls;
+
+CREATE POLICY calls_policy
+ON calls FOR ALL
+USING (
+    is_super_admin() OR user_id = auth.uid() OR
+    EXISTS (
+        SELECT 1
+        FROM profile p
+        JOIN userroles ur ON ur.user_id = p.user_id
+        JOIN roles ro11 ON ur.role_id = ro11.role_id
+        WHERE p.org_id = calls.org_id
+          AND p.user_id = auth.uid()
+          AND ro11.name = 'Admin'
+    )
+);
+
+-- ========================================================
+-- TRANSACTIONSAUDITLOG
+-- ========================================================
+ALTER TABLE transactionsauditlog ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS transactionsauditlog_policy ON transactionsauditlog;
+
+CREATE POLICY transactionsauditlog_policy
+ON transactionsauditlog FOR ALL
+USING (
+    is_super_admin() OR
+    EXISTS (
+        SELECT 1
+        FROM profile p
+        JOIN userroles ur ON ur.user_id = p.user_id
+        JOIN roles ro12 ON ur.role_id = ro12.role_id
+        WHERE p.org_id = transactionsauditlog.org_id
+          AND p.user_id = auth.uid()
+          AND ro12.name = 'Admin'
+    )
+);
+
+-- ========================================================
+-- TIMECARDS
+-- ========================================================
+ALTER TABLE timecards ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS timecards_policy ON timecards;
+
+CREATE POLICY timecards_policy
+ON timecards FOR ALL
+USING (
+    is_super_admin() OR user_id = auth.uid() OR
+    EXISTS (
+        SELECT 1
+        FROM profile p
+        JOIN userroles ur ON ur.user_id = p.user_id
+        JOIN roles ro13 ON ur.role_id = ro13.role_id
+        WHERE p.org_id = timecards.org_id
+          AND p.user_id = auth.uid()
+          AND ro13.name = 'Admin'
+    )
+);
+DROP TABLE IF EXISTS transactionsauditlog CASCADE;
+DROP TABLE IF EXISTS timecards CASCADE;
+DROP TABLE IF EXISTS completedrides CASCADE;
+DROP TABLE IF EXISTS rides CASCADE;
+DROP TABLE IF EXISTS calls CASCADE;
+DROP TABLE IF EXISTS volunteers CASCADE;
+DROP TABLE IF EXISTS drivers CASCADE;
+DROP TABLE IF EXISTS clients CASCADE;
+DROP TABLE IF EXISTS userroles CASCADE;
+DROP TABLE IF EXISTS roles CASCADE;
+DROP TABLE IF EXISTS profile CASCADE;
+DROP TABLE IF EXISTS organization CASCADE;
+
+CREATE TABLE organization (
+    org_id SERIAL PRIMARY KEY,
+    name TEXT NOT NULL,
+    contact_email TEXT,
+    contact_phone TEXT,
+    address TEXT,
+    city TEXT,
+    state TEXT,
+    zip_code TEXT
+);
+
+CREATE TABLE profile (
+    user_id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+    org_id INT REFERENCES organization(org_id),
+    name role_enum UNIQUE,
+    first_name TEXT,
+    last_name TEXT,
+    email TEXT
+);
+
+CREATE TABLE clients (
+    client_id SERIAL PRIMARY KEY,
+    user_id UUID REFERENCES profile(user_id) ON DELETE CASCADE,
+    org_id INT REFERENCES organization(org_id),
+    first_name TEXT,
+    last_name TEXT,
+    date_of_birth DATE,
+    primary_phone TEXT,
+    secondary_phone TEXT,
+    contact_pref contact_pref_enum,
+    gender gender_enum,
+    street_address TEXT,
+    address2 TEXT,
+    city TEXT,
+    state TEXT,
+    zip_code TEXT,
+    lives_alone BOOLEAN,
+    mobility_needs TEXT,
+    medical_needs TEXT,
+    emergency_contact_name TEXT,
+    emergency_contact_phone TEXT
+);
+
+CREATE TABLE vehicles (
+    vehicle_id SERIAL PRIMARY KEY,
+    user_id UUID REFERENCES profile(user_id) ON DELETE CASCADE,
+    vehicle_make TEXT,
+    vehicle_model TEXT,
+    license_plate TEXT,
+    max_passengers INT,
+    insurance_expiry DATE,
+    driver_status driver_status_enum
+);
+
+CREATE TABLE training (
+    training_id SERIAL PRIMARY KEY,
+    user_id UUID REFERENCES profile(user_id) ON DELETE CASCADE,
+    training_date DATE,
+    background_check_status background_check_status_enum,
+    volunteer_status volunteer_status_enum
+);
+
+CREATE TABLE rides (
+    ride_id SERIAL PRIMARY KEY,
+    org_id INT REFERENCES organization(org_id),
+    client_id INT REFERENCES clients(client_id),
+    vehicle_id INT REFERENCES vehicles(vehicle_id),
+    dispatcher_name TEXT,
+    pickup_address TEXT,
+    dropoff_address TEXT,
+    scheduled_time TIMESTAMP,
+    status ride_status_enum,
+    notes TEXT
+);
+
+CREATE TABLE completedrides (
+    completed_ride_id SERIAL PRIMARY KEY,
+    ride_id INT REFERENCES rides(ride_id) ON DELETE CASCADE,
+    actual_start TIMESTAMP,
+    actual_end TIMESTAMP,
+    miles_driven DECIMAL(6,2),
+    hours DECIMAL(4,2),
+    donation_amount DECIMAL(10,2)
+);
+
+CREATE TABLE calls (
+    call_id SERIAL PRIMARY KEY,
+    user_id UUID REFERENCES profile(user_id),
+    org_id INT REFERENCES organization(org_id),
+    call_time TIMESTAMP,
+    call_type call_type_enum,
+    notes TEXT
+);
+
+CREATE TABLE transactionsauditlog (
+    transaction_id SERIAL PRIMARY KEY,
+    user_id UUID REFERENCES profile(user_id),
+    org_id INT REFERENCES organization(org_id),
+    action TEXT,
+    table_name TEXT,
+    record_id INT,
+    timestamp TIMESTAMP DEFAULT now()
+);
+
+CREATE TABLE timecards (
+    timecard_id SERIAL PRIMARY KEY,
+    user_id UUID REFERENCES profile(user_id),
+    org_id INT REFERENCES organization(org_id),
+    shift_start TIMESTAMP,
+    shift_end TIMESTAMP,
+    hours DECIMAL(4,2)
+);
+CREATE TYPE contact_pref_enum AS ENUM ('Phone','Email','Text');
+CREATE TYPE gender_enum AS ENUM ('Male','Female','Other');
+CREATE TYPE role_enum AS ENUM ('Admin','Dispatcher','Driver','Volunteer','Client');
+CREATE TYPE driver_status_enum AS ENUM ('Active','Inactive','Suspended');
+CREATE TYPE volunteer_status_enum AS ENUM ('Active','Inactive');
+CREATE TYPE background_check_status_enum AS ENUM ('Pending','Passed','Failed');
+CREATE TYPE ride_status_enum AS ENUM ('Requested','Scheduled','In Progress','Completed','Cancelled');
+CREATE TYPE call_type_enum AS ENUM ('Inbound','Outbound');
+
+
+we also have set up
+
+Database Enumerated
+
+SCHEMA	NAME	VALUES	
+public
+background_check_status_enum	Pending, Passed, Failed	
+
+public
+call_type_enum	Inbound, Outbound	
+
+public
+contact_pref_enum	Phone, Email, Text	
+
+public
+driver_status_enum	Active, Inactive, Suspended	
+
+public
+gender_enum	Male, Female, Other	
+
+public
+ride_status_enum	Requested, Scheduled, In Progress, Completed, Cancelled	
+
+public
+role_enum	Admin, Dispatcher, Driver, Volunteer, Client, Super Admin	
+
+public
+volunteer_status_enum	Active, Inactive	
+
