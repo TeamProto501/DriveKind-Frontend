@@ -4,7 +4,7 @@
   import { Badge } from "$lib/components/ui/badge";
   import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "$lib/components/ui/card";
   import { Input } from "$lib/components/ui/input";
-  import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "$lib/components/ui/select";
+  import { Select, SelectContent, SelectItem, SelectTrigger } from "$lib/components/ui/select";
   import { UserCog, Phone, MapPin, Car, Clock, Search, Filter, Plus } from "@lucide/svelte";
 
   // Mock driver data
@@ -117,7 +117,7 @@
         </div>
         <Select bind:value={statusFilter}>
           <SelectTrigger class="w-48">
-            <SelectValue placeholder="Filter by status" />
+            <span class="text-muted-foreground">Filter by status</span>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Statuses</SelectItem>
