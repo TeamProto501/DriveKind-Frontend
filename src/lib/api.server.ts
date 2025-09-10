@@ -2,11 +2,8 @@ import { redirect } from '@sveltejs/kit';
 import type { RequestEvent } from '@sveltejs/kit';
 import { createSupabaseServerClient } from './supabase.server';
 
-const USE_AUTH_TESTING = false;
-
-export const API_BASE_URL = USE_AUTH_TESTING
-  ? 'https://smile-design-manhattan-api-git-new-auth-evancoppas-projects.vercel.app'
-  : 'https://smile-design-manhattan-api.vercel.app';
+// DriveKind API Configuration
+export const API_BASE_URL = 'http://localhost:3000';
 
 export interface AuthInfo {
   token?: string;

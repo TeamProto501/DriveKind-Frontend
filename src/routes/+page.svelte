@@ -1,150 +1,191 @@
 <script lang="ts">
-	import { enhance } from '$app/forms';
-	import type { PageData, ActionData } from './$types';
+  import { enhance } from '$app/forms';
+  import { goto } from '$app/navigation';
+  import { onMount } from 'svelte';
+  import type { PageData, ActionData } from './$types';
 
-	let { data, form }: { data: PageData, form: ActionData } = $props();
-	const session = data.session;
-	let loading = $state(false);
-	let testLoading = $state(false);
+  let { data, form }: { data: PageData, form: ActionData } = $props();
+  const session = data.session;
+  let loading = $state(false);
+  let testLoading = $state(false);
+
+  // Mock user roles for demonstration
+  let userRoles = $state<string[]>([]);
+
+  onMount(() => {
+    // Simulate loading user roles
+    setTimeout(() => {
+      userRoles = ["Admin", "Dispatcher"];
+    }, 1000);
+  });
+
+  // Redirect to appropriate dashboard based on user role
+  function redirectToDashboard() {
+    if (userRoles.includes('Admin')) {
+      goto('/admin/dash');
+    } else if (userRoles.includes('Dispatcher')) {
+      goto('/dispatcher/dashboard');
+    } else if (userRoles.includes('Driver')) {
+      goto('/driver/rides');
+    } else {
+      goto('/profile');
+    }
+  }
 </script>
 
-<div class="min-h-screen bg-gray-50 p-8">
-	<div class="max-w-4xl mx-auto">
-		<h1 class="text-4xl font-bold text-gray-900 mb-8">Welcome to SvelteKit</h1>
-		
-		{#if session}
-			<!-- API Test Section -->
-			<div class="bg-white rounded-lg shadow p-6 mb-6">
-				<h2 class="text-2xl font-semibold text-gray-800 mb-4">API Test</h2>
-				<div class="space-y-4">
-					<form 
-						method="POST" 
-						action="?/testProviders"
-						use:enhance={() => {
-							testLoading = true;
-							return async ({ update }) => {
-								testLoading = false;
-								await update();
-							};
-						}}
-					>
-						<button
-							type="submit"
-							disabled={testLoading}
-							class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
-						>
-							{testLoading ? 'Testing...' : 'Test Providers Endpoint'}
-						</button>
-					</form>
+<svelte:head>
+  <title>DriveKind - Welcome</title>
+</svelte:head>
 
-					{#if form?.error}
-						<div class="bg-red-50 border border-red-200 rounded-md p-4">
-							<p class="text-red-800 font-medium">Error:</p>
-							<p class="text-red-700 text-sm mt-1">{form.error}</p>
-						</div>
-					{/if}
+<div class="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+  <div class="max-w-6xl mx-auto px-4 py-12">
+    <!-- Header -->
+    <div class="text-center mb-12">
+      <div class="flex items-center justify-center mb-6">
+        <div class="w-16 h-16 bg-blue-600 rounded-xl flex items-center justify-center mr-4">
+          <span class="text-white font-bold text-2xl">DK</span>
+        </div>
+        <h1 class="text-5xl font-bold text-gray-900">DriveKind</h1>
+      </div>
+      <p class="text-xl text-gray-600 max-w-2xl mx-auto">
+        Your trusted partner for accessible transportation services. We provide safe, reliable rides for everyone who needs them.
+      </p>
+    </div>
 
-					{#if form?.success && form?.data}
-						<div class="bg-green-50 border border-green-200 rounded-md p-4">
-							<p class="text-green-800 font-medium mb-2">Success! Providers data:</p>
-							<pre class="text-green-700 text-sm bg-green-100 p-2 rounded overflow-x-auto">{JSON.stringify(form.data, null, 2)}</pre>
-						</div>
-					{/if}
-				</div>
-			</div>
+    {#if session}
+      <!-- Welcome Back Section -->
+      <div class="bg-white rounded-2xl shadow-xl p-8 mb-8">
+        <div class="text-center">
+          <h2 class="text-3xl font-bold text-gray-900 mb-4">Welcome back!</h2>
+          <p class="text-lg text-gray-600 mb-6">
+            You're signed in as <span class="font-semibold text-blue-600">{session.user?.email}</span>
+          </p>
+          
+          <div class="flex flex-col sm:flex-row gap-4 justify-center">
+            <button
+              onclick={redirectToDashboard}
+              class="px-8 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+            >
+              Go to Dashboard
+            </button>
+            <button
+              onclick={() => goto('/profile')}
+              class="px-8 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 transition-colors"
+            >
+              View Profile
+            </button>
+          </div>
+        </div>
+      </div>
 
-			<div class="bg-white rounded-lg shadow p-6 mb-6">
-				<div class="flex justify-between items-start mb-4">
-					<h2 class="text-2xl font-semibold text-gray-800">User Session Data</h2>
-					<form 
-						method="POST" 
-						action="?/logout"
-						use:enhance={({ formElement, formData, action, cancel, submitter }) => {
-							loading = true;
-							return async ({ result, update }) => {
-								loading = false;
-								await update();
-							};
-						}}
-					>
-						<button
-							type="submit"
-							disabled={loading}
-							class="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 disabled:opacity-50"
-						>
-							{loading ? 'Logging out...' : 'Logout'}
-						</button>
-					</form>
-				</div>
-				
-				<div class="space-y-4">
-					<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-						<div class="bg-gray-50 p-4 rounded-md">
-							<h3 class="font-medium text-gray-700 mb-2">User ID</h3>
-							<p class="text-sm text-gray-600 font-mono">{session.user.id}</p>
-						</div>
-						
-						<div class="bg-gray-50 p-4 rounded-md">
-							<h3 class="font-medium text-gray-700 mb-2">Email</h3>
-							<p class="text-sm text-gray-600">{session.user.email}</p>
-						</div>
-						
-						<div class="bg-gray-50 p-4 rounded-md">
-							<h3 class="font-medium text-gray-700 mb-2">Created At</h3>
-							<p class="text-sm text-gray-600">{new Date(session.user.created_at).toLocaleString()}</p>
-						</div>
-						
-						<div class="bg-gray-50 p-4 rounded-md">
-							<h3 class="font-medium text-gray-700 mb-2">Last Sign In</h3>
-							<p class="text-sm text-gray-600">{new Date(session.user.last_sign_in_at).toLocaleString()}</p>
-						</div>
-					</div>
-					
-					{#if session.user.user_metadata && Object.keys(session.user.user_metadata).length > 0}
-						<div class="bg-gray-50 p-4 rounded-md">
-							<h3 class="font-medium text-gray-700 mb-2">User Metadata</h3>
-							<pre class="text-sm text-gray-600 bg-gray-100 p-2 rounded overflow-x-auto">{JSON.stringify(session.user.user_metadata, null, 2)}</pre>
-						</div>
-					{/if}
-					
-					{#if session.user.app_metadata && Object.keys(session.user.app_metadata).length > 0}
-						<div class="bg-gray-50 p-4 rounded-md">
-							<h3 class="font-medium text-gray-700 mb-2">App Metadata</h3>
-							<pre class="text-sm text-gray-600 bg-gray-100 p-2 rounded overflow-x-auto">{JSON.stringify(session.user.app_metadata, null, 2)}</pre>
-						</div>
-					{/if}
-					
-					<div class="bg-gray-50 p-4 rounded-md">
-						<h3 class="font-medium text-gray-700 mb-2">Session Details</h3>
-						<div class="space-y-2 text-sm text-gray-600">
-							<div><span class="font-medium">Access Token Expires:</span> {new Date(session.expires_at * 1000).toLocaleString()}</div>
-							<div><span class="font-medium">Token Type:</span> {session.token_type}</div>
-						</div>
-					</div>
-					
-					<details class="bg-gray-50 p-4 rounded-md">
-						<summary class="font-medium text-gray-700 cursor-pointer">Raw Session Data</summary>
-						<pre class="mt-2 text-xs text-gray-600 bg-gray-100 p-2 rounded overflow-x-auto">{JSON.stringify(session, null, 2)}</pre>
-					</details>
-				</div>
-			</div>
-		{:else}
-			<div class="bg-white rounded-lg shadow p-6 text-center">
-				<h2 class="text-2xl font-semibold text-gray-800 mb-4">Welcome!</h2>
-				<p class="text-gray-600 mb-6">You are not currently logged in.</p>
-				<a 
-					href="/login"
-					class="inline-block px-6 py-3 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-				>
-					Sign In
-				</a>
-			</div>
-		{/if}
-		
-		<div class="mt-8 text-center">
-			<p class="text-gray-500">
-				Visit <a href="https://svelte.dev/docs/kit" class="text-indigo-600 hover:text-indigo-500">svelte.dev/docs/kit</a> to read the documentation
-			</p>
-		</div>
-	</div>
+      <!-- API Test Section -->
+      <div class="bg-white rounded-2xl shadow-xl p-8 mb-8">
+        <h2 class="text-2xl font-bold text-gray-900 mb-6">API Test</h2>
+        <div class="space-y-4">
+          <form 
+            method="POST" 
+            action="?/testProviders"
+            use:enhance={() => {
+              testLoading = true;
+              return async ({ update }) => {
+                testLoading = false;
+                await update();
+              };
+            }}
+          >
+            <button
+              type="submit"
+              disabled={testLoading}
+              class="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50 transition-colors"
+            >
+              {testLoading ? 'Testing...' : 'Test Providers Endpoint'}
+            </button>
+          </form>
+
+          {#if form?.error}
+            <div class="bg-red-50 border border-red-200 rounded-lg p-4">
+              <p class="text-red-800 font-medium">Error:</p>
+              <p class="text-red-700 text-sm mt-1">{form.error}</p>
+            </div>
+          {/if}
+
+          {#if form?.success && form?.data}
+            <div class="bg-green-50 border border-green-200 rounded-lg p-4">
+              <p class="text-green-800 font-medium mb-2">Success! Providers data:</p>
+              <pre class="text-green-700 text-sm bg-green-100 p-3 rounded overflow-x-auto">{JSON.stringify(form.data, null, 2)}</pre>
+            </div>
+          {/if}
+        </div>
+      </div>
+
+      <!-- Quick Actions -->
+      <div class="grid md:grid-cols-3 gap-6">
+        <div class="bg-white rounded-xl shadow-lg p-6 text-center">
+          <div class="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mx-auto mb-4">
+            <span class="text-blue-600 text-xl">📊</span>
+          </div>
+          <h3 class="text-lg font-semibold text-gray-900 mb-2">Dashboard</h3>
+          <p class="text-gray-600 text-sm mb-4">View your personalized dashboard</p>
+          <button
+            onclick={redirectToDashboard}
+            class="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            Go to Dashboard
+          </button>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-lg p-6 text-center">
+          <div class="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center mx-auto mb-4">
+            <span class="text-green-600 text-xl">👤</span>
+          </div>
+          <h3 class="text-lg font-semibold text-gray-900 mb-2">Profile</h3>
+          <p class="text-gray-600 text-sm mb-4">Manage your account settings</p>
+          <button
+            onclick={() => goto('/profile')}
+            class="w-full px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+          >
+            View Profile
+          </button>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-lg p-6 text-center">
+          <div class="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center mx-auto mb-4">
+            <span class="text-purple-600 text-xl">❓</span>
+          </div>
+          <h3 class="text-lg font-semibold text-gray-900 mb-2">Help</h3>
+          <p class="text-gray-600 text-sm mb-4">Get support and documentation</p>
+          <button
+            onclick={() => goto('/help')}
+            class="w-full px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+          >
+            Get Help
+          </button>
+        </div>
+      </div>
+
+    {:else}
+      <!-- Not Logged In -->
+      <div class="bg-white rounded-2xl shadow-xl p-8 text-center">
+        <h2 class="text-3xl font-bold text-gray-900 mb-4">Get Started with DriveKind</h2>
+        <p class="text-lg text-gray-600 mb-8">
+          Sign in to access your dashboard and manage your transportation needs.
+        </p>
+        
+        <div class="flex flex-col sm:flex-row gap-4 justify-center">
+          <button
+            onclick={() => goto('/login')}
+            class="px-8 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+          >
+            Sign In
+          </button>
+          <button
+            onclick={() => goto('/signup')}
+            class="px-8 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 transition-colors"
+          >
+            Sign Up
+          </button>
+        </div>
+      </div>
+    {/if}
+  </div>
 </div>

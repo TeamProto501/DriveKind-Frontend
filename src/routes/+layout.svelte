@@ -21,6 +21,10 @@
   });
 </script>
 
-<Navbar {data} />
-
-{@render children()}
+{#if data.session}
+  <Navbar {data}>
+    {@render children()}
+  </Navbar>
+{:else}
+  {@render children()}
+{/if}
