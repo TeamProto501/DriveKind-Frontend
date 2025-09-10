@@ -5,7 +5,6 @@
 	import { page } from '$app/stores';
 	import { Shield, AlertTriangle, Loader2 } from '@lucide/svelte';
 	import type { RoleEnum } from '$lib/types';
-	import { getDefaultRoute } from '$lib/navigation';
 	
 	let { requiredRoles, children, fallback } = $props<{
 		requiredRoles: RoleEnum[];
@@ -22,6 +21,14 @@
 	
 	// Check if user has required roles using runes
 	const hasAccess = $derived(requiredRoles.some(role => userRoles.includes(role)));
+	
+	// Simple function to get default route based on user roles
+	function getDefaultRoute(roles: RoleEnum[]): string {
+		if (roles.includes('Admin')) return '/admin/dash';
+		if (roles.includes('Dispatcher')) return '/dispatcher/dashboard';
+		if (roles.includes('Driver')) return '/driver/rides';
+		return '/';
+	}
 	
 	// Load user roles on mount using $effect
 	$effect(() => {
