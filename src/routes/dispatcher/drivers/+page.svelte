@@ -117,7 +117,7 @@
         </div>
         <Select bind:value={statusFilter}>
           <SelectTrigger class="w-48">
-            <SelectValue placeholder="Filter by status" />
+            <span class="text-muted-foreground">Filter by status</span>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Statuses</SelectItem>
