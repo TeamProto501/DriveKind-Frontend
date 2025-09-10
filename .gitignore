@@ -19,3 +19,6 @@
 # deploy
 /docker
 src/lib/auth.ts
+
+# Vercel build output
+.vercel/output/
