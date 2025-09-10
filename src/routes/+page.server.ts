@@ -1,7 +1,7 @@
 import { redirect, fail } from '@sveltejs/kit';
 import type { Actions } from './$types';
 import { createSupabaseServerClient } from '$lib/supabase.server';
-import { authenticatedFetch, API_BASE_URL } from '$lib/api.server';
+import { getClients } from '$lib/api';
 
 export const actions: Actions = {
 	logout: async (event) => {
@@ -17,14 +17,9 @@ export const actions: Actions = {
 		throw redirect(302, '/login');
 	},
 
-	testProviders: async (event) => {
+	testClients: async (event) => {
 		try {
-			const response = await authenticatedFetch(
-				`${API_BASE_URL}/providers`,
-				{},
-				undefined,
-				event
-			);
+			const response = await getClients(undefined, event);
 			
 			if (response.ok) {
 				const data = await response.json();
