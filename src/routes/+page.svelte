@@ -84,7 +84,7 @@
         <div class="space-y-4">
           <form 
             method="POST" 
-            action="?/testProviders"
+            action="?/testClients"
             use:enhance={() => {
               testLoading = true;
               return async ({ update }) => {
@@ -98,7 +98,7 @@
               disabled={testLoading}
               class="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50 transition-colors"
             >
-              {testLoading ? 'Testing...' : 'Test Providers Endpoint'}
+              {testLoading ? 'Testing...' : 'Test Clients Endpoint'}
             </button>
           </form>
 
@@ -111,7 +111,7 @@
 
           {#if form?.success && form?.data}
             <div class="bg-green-50 border border-green-200 rounded-lg p-4">
-              <p class="text-green-800 font-medium mb-2">Success! Providers data:</p>
+              <p class="text-green-800 font-medium mb-2">Success! Client data:</p>
               <pre class="text-green-700 text-sm bg-green-100 p-3 rounded overflow-x-auto">{JSON.stringify(form.data, null, 2)}</pre>
             </div>
           {/if}

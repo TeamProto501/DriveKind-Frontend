@@ -6,7 +6,7 @@ import { toastStore } from './toast';
 import type { AuthInfo } from './types';
 
 // DriveKind API Configuration
-export const API_BASE_URL = 'http://localhost:3000';
+export const API_BASE_URL = 'https://drive-kind-api.vercel.app/';
 
 
 
@@ -79,55 +79,8 @@ export async function authenticatedFetch(
   }
 }
 
-// Public API functions (no authentication required)
-export async function fetchPublicPractices(): Promise<Response> {
-  return await fetch(`${API_BASE_URL}/practices/public`);
-}
 
-export async function fetchPublicTreatmentPlan(
-  lastName: string,
-  practiceCode: string,
-  uuid?: string
-): Promise<Response> {
-  const params = new URLSearchParams({
-    lastName: encodeURIComponent(lastName),
-    practiceCode: encodeURIComponent(practiceCode)
-  });
-  
-  if (uuid) {
-    params.append('uuid', uuid);
-  }
-  
-  return await fetch(`${API_BASE_URL}/plans/public?${params.toString()}`);
-}
 
-export async function getPublicTreatmentPlan(uuid: string): Promise<Response> {
-  console.log(`Fetching public treatment plan for UUID: ${uuid}`);
-  return await fetch(`${API_BASE_URL}/public/treatment-plan/${uuid}`);
-}
-
-function preprocessHTMLForPDF(html: string): string {
-  const baseURL = 'https://guaranteeth-slides.vercel.app';
-  
-  html = html.replace(/src="(\/_app\/immutable\/assets\/[^"]+)"/g, `src="${baseURL}$1"`);
-  html = html.replace(/src="(\/src\/lib\/[^"]+\.(jpg|jpeg|png|gif|svg|webp))"/gi, `src="${baseURL}$1"`);
-  html = html.replace(/src="(\/[^"]+(?<!data:)[^"]*\.(jpg|jpeg|png|gif|svg|webp))"/gi, `src="${baseURL}$1"`);
-  html = html.replace(/url\(["']?(\/_app\/immutable\/assets\/[^)]+)["']?\)/g, `url(${baseURL}$1)`);
-  html = html.replace(/url\(["']?(\/src\/lib\/[^)]+\.(jpg|jpeg|png|gif|svg|webp))["']?\)/gi, `url(${baseURL}$1)`);
-  html = html.replace(/url\(["']?(\/[^)]+(?<!data:)[^)]*\.(jpg|jpeg|png|gif|svg|webp))["']?\)/gi, `url(${baseURL}$1)`);
-  
-  return html;
-}
-
-export async function generatePDF(html: string): Promise<Response> {
-  const processedHTML = preprocessHTMLForPDF(html);
-  
-  return await fetch('https://pdf-gen-pi.vercel.app/api/pdf', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ html: processedHTML })
-  });
-}
 
 // Authenticated API functions
 export async function getClients(
