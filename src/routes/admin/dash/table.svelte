@@ -16,124 +16,89 @@
     currentPage = page;
   }
 </script>
+<script lang="ts">
+  import { supabase } from '$lib/supabase';
+  export let type: string;
 
-<div class="overflow-x-auto border-1 border-gray-100 rounded-md">
-  <Table.Root class="min-w-full divide-y-2 divide-gray-200 bg-white text-sm ">
-    <Table.Header class="ltr:text-left rtl:text-right bg-gray-100">
-      <Table.Row>
-        <Table.Head class="sticky inset-y-0 start-0 px-4 py-4">#</Table.Head>
-        {#each keys as key}
-          <Table.Head class="px-4 py-2 font-medium whitespace-nowrap"
-            >{formatLabel(key)}</Table.Head
-          >
-        {/each}
-      </Table.Row>
-    </Table.Header>
+  let rows: any[] = [];
+  let loading = true;
+  let error: string | null = null;
 
-    <Table.Body class="divide-y divide-gray-200">
-      {#each pagedData as row, i}
-        <Table.Row class="px-4 py-2">
-          <Table.Cell>{(currentPage - 1) * pageSize + i + 1}</Table.Cell>
-          {#each keys as key}
-            <Table.Cell>{row[key] ?? "-"}</Table.Cell>
-          {/each}
-        </Table.Row>
-      {/each}
-      <Table.Row class="text-gray-500 font-bold">
-        Total: {data.length}
-      </Table.Row>
-      {#if pagedData.length === 0}
-        <Table.Row>
-          <Table.Cell colspan={keys.length + 1} class="text-center"
-            >No data</Table.Cell
-          >
-        </Table.Row>
-      {/if}
-    </Table.Body>
-  </Table.Root>
+  // fetch data whenever type changes
+  $: if (type) {
+    loadData(type);
+  }
 
-  <div class="mt-4 flex justify-end pb-2">
-    <Pagination.Root
-      count={items.length}
-      perPage={pageSize}
-      bind:page={currentPage}
-    >
-      {#snippet children({ pages, currentPage: paginationCurrentPage })}
-        <Pagination.Content>
-          <Pagination.Item>
-            <Pagination.PrevButton />
-          </Pagination.Item>
+  async function loadData(type: string) {
+    loading = true;
+    error = null;
+    rows = [];
 
-          {#each pages as page (page.key)}
-            {#if page.type === "ellipsis"}
-              <Pagination.Item>
-                <Pagination.Ellipsis />
-              </Pagination.Item>
-            {:else}
-              <Pagination.Item>
-                <Pagination.Link {page} isActive={currentPage === page.value}>
-                  {page.value}
-                </Pagination.Link>
-              </Pagination.Item>
-            {/if}
-          {/each}
+    try {
+      if (type === 'clients') {
+        const { data, error: err } = await supabase
+          .from('clients')
+          .select('first_name, last_name, date_of_birth, primary_phone');
 
-          <Pagination.Item>
-            <Pagination.NextButton />
-          </Pagination.Item>
-        </Pagination.Content>
-      {/snippet}
-    </Pagination.Root>
-  </div>
-</div>
-<!-- <div class="flex flex-col">
-  <div class="overflow-x-auto border-1 border-gray-100 rounded-md">
-    <table class="min-w-full divide-y-2 divide-gray-200 bg-white text-sm">
-      <thead class="ltr:text-left rtl:text-right bg-gray-100">
-        <tr>
-          <th class="sticky inset-y-0 start-0 px-4 py-4">
-            <label for="SelectAll" class="sr-only">Select All</label>
+        if (err) throw err;
+        rows = data ?? [];
+      }
 
-            <input
-              type="checkbox"
-              id="SelectAll"
-              class="size-5 rounded-sm border-gray-300"
-            />
-          </th>
-          {#each columns as col}
-            <th class="px-4 py-2 font-medium whitespace-nowrap">{col.label}</th>
-          {/each}
-        </tr>
-      </thead>
+      if (type === 'drivers') {
+        const { data, error: err } = await supabase
+          .from('staff_profiles')
+          .select('first_name, last_name, dob, role')
+          .contains('role', ['Driver']); // role is an enum[]
 
-      <tbody class="divide-y divide-gray-200">
-        {#if rows?.length}
-          {#each rows as row, i}
+        if (err) throw err;
+        rows = data ?? [];
+      }
+    } catch (e: any) {
+      error = e.message;
+    } finally {
+      loading = false;
+    }
+  }
+</script>
+
+<div class="flex flex-col">
+  {#if loading}
+    <p class="text-gray-500 p-4">Loading...</p>
+  {:else if error}
+    <p class="text-red-600 p-4">Error: {error}</p>
+  {:else}
+    <div class="overflow-x-auto border-1 border-gray-100 rounded-md">
+      <table class="min-w-full divide-y-2 divide-gray-200 bg-white text-sm">
+        <thead class="bg-gray-100">
+          <tr>
+            <th class="px-4 py-2 text-gray-900">Name</th>
+            <th class="px-4 py-2 text-gray-900">DOB</th>
+            <th class="px-4 py-2 text-gray-900">Role / Phone</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-200">
+          {#each rows as row}
             <tr>
-              <td class="px-4 py-2"><input type="checkbox" id={"r" + i} /></td>
-              {#each columns as col}
-                <td class="px-4 py-2 whitespace-nowrap"
-                  >{row[col.key] ?? "-"}</td
-                >
-              {/each}
+              <td class="px-4 py-2 text-gray-900">
+                {row.first_name} {row.last_name}
+              </td>
+              <td class="px-4 py-2 text-gray-700">
+                {row.dob || row.date_of_birth}
+              </td>
+              <td class="px-4 py-2 text-gray-700">
+                {#if type === 'drivers'}
+                  {row.role?.join(', ')}
+                {:else}
+                  {row.primary_phone}
+                {/if}
+              </td>
             </tr>
           {/each}
-          <tr>
-            <td colspan={colspan()} class="px-4 py-2 text-gray-500 font-bold">
-              Total: {rows.length}
-            </td>
-          </tr>
-        {:else}
-          <tr>
-            <td colspan={colspan()}>No data</td>
-          </tr>
-        {/if}
-        <tr>
-          <td colspan="8" class=" px-4 py-2 whitespace-nowrap text-gray-500"
-            >Total: <span class="font-bold text-black">{rows.length}</span></td
-          >
-        </tr>
-      </tbody>
-    </table>
-  </div>
-</div> -->
+        </tbody>
+      </table>
+    </div>
+  {/if}
+</div>
+
+
+
