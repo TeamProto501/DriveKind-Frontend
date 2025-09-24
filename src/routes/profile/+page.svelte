@@ -1,7 +1,11 @@
 <script lang="ts">
 	import RoleGuard from '$lib/components/RoleGuard.svelte';
 	import Breadcrumbs from '$lib/components/Breadcrumbs.svelte';
-	import { User, Settings, Shield, Mail, Phone, MapPin, Calendar } from '@lucide/svelte';
+	import { User, Mail, Phone, MapPin, Calendar } from '@lucide/svelte';
+	import { getContext } from 'svelte';
+
+	const profile = getContext<any>('profile');
+	const session = getContext<any>('session');
 </script>
 
 <RoleGuard requiredRoles={['Admin', 'Dispatcher', 'Driver', 'Volunteer']}>
@@ -20,10 +24,19 @@
 				</div>
 				
 				<div class="p-6">
-					<div class="text-center py-12">
-						<User class="w-16 h-16 text-gray-400 mx-auto mb-4" />
-						<h3 class="text-lg font-medium text-gray-900 mb-2">Profile Management Coming Soon</h3>
-						<p class="text-gray-500">This page will allow users to update their personal information, contact details, and account preferences.</p>
+					<div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+						<div>
+							<label class="block text-sm font-medium text-gray-700">First name</label>
+							<p class="mt-1 text-gray-900">{profile?.first_name ?? '-'}</p>
+						</div>
+						<div>
+							<label class="block text-sm font-medium text-gray-700">Last name</label>
+							<p class="mt-1 text-gray-900">{profile?.last_name ?? '-'}</p>
+						</div>
+						<div class="sm:col-span-2">
+							<label class="block text-sm font-medium text-gray-700">Email</label>
+							<p class="mt-1 text-gray-900">{profile?.email ?? session?.user?.email ?? '-'}</p>
+						</div>
 					</div>
 				</div>
 			</div>

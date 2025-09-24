@@ -6,6 +6,8 @@
   import Navbar from "$lib/components/Navbar.svelte";
   import type { LayoutData } from "./$types";
   setContext("session", data.session);
+  setContext("profile", data.profile);
+  setContext("roles", data.roles);
 
   onMount(() => {
     const {

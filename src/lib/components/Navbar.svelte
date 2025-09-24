@@ -156,10 +156,16 @@
     return actions;
   });
 
-  // Load mock user data on mount
+  // Load mock user data on mount (preserve previous behavior)
   onMount(() => {
-    // Simulate loading user data
-    setTimeout(() => {
+    if (data?.profile) {
+      // Use real profile if available
+      userProfile = data.profile as any;
+      if (Array.isArray(data.roles)) {
+        userRoles = data.roles as RoleEnum[];
+      }
+    } else {
+      // Fallback to previous mock data
       userProfile = {
         user_id: "mock-user-id",
         org_id: 1,
@@ -176,7 +182,7 @@
         state: "CA",
         zip_code: "12345",
         lives_alone: true,
-      };
+      } as unknown as Profile;
       userRoles = ["Admin", "Dispatcher"];
       activeRole = "Admin"; // Set initial active role
       userOrganization = {
@@ -188,9 +194,9 @@
         city: "Anytown",
         state: "CA",
         zip_code: "12345",
-      };
-      isLoading = false;
-    }, 1000);
+      } as Organization;
+    }
+    isLoading = false;
   });
 
   // Logout function
