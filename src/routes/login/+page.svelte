@@ -1,56 +1,75 @@
 <script lang="ts">
-  import { enhance } from '$app/forms';
+  import { supabase } from '$lib/supabase';
   import { authStore } from '$lib/stores/auth';
-  import type { PageData, ActionData } from './$types';
+  import { writable } from 'svelte/store';
 
-  export let data: PageData;
-  export let form: ActionData;
-
+  let email = '';
+  let password = '';
   let loading = false;
+  let errorMessage = '';
 
-  // Update authStore if server returns token/userId
   function setAuth(token: string, userId: string) {
     authStore.set({ token, userId });
+  }
+
+  async function handleLogin() {
+    loading = true;
+    errorMessage = '';
+
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password
+      });
+
+      if (error) {
+        errorMessage = error.message;
+        return;
+      }
+
+      if (!data.session || !data.user) {
+        errorMessage = 'No session returned from Supabase';
+        return;
+      }
+
+      setAuth(data.session.access_token, data.user.id);
+
+      // Redirect after successful login
+      window.location.href = '/admin/dash';
+
+    } catch (err: any) {
+      console.error('Login error:', err);
+      errorMessage = err.message || 'Login failed';
+    } finally {
+      loading = false;
+    }
   }
 </script>
 
 <div class="min-h-screen flex items-center justify-center bg-gray-50">
   <div class="max-w-md w-full space-y-8 p-8">
     <div>
-      <h2 class="mt-6 text-center text-3xl font-extrabold text-gray-900">Sign in to your account</h2>
+      <h2 class="mt-6 text-center text-3xl font-extrabold text-gray-900">
+        Sign in to your account
+      </h2>
       <p class="mt-2 text-center text-sm text-gray-600">
         Or
-        <a href="/signup" class="font-medium text-indigo-600 hover:text-indigo-500">create a new account</a>
+        <a href="/signup" class="font-medium text-indigo-600 hover:text-indigo-500">
+          create a new account
+        </a>
       </p>
     </div>
 
-    <form
-      method="POST"
-      use:enhance={({ formElement }) => {
-        loading = true;
-        return async ({ result, update }) => {
-          loading = false;
-
-          if (result.type === 'success') {
-            if (result.data?.token && result.data?.userId) {
-              setAuth(result.data.token.toString(), result.data.userId.toString());
-            }
-            // Redirect is handled by server
-          } else {
-            await update(); // show server validation errors
-          }
-        };
-      }}
-      class="mt-8 space-y-6"
-    >
+    <form on:submit|preventDefault={handleLogin} class="mt-8 space-y-6">
       <div class="space-y-4">
         <div>
-          <label for="email" class="block text-sm font-medium text-gray-700">Email address</label>
+          <label for="email" class="block text-sm font-medium text-gray-700">
+            Email address
+          </label>
           <input
             id="email"
-            name="email"
             type="email"
-            value={form?.email ?? ''}
+            bind:value={email}
             required
             class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
             placeholder="Enter your email"
@@ -58,11 +77,13 @@
         </div>
 
         <div>
-          <label for="password" class="block text-sm font-medium text-gray-700">Password</label>
+          <label for="password" class="block text-sm font-medium text-gray-700">
+            Password
+          </label>
           <input
             id="password"
-            name="password"
             type="password"
+            bind:value={password}
             required
             class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
             placeholder="Enter your password"
@@ -70,8 +91,8 @@
         </div>
       </div>
 
-      {#if form?.error}
-        <div class="rounded-md bg-red-50 p-4 text-sm text-red-800">{form.error}</div>
+      {#if errorMessage}
+        <div class="rounded-md bg-red-50 p-4 text-sm text-red-800">{errorMessage}</div>
       {/if}
 
       <div>
@@ -90,6 +111,7 @@
     </div>
   </div>
 </div>
+
 
 
 
