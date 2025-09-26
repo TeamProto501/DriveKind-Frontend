@@ -61,19 +61,19 @@ export const deleteClient = (id: number, authInfo?: AuthInfo) =>
    STAFF PROFILES
 ========================================================= */
 export const getAllStaffProfiles = (authInfo?: AuthInfo) =>
-  fetchJson(`${API_BASE_URL}/staff_profiles`, {}, authInfo);
+  fetchJson(`${API_BASE_URL}/staff-profiles`, {}, authInfo);
 
 export const getStaffProfileById = (id: string, authInfo?: AuthInfo) =>
-  fetchJson(`${API_BASE_URL}/staff_profiles/${id}`, {}, authInfo);
+  fetchJson(`${API_BASE_URL}/staff-profiles/${id}`, {}, authInfo);
 
 export const createStaffProfile = (data: any, authInfo?: AuthInfo) =>
-  fetchJson(`${API_BASE_URL}/staff_profiles`, { method: 'POST', body: JSON.stringify(data) }, authInfo);
+  fetchJson(`${API_BASE_URL}/staff-profiles`, { method: 'POST', body: JSON.stringify(data) }, authInfo);
 
 export const updateStaffProfile = (id: string, data: any, authInfo?: AuthInfo) =>
-  fetchJson(`${API_BASE_URL}/staff_profiles/${id}`, { method: 'PUT', body: JSON.stringify(data) }, authInfo);
+  fetchJson(`${API_BASE_URL}/staff-profiles/${id}`, { method: 'PUT', body: JSON.stringify(data) }, authInfo);
 
 export const deleteStaffProfile = (id: string, authInfo?: AuthInfo) =>
-  fetchJson(`${API_BASE_URL}/staff_profiles/${id}`, { method: 'DELETE' }, authInfo);
+  fetchJson(`${API_BASE_URL}/staff-profiles/${id}`, { method: 'DELETE' }, authInfo);
 
 /* =========================================================
    CALLS
@@ -181,10 +181,10 @@ export const createTransactionAuditLog = (data: any, authInfo?: AuthInfo) =>
    ADMIN DASHBOARD QUERIES
 ========================================================= */
 export const getDriversForAdminDash = (authInfo?: AuthInfo) =>
-  fetchJson(`${API_BASE_URL}/staff_profiles?role=Driver`, {}, authInfo);
+  fetchJson(`${API_BASE_URL}/staff-profiles?role=Driver`, {}, authInfo);
 
 export const getVolunteersForAdminDash = (authInfo?: AuthInfo) =>
-  fetchJson(`${API_BASE_URL}/staff_profiles?role=Volunteer`, {}, authInfo);
+  fetchJson(`${API_BASE_URL}/staff-profiles?role=Volunteer`, {}, authInfo);
 
 export const getClientsForAdminDash = (authInfo?: AuthInfo) =>
   fetchJson(`${API_BASE_URL}/clients`, {}, authInfo);
