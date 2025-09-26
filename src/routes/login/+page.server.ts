@@ -41,16 +41,19 @@ export const actions: Actions = {
 			});
 		}
 
-		// ✅ session cookie is automatically set by supabase server client
-		if (!data.session) {
+		if (!data.session || !data.user) {
 			return fail(400, {
 				error: 'No session returned from Supabase',
 				email
 			});
 		}
 
-		// Redirect wherever you want authenticated users to land
-		throw redirect(302, '/admin/dash'); 
+		// Return userId + token for frontend reactive store
+		return {
+			success: true,
+			token: data.session.access_token,
+			userId: data.user.id
+		};
 	},
 
 	logout: async (event) => {
@@ -66,3 +69,4 @@ export const actions: Actions = {
 		throw redirect(302, '/login');
 	}
 };
+
