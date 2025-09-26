@@ -1,47 +1,14 @@
 <script lang="ts">
-  import { supabase } from '$lib/supabase';
+  import { enhance } from '$app/forms';
   import { authStore } from '$lib/stores/auth';
-  import { writable } from 'svelte/store';
+  import type { PageData, ActionData } from './$types';
 
-  let email = '';
-  let password = '';
+  let { data, form }: { data: PageData; form: ActionData } = $props();
   let loading = false;
-  let errorMessage = '';
 
-  // Update authStore with token + userId
+  // Update authStore after successful login
   function setAuth(token: string, userId: string) {
     authStore.set({ token, userId });
-  }
-
-  async function handleLogin(e: Event) {
-    e.preventDefault();
-    errorMessage = '';
-    loading = true;
-
-    try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password
-      });
-
-      if (error) {
-        errorMessage = error.message;
-        return;
-      }
-
-      if (!data.session) {
-        errorMessage = 'No session returned from Supabase';
-        return;
-      }
-
-      setAuth(data.session.access_token, data.user.id);
-
-    } catch (err: any) {
-      console.error(err);
-      errorMessage = err.message || 'Login failed';
-    } finally {
-      loading = false;
-    }
   }
 </script>
 
@@ -57,16 +24,37 @@
         <input type="email" bind:value={email} required class="mt-1 block w-full px-3 py-2 border rounded-md" />
       </div>
 
-    <form on:submit|preventDefault={handleLogin} class="mt-8 space-y-6">
+    <form
+      method="POST"
+      action="?/login"
+      use:enhance={({ formElement, formData, action }) => {
+        loading = true;
+        return async ({ result, update }) => {
+          loading = false;
+
+          if (result.type === 'success') {
+            // Update authStore if server returns token + userId
+            if (result.data?.token && result.data?.userId) {
+              setAuth(result.data.token.toString(), result.data.userId.toString());
+            }
+
+            // Redirect handled by server automatically
+          } else {
+            // Show server validation errors
+            await update();
+          }
+        };
+      }}
+      class="mt-8 space-y-6"
+    >
       <div class="space-y-4">
         <div>
-          <label for="email" class="block text-sm font-medium text-gray-700">
-            Email address
-          </label>
+          <label for="email" class="block text-sm font-medium text-gray-700">Email address</label>
           <input
             id="email"
+            name="email"
             type="email"
-            bind:value={email}
+            value={form?.email ?? ''}
             required
             class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
             placeholder="Enter your email"
@@ -74,13 +62,11 @@
         </div>
 
         <div>
-          <label for="password" class="block text-sm font-medium text-gray-700">
-            Password
-          </label>
+          <label for="password" class="block text-sm font-medium text-gray-700">Password</label>
           <input
             id="password"
+            name="password"
             type="password"
-            bind:value={password}
             required
             class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
             placeholder="Enter your password"
@@ -88,8 +74,8 @@
         </div>
       </div>
 
-      {#if errorMessage}
-        <div class="rounded-md bg-red-50 p-4 text-sm text-red-800">{errorMessage}</div>
+      {#if form?.error}
+        <div class="rounded-md bg-red-50 p-4 text-sm text-red-800">{form.error}</div>
       {/if}
 
       <div>
@@ -108,6 +94,8 @@
     </div>
   </div>
 </div>
+
+
 
 
 

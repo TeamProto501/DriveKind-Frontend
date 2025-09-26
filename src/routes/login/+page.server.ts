@@ -36,15 +36,26 @@ export const actions: Actions = {
       password,
     });
 
-    if (error) {
-      return fail(400, {
-        error: error.message,
-        email,
-      });
-    }
+		if (error) {
+			return fail(400, {
+				error: error.message,
+				email
+			});
+		}
 
-		// Redirect wherever you want authenticated users to land
-		throw redirect(302, '/admin/dash'); 
+		if (!data.session || !data.user) {
+			return fail(400, {
+				error: 'No session returned from Supabase',
+				email
+			});
+		}
+
+		// Return userId + token for frontend reactive store
+		return {
+			success: true,
+			token: data.session.access_token,
+			userId: data.user.id
+		};
 	},
 
   logout: async (event) => {
@@ -60,3 +71,4 @@ export const actions: Actions = {
     throw redirect(302, "/login");
   },
 };
+
