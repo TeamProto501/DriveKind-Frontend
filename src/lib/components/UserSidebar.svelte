@@ -27,40 +27,29 @@
   const roles = ['Admin', 'Dispatcher', 'Driver', 'Volunteer', 'Client'];
   const defaultInsert = { org_id: 1 };
 
-  let form: StaffForm = {
-    first_name: '',
-    last_name: '',
-    email: '',
-    primary_phone: '',
-    role: [],
-    dob: '1970-01-01',
-    city: 'N/A',
-    state: 'N/A',
-    training_completed: false,
-    mileage_reimbursement: false
-  };
-
+  let form: StaffForm = initializeForm();
   let saving = false;
   let errorMessage: string | null = null;
   let showMoreInfo = false;
   let expanded = { personal: false, training: false, preferences: false };
 
-  // --- Reactive form initialization ---
-  $: if (user && !createMode) {
-    form = {
-      first_name: user.first_name || '',
-      last_name: user.last_name || '',
-      email: user.email || '',
-      primary_phone: user.primary_phone || '',
-      role: Array.isArray(user.role) ? user.role : [user.role],
-      dob: user.dob || '1970-01-01',
-      city: user.city || 'N/A',
-      state: user.state || 'N/A',
-      training_completed: user.training_completed ?? false,
-      mileage_reimbursement: user.mileage_reimbursement ?? false
-    };
-  } else if (createMode) {
-    form = {
+  // --- Initialize form ---
+  function initializeForm(): StaffForm {
+    if (user && !createMode) {
+      return {
+        first_name: user.first_name || '',
+        last_name: user.last_name || '',
+        email: user.email || '',
+        primary_phone: user.primary_phone || '',
+        role: Array.isArray(user.role) ? user.role : [user.role],
+        dob: user.dob || '1970-01-01',
+        city: user.city || 'N/A',
+        state: user.state || 'N/A',
+        training_completed: user.training_completed ?? false,
+        mileage_reimbursement: user.mileage_reimbursement ?? false
+      };
+    } 
+    return {
       first_name: '',
       last_name: '',
       email: '',
@@ -73,6 +62,9 @@
       mileage_reimbursement: false
     };
   }
+
+  // --- Reactive: reset form whenever user or createMode changes ---
+  $: form = initializeForm();
 
   function validateForm(): string | null {
     if (!form.first_name.trim()) return 'First name is required.';
@@ -89,9 +81,10 @@
   }
 
   async function saveUser() {
-    const authInfo = get(authStore);
     errorMessage = validateForm();
     if (errorMessage) return;
+
+    const authInfo = get(authStore);
     if (!authInfo) {
       errorMessage = 'No session found. Please refresh and try again.';
       return;
@@ -105,7 +98,7 @@
         await updateStaffProfile(user.user_id, form, authInfo);
       }
 
-      dispatch('updated'); // refresh parent
+      dispatch('updated'); // notify parent to refresh list
       dispatch('close');   // close sidebar
     } catch (err: any) {
       console.error(err);
@@ -236,6 +229,7 @@
     </button>
   </div>
 </div>
+
 
 
 
