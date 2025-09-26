@@ -6,7 +6,7 @@
   import { getAllStaffProfiles } from '$lib/api';
   import type { AuthInfo } from '$lib/types';
   import { authStore } from '$lib/stores/auth';
-  import { onMount } from 'svelte';
+  import { onDestroy } from 'svelte';
 
   type StaffProfile = {
     user_id: string;
@@ -33,7 +33,7 @@
 
   let authInfo: AuthInfo | null = null;
 
-  // --- Pagination ---
+  // Pagination
   let currentPage = 1;
   let pageSize = 20;
   $: totalPages = Math.max(Math.ceil(filteredProfiles.length / pageSize), 1);
@@ -44,10 +44,11 @@
 
   // --- Load Users ---
   async function loadUsers() {
-    if (!authInfo) return;
+    if (!authInfo?.token) return;
 
     loading = true;
     errorMessage = null;
+
     try {
       const profiles: StaffProfile[] = await getAllStaffProfiles(authInfo);
       staffProfiles = profiles;
@@ -58,19 +59,6 @@
     } finally {
       loading = false;
     }
-
-    onMount(() => {
-      // if using store
-      const unsubscribe = authStore.subscribe((value) => {
-        authInfo = value;
-        console.log("Auth info in UsersPage:", authInfo);
-        if (authInfo) {
-          loadUsers();
-        }
-      });
-
-      return unsubscribe;
-    });
   }
 
   function applyFilters() {
@@ -120,7 +108,7 @@
   }
 
   // --- Subscribe to authStore ---
-  authStore.subscribe((value) => {
+  const unsubscribe = authStore.subscribe((value) => {
     authInfo = value;
     if (authInfo) loadUsers();
     else {
@@ -129,6 +117,8 @@
       loading = false;
     }
   });
+
+  onDestroy(() => unsubscribe());
 </script>
 
 <RoleGuard requiredRoles={['Admin']}>
@@ -270,6 +260,7 @@
     {/if}
   </div>
 </RoleGuard>
+
 
 
 

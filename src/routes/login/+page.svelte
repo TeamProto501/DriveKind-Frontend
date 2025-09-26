@@ -1,29 +1,46 @@
 <script lang="ts">
-  import { enhance } from '$app/forms';
-  import type { PageData, ActionData } from './$types';
-  import { authStore } from '$lib/stores/auth'; // ✅ your AuthInfo store
+  import { supabase } from '$lib/supabase';
+  import { authStore } from '$lib/stores/auth';
+  import { writable } from 'svelte/store';
 
   let email = '';
   let password = '';
   let loading = false;
-  let error: string | null = null;
+  let errorMessage = '';
 
-  async function handleLogin() {
+  // Update authStore with token + userId
+  function setAuth(token: string, userId: string) {
+    authStore.set({ token, userId });
+  }
+
+  async function handleLogin(e: Event) {
+    e.preventDefault();
+    errorMessage = '';
     loading = true;
-    error = null;
 
-    const { data, error: err } = await supabase.auth.signInWithPassword({
-      email,
-      password
-    });
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password
+      });
 
-    loading = false;
+      if (error) {
+        errorMessage = error.message;
+        return;
+      }
 
-    if (err) {
-      error = err.message;
-    } else if (data.session) {
-      // Session automatically stored in localStorage
-      goto('/users'); // redirect to user management or profile
+      if (!data.session) {
+        errorMessage = 'No session returned from Supabase';
+        return;
+      }
+
+      setAuth(data.session.access_token, data.user.id);
+
+    } catch (err: any) {
+      console.error(err);
+      errorMessage = err.message || 'Login failed';
+    } finally {
+      loading = false;
     }
   }
 </script>
@@ -40,29 +57,7 @@
         <input type="email" bind:value={email} required class="mt-1 block w-full px-3 py-2 border rounded-md" />
       </div>
 
-    <form
-      method="POST"
-      action="?/login"
-      use:enhance={({ formElement, formData, action }) => {
-        loading = true;
-
-        return async ({ result, update }) => {
-          loading = false;
-
-          if (result.type === 'success' && result.data?.success) {
-            // ✅ hydrate your store with token + user
-            authStore.set({
-              token: result.data.token.toString(),
-              userId: result.data.userId.toString()
-            });
-          } else {
-            // default SvelteKit update so errors show
-            await update();
-          }
-        };
-      }}
-      class="mt-8 space-y-6"
-    >
+    <form on:submit|preventDefault={handleLogin} class="mt-8 space-y-6">
       <div class="space-y-4">
         <div>
           <label for="email" class="block text-sm font-medium text-gray-700">
@@ -70,43 +65,49 @@
           </label>
           <input
             id="email"
-            name="email"
             type="email"
-            value={form?.email ?? ''}
+            bind:value={email}
             required
-            class="mt-1 relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+            class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
             placeholder="Enter your email"
           />
         </div>
+
         <div>
           <label for="password" class="block text-sm font-medium text-gray-700">
             Password
           </label>
           <input
             id="password"
-            name="password"
             type="password"
+            bind:value={password}
             required
-            class="mt-1 relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+            class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
             placeholder="Enter your password"
           />
         </div>
       </div>
 
-      {#if error}
-        <p class="text-red-600 text-sm">{error}</p>
+      {#if errorMessage}
+        <div class="rounded-md bg-red-50 p-4 text-sm text-red-800">{errorMessage}</div>
       {/if}
 
       <div>
         <button
           type="submit"
           disabled={loading}
-          class="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+          class="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50"
         >
           {loading ? 'Signing In...' : 'Sign In'}
         </button>
       </div>
     </form>
+
+    <div class="text-center">
+      <a href="/" class="text-indigo-600 hover:text-indigo-500">← Back to home</a>
+    </div>
   </div>
 </div>
+
+
 

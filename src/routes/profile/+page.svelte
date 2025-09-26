@@ -4,6 +4,7 @@
   import { getStaffProfileById, updateStaffProfile } from '$lib/api';
   import type { AuthInfo } from '$lib/types';
   import { authStore } from '$lib/stores/auth';
+  import { onDestroy } from 'svelte';
 
   type StaffProfile = {
     user_id: string;
@@ -30,7 +31,7 @@
 
   // --- Load profile ---
   async function loadProfile() {
-    if (!userId || !authInfo) return;
+    if (!userId || !authInfo?.token) return;
 
     loading = true;
     try {
@@ -71,10 +72,10 @@
   }
 
   // --- Subscribe to authStore ---
-  authStore.subscribe((value) => {
+  const unsubscribe = authStore.subscribe((value) => {
     authInfo = value;
-    if (authInfo) {
-      userId = authInfo?.userId || null;
+    if (authInfo?.userId) {
+      userId = authInfo.userId;
       loadProfile();
     } else {
       userId = null;
@@ -83,6 +84,8 @@
       loading = false;
     }
   });
+
+  onDestroy(() => unsubscribe());
 </script>
 
 <RoleGuard requiredRoles={['Client', 'Admin', 'Driver', 'Dispatcher', 'Volunteer']}>
@@ -117,10 +120,10 @@
           {:else}
             <div class="space-y-2">
               <p><strong>Name:</strong> {profile.first_name} {profile.last_name}</p>
-              <p><strong>Email:</strong> {profile.email}</p>
-              <p><strong>Phone:</strong> {profile.primary_phone}</p>
-              <p><strong>DOB:</strong> {profile.dob}</p>
-              <p><strong>Address:</strong> {profile.city}, {profile.state} {profile.zip_code}</p>
+              <p><strong>Email:</strong> {profile.email || '-'}</p>
+              <p><strong>Phone:</strong> {profile.primary_phone || '-'}</p>
+              <p><strong>DOB:</strong> {profile.dob || '-'}</p>
+              <p><strong>Address:</strong> {profile.city || '-'}, {profile.state || '-'} {profile.zip_code || '-'}</p>
               <p><strong>Role(s):</strong> {Array.isArray(profile.role) ? profile.role.join(', ') : profile.role}</p>
             </div>
 
@@ -133,6 +136,7 @@
     </div>
   </div>
 </RoleGuard>
+
 
 
 
