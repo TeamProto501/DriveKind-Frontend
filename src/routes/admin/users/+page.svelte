@@ -2,73 +2,88 @@
   import RoleGuard from '$lib/components/RoleGuard.svelte';
   import Breadcrumbs from '$lib/components/Breadcrumbs.svelte';
   import { Users, Plus, Search, Filter } from '@lucide/svelte';
-  import { supabase } from '$lib/supabase';
   import { onMount } from 'svelte';
   import UserSidebar from '$lib/components/UserSidebar.svelte';
+  import { getAllStaffProfiles } from '$lib/api';
+  import type { AuthInfo } from '$lib/types';
+  import { supabase } from '$lib/supabase';
 
-  let staffProfiles: any[] = [];
-  let filteredProfiles: any[] = [];
+  // --- Types ---
+  type StaffProfile = {
+    user_id: string;
+    first_name: string;
+    last_name: string;
+    email?: string;
+    primary_phone?: string;
+    role: string[] | string;
+    city?: string;
+    state?: string;
+  };
+
+  let staffProfiles: StaffProfile[] = [];
+  let filteredProfiles: StaffProfile[] = [];
   let loading = true;
+  let errorMessage: string | null = null;
 
-  let searchQuery = "";
-  let roleFilter: string = "All";
-  let roles = ["All", "Admin", "Dispatcher", "Driver", "Volunteer", "Client"];
+  let searchQuery = '';
+  let roleFilter: string = 'All';
+  const roles = ['All', 'Admin', 'Dispatcher', 'Driver', 'Volunteer', 'Client'];
 
-  let selectedUser: any = null;
+  let selectedUser: StaffProfile | null = null;
   let isCreateMode = false;
 
-  // Pagination
+  // --- Auth ---
+  let authInfo: AuthInfo | undefined;
+
+  async function initAuth() {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.user) {
+      authInfo = { token: session.access_token };
+    }
+  }
+
+  // --- Pagination ---
   let currentPage = 1;
   let pageSize = 20;
-  $: totalPages = Math.ceil(filteredProfiles.length / pageSize) || 1;
+  $: totalPages = Math.max(Math.ceil(filteredProfiles.length / pageSize), 1);
   $: paginatedProfiles = filteredProfiles.slice(
     (currentPage - 1) * pageSize,
     currentPage * pageSize
   );
 
-  let userToken: string | null = null;
-
-  async function loadUsers() {
+  // --- Load Users ---
+  async function loadUsers(auth?: AuthInfo) {
     loading = true;
-
-    // ✅ Get Supabase auth token
-    const { data: { session } } = await supabase.auth.getSession();
-    userToken = session?.access_token;
-
+    errorMessage = null;
     try {
-      const res = await fetch("https://your-api-url.com/profiles", {
-        headers: {
-          Authorization: `Bearer ${userToken}`,
-          "Content-Type": "application/json"
-        }
-      });
-
-      if (!res.ok) throw new Error(`Failed to load users: ${res.status}`);
-      staffProfiles = await res.json();
+      const profiles: StaffProfile[] = await getAllStaffProfiles(auth);
+      staffProfiles = profiles;
       applyFilters();
-    } catch (err) {
-      console.error("Error loading users:", err);
+    } catch (err: any) {
+      console.error('Error loading users:', err);
+      errorMessage = err.message || 'Failed to load users';
+    } finally {
+      loading = false;
     }
-
-    loading = false;
   }
 
+  // --- Filter ---
   function applyFilters() {
-    let results = staffProfiles;
+    let results = [...staffProfiles];
 
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       results = results.filter(
-        (u) =>
+        u =>
           `${u.first_name} ${u.last_name}`.toLowerCase().includes(q) ||
           (u.email && u.email.toLowerCase().includes(q)) ||
           (u.primary_phone && u.primary_phone.includes(q))
       );
     }
 
-    if (roleFilter !== "All") {
-      results = results.filter((u) =>
-        Array.isArray(u.role) ? u.role.includes(roleFilter) : u.role === roleFilter
+    if (roleFilter !== 'All') {
+      results = results.filter(
+        u => Array.isArray(u.role) ? u.role.includes(roleFilter) : u.role === roleFilter
       );
     }
 
@@ -76,9 +91,10 @@
     currentPage = 1;
   }
 
-  function openSidebar(user: any = null) {
+  // --- Sidebar Controls ---
+  function openSidebar(user: StaffProfile | null = null) {
     selectedUser = user;
-    isCreateMode = user === null;
+    isCreateMode = !user;
   }
 
   function closeSidebar() {
@@ -86,6 +102,7 @@
     isCreateMode = false;
   }
 
+  // --- Pagination Controls ---
   function nextPage() {
     if (currentPage < totalPages) currentPage++;
   }
@@ -99,8 +116,9 @@
     currentPage = 1;
   }
 
-  onMount(() => {
-    loadUsers();
+  onMount(async () => {
+    await initAuth();
+    await loadUsers(authInfo);
   });
 </script>
 
@@ -155,6 +173,8 @@
         <div class="p-6 overflow-x-auto">
           {#if loading}
             <p class="text-center text-gray-500 py-8">Loading users...</p>
+          {:else if errorMessage}
+            <p class="text-center text-red-600 py-8">{errorMessage}</p>
           {:else if filteredProfiles.length === 0}
             <p class="text-center text-gray-500 py-8">No users found.</p>
           {:else}
@@ -172,9 +192,7 @@
                   <tr class="border-b hover:bg-gray-50 text-sm">
                     <td class="px-4 py-2">{user.first_name} {user.last_name}</td>
                     <td class="px-4 py-2">{user.email || user.primary_phone || '-'}</td>
-                    <td class="px-4 py-2">
-                      {Array.isArray(user.role) ? user.role.join(', ') : user.role || '-'}
-                    </td>
+                    <td class="px-4 py-2">{Array.isArray(user.role) ? user.role.join(', ') : user.role || '-'}</td>
                     <td class="px-4 py-2">
                       <button
                         class="text-blue-600 hover:underline text-sm"
@@ -190,7 +208,6 @@
 
             <!-- Pagination Controls -->
             <div class="flex flex-col sm:flex-row items-center justify-between mt-4 gap-3">
-              <!-- Page Size Selector -->
               <div class="flex items-center gap-2 text-sm text-gray-600">
                 <span>Show</span>
                 <select
@@ -206,7 +223,6 @@
                 <span>entries</span>
               </div>
 
-              <!-- Page Navigation -->
               <div class="flex items-center gap-4">
                 <button
                   class="px-3 py-1 border rounded disabled:opacity-50"
@@ -239,8 +255,11 @@
         user={selectedUser}
         createMode={isCreateMode}
         on:close={closeSidebar}
-        on:updated={loadUsers}
+        on:updated={() => loadUsers(authInfo)}
+        authInfo={authInfo}
       />
     {/if}
   </div>
 </RoleGuard>
+
+
