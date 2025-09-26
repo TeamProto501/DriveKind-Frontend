@@ -17,22 +17,45 @@
   let selectedUser: any = null;
   let isCreateMode = false;
 
+  // Pagination
+  let currentPage = 1;
+  let pageSize = 20;
+  $: totalPages = Math.ceil(filteredProfiles.length / pageSize) || 1;
+  $: paginatedProfiles = filteredProfiles.slice(
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize
+  );
+
+  let userToken: string | null = null;
+
   async function loadUsers() {
     loading = true;
-    const { data, error } = await supabase.from("staff_profiles").select("*");
-    if (error) {
-      console.error(error);
-    } else {
-      staffProfiles = data;
+
+    // ✅ Get Supabase auth token
+    const { data: { session } } = await supabase.auth.getSession();
+    userToken = session?.access_token;
+
+    try {
+      const res = await fetch("https://your-api-url.com/profiles", {
+        headers: {
+          Authorization: `Bearer ${userToken}`,
+          "Content-Type": "application/json"
+        }
+      });
+
+      if (!res.ok) throw new Error(`Failed to load users: ${res.status}`);
+      staffProfiles = await res.json();
       applyFilters();
+    } catch (err) {
+      console.error("Error loading users:", err);
     }
+
     loading = false;
   }
 
   function applyFilters() {
     let results = staffProfiles;
 
-    // search filter
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       results = results.filter(
@@ -43,12 +66,14 @@
       );
     }
 
-    // role filter
     if (roleFilter !== "All") {
-      results = results.filter((u) => u.role?.includes(roleFilter));
+      results = results.filter((u) =>
+        Array.isArray(u.role) ? u.role.includes(roleFilter) : u.role === roleFilter
+      );
     }
 
     filteredProfiles = results;
+    currentPage = 1;
   }
 
   function openSidebar(user: any = null) {
@@ -59,6 +84,19 @@
   function closeSidebar() {
     selectedUser = null;
     isCreateMode = false;
+  }
+
+  function nextPage() {
+    if (currentPage < totalPages) currentPage++;
+  }
+
+  function prevPage() {
+    if (currentPage > 1) currentPage--;
+  }
+
+  function changePageSize(size: number) {
+    pageSize = size;
+    currentPage = 1;
   }
 
   onMount(() => {
@@ -77,7 +115,6 @@
           <p class="text-gray-600 mt-2">Manage user accounts, roles, and permissions.</p>
         </div>
 
-        <!-- Add User Button -->
         <button
           class="inline-flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg shadow hover:bg-blue-700 transition"
           on:click={() => openSidebar(null)}
@@ -87,7 +124,7 @@
       </div>
 
       <div class="bg-white rounded-lg shadow-sm border border-gray-200">
-        <!-- Table Header with search + filters -->
+        <!-- Filters -->
         <div class="px-6 py-4 border-b border-gray-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div class="flex items-center gap-2 w-full sm:w-1/2">
             <Search class="w-4 h-4 text-gray-400" />
@@ -131,11 +168,13 @@
                 </tr>
               </thead>
               <tbody>
-                {#each filteredProfiles as user}
+                {#each paginatedProfiles as user}
                   <tr class="border-b hover:bg-gray-50 text-sm">
                     <td class="px-4 py-2">{user.first_name} {user.last_name}</td>
                     <td class="px-4 py-2">{user.email || user.primary_phone || '-'}</td>
-                    <td class="px-4 py-2">{user.role ? user.role.join(', ') : '-'}</td>
+                    <td class="px-4 py-2">
+                      {Array.isArray(user.role) ? user.role.join(', ') : user.role || '-'}
+                    </td>
                     <td class="px-4 py-2">
                       <button
                         class="text-blue-600 hover:underline text-sm"
@@ -148,6 +187,48 @@
                 {/each}
               </tbody>
             </table>
+
+            <!-- Pagination Controls -->
+            <div class="flex flex-col sm:flex-row items-center justify-between mt-4 gap-3">
+              <!-- Page Size Selector -->
+              <div class="flex items-center gap-2 text-sm text-gray-600">
+                <span>Show</span>
+                <select
+                  bind:value={pageSize}
+                  on:change={(e) => changePageSize(parseInt(e.target.value))}
+                  class="border rounded px-2 py-1 text-sm"
+                >
+                  <option value="10">10</option>
+                  <option value="20">20</option>
+                  <option value="50">50</option>
+                  <option value="100">100</option>
+                </select>
+                <span>entries</span>
+              </div>
+
+              <!-- Page Navigation -->
+              <div class="flex items-center gap-4">
+                <button
+                  class="px-3 py-1 border rounded disabled:opacity-50"
+                  on:click={prevPage}
+                  disabled={currentPage === 1}
+                >
+                  Previous
+                </button>
+
+                <span class="text-sm text-gray-600">
+                  Page {currentPage} of {totalPages}
+                </span>
+
+                <button
+                  class="px-3 py-1 border rounded disabled:opacity-50"
+                  on:click={nextPage}
+                  disabled={currentPage === totalPages}
+                >
+                  Next
+                </button>
+              </div>
+            </div>
           {/if}
         </div>
       </div>
