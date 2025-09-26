@@ -44,7 +44,7 @@
 
   // --- Load Users ---
   async function loadUsers() {
-    if (!authInfo) {console.log("!authinfo thingy"); return;}
+    if (!authInfo) return;
 
     loading = true;
     errorMessage = null;
@@ -63,6 +63,7 @@
       // if using store
       const unsubscribe = authStore.subscribe((value) => {
         authInfo = value;
+        console.log("Auth info in UsersPage:", authInfo);
         if (authInfo) {
           loadUsers();
         }
