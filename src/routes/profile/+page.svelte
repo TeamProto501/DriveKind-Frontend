@@ -6,7 +6,6 @@
   import type { AuthInfo } from '$lib/types';
   import { supabase } from '$lib/supabase';
 
-  // --- Types ---
   type StaffProfile = {
     user_id: string;
     first_name: string;
@@ -30,20 +29,6 @@
   let userId: string | null = null;
   let authInfo: AuthInfo | undefined;
 
-  // --- Initialize Supabase auth ---
-  async function initAuth() {
-    const { data: { session } } = await supabase.auth.getSession();
-
-    if (!session?.user) {
-      console.error('No user session found.');
-      return;
-    }
-
-    authInfo = { token: session.access_token };
-    userId = session.user.id;
-  }
-
-  // --- Load profile from backend ---
   async function loadProfile() {
     if (!userId || !authInfo) return;
 
@@ -61,7 +46,6 @@
     }
   }
 
-  // --- Save profile updates ---
   async function saveProfile() {
     if (!userId || !authInfo || !profile) return;
 
@@ -84,9 +68,22 @@
     editing = false;
   }
 
-  onMount(async () => {
-    await initAuth();
-    await loadProfile();
+  // --- Use Supabase auth state change subscription ---
+  onMount(() => {
+    const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
+      if (session?.user) {
+        authInfo = { token: session.access_token };
+        userId = session.user.id;
+        loadProfile();
+      } else {
+        console.error('No user session found.');
+        profile = null;
+        formData = {} as StaffProfile;
+        loading = false;
+      }
+    });
+
+    return () => listener.subscription.unsubscribe();
   });
 </script>
 
@@ -104,7 +101,6 @@
           <h2 class="text-2xl font-semibold text-gray-900 mb-4">My Profile</h2>
 
           {#if editing}
-            <!-- Editable Form -->
             <div class="space-y-4">
               <input type="text" bind:value={formData.first_name} placeholder="First Name" class="w-full border rounded px-3 py-2 text-sm" />
               <input type="text" bind:value={formData.last_name} placeholder="Last Name" class="w-full border rounded px-3 py-2 text-sm" />
@@ -121,7 +117,6 @@
               <button on:click={cancelEdit} class="px-4 py-2 border rounded text-gray-700 hover:bg-gray-50">Cancel</button>
             </div>
           {:else}
-            <!-- Display profile info -->
             <div class="space-y-2">
               <p><strong>Name:</strong> {profile.first_name} {profile.last_name}</p>
               <p><strong>Email:</strong> {profile.email}</p>
@@ -140,6 +135,7 @@
     </div>
   </div>
 </RoleGuard>
+
 
 
 
