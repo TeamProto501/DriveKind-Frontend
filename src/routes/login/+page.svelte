@@ -16,35 +16,32 @@
 
 <div class="min-h-screen flex items-center justify-center bg-gray-50">
   <div class="max-w-md w-full space-y-8 p-8">
-    <h2 class="text-3xl font-extrabold text-gray-900 text-center">
-      Sign in to your account
-    </h2>
-
-    <form on:submit|preventDefault={handleLogin} class="space-y-6">
-      <div>
-        <label class="block text-sm font-medium text-gray-700">Email</label>
-        <input type="email" bind:value={email} required class="mt-1 block w-full px-3 py-2 border rounded-md" />
-      </div>
+    <div>
+      <h2 class="mt-6 text-center text-3xl font-extrabold text-gray-900">Sign in to your account</h2>
+      <p class="mt-2 text-center text-sm text-gray-600">
+        Or
+        <a href="/signup" class="font-medium text-indigo-600 hover:text-indigo-500">create a new account</a>
+      </p>
+    </div>
 
     <form
       method="POST"
-      class="mt-8 space-y-6"
       use:enhance={({ formElement }) => {
         loading = true;
         return async ({ result, update }) => {
           loading = false;
 
           if (result.type === 'success') {
-            // Update authStore with token + userId from server
             if (result.data?.token && result.data?.userId) {
               setAuth(result.data.token.toString(), result.data.userId.toString());
             }
+            // Redirect is handled by server
           } else {
-            // Show server validation errors
-            await update();
+            await update(); // show server validation errors
           }
         };
       }}
+      class="mt-8 space-y-6"
     >
       <div class="space-y-4">
         <div>
@@ -93,6 +90,7 @@
     </div>
   </div>
 </div>
+
 
 
 
