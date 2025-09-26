@@ -6,7 +6,7 @@
   import { getAllStaffProfiles } from '$lib/api';
   import type { AuthInfo } from '$lib/types';
   import { authStore } from '$lib/stores/auth';
-  import { get } from 'svelte/store';
+  import { onMount } from 'svelte';
 
   type StaffProfile = {
     user_id: string;
@@ -44,7 +44,7 @@
 
   // --- Load Users ---
   async function loadUsers() {
-    if (!authInfo) return;
+    if (!authInfo) {console.log("!authinfo thingy"); return;}
 
     loading = true;
     errorMessage = null;
@@ -58,6 +58,18 @@
     } finally {
       loading = false;
     }
+
+    onMount(() => {
+      // if using store
+      const unsubscribe = authStore.subscribe((value) => {
+        authInfo = value;
+        if (authInfo) {
+          loadUsers();
+        }
+      });
+
+      return unsubscribe;
+    });
   }
 
   function applyFilters() {
