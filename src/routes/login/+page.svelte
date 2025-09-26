@@ -1,6 +1,7 @@
 <script lang="ts">
   import { enhance } from '$app/forms';
   import type { PageData, ActionData } from './$types';
+  import { authStore } from '$lib/stores/auth'; // ✅ your AuthInfo store
 
   let { data, form }: { data: PageData; form: ActionData } = $props();
 
@@ -24,11 +25,22 @@
     <form
       method="POST"
       action="?/login"
-      use:enhance={({ formElement, formData, action, cancel, submitter }) => {
+      use:enhance={({ formElement, formData, action }) => {
         loading = true;
+
         return async ({ result, update }) => {
           loading = false;
-          await update();
+
+          if (result.type === 'success' && result.data?.success) {
+            // ✅ hydrate your store with token + user
+            authStore.set({
+              token: result.data.token.toString(),
+              userId: result.data.userId.toString()
+            });
+          } else {
+            // default SvelteKit update so errors show
+            await update();
+          }
         };
       }}
       class="mt-8 space-y-6"
@@ -71,14 +83,6 @@
         </div>
       {/if}
 
-      {#if form?.message}
-        <div class="rounded-md bg-green-50 p-4">
-          <div class="text-sm text-green-800">
-            {form.message}
-          </div>
-        </div>
-      {/if}
-
       <div>
         <button
           type="submit"
@@ -97,3 +101,4 @@
     </div>
   </div>
 </div>
+
