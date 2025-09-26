@@ -1,7 +1,13 @@
 <script lang="ts">
-  import { createEventDispatcher, onMount } from 'svelte';
+  import { createEventDispatcher } from 'svelte';
   import { createStaffProfile, updateStaffProfile } from '$lib/api';
-  import type { AuthInfo } from '$lib/types';
+  import { authStore } from '$lib/stores/auth';
+  import { get } from 'svelte/store';
+
+  export let user: StaffProfile | null = null;
+  export let createMode: boolean = false;
+
+  const dispatch = createEventDispatcher();
 
   type StaffForm = {
     first_name: string;
@@ -17,12 +23,6 @@
   };
 
   type StaffProfile = StaffForm & { user_id: string };
-
-  export let user: StaffProfile | null = null;
-  export let createMode: boolean = false;
-  export let authInfo: AuthInfo | undefined; // Optional auth info
-
-  const dispatch = createEventDispatcher();
 
   const roles = ['Admin', 'Dispatcher', 'Driver', 'Volunteer', 'Client'];
   const defaultInsert = { org_id: 1 };
@@ -45,22 +45,34 @@
   let showMoreInfo = false;
   let expanded = { personal: false, training: false, preferences: false };
 
-  onMount(() => {
-    if (user && !createMode) {
-      form = {
-        first_name: user.first_name || '',
-        last_name: user.last_name || '',
-        email: user.email || '',
-        primary_phone: user.primary_phone || '',
-        role: Array.isArray(user.role) ? user.role : [user.role],
-        dob: user.dob || '1970-01-01',
-        city: user.city || 'N/A',
-        state: user.state || 'N/A',
-        training_completed: user.training_completed ?? false,
-        mileage_reimbursement: user.mileage_reimbursement ?? false
-      };
-    }
-  });
+  // --- Reactive form initialization ---
+  $: if (user && !createMode) {
+    form = {
+      first_name: user.first_name || '',
+      last_name: user.last_name || '',
+      email: user.email || '',
+      primary_phone: user.primary_phone || '',
+      role: Array.isArray(user.role) ? user.role : [user.role],
+      dob: user.dob || '1970-01-01',
+      city: user.city || 'N/A',
+      state: user.state || 'N/A',
+      training_completed: user.training_completed ?? false,
+      mileage_reimbursement: user.mileage_reimbursement ?? false
+    };
+  } else if (createMode) {
+    form = {
+      first_name: '',
+      last_name: '',
+      email: '',
+      primary_phone: '',
+      role: [],
+      dob: '1970-01-01',
+      city: 'N/A',
+      state: 'N/A',
+      training_completed: false,
+      mileage_reimbursement: false
+    };
+  }
 
   function validateForm(): string | null {
     if (!form.first_name.trim()) return 'First name is required.';
@@ -77,19 +89,24 @@
   }
 
   async function saveUser() {
+    const authInfo = get(authStore);
     errorMessage = validateForm();
     if (errorMessage) return;
+    if (!authInfo) {
+      errorMessage = 'No session found. Please refresh and try again.';
+      return;
+    }
 
     saving = true;
     try {
       if (createMode) {
-        // Pass authInfo if available
         await createStaffProfile({ ...defaultInsert, ...form }, authInfo);
       } else if (user) {
         await updateStaffProfile(user.user_id, form, authInfo);
       }
-      dispatch('updated'); // Refresh parent list
-      dispatch('close');   // Close sidebar
+
+      dispatch('updated'); // refresh parent
+      dispatch('close');   // close sidebar
     } catch (err: any) {
       console.error(err);
       errorMessage = err.message || 'Failed to save user';
@@ -119,17 +136,14 @@
       <label class="block text-sm font-medium text-gray-700">First Name *</label>
       <input type="text" bind:value={form.first_name} class="mt-1 block w-full border rounded px-3 py-2 text-sm" />
     </div>
-
     <div>
       <label class="block text-sm font-medium text-gray-700">Last Name *</label>
       <input type="text" bind:value={form.last_name} class="mt-1 block w-full border rounded px-3 py-2 text-sm" />
     </div>
-
     <div>
       <label class="block text-sm font-medium text-gray-700">Email</label>
       <input type="email" bind:value={form.email} class="mt-1 block w-full border rounded px-3 py-2 text-sm" />
     </div>
-
     <div>
       <label class="block text-sm font-medium text-gray-700">Phone</label>
       <input type="tel" bind:value={form.primary_phone} class="mt-1 block w-full border rounded px-3 py-2 text-sm" />
@@ -222,6 +236,8 @@
     </button>
   </div>
 </div>
+
+
 
 
 

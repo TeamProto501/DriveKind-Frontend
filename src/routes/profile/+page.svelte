@@ -1,10 +1,10 @@
 <script lang="ts">
   import RoleGuard from '$lib/components/RoleGuard.svelte';
   import Breadcrumbs from '$lib/components/Breadcrumbs.svelte';
-  import { onMount } from 'svelte';
   import { getStaffProfileById, updateStaffProfile } from '$lib/api';
   import type { AuthInfo } from '$lib/types';
-  import { supabase } from '$lib/supabase';
+  import { authStore } from '$lib/stores/auth';
+  import { get } from 'svelte/store';
 
   type StaffProfile = {
     user_id: string;
@@ -27,7 +27,7 @@
   let loading = true;
   let isAdmin = false;
   let userId: string | null = null;
-  let authInfo: AuthInfo | undefined;
+  let authInfo: AuthInfo | null = null;
 
   // --- Load profile ---
   async function loadProfile() {
@@ -40,7 +40,7 @@
       isAdmin = Array.isArray(profile.role)
         ? profile.role.includes('Admin')
         : profile.role === 'Admin';
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to load profile:', err);
       profile = null;
     } finally {
@@ -61,7 +61,7 @@
       profile = await updateStaffProfile(userId, updatedData, authInfo);
       formData = { ...profile };
       editing = false;
-    } catch (err) {
+    } catch (err: any) {
       console.error('Save failed:', err);
     }
   }
@@ -71,40 +71,18 @@
     editing = false;
   }
 
-  // --- Auth and profile initialization ---
-  onMount(() => {
-    async function init() {
-      // 1️⃣ Get current session
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        authInfo = { token: session.access_token };
-        userId = session.user.id;
-        await loadProfile();
-      } else {
-        console.error('No user session found.');
-        profile = null;
-        formData = {} as StaffProfile;
-        loading = false;
-      }
-
-      // 2️⃣ Subscribe to future auth state changes
-      const { data: listener } = supabase.auth.onAuthStateChange(async (event, session) => {
-        if (session?.user) {
-          authInfo = { token: session.access_token };
-          userId = session.user.id;
-          await loadProfile();
-        } else {
-          console.error('No user session found.');
-          profile = null;
-          formData = {} as StaffProfile;
-          loading = false;
-        }
-      });
-
-      return () => listener.subscription.unsubscribe();
+  // --- Subscribe to authStore ---
+  authStore.subscribe((value) => {
+    authInfo = value;
+    if (authInfo) {
+      userId = authInfo?.userId || null;
+      loadProfile();
+    } else {
+      userId = null;
+      profile = null;
+      formData = {} as StaffProfile;
+      loading = false;
     }
-
-    init();
   });
 </script>
 
@@ -156,6 +134,8 @@
     </div>
   </div>
 </RoleGuard>
+
+
 
 
 
