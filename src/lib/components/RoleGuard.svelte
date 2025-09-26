@@ -7,7 +7,7 @@
 
 	export let requiredRoles: RoleEnum[] = [];
 	export let children: any;
-	export let fallback?: any;
+	export let fallback: any;
 
 	// Get session from context
 	const session = getContext('session');
