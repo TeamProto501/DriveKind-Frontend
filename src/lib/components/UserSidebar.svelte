@@ -1,77 +1,79 @@
 <script lang="ts">
-  import { supabase } from '$lib/supabase';
   import { createEventDispatcher, onMount } from 'svelte';
+  import { createStaffProfile, updateStaffProfile } from '$lib/api';
+  import type { AuthInfo } from '$lib/types';
 
-  export let user: any = null;
+  type StaffForm = {
+    first_name: string;
+    last_name: string;
+    email?: string;
+    primary_phone?: string;
+    role: string[];
+    dob: string;
+    city: string;
+    state: string;
+    training_completed: boolean;
+    mileage_reimbursement: boolean;
+  };
+
+  type StaffProfile = StaffForm & { user_id: string };
+
+  export let user: StaffProfile | null = null;
   export let createMode: boolean = false;
+  export let authInfo: AuthInfo | undefined; // Optional auth info
 
   const dispatch = createEventDispatcher();
 
-  let form = {
+  const roles = ['Admin', 'Dispatcher', 'Driver', 'Volunteer', 'Client'];
+  const defaultInsert = { org_id: 1 };
+
+  let form: StaffForm = {
     first_name: '',
     last_name: '',
     email: '',
     primary_phone: '',
-    role: [] as string[],
+    role: [],
     dob: '1970-01-01',
     city: 'N/A',
     state: 'N/A',
     training_completed: false,
-    mileage_reimbursment: false
-  };
-
-  const defaultInsert = {
-    org_id: 1
+    mileage_reimbursement: false
   };
 
   let saving = false;
   let errorMessage: string | null = null;
   let showMoreInfo = false;
+  let expanded = { personal: false, training: false, preferences: false };
 
-  // Track collapsed/expanded state for each group
-  let expanded = {
-    personal: false,
-    training: false,
-    preferences: false
-  };
-
-  const roles = ['Admin', 'Dispatcher', 'Driver', 'Volunteer', 'Client'];
-  let userToken: string | null = null;
-
-  onMount(async () => {
-    // Get auth token
-    const { data: { session } } = await supabase.auth.getSession();
-    userToken = session?.access_token;
-
+  onMount(() => {
     if (user && !createMode) {
       form = {
         first_name: user.first_name || '',
         last_name: user.last_name || '',
         email: user.email || '',
         primary_phone: user.primary_phone || '',
-        role: user.role || [],
+        role: Array.isArray(user.role) ? user.role : [user.role],
         dob: user.dob || '1970-01-01',
         city: user.city || 'N/A',
         state: user.state || 'N/A',
         training_completed: user.training_completed ?? false,
-        mileage_reimbursment: user.mileage_reimbursment ?? false
+        mileage_reimbursement: user.mileage_reimbursement ?? false
       };
     }
   });
 
-  function validateForm() {
+  function validateForm(): string | null {
     if (!form.first_name.trim()) return 'First name is required.';
     if (!form.last_name.trim()) return 'Last name is required.';
-    if (!form.email.trim() && !form.primary_phone.trim()) return 'Either email or phone is required.';
+    if (!form.email?.trim() && !form.primary_phone?.trim())
+      return 'Either email or phone is required.';
     return null;
   }
 
   function toggleRole(role: string) {
-    if (form.role.includes(role)) {
-      form.role = form.role.filter(r => r !== role);
-    } else {
-      form.role = [...form.role, role];
-    }
+    form.role = form.role.includes(role)
+      ? form.role.filter(r => r !== role)
+      : [...form.role, role];
   }
 
   async function saveUser() {
@@ -79,36 +81,21 @@
     if (errorMessage) return;
 
     saving = true;
-
     try {
-      const url = createMode
-        ? 'https://your-api-url.com/profiles'
-        : `https://your-api-url.com/profiles/${user.user_id}`;
-
-      const method = createMode ? 'POST' : 'PUT';
-
-      const res = await fetch(url, {
-        method,
-        headers: {
-          'Authorization': `Bearer ${userToken}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ ...defaultInsert, ...form })
-      });
-
-      if (!res.ok) {
-        const errText = await res.text();
-        throw new Error(errText || `Request failed with status ${res.status}`);
+      if (createMode) {
+        // Pass authInfo if available
+        await createStaffProfile({ ...defaultInsert, ...form }, authInfo);
+      } else if (user) {
+        await updateStaffProfile(user.user_id, form, authInfo);
       }
-
-      dispatch('updated');
-      dispatch('close');
+      dispatch('updated'); // Refresh parent list
+      dispatch('close');   // Close sidebar
     } catch (err: any) {
       console.error(err);
       errorMessage = err.message || 'Failed to save user';
+    } finally {
+      saving = false;
     }
-
-    saving = false;
   }
 </script>
 
@@ -127,7 +114,7 @@
       <p class="text-sm text-red-600">{errorMessage}</p>
     {/if}
 
-    <!-- Core Info -->
+    <!-- Basic Info -->
     <div>
       <label class="block text-sm font-medium text-gray-700">First Name *</label>
       <input type="text" bind:value={form.first_name} class="mt-1 block w-full border rounded px-3 py-2 text-sm" />
@@ -148,7 +135,7 @@
       <input type="tel" bind:value={form.primary_phone} class="mt-1 block w-full border rounded px-3 py-2 text-sm" />
     </div>
 
-    <!-- Roles with Checkboxes -->
+    <!-- Roles -->
     <div>
       <label class="block text-sm font-medium text-gray-700">Roles</label>
       <div class="mt-2 space-y-2">
@@ -168,7 +155,6 @@
       </button>
     </div>
 
-    <!-- Additional Fields (Accordion) -->
     {#if showMoreInfo}
       <!-- Personal Info -->
       <div class="mt-4 border rounded">
@@ -181,18 +167,9 @@
         </button>
         {#if expanded.personal}
           <div class="p-4 space-y-4">
-            <div>
-              <label class="block text-sm font-medium text-gray-700">Date of Birth</label>
-              <input type="date" bind:value={form.dob} class="mt-1 block w-full border rounded px-3 py-2 text-sm" />
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-gray-700">City</label>
-              <input type="text" bind:value={form.city} class="mt-1 block w-full border rounded px-3 py-2 text-sm" />
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-gray-700">State</label>
-              <input type="text" bind:value={form.state} class="mt-1 block w-full border rounded px-3 py-2 text-sm" />
-            </div>
+            <input type="date" bind:value={form.dob} class="w-full border rounded px-3 py-2 text-sm" />
+            <input type="text" bind:value={form.city} placeholder="City" class="w-full border rounded px-3 py-2 text-sm" />
+            <input type="text" bind:value={form.state} placeholder="State" class="w-full border rounded px-3 py-2 text-sm" />
           </div>
         {/if}
       </div>
@@ -228,7 +205,7 @@
         {#if expanded.preferences}
           <div class="p-4 space-y-2">
             <label class="flex items-center space-x-2 text-sm">
-              <input type="checkbox" bind:checked={form.mileage_reimbursment} />
+              <input type="checkbox" bind:checked={form.mileage_reimbursement} />
               <span>Mileage Reimbursement</span>
             </label>
           </div>
@@ -239,13 +216,17 @@
 
   <!-- Footer -->
   <div class="px-6 py-4 border-t flex justify-end space-x-2">
-    <button on:click={() => dispatch('close')} class="px-4 py-2 rounded-lg border text-gray-700 hover:bg-gray-50">
-      Cancel
-    </button>
+    <button on:click={() => dispatch('close')} class="px-4 py-2 rounded-lg border text-gray-700 hover:bg-gray-50">Cancel</button>
     <button on:click={saveUser} disabled={saving} class="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50">
       {saving ? 'Saving...' : (createMode ? 'Create User' : 'Save Changes')}
     </button>
   </div>
 </div>
+
+
+
+
+
+
 
 
