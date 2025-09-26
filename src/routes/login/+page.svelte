@@ -8,6 +8,7 @@
 
   let loading = false;
 
+  // Update authStore if server returns token/userId
   function setAuth(token: string, userId: string) {
     authStore.set({ token, userId });
   }
@@ -29,20 +30,23 @@
 
     <form
       method="POST"
-      use:enhance={({ formElement, formData }) => {
+      class="mt-8 space-y-6"
+      use:enhance={({ formElement }) => {
         loading = true;
         return async ({ result, update }) => {
           loading = false;
+
           if (result.type === 'success') {
+            // Update authStore with token + userId from server
             if (result.data?.token && result.data?.userId) {
               setAuth(result.data.token.toString(), result.data.userId.toString());
             }
           } else {
+            // Show server validation errors
             await update();
           }
         };
       }}
-      class="mt-8 space-y-6"
     >
       <div class="space-y-4">
         <div>
@@ -91,6 +95,8 @@
     </div>
   </div>
 </div>
+
+
 
 
 
