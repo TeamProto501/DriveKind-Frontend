@@ -106,22 +106,34 @@
     currentPage = 1;
   }
 
-  // --- Supabase auth listener ---
+  // --- Supabase auth listener with immediate session check ---
   onMount(() => {
-    const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
-      if (session?.user) {
-        authInfo = { token: session.access_token };
-        loadUsers();
-      } else {
-        console.error('No user session found.');
-        staffProfiles = [];
-        filteredProfiles = [];
-        loading = false;
-      }
-    });
+	async function init() {
+		// 1️⃣ Immediately check for existing session
+		const { data: { session } } = await supabase.auth.getSession();
+		if (session?.user) {
+		authInfo = { token: session.access_token };
+		await loadUsers();
+		}
 
-    return () => listener.subscription.unsubscribe();
-  });
+		// 2️⃣ Subscribe to future auth changes
+		const { data: listener } = supabase.auth.onAuthStateChange(async (event, session) => {
+		if (session?.user) {
+			authInfo = { token: session.access_token };
+			await loadUsers();
+		} else {
+			console.log('No user session found.');
+			staffProfiles = [];
+			filteredProfiles = [];
+			loading = false;
+		}
+		});
+
+		return () => listener.subscription.unsubscribe();
+	}
+	
+	init();
+});
 </script>
 
 <RoleGuard requiredRoles={['Admin']}>
@@ -263,6 +275,8 @@
     {/if}
   </div>
 </RoleGuard>
+
+
 
 
 
