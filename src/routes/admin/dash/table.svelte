@@ -1,52 +1,105 @@
-<script>
-let {type} = $props()
- let array1 = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
-let array2 = [10, 11, 12, 13, 14, 15, 16, 17, 18, 19,12];
-let array = $derived(type === 'clients' ? array1 : array2);
+<script lang="ts">
+  import { derived } from "svelte/store";
+  import { page } from "$app/stores";
+  let clients = [];
+  page.subscribe(($page) => {
+    clients = $page.data?.clients || [];
+  });
+  let { type } = $props();
+  /*   let array1 = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+  let array2 = [10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 12];
+  let array = $derived(type === "clients" ? array1 : array2); */
 
   // console.log(`Selected tab changed to: ${type}`);
-  </script>
+</script>
 
-<div class="flex flex-col ">
-
-<div class="overflow-x-auto border-1 border-gray-100 rounded-md">
+<div class="flex flex-col">
+  <div class="overflow-x-auto border-1 border-gray-100 rounded-md">
     <table class="min-w-full divide-y-2 divide-gray-200 bg-white text-sm">
       <thead class="ltr:text-left rtl:text-right bg-gray-100">
         <tr>
-          <th class="sticky inset-y-0 start-0  px-4 py-4 ">
+          <th class="sticky inset-y-0 start-0 px-4 py-4">
             <label for="SelectAll" class="sr-only">Select All</label>
-  
-            <input type="checkbox" id="SelectAll" class="size-5 rounded-sm border-gray-300" /> 
+
+            <input
+              type="checkbox"
+              id="SelectAll"
+              class="size-5 rounded-sm border-gray-300"
+            />
           </th>
-          <th class="px-4 py-2 font-medium whitespace-nowrap text-gray-900">Name</th>
-          <th class="px-4 py-2 font-medium whitespace-nowrap text-gray-900">Date of Birth</th>
-          <th class="px-4 py-2 font-medium whitespace-nowrap text-gray-900">Role</th>
-          <th class="px-4 py-2 font-medium whitespace-nowrap text-gray-900">Salary</th>
+          <th class="px-4 py-2 font-medium whitespace-nowrap text-gray-900"
+            >First Name</th
+          >
+          <th class="px-4 py-2 font-medium whitespace-nowrap text-gray-900"
+            >Last Name</th
+          >
+          <th class="px-4 py-2 font-medium whitespace-nowrap text-gray-900"
+            >Date of Birth</th
+          >
+          <th class="px-4 py-2 font-medium whitespace-nowrap text-gray-900"
+            >St.Address</th
+          >
+          <th class="px-4 py-2 font-medium whitespace-nowrap text-gray-900"
+            >City</th
+          >
+          <th class="px-4 py-2 font-medium whitespace-nowrap text-gray-900"
+            >State</th
+          >
+          <th class="px-4 py-2 font-medium whitespace-nowrap text-gray-900"
+            >Zip Code</th
+          >
+          <th class="px-4 py-2 font-medium whitespace-nowrap text-gray-900"
+            >Phone</th
+          >
         </tr>
       </thead>
-  
+
       <tbody class="divide-y divide-gray-200">
-        {#each array as item}
-        <tr>
-          <td class="sticky inset-y-0 start-0 bg-white px-4 py-4">
-            <label class="sr-only" for="Row1">Row 1</label>
-  
-            <input class="size-5 rounded-sm border-gray-300" type="checkbox" id="Row1" />
-          </td>
-          <td class="px-4 py-2 font-medium whitespace-nowrap text-gray-900">John Doe</td>
-          <td class="px-4 py-2 whitespace-nowrap text-gray-700">12/05/1995</td>
-          <td class="px-4 py-2 whitespace-nowrap text-gray-700">Developer</td>
-          <td class="px-4 py-2 whitespace-nowrap text-gray-700">$50,000</td>
-        </tr>
+        {#each clients as client}
+          <tr>
+            <td class="sticky inset-y-0 start-0 bg-white px-4 py-4">
+              <label class="sr-only" for="Row1">Row 1</label>
+
+              <input
+                class="size-5 rounded-sm border-gray-300"
+                type="checkbox"
+                id="Row1"
+              />
+            </td>
+            <td class="px-4 py-2 whitespace-nowrap text-gray-700"
+              >{client.first_name}</td
+            >
+            <td class="px-4 py-2 whitespace-nowrap text-gray-700"
+              >{client.last_name}</td
+            >
+            <td class="px-4 py-2 whitespace-nowrap text-gray-700"
+              >{client.date_of_birth}</td
+            >
+            <td class="px-4 py-2 whitespace-nowrap text-gray-700"
+              >{client.street_address}</td
+            >
+            <td class="px-4 py-2 whitespace-nowrap text-gray-700"
+              >{client.city}</td
+            >
+            <td class="px-4 py-2 whitespace-nowrap text-gray-700"
+              >{client.state}</td
+            >
+            <td class="px-4 py-2 whitespace-nowrap text-gray-700"
+              >{client.zip_code}</td
+            >
+            <td class="px-4 py-2 whitespace-nowrap text-gray-700"
+              >{client.primary_phone}</td
+            >
+          </tr>
         {/each}
 
         <tr>
-          <td class="px-4 py-2 whitespace-nowrap text-gray-500">Total: <span class="font-bold text-black">{array.length}</span></td>
-
+          <td colspan="8" class=" px-4 py-2 whitespace-nowrap text-gray-500"
+            >Total: <span class="font-bold text-black">{clients.length}</span
+            ></td
+          >
         </tr>
       </tbody>
     </table>
   </div>
 </div>
-
-
