@@ -1,6 +1,7 @@
 <script lang="ts">
-  import { supabase } from '$lib/supabase';
-  import { goto } from '$app/navigation';
+  import { enhance } from '$app/forms';
+  import type { PageData, ActionData } from './$types';
+  import { authStore } from '$lib/stores/auth'; // ✅ your AuthInfo store
 
   let email = '';
   let password = '';
@@ -39,18 +40,73 @@
         <input type="email" bind:value={email} required class="mt-1 block w-full px-3 py-2 border rounded-md" />
       </div>
 
-      <div>
-        <label class="block text-sm font-medium text-gray-700">Password</label>
-        <input type="password" bind:value={password} required class="mt-1 block w-full px-3 py-2 border rounded-md" />
+    <form
+      method="POST"
+      action="?/login"
+      use:enhance={({ formElement, formData, action }) => {
+        loading = true;
+
+        return async ({ result, update }) => {
+          loading = false;
+
+          if (result.type === 'success' && result.data?.success) {
+            // ✅ hydrate your store with token + user
+            authStore.set({
+              token: result.data.token.toString(),
+              userId: result.data.userId.toString()
+            });
+          } else {
+            // default SvelteKit update so errors show
+            await update();
+          }
+        };
+      }}
+      class="mt-8 space-y-6"
+    >
+      <div class="space-y-4">
+        <div>
+          <label for="email" class="block text-sm font-medium text-gray-700">
+            Email address
+          </label>
+          <input
+            id="email"
+            name="email"
+            type="email"
+            value={form?.email ?? ''}
+            required
+            class="mt-1 relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+            placeholder="Enter your email"
+          />
+        </div>
+        <div>
+          <label for="password" class="block text-sm font-medium text-gray-700">
+            Password
+          </label>
+          <input
+            id="password"
+            name="password"
+            type="password"
+            required
+            class="mt-1 relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+            placeholder="Enter your password"
+          />
+        </div>
       </div>
 
       {#if error}
         <p class="text-red-600 text-sm">{error}</p>
       {/if}
 
-      <button type="submit" disabled={loading} class="w-full py-2 px-4 bg-indigo-600 text-white rounded-md">
-        {loading ? 'Signing in...' : 'Sign In'}
-      </button>
+      <div>
+        <button
+          type="submit"
+          disabled={loading}
+          class="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+        >
+          {loading ? 'Signing In...' : 'Sign In'}
+        </button>
+      </div>
     </form>
   </div>
 </div>
+

@@ -4,7 +4,6 @@
   import { getStaffProfileById, updateStaffProfile } from '$lib/api';
   import type { AuthInfo } from '$lib/types';
   import { authStore } from '$lib/stores/auth';
-  import { get } from 'svelte/store';
 
   type StaffProfile = {
     user_id: string;
