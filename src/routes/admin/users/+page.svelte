@@ -2,11 +2,11 @@
   import RoleGuard from '$lib/components/RoleGuard.svelte';
   import Breadcrumbs from '$lib/components/Breadcrumbs.svelte';
   import { Users, Plus, Search, Filter } from '@lucide/svelte';
-  import { onMount } from 'svelte';
   import UserSidebar from '$lib/components/UserSidebar.svelte';
   import { getAllStaffProfiles } from '$lib/api';
   import type { AuthInfo } from '$lib/types';
-  import { supabase } from '$lib/supabase';
+  import { authStore } from '$lib/stores/auth';
+  import { get } from 'svelte/store';
 
   type StaffProfile = {
     user_id: string;
@@ -31,7 +31,7 @@
   let selectedUser: StaffProfile | null = null;
   let isCreateMode = false;
 
-  let authInfo: AuthInfo | undefined;
+  let authInfo: AuthInfo | null = null;
 
   // --- Pagination ---
   let currentPage = 1;
@@ -106,34 +106,16 @@
     currentPage = 1;
   }
 
-  // --- Supabase auth listener with immediate session check ---
-  onMount(() => {
-	async function init() {
-		// 1️⃣ Immediately check for existing session
-		const { data: { session } } = await supabase.auth.getSession();
-		if (session?.user) {
-		authInfo = { token: session.access_token };
-		await loadUsers();
-		}
-
-		// 2️⃣ Subscribe to future auth changes
-		const { data: listener } = supabase.auth.onAuthStateChange(async (event, session) => {
-		if (session?.user) {
-			authInfo = { token: session.access_token };
-			await loadUsers();
-		} else {
-			console.log('No user session found.');
-			staffProfiles = [];
-			filteredProfiles = [];
-			loading = false;
-		}
-		});
-
-		return () => listener.subscription.unsubscribe();
-	}
-	
-	init();
-});
+  // --- Subscribe to authStore ---
+  authStore.subscribe((value) => {
+    authInfo = value;
+    if (authInfo) loadUsers();
+    else {
+      staffProfiles = [];
+      filteredProfiles = [];
+      loading = false;
+    }
+  });
 </script>
 
 <RoleGuard requiredRoles={['Admin']}>
@@ -275,6 +257,8 @@
     {/if}
   </div>
 </RoleGuard>
+
+
 
 
 
