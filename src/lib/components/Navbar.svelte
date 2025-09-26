@@ -224,7 +224,19 @@
   // Role switching function
   function switchRole(role: RoleEnum) {
     activeRole = role;
-	}
+
+    // Redirect user to default dashboard for their role
+    if (role === "Admin") {
+      goto("/admin/dash");
+    } else if (role === "Dispatcher") {
+      goto("/dispatcher/dashboard");
+    } else if (role === "Driver") {
+      goto("/driver/rides");
+    } else {
+      // fallback route
+      goto("/profile");
+    }
+  }
 </script>
 
 <!-- Sidebar Provider -->
