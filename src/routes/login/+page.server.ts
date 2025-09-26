@@ -4,18 +4,17 @@ import { createSupabaseServerClient } from '$lib/supabase.server';
 
 export const load: PageServerLoad = async (event) => {
   const supabase = createSupabaseServerClient(event);
-  const {
-    data: { session }
-  } = await supabase.auth.getSession();
+  const { data: { session } } = await supabase.auth.getSession();
 
   // Redirect if already logged in
   if (session) {
-    throw redirect(302, '/');
+    throw redirect(302, '/admin/dash');
   }
 
   return {};
 };
 
+// ✅ default action called automatically by <form method="POST">
 export const actions: Actions = {
   default: async (event) => {
     const supabase = createSupabaseServerClient(event);
@@ -25,32 +24,20 @@ export const actions: Actions = {
     const password = formData.get('password')?.toString() || '';
 
     if (!email || !password) {
-      return fail(400, {
-        error: 'Please fill in all fields',
-        email
-      });
+      return fail(400, { error: 'Please fill in all fields', email });
     }
 
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password
-    });
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
     if (error) {
-      return fail(400, {
-        error: error.message,
-        email
-      });
+      return fail(400, { error: error.message, email });
     }
 
     if (!data.session || !data.user) {
-      return fail(400, {
-        error: 'No session returned from Supabase',
-        email
-      });
+      return fail(400, { error: 'No session returned from Supabase', email });
     }
 
-    // ✅ Return userId + access token for frontend reactive store
+    // ✅ Return token + userId for frontend reactive store
     return {
       success: true,
       token: data.session.access_token,
@@ -61,15 +48,10 @@ export const actions: Actions = {
   logout: async (event) => {
     const supabase = createSupabaseServerClient(event);
     const { error } = await supabase.auth.signOut();
-
-    if (error) {
-      return fail(500, {
-        error: 'Error logging out'
-      });
-    }
-
+    if (error) return fail(500, { error: 'Error logging out' });
     throw redirect(302, '/login');
   }
 };
+
 
 
