@@ -8,7 +8,6 @@
   import type { AuthInfo } from '$lib/types';
   import { supabase } from '$lib/supabase';
 
-  // --- Types ---
   type StaffProfile = {
     user_id: string;
     first_name: string;
@@ -32,15 +31,7 @@
   let selectedUser: StaffProfile | null = null;
   let isCreateMode = false;
 
-  // --- Auth ---
   let authInfo: AuthInfo | undefined;
-
-  async function initAuth() {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session?.user) {
-      authInfo = { token: session.access_token };
-    }
-  }
 
   // --- Pagination ---
   let currentPage = 1;
@@ -52,11 +43,13 @@
   );
 
   // --- Load Users ---
-  async function loadUsers(auth?: AuthInfo) {
+  async function loadUsers() {
+    if (!authInfo) return;
+
     loading = true;
     errorMessage = null;
     try {
-      const profiles: StaffProfile[] = await getAllStaffProfiles(auth);
+      const profiles: StaffProfile[] = await getAllStaffProfiles(authInfo);
       staffProfiles = profiles;
       applyFilters();
     } catch (err: any) {
@@ -67,7 +60,6 @@
     }
   }
 
-  // --- Filter ---
   function applyFilters() {
     let results = [...staffProfiles];
 
@@ -91,7 +83,6 @@
     currentPage = 1;
   }
 
-  // --- Sidebar Controls ---
   function openSidebar(user: StaffProfile | null = null) {
     selectedUser = user;
     isCreateMode = !user;
@@ -102,7 +93,6 @@
     isCreateMode = false;
   }
 
-  // --- Pagination Controls ---
   function nextPage() {
     if (currentPage < totalPages) currentPage++;
   }
@@ -116,9 +106,21 @@
     currentPage = 1;
   }
 
-  onMount(async () => {
-    await initAuth();
-    await loadUsers(authInfo);
+  // --- Supabase auth listener ---
+  onMount(() => {
+    const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
+      if (session?.user) {
+        authInfo = { token: session.access_token };
+        loadUsers();
+      } else {
+        console.error('No user session found.');
+        staffProfiles = [];
+        filteredProfiles = [];
+        loading = false;
+      }
+    });
+
+    return () => listener.subscription.unsubscribe();
   });
 </script>
 
@@ -255,11 +257,12 @@
         user={selectedUser}
         createMode={isCreateMode}
         on:close={closeSidebar}
-        on:updated={() => loadUsers(authInfo)}
+        on:updated={loadUsers}
         authInfo={authInfo}
       />
     {/if}
   </div>
 </RoleGuard>
+
 
 
