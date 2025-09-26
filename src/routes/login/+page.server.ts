@@ -43,8 +43,9 @@ export const actions: Actions = {
       });
     }
 
-    throw redirect(302, "/");
-  },
+		// Redirect wherever you want authenticated users to land
+		throw redirect(302, '/dash'); 
+	},
 
   logout: async (event) => {
     const supabase = createSupabaseServerClient(event);
