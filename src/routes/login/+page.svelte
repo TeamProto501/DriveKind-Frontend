@@ -3,10 +3,11 @@
   import { authStore } from '$lib/stores/auth';
   import type { PageData, ActionData } from './$types';
 
-  let { data, form }: { data: PageData; form: ActionData } = $props();
+  export let data: PageData;
+  export let form: ActionData;
+
   let loading = false;
 
-  // Update authStore after successful login
   function setAuth(token: string, userId: string) {
     authStore.set({ token, userId });
   }
@@ -26,21 +27,15 @@
 
     <form
       method="POST"
-      action="?/login"
-      use:enhance={({ formElement, formData, action }) => {
+      use:enhance={({ formElement, formData }) => {
         loading = true;
         return async ({ result, update }) => {
           loading = false;
-
           if (result.type === 'success') {
-            // Update authStore if server returns token + userId
             if (result.data?.token && result.data?.userId) {
               setAuth(result.data.token.toString(), result.data.userId.toString());
             }
-
-            // Redirect handled by server automatically
           } else {
-            // Show server validation errors
             await update();
           }
         };
@@ -94,6 +89,7 @@
     </div>
   </div>
 </div>
+
 
 
 
