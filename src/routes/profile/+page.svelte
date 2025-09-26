@@ -29,6 +29,7 @@
   let userId: string | null = null;
   let authInfo: AuthInfo | undefined;
 
+  // --- Load profile ---
   async function loadProfile() {
     if (!userId || !authInfo) return;
 
@@ -41,11 +42,13 @@
         : profile.role === 'Admin';
     } catch (err) {
       console.error('Failed to load profile:', err);
+      profile = null;
     } finally {
       loading = false;
     }
   }
 
+  // --- Save profile ---
   async function saveProfile() {
     if (!userId || !authInfo || !profile) return;
 
@@ -68,22 +71,40 @@
     editing = false;
   }
 
-  // --- Use Supabase auth state change subscription ---
+  // --- Auth and profile initialization ---
   onMount(() => {
-    const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
+    async function init() {
+      // 1️⃣ Get current session
+      const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
         authInfo = { token: session.access_token };
         userId = session.user.id;
-        loadProfile();
+        await loadProfile();
       } else {
         console.error('No user session found.');
         profile = null;
         formData = {} as StaffProfile;
         loading = false;
       }
-    });
 
-    return () => listener.subscription.unsubscribe();
+      // 2️⃣ Subscribe to future auth state changes
+      const { data: listener } = supabase.auth.onAuthStateChange(async (event, session) => {
+        if (session?.user) {
+          authInfo = { token: session.access_token };
+          userId = session.user.id;
+          await loadProfile();
+        } else {
+          console.error('No user session found.');
+          profile = null;
+          formData = {} as StaffProfile;
+          loading = false;
+        }
+      });
+
+      return () => listener.subscription.unsubscribe();
+    }
+
+    init();
   });
 </script>
 
@@ -135,6 +156,7 @@
     </div>
   </div>
 </RoleGuard>
+
 
 
 
