@@ -50,7 +50,7 @@ export const actions: Actions = {
 		}
 
 		// Redirect wherever you want authenticated users to land
-		throw redirect(302, '/dashboard'); 
+		throw redirect(302, '/dash'); 
 	},
 
 	logout: async (event) => {
