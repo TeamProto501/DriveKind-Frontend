@@ -18,7 +18,7 @@ export const load: PageServerLoad = async (event) => {
 };
 
 export const actions: Actions = {
-  default: async (event) => {
+  login: async (event) => {
     const supabase = createSupabaseServerClient(event);
     const formData = await event.request.formData();
 
