@@ -10,7 +10,7 @@ export const load = async (event) => {
       ? "/volunteer/dash"
       : "/clients/dash";
   const res = await authenticatedFetch(
-    API_BASE_URL + "/clients/dash",
+    API_BASE_URL + endpoint,
     {},
     undefined,
     event

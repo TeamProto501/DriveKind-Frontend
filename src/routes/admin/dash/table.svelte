@@ -17,69 +17,74 @@
   }
 </script>
 
-<Table.Root class="min-w-full divide-y-2 divide-gray-200 bg-white text-sm ">
-  <Table.Header class="ltr:text-left rtl:text-right bg-gray-100">
-    <Table.Row>
-      <Table.Head class="sticky inset-y-0 start-0 px-4 py-4">#</Table.Head>
-      {#each keys as key}
-        <Table.Head class="px-4 py-2 font-medium whitespace-nowrap"
-          >{formatLabel(key)}</Table.Head
-        >
-      {/each}
-    </Table.Row>
-  </Table.Header>
-
-  <Table.Body class="divide-y divide-gray-200">
-    {#each pagedData as row, i}
-      <Table.Row class="px-4 py-2">
-        <Table.Cell>{(currentPage - 1) * pageSize + i + 1}</Table.Cell>
-        {#each keys as key}
-          <Table.Cell>{row[key] ?? "-"}</Table.Cell>
-        {/each}
-      </Table.Row>
-    {/each}
-    {#if pagedData.length === 0}
+<div class="overflow-x-auto border-1 border-gray-100 rounded-md">
+  <Table.Root class="min-w-full divide-y-2 divide-gray-200 bg-white text-sm ">
+    <Table.Header class="ltr:text-left rtl:text-right bg-gray-100">
       <Table.Row>
-        <Table.Cell colspan={keys.length + 1} class="text-center"
-          >No data</Table.Cell
-        >
-      </Table.Row>
-    {/if}
-  </Table.Body>
-</Table.Root>
-
-<div class="mt-4 flex justify-end">
-  <Pagination.Root
-    count={items.length}
-    perPage={pageSize}
-    bind:page={currentPage}
-  >
-    {#snippet children({ pages, currentPage: paginationCurrentPage })}
-      <Pagination.Content>
-        <Pagination.Item>
-          <Pagination.PrevButton />
-        </Pagination.Item>
-
-        {#each pages as page (page.key)}
-          {#if page.type === "ellipsis"}
-            <Pagination.Item>
-              <Pagination.Ellipsis />
-            </Pagination.Item>
-          {:else}
-            <Pagination.Item>
-              <Pagination.Link {page} isActive={currentPage === page.value}>
-                {page.value}
-              </Pagination.Link>
-            </Pagination.Item>
-          {/if}
+        <Table.Head class="sticky inset-y-0 start-0 px-4 py-4">#</Table.Head>
+        {#each keys as key}
+          <Table.Head class="px-4 py-2 font-medium whitespace-nowrap"
+            >{formatLabel(key)}</Table.Head
+          >
         {/each}
+      </Table.Row>
+    </Table.Header>
 
-        <Pagination.Item>
-          <Pagination.NextButton />
-        </Pagination.Item>
-      </Pagination.Content>
-    {/snippet}
-  </Pagination.Root>
+    <Table.Body class="divide-y divide-gray-200">
+      {#each pagedData as row, i}
+        <Table.Row class="px-4 py-2">
+          <Table.Cell>{(currentPage - 1) * pageSize + i + 1}</Table.Cell>
+          {#each keys as key}
+            <Table.Cell>{row[key] ?? "-"}</Table.Cell>
+          {/each}
+        </Table.Row>
+      {/each}
+      <Table.Row class="text-gray-500 font-bold">
+        Total: {data.length}
+      </Table.Row>
+      {#if pagedData.length === 0}
+        <Table.Row>
+          <Table.Cell colspan={keys.length + 1} class="text-center"
+            >No data</Table.Cell
+          >
+        </Table.Row>
+      {/if}
+    </Table.Body>
+  </Table.Root>
+
+  <div class="mt-4 flex justify-end pb-2">
+    <Pagination.Root
+      count={items.length}
+      perPage={pageSize}
+      bind:page={currentPage}
+    >
+      {#snippet children({ pages, currentPage: paginationCurrentPage })}
+        <Pagination.Content>
+          <Pagination.Item>
+            <Pagination.PrevButton />
+          </Pagination.Item>
+
+          {#each pages as page (page.key)}
+            {#if page.type === "ellipsis"}
+              <Pagination.Item>
+                <Pagination.Ellipsis />
+              </Pagination.Item>
+            {:else}
+              <Pagination.Item>
+                <Pagination.Link {page} isActive={currentPage === page.value}>
+                  {page.value}
+                </Pagination.Link>
+              </Pagination.Item>
+            {/if}
+          {/each}
+
+          <Pagination.Item>
+            <Pagination.NextButton />
+          </Pagination.Item>
+        </Pagination.Content>
+      {/snippet}
+    </Pagination.Root>
+  </div>
 </div>
 <!-- <div class="flex flex-col">
   <div class="overflow-x-auto border-1 border-gray-100 rounded-md">

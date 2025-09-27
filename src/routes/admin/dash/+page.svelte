@@ -17,8 +17,10 @@
     Database,
     FileText,
     Shield,
+    User,
   } from "@lucide/svelte";
   import { goto } from "$app/navigation";
+  import { navigating } from "$app/stores";
   export let data: any;
 
   // Quick action items for admin
@@ -69,8 +71,31 @@
       icon: Car,
       description: "Manage driver accounts and schedules",
     },
+    {
+      id: "volunteer",
+      label: "Volunteers",
+      icon: User,
+      description: "Manage volunteers and their accounts",
+    },
+    {
+      id: "dispatchers",
+      label: "Dispatchers",
+      icon: User,
+      description: "Manage Dispatchers and their accounts",
+    },
   ];
-  const rows = data?.data ?? data ?? [];
+  $: rows = data?.data ?? [];
+  $: selectedTab = data?.tab ?? "clients";
+  $: isNavigating = $navigating;
+  function selectTab(tabId: string) {
+    if (selectedTab !== tabId) {
+      goto(`?tab=${tabId}`, {
+        replaceState: false,
+        noScroll: true,
+        keepFocus: true,
+      });
+    }
+  }
 </script>
 
 <RoleGuard requiredRoles={["Admin"]}>
@@ -127,7 +152,7 @@
       <!-- Main Content Area -->
       <div class="bg-white rounded-lg border border-gray-200 shadow-sm">
         <!-- Tab Navigation -->
-        <!-- <div class="border-b border-gray-200">
+        <div class="border-b border-gray-200">
           <div class="flex items-center justify-between px-6 py-4">
             <nav class="flex space-x-8">
               {#each tabs as t}
@@ -143,10 +168,10 @@
                   <span>{t.label}</span>
                 </button>
               {/each}
-            </nav> -->
+            </nav>
 
-        <!-- Action Buttons -->
-        <!-- <div class="flex items-center space-x-2">
+            <!-- Action Buttons -->
+            <div class="flex items-center space-x-2">
               <button
                 class="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-md transition-colors duration-200"
                 title="Search"
@@ -173,12 +198,12 @@
               </button>
             </div>
           </div>
-        </div> -->
+        </div>
 
         <!-- Tab Content -->
-        <!-- <div class="p-6"> -->
-        <!-- Tab Description -->
-        <!-- {#each tabs as t}
+        <div class="p-6">
+          <!-- Tab Description -->
+          {#each tabs as t}
             {#if selectedTab === t.id}
               <div class="mb-6">
                 <div class="flex items-center space-x-2 text-gray-600 mb-2">
@@ -189,14 +214,14 @@
               </div>
             {/if}
           {/each}
- -->
-        <!-- Table Component -->
-        <Table data={rows} />
-        <!--  </div>
-      </div>   -->
 
-        <!-- Stats Overview -->
-        <!-- <div class="mt-8 grid grid-cols-1 md:grid-cols-3 gap-6">
+          <!-- Table Component -->
+          <Table data={rows} />
+        </div>
+      </div>
+
+      <!-- Stats Overview -->
+      <div class="mt-8 grid grid-cols-1 md:grid-cols-3 gap-6">
         <div class="bg-white p-6 rounded-lg border border-gray-200 shadow-sm">
           <div class="flex items-center">
             <div class="p-2 bg-blue-100 rounded-lg">
@@ -234,8 +259,5 @@
         </div>
       </div>
     </div>
-  </div> -->
-      </div>
-    </div>
-  </div></RoleGuard
->
+  </div>
+</RoleGuard>
