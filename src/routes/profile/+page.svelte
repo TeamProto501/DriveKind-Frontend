@@ -21,21 +21,23 @@
   };
 
   let { data }: { data: PageData } = $props();
-  $: form = $page.form as ActionData;
+  let form = $derived($page.form as ActionData);
 
-  let profile: StaffProfile | null = data.profile;
+  let profile = $state<StaffProfile | null>(data.profile);
   let editing = $state(false);
   let loading = $state(false);
 
   // Initialize form data from the loaded profile
   let formData = $state(profile ? { ...profile } : {} as StaffProfile);
 
-  // Update formData when profile changes (after form submission)
-  $: if (form?.success && form?.profile) {
-    profile = form.profile;
-    formData = { ...form.profile };
-    editing = false;
-  }
+  // Update formData when profile changes (after form submission) using $effect
+  $effect(() => {
+    if (form?.success && form?.profile) {
+      profile = form.profile;
+      formData = { ...form.profile };
+      editing = false;
+    }
+  });
 
   function cancelEdit() {
     if (profile) formData = { ...profile };
@@ -43,9 +45,9 @@
   }
 
   // Check if user is admin
-  $: isAdmin = profile && (Array.isArray(profile.role)
+  let isAdmin = $derived(profile && (Array.isArray(profile.role)
     ? profile.role.includes('Admin')
-    : profile.role === 'Admin');
+    : profile.role === 'Admin'));
 </script>
 
 <RoleGuard requiredRoles={['Client', 'Admin', 'Driver', 'Dispatcher', 'Volunteer']}>
