@@ -1,92 +1,54 @@
 <script lang="ts">
-  import { supabase } from '$lib/supabase';
-  import { authStore } from '$lib/stores/auth';
-  import { writable } from 'svelte/store';
+  import { enhance } from '$app/forms';
+  import { page } from '$app/stores';
 
   let email = '';
   let password = '';
   let loading = false;
-  let errorMessage = '';
 
-  function setAuth(token: string, userId: string) {
-    authStore.set({ token, userId });
-  }
-
-  async function handleLogin() {
-    loading = true;
-    errorMessage = '';
-
-    try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password
-      });
-
-      if (error) {
-        errorMessage = error.message;
-        return;
-      }
-
-      if (!data.session || !data.user) {
-        errorMessage = 'No session returned from Supabase';
-        return;
-      }
-
-      setAuth(data.session.access_token, data.user.id);
-
-      // Redirect after successful login
-      window.location.href = '/admin/dash';
-
-    } catch (err: any) {
-      console.error('Login error:', err);
-      errorMessage = err.message || 'Login failed';
-    } finally {
-      loading = false;
-    }
-  }
+  // Access server error messages via $page.data.form?.error
+  $: errorMessage = $page.data?.form?.error;
 </script>
 
 <div class="min-h-screen flex items-center justify-center bg-gray-50">
   <div class="max-w-md w-full space-y-8 p-8">
-    <div>
-      <h2 class="mt-6 text-center text-3xl font-extrabold text-gray-900">
-        Sign in to your account
-      </h2>
-      <p class="mt-2 text-center text-sm text-gray-600">
-        Or
-        <a href="/signup" class="font-medium text-indigo-600 hover:text-indigo-500">
-          create a new account
-        </a>
-      </p>
-    </div>
+    <h2 class="mt-6 text-center text-3xl font-extrabold text-gray-900">
+      Sign in to your account
+    </h2>
 
-    <form on:submit|preventDefault={handleLogin} class="mt-8 space-y-6">
+    <form
+      method="POST"
+      use:enhance={() => {
+        loading = true;
+        return ({ update }) => {
+          loading = false;
+          update(); // let SvelteKit update form data (errors etc.)
+        };
+      }}
+      class="mt-8 space-y-6"
+    >
       <div class="space-y-4">
         <div>
-          <label for="email" class="block text-sm font-medium text-gray-700">
-            Email address
-          </label>
+          <label for="email" class="block text-sm font-medium text-gray-700">Email address</label>
           <input
             id="email"
+            name="email"
             type="email"
             bind:value={email}
             required
-            class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-            placeholder="Enter your email"
+            class="mt-1 block w-full px-3 py-2 border rounded-md"
           />
         </div>
 
         <div>
-          <label for="password" class="block text-sm font-medium text-gray-700">
-            Password
-          </label>
+          <label for="password" class="block text-sm font-medium text-gray-700">Password</label>
           <input
             id="password"
+            name="password"
             type="password"
             bind:value={password}
             required
-            class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-            placeholder="Enter your password"
+            class="mt-1 block w-full px-3 py-2 border rounded-md"
           />
         </div>
       </div>
@@ -95,22 +57,20 @@
         <div class="rounded-md bg-red-50 p-4 text-sm text-red-800">{errorMessage}</div>
       {/if}
 
-      <div>
-        <button
-          type="submit"
-          disabled={loading}
-          class="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50"
-        >
-          {loading ? 'Signing In...' : 'Sign In'}
-        </button>
-      </div>
+      <button
+        type="submit"
+        disabled={loading}
+        class="w-full py-2 px-4 rounded-md text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50"
+      >
+        {loading ? 'Signing In...' : 'Sign In'}
+      </button>
     </form>
-
-    <div class="text-center">
-      <a href="/" class="text-indigo-600 hover:text-indigo-500">← Back to home</a>
-    </div>
   </div>
 </div>
+
+
+
+
 
 
 
