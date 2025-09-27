@@ -1,19 +1,87 @@
 <script lang="ts">
-  import { derived } from "svelte/store";
-  import { page } from "$app/stores";
-  let clients = [];
-  page.subscribe(($page) => {
-    clients = $page.data?.clients || [];
-  });
-  let { type } = $props();
-  /*   let array1 = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
-  let array2 = [10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 12];
-  let array = $derived(type === "clients" ? array1 : array2); */
-
-  // console.log(`Selected tab changed to: ${type}`);
+  import * as Table from "$lib/components/ui/table/index.js";
+  import * as Pagination from "$lib/components/ui/pagination/index.js";
+  export let data: any = [];
+  $: items = Array.isArray(data) ? data : (data?.data ?? []);
+  const pageSize = 15;
+  let currentPage = 1;
+  $: pagedData = items.slice(
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize
+  );
+  $: keys = items[0] ? Object.keys(items[0]) : [];
+  const formatLabel = (k: string) =>
+    k.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  function handlePageChange(page: number) {
+    currentPage = page;
+  }
 </script>
 
-<div class="flex flex-col">
+<Table.Root class="min-w-full divide-y-2 divide-gray-200 bg-white text-sm ">
+  <Table.Header class="ltr:text-left rtl:text-right bg-gray-100">
+    <Table.Row>
+      <Table.Head class="sticky inset-y-0 start-0 px-4 py-4">#</Table.Head>
+      {#each keys as key}
+        <Table.Head class="px-4 py-2 font-medium whitespace-nowrap"
+          >{formatLabel(key)}</Table.Head
+        >
+      {/each}
+    </Table.Row>
+  </Table.Header>
+
+  <Table.Body class="divide-y divide-gray-200">
+    {#each pagedData as row, i}
+      <Table.Row class="px-4 py-2">
+        <Table.Cell>{(currentPage - 1) * pageSize + i + 1}</Table.Cell>
+        {#each keys as key}
+          <Table.Cell>{row[key] ?? "-"}</Table.Cell>
+        {/each}
+      </Table.Row>
+    {/each}
+    {#if pagedData.length === 0}
+      <Table.Row>
+        <Table.Cell colspan={keys.length + 1} class="text-center"
+          >No data</Table.Cell
+        >
+      </Table.Row>
+    {/if}
+  </Table.Body>
+</Table.Root>
+
+<div class="mt-4 flex justify-end">
+  <Pagination.Root
+    count={items.length}
+    perPage={pageSize}
+    bind:page={currentPage}
+  >
+    {#snippet children({ pages, currentPage: paginationCurrentPage })}
+      <Pagination.Content>
+        <Pagination.Item>
+          <Pagination.PrevButton />
+        </Pagination.Item>
+
+        {#each pages as page (page.key)}
+          {#if page.type === "ellipsis"}
+            <Pagination.Item>
+              <Pagination.Ellipsis />
+            </Pagination.Item>
+          {:else}
+            <Pagination.Item>
+              <Pagination.Link {page} isActive={currentPage === page.value}>
+                {page.value}
+              </Pagination.Link>
+            </Pagination.Item>
+          {/if}
+        {/each}
+
+        <Pagination.Item>
+          <Pagination.NextButton />
+        </Pagination.Item>
+      </Pagination.Content>
+    {/snippet}
+  </Pagination.Root>
+</div>
+<!-- <div class="flex flex-col">
   <div class="overflow-x-auto border-1 border-gray-100 rounded-md">
     <table class="min-w-full divide-y-2 divide-gray-200 bg-white text-sm">
       <thead class="ltr:text-left rtl:text-right bg-gray-100">
@@ -27,79 +95,40 @@
               class="size-5 rounded-sm border-gray-300"
             />
           </th>
-          <th class="px-4 py-2 font-medium whitespace-nowrap text-gray-900"
-            >First Name</th
-          >
-          <th class="px-4 py-2 font-medium whitespace-nowrap text-gray-900"
-            >Last Name</th
-          >
-          <th class="px-4 py-2 font-medium whitespace-nowrap text-gray-900"
-            >Date of Birth</th
-          >
-          <th class="px-4 py-2 font-medium whitespace-nowrap text-gray-900"
-            >St.Address</th
-          >
-          <th class="px-4 py-2 font-medium whitespace-nowrap text-gray-900"
-            >City</th
-          >
-          <th class="px-4 py-2 font-medium whitespace-nowrap text-gray-900"
-            >State</th
-          >
-          <th class="px-4 py-2 font-medium whitespace-nowrap text-gray-900"
-            >Zip Code</th
-          >
-          <th class="px-4 py-2 font-medium whitespace-nowrap text-gray-900"
-            >Phone</th
-          >
+          {#each columns as col}
+            <th class="px-4 py-2 font-medium whitespace-nowrap">{col.label}</th>
+          {/each}
         </tr>
       </thead>
 
       <tbody class="divide-y divide-gray-200">
-        {#each clients as client}
+        {#if rows?.length}
+          {#each rows as row, i}
+            <tr>
+              <td class="px-4 py-2"><input type="checkbox" id={"r" + i} /></td>
+              {#each columns as col}
+                <td class="px-4 py-2 whitespace-nowrap"
+                  >{row[col.key] ?? "-"}</td
+                >
+              {/each}
+            </tr>
+          {/each}
           <tr>
-            <td class="sticky inset-y-0 start-0 bg-white px-4 py-4">
-              <label class="sr-only" for="Row1">Row 1</label>
-
-              <input
-                class="size-5 rounded-sm border-gray-300"
-                type="checkbox"
-                id="Row1"
-              />
+            <td colspan={colspan()} class="px-4 py-2 text-gray-500 font-bold">
+              Total: {rows.length}
             </td>
-            <td class="px-4 py-2 whitespace-nowrap text-gray-700"
-              >{client.first_name}</td
-            >
-            <td class="px-4 py-2 whitespace-nowrap text-gray-700"
-              >{client.last_name}</td
-            >
-            <td class="px-4 py-2 whitespace-nowrap text-gray-700"
-              >{client.date_of_birth}</td
-            >
-            <td class="px-4 py-2 whitespace-nowrap text-gray-700"
-              >{client.street_address}</td
-            >
-            <td class="px-4 py-2 whitespace-nowrap text-gray-700"
-              >{client.city}</td
-            >
-            <td class="px-4 py-2 whitespace-nowrap text-gray-700"
-              >{client.state}</td
-            >
-            <td class="px-4 py-2 whitespace-nowrap text-gray-700"
-              >{client.zip_code}</td
-            >
-            <td class="px-4 py-2 whitespace-nowrap text-gray-700"
-              >{client.primary_phone}</td
-            >
           </tr>
-        {/each}
-
+        {:else}
+          <tr>
+            <td colspan={colspan()}>No data</td>
+          </tr>
+        {/if}
         <tr>
           <td colspan="8" class=" px-4 py-2 whitespace-nowrap text-gray-500"
-            >Total: <span class="font-bold text-black">{clients.length}</span
-            ></td
+            >Total: <span class="font-bold text-black">{rows.length}</span></td
           >
         </tr>
       </tbody>
     </table>
   </div>
-</div>
+</div> -->
