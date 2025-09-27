@@ -84,6 +84,7 @@
     currentPage = 1;
   }
 
+  // Sidebar open/close
   function openSidebar(user: StaffProfile | null = null) {
     selectedUser = user;
     isCreateMode = !user;
@@ -94,20 +95,15 @@
     isCreateMode = false;
   }
 
-  function nextPage() {
-    if (currentPage < totalPages) currentPage++;
-  }
-
-  function prevPage() {
-    if (currentPage > 1) currentPage--;
-  }
-
+  // Pagination
+  function nextPage() { if (currentPage < totalPages) currentPage++; }
+  function prevPage() { if (currentPage > 1) currentPage--; }
   function changePageSize(size: number) {
     pageSize = size;
     currentPage = 1;
   }
 
-  // --- Subscribe to authStore ---
+  // --- Auth subscription ---
   const unsubscribe = authStore.subscribe((value) => {
     authInfo = value;
     if (authInfo) loadUsers();
@@ -117,7 +113,6 @@
       loading = false;
     }
   });
-
   onDestroy(() => unsubscribe());
 </script>
 
@@ -249,6 +244,7 @@
       </div>
     </div>
 
+    <!-- Sidebar for Add/Edit -->
     {#if selectedUser !== null || isCreateMode}
       <UserSidebar
         user={selectedUser}
@@ -260,6 +256,7 @@
     {/if}
   </div>
 </RoleGuard>
+
 
 
 
