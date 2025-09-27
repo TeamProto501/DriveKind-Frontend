@@ -3,7 +3,7 @@ import { authenticatedFetch, API_BASE_URL } from "$lib/api";
 
 export const load = async (event) => {
   const res = await authenticatedFetch(
-    API_BASE_URL + "/staff/dash", // 👈 create a /staff/dash API endpoint
+    API_BASE_URL + "/staff-profiles", // 👈 create a /staff/dash API endpoint
     {},
     undefined,
     event
