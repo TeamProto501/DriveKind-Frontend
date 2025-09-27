@@ -42,7 +42,20 @@ export const actions: Actions = {
 
     // ✅ Supabase sets cookies automatically here
     throw redirect(302, '/admin/dash');
-  }
+  },
+
+  logout: async (event) => {
+		const supabase = createSupabaseServerClient(event);
+		const { error } = await supabase.auth.signOut();
+
+		if (error) {
+			return fail(500, {
+				error: 'Error logging out'
+			});
+		}
+
+		throw redirect(302, '/login');
+	}
 };
 
 

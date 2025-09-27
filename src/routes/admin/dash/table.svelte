@@ -1,85 +1,51 @@
-<script lang="ts">
-  import { supabase } from '$lib/supabase';
-  export let type: string;
+<script>
+let {type} = $props()
+ let array1 = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+let array2 = [10, 11, 12, 13, 14, 15, 16, 17, 18, 19,12];
+let array = $derived(type === 'clients' ? array1 : array2);
+  // console.log(`Selected tab changed to: ${type}`);
+  </script>
 
-  let rows: any[] = [];
-  let loading = true;
-  let error: string | null = null;
+<div class="flex flex-col ">
 
-  // fetch data whenever type changes
-  $: if (type) {
-    loadData(type);
-  }
+<div class="overflow-x-auto border-1 border-gray-100 rounded-md">
+    <table class="min-w-full divide-y-2 divide-gray-200 bg-white text-sm">
+      <thead class="ltr:text-left rtl:text-right bg-gray-100">
+        <tr>
+          <th class="sticky inset-y-0 start-0  px-4 py-4 ">
+            <label for="SelectAll" class="sr-only">Select All</label>
 
-  async function loadData(type: string) {
-    loading = true;
-    error = null;
-    rows = [];
+            <input type="checkbox" id="SelectAll" class="size-5 rounded-sm border-gray-300" /> 
+          </th>
+          <th class="px-4 py-2 font-medium whitespace-nowrap text-gray-900">Name</th>
+          <th class="px-4 py-2 font-medium whitespace-nowrap text-gray-900">Date of Birth</th>
+          <th class="px-4 py-2 font-medium whitespace-nowrap text-gray-900">Role</th>
+          <th class="px-4 py-2 font-medium whitespace-nowrap text-gray-900">Salary</th>
+        </tr>
+      </thead>
 
-    try {
-      if (type === 'clients') {
-        const { data, error: err } = await supabase
-          .from('clients')
-          .select('first_name, last_name, date_of_birth, primary_phone');
+      <tbody class="divide-y divide-gray-200">
+        {#each array as item}
+        <tr>
+          <td class="sticky inset-y-0 start-0 bg-white px-4 py-4">
+            <label class="sr-only" for="Row1">Row 1</label>
 
-        if (err) throw err;
-        rows = data ?? [];
-      }
+            <input class="size-5 rounded-sm border-gray-300" type="checkbox" id="Row1" />
+          </td>
+          <td class="px-4 py-2 font-medium whitespace-nowrap text-gray-900">John Doe</td>
+          <td class="px-4 py-2 whitespace-nowrap text-gray-700">12/05/1995</td>
+          <td class="px-4 py-2 whitespace-nowrap text-gray-700">Developer</td>
+          <td class="px-4 py-2 whitespace-nowrap text-gray-700">$50,000</td>
+        </tr>
+        {/each}
 
-      if (type === 'drivers') {
-        const { data, error: err } = await supabase
-          .from('staff_profiles')
-          .select('first_name, last_name, dob, role')
-          .contains('role', ['Driver']); // role is an enum[]
+        <tr>
+          <td class="px-4 py-2 whitespace-nowrap text-gray-500">Total: <span class="font-bold text-black">{array.length}</span></td>
 
-        if (err) throw err;
-        rows = data ?? [];
-      }
-    } catch (e: any) {
-      error = e.message;
-    } finally {
-      loading = false;
-    }
-  }
-</script>
-
-<div class="flex flex-col">
-  {#if loading}
-    <p class="text-gray-500 p-4">Loading...</p>
-  {:else if error}
-    <p class="text-red-600 p-4">Error: {error}</p>
-  {:else}
-    <div class="overflow-x-auto border-1 border-gray-100 rounded-md">
-      <table class="min-w-full divide-y-2 divide-gray-200 bg-white text-sm">
-        <thead class="bg-gray-100">
-          <tr>
-            <th class="px-4 py-2 text-gray-900">Name</th>
-            <th class="px-4 py-2 text-gray-900">DOB</th>
-            <th class="px-4 py-2 text-gray-900">Role / Phone</th>
-          </tr>
-        </thead>
-        <tbody class="divide-y divide-gray-200">
-          {#each rows as row}
-            <tr>
-              <td class="px-4 py-2 text-gray-900">
-                {row.first_name} {row.last_name}
-              </td>
-              <td class="px-4 py-2 text-gray-700">
-                {row.dob || row.date_of_birth}
-              </td>
-              <td class="px-4 py-2 text-gray-700">
-                {#if type === 'drivers'}
-                  {row.role?.join(', ')}
-                {:else}
-                  {row.primary_phone}
-                {/if}
-              </td>
-            </tr>
-          {/each}
-        </tbody>
-      </table>
-    </div>
-  {/if}
+        </tr>
+      </tbody>
+    </table>
+  </div>
 </div>
 
 

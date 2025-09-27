@@ -3,10 +3,8 @@
   import { page } from '$app/stores';
   import type { PageData, ActionData } from './$types';
 
-  // Match the main branch props structure
   let { data }: { data: PageData } = $props();
-  
-  // Access form data from $page.form (this is the correct way for your setup)
+
   let form = $derived($page.form as ActionData);
 
   let loading = $state(false);
