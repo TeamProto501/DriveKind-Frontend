@@ -4,21 +4,34 @@ import { error } from "@sveltejs/kit";
 
 export const load = async (event) => {
   try {
-    const res = await authenticatedFetch(
-      `${API_BASE_URL}/staff-profiles`,
-      {},
-      undefined,
-      event
+    // Define role endpoints you want to fetch
+    const endpoints = [
+      "clients/dash",
+      "driver/dash",
+      "dispatcher/dash"
+    ];
+
+    // Fetch all in parallel
+    const results = await Promise.all(
+      endpoints.map((ep) =>
+        authenticatedFetch(`${API_BASE_URL}/${ep}`, {}, undefined, event)
+      )
     );
 
-    if (!res.ok) {
-      throw error(res.status, `Failed to fetch staff profiles: ${res.statusText}`);
+    // Validate responses
+    const failed = results.find((res) => !res.ok);
+    if (failed) {
+      throw error(failed.status, `Failed on ${failed.url}: ${failed.statusText}`);
     }
 
-    const data = await res.json();
-    return { staffProfiles: data };
+    // Parse all JSON and merge into single list
+    const dataArrays = await Promise.all(results.map((res) => res.json()));
+    const staffProfiles = dataArrays.flat();
+
+    return { staffProfiles };
   } catch (err) {
     console.error("users/+page.server.ts load error:", err);
     throw error(500, "Failed to load staff profiles");
   }
 };
+
