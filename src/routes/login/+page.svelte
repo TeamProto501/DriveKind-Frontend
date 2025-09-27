@@ -7,7 +7,7 @@
   let { data }: { data: PageData } = $props();
   
   // Access form data from $page.form (this is the correct way for your setup)
-  $: form = $page.form as ActionData;
+  let form = $derived($page.form as ActionData);
 
   let loading = $state(false);
 </script>
