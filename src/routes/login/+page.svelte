@@ -6,8 +6,8 @@
   let password = '';
   let loading = false;
 
-  // Pull error messages returned from page.server.ts
-  $: errorMessage = $page.data?.form?.error;
+  // Fix: Access form results from $page.form, not $page.data.form
+  $: errorMessage = $page.form?.error;
 </script>
 
 <div class="flex items-center justify-center min-h-screen bg-gray-100">
