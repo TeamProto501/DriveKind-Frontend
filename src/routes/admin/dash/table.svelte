@@ -1,3 +1,4 @@
+
 <script lang="ts">
   import * as Table from "$lib/components/ui/table/index.js";
   import * as Pagination from "$lib/components/ui/pagination/index.js";
@@ -103,6 +104,7 @@
           {#each columns as col}
             <th class="px-4 py-2 font-medium whitespace-nowrap">{col.label}</th>
           {/each}
+
         </tr>
       </thead>
 
