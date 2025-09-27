@@ -1,7 +1,7 @@
 import { redirect, fail } from '@sveltejs/kit';
 import type { Actions } from './$types';
 import { createSupabaseServerClient } from '$lib/supabase.server';
-import { getClients } from '$lib/api';
+import { getAllClients } from '$lib/api';
 
 export const actions: Actions = {
 	logout: async (event) => {
@@ -19,7 +19,7 @@ export const actions: Actions = {
 
 	testClients: async (event) => {
 		try {
-			const response = await getClients();
+			const response = await getAllClients();
 			
 			if (response.ok) {
 				const data = await response.json();
