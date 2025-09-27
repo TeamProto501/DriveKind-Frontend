@@ -1,6 +1,21 @@
 import { fail, redirect } from '@sveltejs/kit';
-import type { Actions } from './$types';
+import type { Actions, PageServerLoad } from './$types';
 import { createSupabaseServerClient } from '$lib/supabase.server';
+
+// Add the missing load function
+export const load: PageServerLoad = async (event) => {
+  const supabase = createSupabaseServerClient(event);
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
+  // Redirect if already logged in
+  if (session) {
+    throw redirect(302, "/admin/dash"); // or wherever you want to redirect
+  }
+
+  return {};
+};
 
 export const actions: Actions = {
   default: async (event) => {
