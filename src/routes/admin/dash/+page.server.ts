@@ -8,6 +8,8 @@ export const load = async (event) => {
       ? "/driver/dash"
       : tab === "volunteer"
       ? "/volunteer/dash"
+      : tab === "dispatcher"
+      ? "/dispatcher/dash"
       : "/clients/dash";
   const res = await authenticatedFetch(
     API_BASE_URL + endpoint,
