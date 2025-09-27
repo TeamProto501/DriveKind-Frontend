@@ -3,10 +3,9 @@
   import Breadcrumbs from '$lib/components/Breadcrumbs.svelte';
   import { Users, Plus, Search, Filter } from '@lucide/svelte';
   import UserSidebar from '$lib/components/UserSidebar.svelte';
-  import { getAllStaffProfiles } from '$lib/api';
-  import type { AuthInfo } from '$lib/types';
-  import { authStore } from '$lib/stores/auth';
-  import { onDestroy } from 'svelte';
+  import type { PageData } from './$types';
+
+  export let data: PageData;
 
   type StaffProfile = {
     user_id: string;
@@ -19,10 +18,8 @@
     state?: string;
   };
 
-  let staffProfiles: StaffProfile[] = [];
-  let filteredProfiles: StaffProfile[] = [];
-  let loading = true;
-  let errorMessage: string | null = null;
+  let staffProfiles: StaffProfile[] = data.staffProfiles;
+  let filteredProfiles: StaffProfile[] = [...staffProfiles];
 
   let searchQuery = '';
   let roleFilter: string = 'All';
@@ -30,8 +27,6 @@
 
   let selectedUser: StaffProfile | null = null;
   let isCreateMode = false;
-
-  let authInfo: AuthInfo | null = null;
 
   // Pagination
   let currentPage = 1;
@@ -41,25 +36,6 @@
     (currentPage - 1) * pageSize,
     currentPage * pageSize
   );
-
-  // --- Load Users ---
-  async function loadUsers() {
-    if (!authInfo?.token) return;
-
-    loading = true;
-    errorMessage = null;
-
-    try {
-      const profiles: StaffProfile[] = await getAllStaffProfiles(authInfo);
-      staffProfiles = profiles;
-      applyFilters();
-    } catch (err: any) {
-      console.error('Error loading users:', err);
-      errorMessage = err.message || 'Failed to load users';
-    } finally {
-      loading = false;
-    }
-  }
 
   function applyFilters() {
     let results = [...staffProfiles];
@@ -84,36 +60,23 @@
     currentPage = 1;
   }
 
-  // Sidebar open/close
+  // Sidebar
   function openSidebar(user: StaffProfile | null = null) {
     selectedUser = user;
     isCreateMode = !user;
   }
-
   function closeSidebar() {
     selectedUser = null;
     isCreateMode = false;
   }
 
-  // Pagination
+  // Pagination controls
   function nextPage() { if (currentPage < totalPages) currentPage++; }
   function prevPage() { if (currentPage > 1) currentPage--; }
   function changePageSize(size: number) {
     pageSize = size;
     currentPage = 1;
   }
-
-  // --- Auth subscription ---
-  const unsubscribe = authStore.subscribe((value) => {
-    authInfo = value;
-    if (authInfo) loadUsers();
-    else {
-      staffProfiles = [];
-      filteredProfiles = [];
-      loading = false;
-    }
-  });
-  onDestroy(() => unsubscribe());
 </script>
 
 <RoleGuard requiredRoles={['Admin']}>
@@ -165,11 +128,7 @@
 
         <!-- User Table -->
         <div class="p-6 overflow-x-auto">
-          {#if loading}
-            <p class="text-center text-gray-500 py-8">Loading users...</p>
-          {:else if errorMessage}
-            <p class="text-center text-red-600 py-8">{errorMessage}</p>
-          {:else if filteredProfiles.length === 0}
+          {#if filteredProfiles.length === 0}
             <p class="text-center text-gray-500 py-8">No users found.</p>
           {:else}
             <table class="w-full border-collapse">
@@ -250,8 +209,7 @@
         user={selectedUser}
         createMode={isCreateMode}
         on:close={closeSidebar}
-        on:updated={loadUsers}
-        authInfo={authInfo}
+        on:updated={() => { /* ideally refetch server data here */ }}
       />
     {/if}
   </div>
