@@ -169,8 +169,7 @@
                 </button>
               {/each}
             </nav>
-
-            <!-- Action Buttons -->
+<!-- Action Buttons -->
             <div class="flex items-center space-x-2">
               <button
                 class="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-md transition-colors duration-200"
