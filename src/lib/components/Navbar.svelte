@@ -334,9 +334,13 @@
                 </Sidebar.MenuButton>
               </Sidebar.MenuItem>
             {/each}
-            <!-- Debug info -->
-            <div class="p-2 text-xs text-gray-400 border-t">
-              Debug: {roleBasedItems().length} items, Role: {activeRole || 'none'}, Loading: {isLoading}
+            <!-- Debug info - BIG AND OBVIOUS -->
+            <div class="p-4 bg-red-100 border-2 border-red-500 text-red-800 font-bold">
+              🔍 DEBUG INFO:
+              <br>Items: {roleBasedItems().length}
+              <br>Role: {activeRole || 'none'}
+              <br>Loading: {isLoading}
+              <br>UserRoles: {userRoles.join(', ') || 'none'}
             </div>
           {/if}
         </Sidebar.Menu>
