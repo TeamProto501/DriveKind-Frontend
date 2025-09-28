@@ -1,232 +1,39 @@
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte';
-  import { createStaffProfile, updateStaffProfile } from '$lib/api';
-  import { authStore } from '$lib/stores/auth';
-  import UserSidebar from '$lib/components/UserSidebar.svelte';
-  import { get } from 'svelte/store';
-
-  export let user: StaffProfile | null = null;
-  export let createMode: boolean = false;
-
-  const dispatch = createEventDispatcher();
-
-  type StaffForm = {
-    first_name: string;
-    last_name: string;
-    email?: string;
-    primary_phone?: string;
-    role: string[];
-    dob: string;
-    city: string;
-    state: string;
-    training_completed: boolean;
-    mileage_reimbursement: boolean;
-  };
-
-  type StaffProfile = StaffForm & { user_id: string };
-
-  const roles = ['Admin', 'Dispatcher', 'Driver', 'Volunteer', 'Client'];
-  const defaultInsert = { org_id: 1 };
-
-  let form: StaffForm = initializeForm();
-  let saving = false;
-  let errorMessage: string | null = null;
-  let showMoreInfo = false;
-  let expanded = { personal: false, training: false, preferences: false };
-
-  // --- Initialize form ---
-  function initializeForm(): StaffForm {
-    if (user && !createMode) {
-      return {
-        first_name: user.first_name || '',
-        last_name: user.last_name || '',
-        email: user.email || '',
-        primary_phone: user.primary_phone || '',
-        role: Array.isArray(user.role) ? user.role : [user.role],
-        dob: user.dob || '1970-01-01',
-        city: user.city || 'N/A',
-        state: user.state || 'N/A',
-        training_completed: user.training_completed ?? false,
-        mileage_reimbursement: user.mileage_reimbursement ?? false
-      };
-    } 
-    return {
-      first_name: '',
-      last_name: '',
-      email: '',
-      primary_phone: '',
-      role: [],
-      dob: '1970-01-01',
-      city: 'N/A',
-      state: 'N/A',
-      training_completed: false,
-      mileage_reimbursement: false
-    };
-  }
-
-  // --- Reactive: reset form whenever user or createMode changes ---
-  $: form = initializeForm();
-
-  function validateForm(): string | null {
-    if (!form.first_name.trim()) return 'First name is required.';
-    if (!form.last_name.trim()) return 'Last name is required.';
-    if (!form.email?.trim() && !form.primary_phone?.trim())
-      return 'Either email or phone is required.';
-    return null;
-  }
-
-  function toggleRole(role: string) {
-    form.role = form.role.includes(role)
-      ? form.role.filter(r => r !== role)
-      : [...form.role, role];
-  }
-
-  async function saveUser() {
-    errorMessage = validateForm();
-    if (errorMessage) return;
-
-    const authInfo = get(authStore);
-    if (!authInfo) {
-      errorMessage = 'No session found. Please refresh and try again.';
-      return;
-    }
-
-    saving = true;
-    try {
-      if (createMode) {
-        await createStaffProfile({ ...defaultInsert, ...form }, authInfo);
-      } else if (user) {
-        await updateStaffProfile(user.user_id, form, authInfo);
-      }
-
-      dispatch('updated'); // notify parent to refresh list
-      dispatch('close');   // close sidebar
-    } catch (err: any) {
-      console.error(err);
-      errorMessage = err.message || 'Failed to save user';
-    } finally {
-      saving = false;
-    }
-  }
+	import RoleGuard from '$lib/components/RoleGuard.svelte';
+	import Breadcrumbs from '$lib/components/Breadcrumbs.svelte';
+	import { Users, Plus, Search, Filter, Edit, Trash2, Eye } from '@lucide/svelte';
 </script>
 
-<div class="fixed top-0 right-0 w-96 h-full bg-white shadow-xl border-l border-gray-200 flex flex-col">
-  <!-- Header -->
-  <div class="px-6 py-4 border-b flex items-center justify-between">
-    <h2 class="text-lg font-semibold text-gray-900">
-      {createMode ? 'Add New User' : 'Edit User'}
-    </h2>
-    <button on:click={() => dispatch('close')} class="text-gray-500 hover:text-gray-700">✕</button>
-  </div>
-
-  <!-- Body -->
-  <div class="flex-1 overflow-y-auto p-6 space-y-4">
-    {#if errorMessage}
-      <p class="text-sm text-red-600">{errorMessage}</p>
-    {/if}
-
-    <!-- Basic Info -->
-    <div>
-      <label class="block text-sm font-medium text-gray-700">First Name *</label>
-      <input type="text" bind:value={form.first_name} class="mt-1 block w-full border rounded px-3 py-2 text-sm" />
-    </div>
-    <div>
-      <label class="block text-sm font-medium text-gray-700">Last Name *</label>
-      <input type="text" bind:value={form.last_name} class="mt-1 block w-full border rounded px-3 py-2 text-sm" />
-    </div>
-    <div>
-      <label class="block text-sm font-medium text-gray-700">Email</label>
-      <input type="email" bind:value={form.email} class="mt-1 block w-full border rounded px-3 py-2 text-sm" />
-    </div>
-    <div>
-      <label class="block text-sm font-medium text-gray-700">Phone</label>
-      <input type="tel" bind:value={form.primary_phone} class="mt-1 block w-full border rounded px-3 py-2 text-sm" />
-    </div>
-
-    <!-- Roles -->
-    <div>
-      <label class="block text-sm font-medium text-gray-700">Roles</label>
-      <div class="mt-2 space-y-2">
-        {#each roles as role}
-          <label class="flex items-center space-x-2 text-sm">
-            <input type="checkbox" checked={form.role.includes(role)} on:change={() => toggleRole(role)} />
-            <span>{role}</span>
-          </label>
-        {/each}
-      </div>
-    </div>
-
-    <!-- More Info Toggle -->
-    <div class="mt-4 border-t pt-4">
-      <button on:click={() => (showMoreInfo = !showMoreInfo)} class="text-blue-600 hover:underline text-sm">
-        {showMoreInfo ? 'Hide additional fields' : 'Show more information'}
-      </button>
-    </div>
-
-    {#if showMoreInfo}
-      <!-- Personal Info -->
-      <div class="mt-4 border rounded">
-        <button
-          class="w-full text-left px-4 py-2 bg-gray-100 flex justify-between items-center"
-          on:click={() => (expanded.personal = !expanded.personal)}
-        >
-          <span class="text-sm font-semibold">Personal Information</span>
-          <span>{expanded.personal ? '−' : '+'}</span>
-        </button>
-        {#if expanded.personal}
-          <div class="p-4 space-y-4">
-            <input type="date" bind:value={form.dob} class="w-full border rounded px-3 py-2 text-sm" />
-            <input type="text" bind:value={form.city} placeholder="City" class="w-full border rounded px-3 py-2 text-sm" />
-            <input type="text" bind:value={form.state} placeholder="State" class="w-full border rounded px-3 py-2 text-sm" />
-          </div>
-        {/if}
-      </div>
-
-      <!-- Training -->
-      <div class="mt-4 border rounded">
-        <button
-          class="w-full text-left px-4 py-2 bg-gray-100 flex justify-between items-center"
-          on:click={() => (expanded.training = !expanded.training)}
-        >
-          <span class="text-sm font-semibold">Training</span>
-          <span>{expanded.training ? '−' : '+'}</span>
-        </button>
-        {#if expanded.training}
-          <div class="p-4 space-y-2">
-            <label class="flex items-center space-x-2 text-sm">
-              <input type="checkbox" bind:checked={form.training_completed} />
-              <span>Training Completed</span>
-            </label>
-          </div>
-        {/if}
-      </div>
-
-      <!-- Preferences -->
-      <div class="mt-4 border rounded">
-        <button
-          class="w-full text-left px-4 py-2 bg-gray-100 flex justify-between items-center"
-          on:click={() => (expanded.preferences = !expanded.preferences)}
-        >
-          <span class="text-sm font-semibold">Preferences</span>
-          <span>{expanded.preferences ? '−' : '+'}</span>
-        </button>
-        {#if expanded.preferences}
-          <div class="p-4 space-y-2">
-            <label class="flex items-center space-x-2 text-sm">
-              <input type="checkbox" bind:checked={form.mileage_reimbursement} />
-              <span>Mileage Reimbursement</span>
-            </label>
-          </div>
-        {/if}
-      </div>
-    {/if}
-  </div>
-
-  <!-- Footer -->
-  <div class="px-6 py-4 border-t flex justify-end space-x-2">
-    <button on:click={() => dispatch('close')} class="px-4 py-2 rounded-lg border text-gray-700 hover:bg-gray-50">Cancel</button>
-    <button on:click={saveUser} disabled={saving} class="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50">
-      {saving ? 'Saving...' : (createMode ? 'Create User' : 'Save Changes')}
-    </button>
-  </div>
-</div>
+<RoleGuard requiredRoles={['Admin']}>
+	<div class="min-h-screen bg-gray-50">
+		<Breadcrumbs />
+		
+		<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+			<div class="mb-8">
+				<h1 class="text-3xl font-bold text-gray-900">User Management</h1>
+				<p class="text-gray-600 mt-2">Manage user accounts, roles, and permissions.</p>
+			</div>
+			
+			<div class="bg-white rounded-lg shadow-sm border border-gray-200">
+				<div class="px-6 py-4 border-b border-gray-200">
+					<div class="flex items-center justify-between">
+						<h2 class="text-lg font-medium text-gray-900">All Users</h2>
+						<button class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200 flex items-center space-x-2">
+							<Plus class="w-4 h-4" />
+							<span>Add User</span>
+						</button>
+					</div>
+				</div>
+				
+				<div class="p-6">
+					<div class="text-center py-12">
+						<Users class="w-16 h-16 text-gray-400 mx-auto mb-4" />
+						<h3 class="text-lg font-medium text-gray-900 mb-2">User Management Coming Soon</h3>
+						<p class="text-gray-500">This page will allow administrators to manage user accounts, assign roles, and configure permissions.</p>
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
+</RoleGuard>
+<!-- <--force vercel commit-->
