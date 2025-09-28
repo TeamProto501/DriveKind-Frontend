@@ -79,9 +79,6 @@ export async function authenticatedFetch(
   }
 }
 
-
-
-
 // Authenticated API functions
 export async function getClients(
   authInfo?: AuthInfo,
@@ -94,3 +91,16 @@ export async function getClients(
     event
   );
 }
+async function fetchJson(url: string, options?: RequestInit, authInfo?: AuthInfo, event?: RequestEvent) {
+  const res = await authenticatedFetch(url, options, authInfo);
+  return res.json();
+}
+
+export const getAllClients = (authInfo?: AuthInfo) =>
+  fetchJson(`${API_BASE_URL}/clients`, {}, authInfo);
+
+export const createStaffProfile = (data: any, authInfo?: AuthInfo) =>
+  fetchJson(`${API_BASE_URL}/staff-profiles`, { method: 'POST', body: JSON.stringify(data) }, authInfo);
+
+export const updateStaffProfile = (id: string, data: any, authInfo?: AuthInfo) =>
+  fetchJson(`${API_BASE_URL}/staff-profiles/${id}`, { method: 'PUT', body: JSON.stringify(data) }, authInfo);
