@@ -101,7 +101,16 @@
 		const items = [];
     const currentRole = activeRole || (userRoles.length > 0 ? userRoles[0] : null);
     
-    if (!currentRole) return items;
+    console.log('🧭 NAVIGATION DEBUG:');
+    console.log('- currentRole:', currentRole);
+    console.log('- activeRole:', activeRole);
+    console.log('- userRoles:', userRoles);
+    console.log('- userRoles.length:', userRoles.length);
+    
+    if (!currentRole) {
+      console.log('❌ No current role found, returning empty items');
+      return items;
+    }
 		
     // Admin items
     if (currentRole === 'Admin') {
@@ -117,6 +126,7 @@
     
     // Super Admin items
     if (currentRole === 'Super Admin') {
+      console.log('✅ Adding Super Admin navigation items');
 			items.push(
         { label: 'Dashboard', href: '/admin/dash', icon: 'Home', badge: null },
         { label: 'Organizations', href: '/admin/organizations', icon: 'Building2', badge: null },
@@ -126,6 +136,9 @@
         { label: 'Reports', href: '/admin/reports', icon: 'FileText', badge: null },
         { label: 'Audit Logs', href: '/admin/audit', icon: 'Shield', badge: null }
       );
+      console.log('📋 Super Admin items added:', items.length);
+    } else {
+      console.log('❌ Not Super Admin role, current role is:', currentRole);
     }
     
     // Dispatcher items
@@ -151,6 +164,7 @@
       { label: 'Help', href: '/help', icon: 'HelpCircle', badge: null }
     );
 		
+		console.log('🎯 Final navigation items:', items);
 		return items;
 	});
 	
