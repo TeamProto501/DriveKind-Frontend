@@ -321,7 +321,7 @@
 						</button>
 					</div>
 					
-					<form onsubmit|preventDefault={addOrganization} class="space-y-4">
+					<form onsubmit={(e) => { e.preventDefault(); addOrganization(); }} class="space-y-4">
 						<div>
 							<label class="block text-sm font-medium text-gray-700">Organization Name</label>
 							<input
@@ -427,7 +427,7 @@
 						</button>
 					</div>
 					
-					<form onsubmit|preventDefault={updateOrganization} class="space-y-4">
+					<form onsubmit={(e) => { e.preventDefault(); updateOrganization(); }} class="space-y-4">
 						<div>
 							<label class="block text-sm font-medium text-gray-700">Organization Name</label>
 							<input
