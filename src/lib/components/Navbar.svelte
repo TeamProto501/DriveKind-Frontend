@@ -101,17 +101,7 @@
 		const items = [];
     const currentRole = activeRole || (userRoles.length > 0 ? userRoles[0] : null);
     
-    console.log('🧭 NAVIGATION DEBUG (derived function called):');
-    console.log('- currentRole:', currentRole);
-    console.log('- activeRole:', activeRole);
-    console.log('- userRoles:', userRoles);
-    console.log('- userRoles.length:', userRoles.length);
-    console.log('- isLoading:', isLoading);
-    
-    if (!currentRole) {
-      console.log('❌ No current role found, returning empty items');
-      return items;
-    }
+    if (!currentRole) return items;
 		
     // Admin items
     if (currentRole === 'Admin') {
@@ -127,7 +117,6 @@
     
     // Super Admin items
     if (currentRole === 'Super Admin') {
-      console.log('✅ Adding Super Admin navigation items');
 			items.push(
         { label: 'Dashboard', href: '/admin/dash', icon: 'Home', badge: null },
         { label: 'Organizations', href: '/admin/organizations', icon: 'Building2', badge: null },
@@ -137,9 +126,6 @@
         { label: 'Reports', href: '/admin/reports', icon: 'FileText', badge: null },
         { label: 'Audit Logs', href: '/admin/audit', icon: 'Shield', badge: null }
       );
-      console.log('📋 Super Admin items added:', items.length);
-    } else {
-      console.log('❌ Not Super Admin role, current role is:', currentRole);
     }
     
     
@@ -166,7 +152,6 @@
       { label: 'Help', href: '/help', icon: 'HelpCircle', badge: null }
     );
 		
-		console.log('🎯 Final navigation items:', items);
 		return items;
 	});
 	
@@ -187,27 +172,14 @@
 
   // Load user data on mount
   onMount(() => {
-    console.log('🔍 NAVBAR DEBUG INFO:');
-    console.log('📊 Full data object:', data);
-    console.log('👤 Profile data:', data?.profile);
-    console.log('🎭 Roles data:', data?.roles);
-    console.log('🔐 Session data:', data?.session);
-    console.log('📧 User email:', data?.session?.user?.email);
-    
     if (data?.profile) {
-      console.log('✅ Using REAL profile data');
       // Use real profile if available
       userProfile = data.profile as any;
       if (Array.isArray(data.roles)) {
         userRoles = data.roles as RoleEnum[];
         activeRole = userRoles[0]; // Set first role as active
-        console.log('✅ Real roles loaded:', userRoles);
-        console.log('🎯 Active role set to:', activeRole);
-      } else {
-        console.log('❌ No roles array found in data.roles');
       }
     } else {
-      console.log('🔄 Using MOCK profile data (no real profile found)');
       // Fallback to mock data for testing
       userProfile = {
         user_id: "mock-user-id",
@@ -228,8 +200,6 @@
       } as unknown as Profile;
       userRoles = ["Super Admin"]; // Set as Super Admin for testing
       activeRole = "Super Admin";
-      console.log('🎭 Mock roles set:', userRoles);
-      console.log('🎯 Mock active role:', activeRole);
       userOrganization = {
         org_id: 1,
         name: "DriveKind Transit Services",
@@ -241,12 +211,6 @@
         zip_code: "12345",
       } as Organization;
     }
-    
-    console.log('📋 Final state:');
-    console.log('- userProfile:', userProfile);
-    console.log('- userRoles:', userRoles);
-    console.log('- activeRole:', activeRole);
-    console.log('- isLoading:', isLoading);
     
     isLoading = false;
   });
