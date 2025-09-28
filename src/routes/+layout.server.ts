@@ -32,7 +32,16 @@ export const load: LayoutServerLoad = async (event) => {
 
 			if (profileRow) {
 				profile = profileRow;
-				roles = Array.isArray(profileRow.role) ? profileRow.role : null;
+				// Handle PostgreSQL enum array format
+				if (profileRow.role) {
+					if (Array.isArray(profileRow.role)) {
+						roles = profileRow.role;
+					} else if (typeof profileRow.role === 'string') {
+						// If it's a single role string, convert to array
+						roles = [profileRow.role];
+					}
+				}
+				console.log('Loaded profile roles:', roles);
 			}
 		}
 		
