@@ -3,7 +3,6 @@
 	import Breadcrumbs from '$lib/components/Breadcrumbs.svelte';
 	import { Building2, Plus, Search, Edit, Trash2, Eye, Save, X } from '@lucide/svelte';
 	import { onMount } from 'svelte';
-	import { createSupabaseServerClient } from '$lib/supabase.server';
 	import { supabase } from '$lib/supabase';
 
 	// Organization interface
