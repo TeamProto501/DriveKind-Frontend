@@ -101,11 +101,12 @@
 		const items = [];
     const currentRole = activeRole || (userRoles.length > 0 ? userRoles[0] : null);
     
-    console.log('🧭 NAVIGATION DEBUG:');
+    console.log('🧭 NAVIGATION DEBUG (derived function called):');
     console.log('- currentRole:', currentRole);
     console.log('- activeRole:', activeRole);
     console.log('- userRoles:', userRoles);
     console.log('- userRoles.length:', userRoles.length);
+    console.log('- isLoading:', isLoading);
     
     if (!currentRole) {
       console.log('❌ No current role found, returning empty items');
@@ -140,6 +141,14 @@
     } else {
       console.log('❌ Not Super Admin role, current role is:', currentRole);
     }
+    
+    // TEMPORARY: Force add Super Admin items for testing
+    console.log('🧪 TEMPORARY TEST: Adding Super Admin items regardless of role');
+    items.push(
+      { label: 'TEST Dashboard', href: '/admin/dash', icon: 'Home', badge: null },
+      { label: 'TEST Organizations', href: '/admin/organizations', icon: 'Building2', badge: null }
+    );
+    console.log('🧪 TEST items added, total items now:', items.length);
     
     // Dispatcher items
     if (currentRole === 'Dispatcher') {
