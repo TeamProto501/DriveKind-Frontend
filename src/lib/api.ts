@@ -1,7 +1,6 @@
 // api.ts
 import { redirect } from '@sveltejs/kit';
 import type { RequestEvent } from '@sveltejs/kit';
-import { supabase } from './supabase';
 import { createSupabaseServerClient } from './supabase.server';
 import { toastStore } from './toast';
 
