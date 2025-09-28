@@ -78,7 +78,7 @@
       description: "Manage volunteers and their accounts",
     },
     {
-      id: "dispatchers",
+      id: "dispatcher",
       label: "Dispatchers",
       icon: User,
       description: "Manage Dispatchers and their accounts",
