@@ -169,16 +169,21 @@
     return actions;
   });
 
-  // Load mock user data on mount (preserve previous behavior)
+  // Load user data on mount
   onMount(() => {
+    console.log('Navbar data:', data);
+    console.log('Profile:', data?.profile);
+    console.log('Roles:', data?.roles);
+    
     if (data?.profile) {
       // Use real profile if available
       userProfile = data.profile as any;
       if (Array.isArray(data.roles)) {
         userRoles = data.roles as RoleEnum[];
+        activeRole = userRoles[0]; // Set first role as active
       }
     } else {
-      // Fallback to previous mock data
+      // Fallback to mock data for testing
       userProfile = {
         user_id: "mock-user-id",
         org_id: 1,
@@ -196,8 +201,8 @@
         zip_code: "12345",
         lives_alone: true,
       } as unknown as Profile;
-      userRoles = ["Admin", "Dispatcher"];
-      activeRole = "Admin"; // Set initial active role
+      userRoles = ["Super Admin"]; // Set as Super Admin for testing
+      activeRole = "Super Admin";
       userOrganization = {
         org_id: 1,
         name: "DriveKind Transit Services",
