@@ -1,7 +1,7 @@
 // api.ts
 import { redirect } from '@sveltejs/kit';
 import type { RequestEvent } from '@sveltejs/kit';
-import { createSupabaseServerClient } from './supabase.server';
+import { supabase } from './supabase';
 import { toastStore } from './toast';
 
 import type { AuthInfo } from './types';
@@ -15,72 +15,21 @@ export const API_BASE_URL = 'https://drive-kind-api.vercel.app/';
    AUTHENTICATED FETCH
 ========================================================= */
 export async function authenticatedFetch(
-  url: string, 
-  options: RequestInit = {}, 
-  authInfo?: AuthInfo,
-  event?: RequestEvent
+  url: string,
+  options: RequestInit = {},
+  authInfo?: AuthInfo
 ): Promise<Response> {
-  let token: string | undefined;
-  let supabaseClient: any = null;
-  
-  if (authInfo?.token) {
-    token = authInfo.token;
-  } else if (event) {
-    supabaseClient = createSupabaseServerClient(event);
-    const { data: { session } } = await supabaseClient.auth.getSession();
-    token = session?.access_token;
-  }
-  
-  if (!token) {
-    throw new Error('No authentication token available');
-  }
+  const token = authInfo?.token ?? (typeof window !== 'undefined' ? (await supabase.auth.getSession()).data.session?.access_token : undefined);
 
-  const makeRequest = async (accessToken: string): Promise<Response> => {
-    const headers = {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${accessToken}`,
-      ...options.headers,
-    };
+  if (!token) throw new Error('No authentication token available');
 
-    return fetch(url, {
-      ...options,
-      headers,
-      credentials: 'include'
-    });
+  const headers = {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${token}`,
+    ...options.headers
   };
 
-  try {
-    const response = await makeRequest(token);
-    
-    if (response.ok) {
-      return response;
-    }
-    
-    if (response.status === 401 || response.status === 403) {
-      if (supabaseClient) {
-        const { data: { session }, error } = await supabaseClient.auth.refreshSession();
-        
-        if (session?.access_token && !error) {
-          const retryResponse = await makeRequest(session.access_token);
-          if (retryResponse.ok) {
-            return retryResponse;
-          }
-        }
-      }
-      
-      // Only show toast error if we're in a browser context
-      if (typeof window !== 'undefined') {
-        toastStore.error('Your session has expired. Please log out and log back in to continue.', {
-          duration: 8000
-        });
-      }
-    }
-    
-    return response;
-    
-  } catch (fetchError) {
-    throw fetchError;
-  }
+  return fetch(url, { ...options, headers, credentials: 'include' });
 }
 
 /* =========================================================
@@ -97,6 +46,18 @@ async function fetchJson(url: string, options?: RequestInit, authInfo?: AuthInfo
 export const getAllClients = (authInfo?: AuthInfo) =>
   fetchJson(`${API_BASE_URL}/clients`, {}, authInfo);
 
+export const getClientById = (id: number, authInfo?: AuthInfo) =>
+  fetchJson(`${API_BASE_URL}/clients/${id}`, {}, authInfo);
+
+export const createClient = (data: any, authInfo?: AuthInfo) =>
+  fetchJson(`${API_BASE_URL}/clients`, { method: 'POST', body: JSON.stringify(data) }, authInfo);
+
+export const updateClient = (id: number, data: any, authInfo?: AuthInfo) =>
+  fetchJson(`${API_BASE_URL}/clients/${id}`, { method: 'PUT', body: JSON.stringify(data) }, authInfo);
+
+export const deleteClient = (id: number, authInfo?: AuthInfo) =>
+  fetchJson(`${API_BASE_URL}/clients/${id}`, { method: 'DELETE' }, authInfo);
+
 /* =========================================================
    STAFF PROFILES
 ========================================================= */
@@ -111,3 +72,120 @@ export const createStaffProfile = (data: any, authInfo?: AuthInfo) =>
 
 export const updateStaffProfile = (id: string, data: any, authInfo?: AuthInfo) =>
   fetchJson(`${API_BASE_URL}/staff-profiles/${id}`, { method: 'PUT', body: JSON.stringify(data) }, authInfo);
+
+export const deleteStaffProfile = (id: string, authInfo?: AuthInfo) =>
+  fetchJson(`${API_BASE_URL}/staff-profiles/${id}`, { method: 'DELETE' }, authInfo);
+
+/* =========================================================
+   CALLS
+========================================================= */
+export const getAllCalls = (authInfo?: AuthInfo) =>
+  fetchJson(`${API_BASE_URL}/calls`, {}, authInfo);
+
+export const getCallById = (id: number, authInfo?: AuthInfo) =>
+  fetchJson(`${API_BASE_URL}/calls/${id}`, {}, authInfo);
+
+export const createCall = (data: any, authInfo?: AuthInfo) =>
+  fetchJson(`${API_BASE_URL}/calls`, { method: 'POST', body: JSON.stringify(data) }, authInfo);
+
+export const updateCall = (id: number, data: any, authInfo?: AuthInfo) =>
+  fetchJson(`${API_BASE_URL}/calls/${id}`, { method: 'PUT', body: JSON.stringify(data) }, authInfo);
+
+export const deleteCall = (id: number, authInfo?: AuthInfo) =>
+  fetchJson(`${API_BASE_URL}/calls/${id}`, { method: 'DELETE' }, authInfo);
+
+/* =========================================================
+   DRIVER UNAVAILABILITY
+========================================================= */
+export const getAllDriverUnavailabilities = (authInfo?: AuthInfo) =>
+  fetchJson(`${API_BASE_URL}/driver_unavailability`, {}, authInfo);
+
+export const getDriverUnavailabilityById = (id: number, authInfo?: AuthInfo) =>
+  fetchJson(`${API_BASE_URL}/driver_unavailability/${id}`, {}, authInfo);
+
+export const createDriverUnavailability = (data: any, authInfo?: AuthInfo) =>
+  fetchJson(`${API_BASE_URL}/driver_unavailability`, { method: 'POST', body: JSON.stringify(data) }, authInfo);
+
+export const updateDriverUnavailability = (id: number, data: any, authInfo?: AuthInfo) =>
+  fetchJson(`${API_BASE_URL}/driver_unavailability/${id}`, { method: 'PUT', body: JSON.stringify(data) }, authInfo);
+
+export const deleteDriverUnavailability = (id: number, authInfo?: AuthInfo) =>
+  fetchJson(`${API_BASE_URL}/driver_unavailability/${id}`, { method: 'DELETE' }, authInfo);
+
+/* =========================================================
+   TIMECARDS
+========================================================= */
+export const getAllTimecards = (authInfo?: AuthInfo) =>
+  fetchJson(`${API_BASE_URL}/timecards`, {}, authInfo);
+
+export const getTimecardById = (id: number, authInfo?: AuthInfo) =>
+  fetchJson(`${API_BASE_URL}/timecards/${id}`, {}, authInfo);
+
+export const createTimecard = (data: any, authInfo?: AuthInfo) =>
+  fetchJson(`${API_BASE_URL}/timecards`, { method: 'POST', body: JSON.stringify(data) }, authInfo);
+
+export const updateTimecard = (id: number, data: any, authInfo?: AuthInfo) =>
+  fetchJson(`${API_BASE_URL}/timecards/${id}`, { method: 'PUT', body: JSON.stringify(data) }, authInfo);
+
+export const deleteTimecard = (id: number, authInfo?: AuthInfo) =>
+  fetchJson(`${API_BASE_URL}/timecards/${id}`, { method: 'DELETE' }, authInfo);
+
+/* =========================================================
+   VEHICLES
+========================================================= */
+export const getAllVehicles = (authInfo?: AuthInfo) =>
+  fetchJson(`${API_BASE_URL}/vehicles`, {}, authInfo);
+
+export const getVehicleById = (id: number, authInfo?: AuthInfo) =>
+  fetchJson(`${API_BASE_URL}/vehicles/${id}`, {}, authInfo);
+
+export const createVehicle = (data: any, authInfo?: AuthInfo) =>
+  fetchJson(`${API_BASE_URL}/vehicles`, { method: 'POST', body: JSON.stringify(data) }, authInfo);
+
+export const updateVehicle = (id: number, data: any, authInfo?: AuthInfo) =>
+  fetchJson(`${API_BASE_URL}/vehicles/${id}`, { method: 'PUT', body: JSON.stringify(data) }, authInfo);
+
+export const deleteVehicle = (id: number, authInfo?: AuthInfo) =>
+  fetchJson(`${API_BASE_URL}/vehicles/${id}`, { method: 'DELETE' }, authInfo);
+
+/* =========================================================
+   ORGANIZATIONS
+========================================================= */
+export const getAllOrganizations = (authInfo?: AuthInfo) =>
+  fetchJson(`${API_BASE_URL}/organizations`, {}, authInfo);
+
+export const getOrganizationById = (id: number, authInfo?: AuthInfo) =>
+  fetchJson(`${API_BASE_URL}/organizations/${id}`, {}, authInfo);
+
+export const createOrganization = (data: any, authInfo?: AuthInfo) =>
+  fetchJson(`${API_BASE_URL}/organizations`, { method: 'POST', body: JSON.stringify(data) }, authInfo);
+
+export const updateOrganization = (id: number, data: any, authInfo?: AuthInfo) =>
+  fetchJson(`${API_BASE_URL}/organizations/${id}`, { method: 'PUT', body: JSON.stringify(data) }, authInfo);
+
+export const deleteOrganization = (id: number, authInfo?: AuthInfo) =>
+  fetchJson(`${API_BASE_URL}/organizations/${id}`, { method: 'DELETE' }, authInfo);
+
+/* =========================================================
+   TRANSACTION AUDIT LOGS
+========================================================= */
+export const getAllTransactionAuditLogs = (authInfo?: AuthInfo) =>
+  fetchJson(`${API_BASE_URL}/transactions_audit_log`, {}, authInfo);
+
+export const getTransactionAuditLogById = (id: number, authInfo?: AuthInfo) =>
+  fetchJson(`${API_BASE_URL}/transactions_audit_log/${id}`, {}, authInfo);
+
+export const createTransactionAuditLog = (data: any, authInfo?: AuthInfo) =>
+  fetchJson(`${API_BASE_URL}/transactions_audit_log`, { method: 'POST', body: JSON.stringify(data) }, authInfo);
+
+/* =========================================================
+   ADMIN DASHBOARD QUERIES
+========================================================= */
+export const getDriversForAdminDash = (authInfo?: AuthInfo) =>
+  fetchJson(`${API_BASE_URL}/staff-profiles?role=Driver`, {}, authInfo);
+
+export const getVolunteersForAdminDash = (authInfo?: AuthInfo) =>
+  fetchJson(`${API_BASE_URL}/staff-profiles?role=Volunteer`, {}, authInfo);
+
+export const getClientsForAdminDash = (authInfo?: AuthInfo) =>
+  fetchJson(`${API_BASE_URL}/clients`, {}, authInfo);
