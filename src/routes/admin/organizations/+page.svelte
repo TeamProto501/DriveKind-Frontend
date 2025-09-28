@@ -48,6 +48,7 @@
 	// Load organizations from Supabase
 	async function loadOrganizations() {
 		try {
+			console.log('🏢 Loading organizations from Supabase...');
 			isLoading = true;
 			const { data, error } = await supabase
 				.from('organization')
@@ -55,14 +56,18 @@
 				.order('name');
 
 			if (error) {
-				console.error('Error loading organizations:', error);
+				console.error('❌ Error loading organizations:', error);
+				alert('Failed to load organizations: ' + error.message);
 				return;
 			}
 
+			console.log('✅ Organizations loaded:', data);
 			organizations = data || [];
 			filteredOrganizations = organizations;
+			console.log('📊 Total organizations:', organizations.length);
 		} catch (error) {
-			console.error('Error loading organizations:', error);
+			console.error('❌ Exception loading organizations:', error);
+			alert('Failed to load organizations: ' + error.message);
 		} finally {
 			isLoading = false;
 		}
