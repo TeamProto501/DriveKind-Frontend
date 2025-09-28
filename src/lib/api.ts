@@ -1,6 +1,5 @@
-import { redirect } from '@sveltejs/kit';
-import type { RequestEvent } from '@sveltejs/kit';
-import { createSupabaseServerClient } from './supabase.server';
+import { browser } from '$app/environment';
+import { supabase } from './supabase'; // Client-side Supabase instance
 import { toastStore } from './toast';
 
 import type { AuthInfo } from './types';
@@ -8,26 +7,27 @@ import type { AuthInfo } from './types';
 // DriveKind API Configuration
 export const API_BASE_URL = 'https://drive-kind-api.vercel.app/';
 
-
-
 export async function authenticatedFetch(
   url: string, 
   options: RequestInit = {}, 
-  authInfo?: AuthInfo,
-  event?: RequestEvent
+  authInfo?: AuthInfo
 ): Promise<Response> {
+  if (!browser) {
+    throw new Error('This API can only be used in the browser');
+  }
+
   let token: string | undefined;
-  let supabaseClient: any = null;
   
   if (authInfo?.token) {
     token = authInfo.token;
-  } else if (event) {
-    supabaseClient = createSupabaseServerClient(event);
-    const { data: { session } } = await supabaseClient.auth.getSession();
+  } else {
+    // Get token from client-side Supabase
+    const { data: { session } } = await supabase.auth.getSession();
     token = session?.access_token;
   }
   
   if (!token) {
+    toastStore.error('No authentication token available. Please log in.');
     throw new Error('No authentication token available');
   }
 
@@ -53,23 +53,19 @@ export async function authenticatedFetch(
     }
     
     if (response.status === 401 || response.status === 403) {
-      if (supabaseClient) {
-        const { data: { session }, error } = await supabaseClient.auth.refreshSession();
-        
-        if (session?.access_token && !error) {
-          const retryResponse = await makeRequest(session.access_token);
-          if (retryResponse.ok) {
-            return retryResponse;
-          }
+      // Try to refresh the session using client-side Supabase
+      const { data: { session }, error } = await supabase.auth.refreshSession();
+      
+      if (session?.access_token && !error) {
+        const retryResponse = await makeRequest(session.access_token);
+        if (retryResponse.ok) {
+          return retryResponse;
         }
       }
       
-      // Only show toast error if we're in a browser context
-      if (typeof window !== 'undefined') {
-        toastStore.error('Your session has expired. Please log out and log back in to continue.', {
-          duration: 8000
-        });
-      }
+      toastStore.error('Your session has expired. Please log out and log back in to continue.', {
+        duration: 8000
+      });
     }
     
     return response;
@@ -79,28 +75,34 @@ export async function authenticatedFetch(
   }
 }
 
-// Authenticated API functions
-export async function getClients(
-  authInfo?: AuthInfo,
-  event?: RequestEvent
-): Promise<Response> {
-  return await authenticatedFetch(
-    `${API_BASE_URL}/clients`,
-    {},
-    authInfo,
-    event
-  );
-}
-async function fetchJson(url: string, options?: RequestInit, authInfo?: AuthInfo, event?: RequestEvent) {
+// Client-side API helper
+async function fetchJson(url: string, options?: RequestInit, authInfo?: AuthInfo) {
   const res = await authenticatedFetch(url, options, authInfo);
+  
+  if (!res.ok) {
+    const errorText = await res.text();
+    throw new Error(`API Error ${res.status}: ${errorText}`);
+  }
+  
   return res.json();
+}
+
+// Client-side API functions
+export async function getClients(authInfo?: AuthInfo): Promise<Response> {
+  return await authenticatedFetch(`${API_BASE_URL}/clients`, {}, authInfo);
 }
 
 export const getAllClients = (authInfo?: AuthInfo) =>
   fetchJson(`${API_BASE_URL}/clients`, {}, authInfo);
 
 export const createStaffProfile = (data: any, authInfo?: AuthInfo) =>
-  fetchJson(`${API_BASE_URL}/staff-profiles`, { method: 'POST', body: JSON.stringify(data) }, authInfo);
+  fetchJson(`${API_BASE_URL}/staff-profiles`, { 
+    method: 'POST', 
+    body: JSON.stringify(data) 
+  }, authInfo);
 
 export const updateStaffProfile = (id: string, data: any, authInfo?: AuthInfo) =>
-  fetchJson(`${API_BASE_URL}/staff-profiles/${id}`, { method: 'PUT', body: JSON.stringify(data) }, authInfo);
+  fetchJson(`${API_BASE_URL}/staff-profiles/${id}`, { 
+    method: 'PUT', 
+    body: JSON.stringify(data) 
+  }, authInfo);
