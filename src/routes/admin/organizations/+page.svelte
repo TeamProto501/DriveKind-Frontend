@@ -41,6 +41,7 @@
 
 	// Load organizations on mount
 	onMount(async () => {
+		console.log('🏢 Organizations page loaded');
 		await loadOrganizations();
 	});
 
