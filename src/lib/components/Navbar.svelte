@@ -171,18 +171,27 @@
 
   // Load user data on mount
   onMount(() => {
-    console.log('Navbar data:', data);
-    console.log('Profile:', data?.profile);
-    console.log('Roles:', data?.roles);
+    console.log('🔍 NAVBAR DEBUG INFO:');
+    console.log('📊 Full data object:', data);
+    console.log('👤 Profile data:', data?.profile);
+    console.log('🎭 Roles data:', data?.roles);
+    console.log('🔐 Session data:', data?.session);
+    console.log('📧 User email:', data?.session?.user?.email);
     
     if (data?.profile) {
+      console.log('✅ Using REAL profile data');
       // Use real profile if available
       userProfile = data.profile as any;
       if (Array.isArray(data.roles)) {
         userRoles = data.roles as RoleEnum[];
         activeRole = userRoles[0]; // Set first role as active
+        console.log('✅ Real roles loaded:', userRoles);
+        console.log('🎯 Active role set to:', activeRole);
+      } else {
+        console.log('❌ No roles array found in data.roles');
       }
     } else {
+      console.log('🔄 Using MOCK profile data (no real profile found)');
       // Fallback to mock data for testing
       userProfile = {
         user_id: "mock-user-id",
@@ -203,6 +212,8 @@
       } as unknown as Profile;
       userRoles = ["Super Admin"]; // Set as Super Admin for testing
       activeRole = "Super Admin";
+      console.log('🎭 Mock roles set:', userRoles);
+      console.log('🎯 Mock active role:', activeRole);
       userOrganization = {
         org_id: 1,
         name: "DriveKind Transit Services",
@@ -214,6 +225,13 @@
         zip_code: "12345",
       } as Organization;
     }
+    
+    console.log('📋 Final state:');
+    console.log('- userProfile:', userProfile);
+    console.log('- userRoles:', userRoles);
+    console.log('- activeRole:', activeRole);
+    console.log('- isLoading:', isLoading);
+    
     isLoading = false;
   });
 
