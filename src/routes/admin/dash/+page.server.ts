@@ -1,4 +1,4 @@
-import { authenticatedFetch, API_BASE_URL } from "$lib/api";
+import { authenticatedFetchServer, API_BASE_URL } from "$lib/api.server";
 
 //initial data load to table
 export const load = async (event) => {
@@ -11,14 +11,28 @@ export const load = async (event) => {
       : tab === "dispatcher"
       ? "/dispatcher/dash"
       : "/clients/dash";
-  const res = await authenticatedFetch(
-    API_BASE_URL + endpoint,
-    {},
-    undefined,
-    event
-  );
-  const text = await res.text();
-  const data = JSON.parse(text);
+      
+  try {
+    const res = await authenticatedFetchServer(
+      API_BASE_URL + endpoint,
+      {},
+      event
+    );
+    const text = await res.text();
+    const data = JSON.parse(text);
 
-  return { tab, data };
+    return { tab, data };
+  } catch (error) {
+    console.error('Dashboard load error:', error);
+    // If it's a redirect (authentication error), let it through
+    if (error instanceof Response && error.status >= 300 && error.status < 400) {
+      throw error;
+    }
+    
+    return { 
+      tab, 
+      data: [],
+      error: 'Failed to load dashboard data'
+    };
+  }
 };
