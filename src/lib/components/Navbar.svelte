@@ -115,6 +115,19 @@
       );
     }
     
+    // Super Admin items
+    if (currentRole === 'Super Admin') {
+			items.push(
+        { label: 'Dashboard', href: '/admin/dash', icon: 'Home', badge: null },
+        { label: 'Organizations', href: '/admin/organizations', icon: 'Building2', badge: null },
+        { label: 'Users', href: '/admin/users', icon: 'Users', badge: null },
+        { label: 'Database', href: '/admin/database', icon: 'Database', badge: null },
+        { label: 'Configuration', href: '/admin/config', icon: 'Settings', badge: null },
+        { label: 'Reports', href: '/admin/reports', icon: 'FileText', badge: null },
+        { label: 'Audit Logs', href: '/admin/audit', icon: 'Shield', badge: null }
+      );
+    }
+    
     // Dispatcher items
     if (currentRole === 'Dispatcher') {
 			items.push(
