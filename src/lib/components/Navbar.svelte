@@ -142,13 +142,6 @@
       console.log('❌ Not Super Admin role, current role is:', currentRole);
     }
     
-    // TEMPORARY: Force add Super Admin items for testing
-    console.log('🧪 TEMPORARY TEST: Adding Super Admin items regardless of role');
-    items.push(
-      { label: 'TEST Dashboard', href: '/admin/dash', icon: 'Home', badge: null },
-      { label: 'TEST Organizations', href: '/admin/organizations', icon: 'Building2', badge: null }
-    );
-    console.log('🧪 TEST items added, total items now:', items.length);
     
     // Dispatcher items
     if (currentRole === 'Dispatcher') {
@@ -334,14 +327,6 @@
                 </Sidebar.MenuButton>
               </Sidebar.MenuItem>
             {/each}
-            <!-- Debug info - BIG AND OBVIOUS -->
-            <div class="p-4 bg-red-100 border-2 border-red-500 text-red-800 font-bold">
-              🔍 DEBUG INFO:
-              <br>Items: {roleBasedItems().length}
-              <br>Role: {activeRole || 'none'}
-              <br>Loading: {isLoading}
-              <br>UserRoles: {userRoles.join(', ') || 'none'}
-            </div>
           {/if}
         </Sidebar.Menu>
       </Sidebar.Group>
