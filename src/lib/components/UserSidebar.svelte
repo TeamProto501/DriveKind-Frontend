@@ -2,7 +2,6 @@
   import { createEventDispatcher } from 'svelte';
   import { createStaffProfile, updateStaffProfile } from '$lib/api';
   import { authStore } from '$lib/stores/auth';
-  import UserSidebar from '$lib/components/UserSidebar.svelte';
   import { get } from 'svelte/store';
 
   export let user: StaffProfile | null = null;
