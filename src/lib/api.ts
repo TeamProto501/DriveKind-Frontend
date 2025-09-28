@@ -106,3 +106,59 @@ export const updateStaffProfile = (id: string, data: any, authInfo?: AuthInfo) =
     method: 'PUT', 
     body: JSON.stringify(data) 
   }, authInfo);
+
+export const deleteStaffProfile = (id: string, authInfo?: AuthInfo) =>
+  fetchJson(`${API_BASE_URL}/staff-profiles/${id}`, { 
+    method: 'DELETE' 
+  }, authInfo);
+
+export const getStaffProfile = (id: string, authInfo?: AuthInfo) =>
+  fetchJson(`${API_BASE_URL}/staff-profiles/${id}`, {}, authInfo);
+
+export const getAllStaffProfiles = (authInfo?: AuthInfo) =>
+  fetchJson(`${API_BASE_URL}/staff-profiles`, {}, authInfo);
+
+// Additional client-side functions
+export const createClient = (data: any, authInfo?: AuthInfo) =>
+  fetchJson(`${API_BASE_URL}/clients`, { 
+    method: 'POST', 
+    body: JSON.stringify(data) 
+  }, authInfo);
+
+export const updateClient = (id: string, data: any, authInfo?: AuthInfo) =>
+  fetchJson(`${API_BASE_URL}/clients/${id}`, { 
+    method: 'PUT', 
+    body: JSON.stringify(data) 
+  }, authInfo);
+
+export const deleteClient = (id: string, authInfo?: AuthInfo) =>
+  fetchJson(`${API_BASE_URL}/clients/${id}`, { 
+    method: 'DELETE' 
+  }, authInfo);
+
+export const getClient = (id: string, authInfo?: AuthInfo) =>
+  fetchJson(`${API_BASE_URL}/clients/${id}`, {}, authInfo);
+
+// Utility function to check if user is authenticated
+export async function isAuthenticated(): Promise<boolean> {
+  if (!browser) return false;
+  
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    return !!session?.access_token;
+  } catch {
+    return false;
+  }
+}
+
+// Utility function to get current user session
+export async function getCurrentSession() {
+  if (!browser) return null;
+  
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    return session;
+  } catch {
+    return null;
+  }
+}
