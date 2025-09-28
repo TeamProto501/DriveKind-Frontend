@@ -316,21 +316,29 @@
       <Sidebar.Group>
         <Sidebar.GroupLabel class="text-slate-600 font-medium text-sm uppercase tracking-wide mb-3">Navigation</Sidebar.GroupLabel>
         <Sidebar.Menu>
-          {#each roleBasedItems() as item}
-            <Sidebar.MenuItem>
-              <Sidebar.MenuButton 
-                onclick={() => navigateTo(item.href)}
-                class="w-full justify-start text-slate-700 hover:text-slate-900 hover:bg-slate-100 {isActiveRoute(item.href) ? 'bg-blue-50 text-blue-700 border-r-2 border-blue-600' : ''}"
-              >
-                {@const IconComponent = getIconComponent(item.icon)}
-                <IconComponent class="w-4 h-4" />
-                <span>{item.label}</span>
-                {#if item.badge}
-                  <Badge variant="secondary" class="ml-auto">{item.badge}</Badge>
-                {/if}
-              </Sidebar.MenuButton>
-            </Sidebar.MenuItem>
-					{/each}
+          {#if isLoading}
+            <div class="p-4 text-center text-gray-500">Loading navigation...</div>
+          {:else}
+            {#each roleBasedItems() as item}
+              <Sidebar.MenuItem>
+                <Sidebar.MenuButton 
+                  onclick={() => navigateTo(item.href)}
+                  class="w-full justify-start text-slate-700 hover:text-slate-900 hover:bg-slate-100 {isActiveRoute(item.href) ? 'bg-blue-50 text-blue-700 border-r-2 border-blue-600' : ''}"
+                >
+                  {@const IconComponent = getIconComponent(item.icon)}
+                  <IconComponent class="w-4 h-4" />
+                  <span>{item.label}</span>
+                  {#if item.badge}
+                    <Badge variant="secondary" class="ml-auto">{item.badge}</Badge>
+                  {/if}
+                </Sidebar.MenuButton>
+              </Sidebar.MenuItem>
+            {/each}
+            <!-- Debug info -->
+            <div class="p-2 text-xs text-gray-400 border-t">
+              Debug: {roleBasedItems().length} items, Role: {activeRole || 'none'}, Loading: {isLoading}
+            </div>
+          {/if}
         </Sidebar.Menu>
       </Sidebar.Group>
 
