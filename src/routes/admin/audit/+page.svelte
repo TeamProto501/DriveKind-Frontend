@@ -2,7 +2,7 @@
 <script lang="ts">
   import RoleGuard from "$lib/components/RoleGuard.svelte";
   import Breadcrumbs from "$lib/components/Breadcrumbs.svelte";
-  let { data = [] } = $props();
+  let { data } = $props();
   let items = $derived(Array.isArray(data) ? data : (data?.data ?? []));
   import {
     FileText,
