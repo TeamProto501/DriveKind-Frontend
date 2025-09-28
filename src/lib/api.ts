@@ -92,6 +92,12 @@ async function fetchJson(url: string, options?: RequestInit, authInfo?: AuthInfo
 }
 
 /* =========================================================
+   CLIENTS
+========================================================= */
+export const getAllClients = (authInfo?: AuthInfo) =>
+  fetchJson(`${API_BASE_URL}/clients`, {}, authInfo);
+
+/* =========================================================
    STAFF PROFILES
 ========================================================= */
 export const getAllStaffProfiles = (authInfo?: AuthInfo) =>
