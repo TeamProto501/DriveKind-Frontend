@@ -65,8 +65,19 @@
 
 			console.log('✅ Organizations refreshed:', data);
 			organizations = data || [];
-			filteredOrganizations = organizations;
+			// Trigger search effect to update filtered list
+			if (!searchTerm.trim()) {
+				filteredOrganizations = organizations;
+			} else {
+				filteredOrganizations = organizations.filter(org =>
+					org.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+					org.contact_email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+					org.city.toLowerCase().includes(searchTerm.toLowerCase()) ||
+					org.state.toLowerCase().includes(searchTerm.toLowerCase())
+				);
+			}
 			console.log('📊 Total organizations after refresh:', organizations.length);
+			console.log('📊 Filtered organizations after refresh:', filteredOrganizations.length);
 		} catch (error) {
 			console.error('❌ Exception refreshing organizations:', error);
 			showEditMessage('Failed to refresh organizations: ' + (error as Error).message, false);
@@ -93,8 +104,19 @@
 
 			console.log('✅ Organizations loaded:', data);
 			organizations = data || [];
-			filteredOrganizations = organizations;
+			// Initialize filtered list
+			if (!searchTerm.trim()) {
+				filteredOrganizations = organizations;
+			} else {
+				filteredOrganizations = organizations.filter(org =>
+					org.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+					org.contact_email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+					org.city.toLowerCase().includes(searchTerm.toLowerCase()) ||
+					org.state.toLowerCase().includes(searchTerm.toLowerCase())
+				);
+			}
 			console.log('📊 Total organizations:', organizations.length);
+			console.log('📊 Filtered organizations:', filteredOrganizations.length);
 		} catch (error) {
 			console.error('❌ Exception loading organizations:', error);
 			showEditMessage('Failed to load organizations: ' + (error as Error).message, false);
@@ -105,6 +127,7 @@
 
 	// Filter organizations based on search term
 	$effect(() => {
+		console.log('🔍 Search effect triggered - searchTerm:', searchTerm, 'organizations.length:', organizations.length);
 		if (!searchTerm.trim()) {
 			filteredOrganizations = organizations;
 		} else {
@@ -115,6 +138,7 @@
 				org.state.toLowerCase().includes(searchTerm.toLowerCase())
 			);
 		}
+		console.log('🔍 Filtered organizations:', filteredOrganizations.length);
 	});
 
 	// Show message
