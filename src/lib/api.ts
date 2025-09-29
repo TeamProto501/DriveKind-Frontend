@@ -5,7 +5,7 @@ import { toastStore } from './toast';
 import type { AuthInfo } from './types';
 
 // DriveKind API Configuration
-export const API_BASE_URL = 'https://drive-kind-api.vercel.app/';
+export const API_BASE_URL = 'https://drive-kind-api.vercel.app';
 
 export async function authenticatedFetch(
   url: string, 
@@ -44,7 +44,8 @@ export async function authenticatedFetch(
     return fetch(url, {
       ...options,
       headers,
-      credentials: 'include'
+      // Remove credentials: 'include' - this might help with CORS
+      // credentials: 'include'
     });
   };
 
