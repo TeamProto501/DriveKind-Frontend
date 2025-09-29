@@ -163,6 +163,7 @@
 
 			console.log('✅ Organization added:', data);
 			organizations = [...organizations, data];
+			filteredOrganizations = organizations; // Update filtered list immediately
 			showEditMessage('Organization added successfully!', true);
 			closeModals();
 		} catch (error) {
@@ -195,6 +196,10 @@
 			organizations = organizations.map(org => 
 				org.org_id === editingOrg.org_id ? data : org
 			);
+			// Update filtered list immediately
+			filteredOrganizations = filteredOrganizations.map(org => 
+				org.org_id === editingOrg.org_id ? data : org
+			);
 			showEditMessage('Organization updated successfully!', true);
 			closeModals();
 		} catch (error) {
@@ -223,6 +228,8 @@
 
 			console.log('✅ Organization deleted');
 			organizations = organizations.filter(org => org.org_id !== selectedOrg.org_id);
+			// Update filtered list immediately
+			filteredOrganizations = filteredOrganizations.filter(org => org.org_id !== selectedOrg.org_id);
 			showEditMessage('Organization deleted successfully!', true);
 			closeModals();
 		} catch (error) {
