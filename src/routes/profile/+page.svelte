@@ -42,8 +42,8 @@
 	}
 
 	let profile: StaffProfile | null = null;
-	let isLoading = $state(true);
-	let error = $state('');
+	let isLoading = true;
+	let error = '';
 
 	// Load profile data on mount
 	onMount(async () => {
