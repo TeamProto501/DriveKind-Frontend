@@ -1,11 +1,9 @@
 <script lang="ts">
-	import RoleGuard from '$lib/components/RoleGuard.svelte';
-	import Breadcrumbs from '$lib/components/Breadcrumbs.svelte';
-	import { Building2, Plus, Search, Edit, Trash2, Eye, Save, X } from '@lucide/svelte';
+	import { Building2, Plus, Search, Edit, Trash2, Save, X, Mail, Phone, MapPin } from '@lucide/svelte';
 	import { onMount } from 'svelte';
 	import { supabase } from '$lib/supabase';
 
-	// Organization interface
+	// Organization interface matching your Supabase schema
 	interface Organization {
 		org_id: number;
 		name: string;
@@ -20,13 +18,15 @@
 	// State
 	let organizations: Organization[] = [];
 	let filteredOrganizations: Organization[] = [];
-	let isLoading = $state(true);
+	let isLoading = $state(false);
 	let searchTerm = $state('');
 	let showAddModal = $state(false);
 	let showEditModal = $state(false);
 	let showDeleteModal = $state(false);
 	let selectedOrg: Organization | null = null;
 	let editingOrg: Organization | null = null;
+	let editMessage = $state('');
+	let editMessageSuccess = $state(false);
 
 	// Form data for add/edit
 	let formData = $state({
@@ -41,7 +41,7 @@
 
 	// Load organizations on mount
 	onMount(async () => {
-		console.log('🏢 Organizations page loaded');
+		console.log('🏢 Organizations page loaded for Super Admin');
 		await loadOrganizations();
 	});
 
@@ -57,7 +57,7 @@
 
 			if (error) {
 				console.error('❌ Error loading organizations:', error);
-				alert('Failed to load organizations: ' + error.message);
+				showEditMessage('Failed to load organizations: ' + error.message, false);
 				return;
 			}
 
@@ -65,9 +65,13 @@
 			organizations = data || [];
 			filteredOrganizations = organizations;
 			console.log('📊 Total organizations:', organizations.length);
+			
+			if (organizations.length === 0) {
+				showEditMessage('No organizations found. Click "Add Organization" to create the first one.', true);
+			}
 		} catch (error) {
 			console.error('❌ Exception loading organizations:', error);
-			alert('Failed to load organizations: ' + error.message);
+			showEditMessage('Failed to load organizations: ' + (error as Error).message, false);
 		} finally {
 			isLoading = false;
 		}
@@ -86,6 +90,15 @@
 			);
 		}
 	});
+
+	// Show message
+	function showEditMessage(message: string, success: boolean) {
+		editMessage = message;
+		editMessageSuccess = success;
+		setTimeout(() => {
+			editMessage = '';
+		}, 5000);
+	}
 
 	// Open add modal
 	function openAddModal() {
@@ -134,6 +147,8 @@
 	// Add organization
 	async function addOrganization() {
 		try {
+			console.log('🏢 Adding organization:', formData);
+			
 			const { data, error } = await supabase
 				.from('organization')
 				.insert([formData])
@@ -141,16 +156,18 @@
 				.single();
 
 			if (error) {
-				console.error('Error adding organization:', error);
-				alert('Failed to add organization');
+				console.error('❌ Error adding organization:', error);
+				showEditMessage('Failed to add organization: ' + error.message, false);
 				return;
 			}
 
+			console.log('✅ Organization added:', data);
 			organizations = [...organizations, data];
+			showEditMessage('Organization added successfully!', true);
 			closeModals();
 		} catch (error) {
-			console.error('Error adding organization:', error);
-			alert('Failed to add organization');
+			console.error('❌ Exception adding organization:', error);
+			showEditMessage('Failed to add organization: ' + (error as Error).message, false);
 		}
 	}
 
@@ -159,6 +176,8 @@
 		if (!editingOrg) return;
 
 		try {
+			console.log('🏢 Updating organization:', editingOrg.org_id, formData);
+			
 			const { data, error } = await supabase
 				.from('organization')
 				.update(formData)
@@ -167,18 +186,20 @@
 				.single();
 
 			if (error) {
-				console.error('Error updating organization:', error);
-				alert('Failed to update organization');
+				console.error('❌ Error updating organization:', error);
+				showEditMessage('Failed to update organization: ' + error.message, false);
 				return;
 			}
 
+			console.log('✅ Organization updated:', data);
 			organizations = organizations.map(org => 
 				org.org_id === editingOrg.org_id ? data : org
 			);
+			showEditMessage('Organization updated successfully!', true);
 			closeModals();
 		} catch (error) {
-			console.error('Error updating organization:', error);
-			alert('Failed to update organization');
+			console.error('❌ Exception updating organization:', error);
+			showEditMessage('Failed to update organization: ' + (error as Error).message, false);
 		}
 	}
 
@@ -187,137 +208,193 @@
 		if (!selectedOrg) return;
 
 		try {
+			console.log('🏢 Deleting organization:', selectedOrg.org_id);
+			
 			const { error } = await supabase
 				.from('organization')
 				.delete()
 				.eq('org_id', selectedOrg.org_id);
 
 			if (error) {
-				console.error('Error deleting organization:', error);
-				alert('Failed to delete organization');
+				console.error('❌ Error deleting organization:', error);
+				showEditMessage('Failed to delete organization: ' + error.message, false);
 				return;
 			}
 
+			console.log('✅ Organization deleted');
 			organizations = organizations.filter(org => org.org_id !== selectedOrg.org_id);
+			showEditMessage('Organization deleted successfully!', true);
 			closeModals();
 		} catch (error) {
-			console.error('Error deleting organization:', error);
-			alert('Failed to delete organization');
+			console.error('❌ Exception deleting organization:', error);
+			showEditMessage('Failed to delete organization: ' + (error as Error).message, false);
 		}
 	}
 </script>
 
-<RoleGuard requiredRoles={['Super Admin']}>
-	<div class="min-h-screen bg-gray-50">
-		<Breadcrumbs />
-		
-		<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-			<div class="mb-8">
-				<h1 class="text-3xl font-bold text-gray-900">Organization Management</h1>
-				<p class="text-gray-600 mt-2">Manage organizations, add new ones, and configure settings.</p>
+<div class="min-h-screen bg-gray-50">
+	<!-- Header -->
+	<div class="bg-white shadow-sm border-b border-gray-200">
+		<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+			<div class="flex items-center justify-between">
+				<div class="flex items-center space-x-3">
+					<div class="p-2 bg-blue-100 rounded-lg">
+						<Building2 class="w-6 h-6 text-blue-600" />
+					</div>
+					<div>
+						<h1 class="text-2xl font-bold text-gray-900">Organizations Management</h1>
+						<p class="text-sm text-gray-600">Manage organizations in the database</p>
+					</div>
+				</div>
+				
+				<button
+					onclick={openAddModal}
+					class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+				>
+					<Plus class="w-4 h-4 mr-2" />
+					Add Organization
+				</button>
 			</div>
-			
-			<!-- Search and Add Section -->
-			<div class="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
-				<div class="px-6 py-4 border-b border-gray-200">
-					<div class="flex items-center justify-between">
-						<div class="flex-1 max-w-md">
-							<div class="relative">
-								<Search class="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-								<input
-									type="text"
-									placeholder="Search organizations..."
-									bind:value={searchTerm}
-									class="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-								/>
-							</div>
-						</div>
-						<button
-							onclick={openAddModal}
-							class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200 flex items-center space-x-2"
-						>
-							<Plus class="w-4 h-4" />
-							<span>Add Organization</span>
-						</button>
+		</div>
+	</div>
+
+	<!-- Success/Error Messages -->
+	{#if editMessage}
+		<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+			<div class="rounded-md p-4 {editMessageSuccess ? 'bg-green-50' : 'bg-red-50'} border {editMessageSuccess ? 'border-green-200' : 'border-red-200'}">
+				<div class="flex">
+					<div class="ml-3">
+						<p class="text-sm font-medium {editMessageSuccess ? 'text-green-800' : 'text-red-800'}">
+							{editMessage}
+						</p>
 					</div>
 				</div>
 			</div>
+		</div>
+	{/if}
 
-			<!-- Organizations List -->
-			<div class="bg-white rounded-lg shadow-sm border border-gray-200">
-				{#if isLoading}
-					<div class="p-8 text-center">
-						<div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-						<p class="mt-2 text-gray-500">Loading organizations...</p>
+	<!-- Main Content -->
+	<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+		<!-- Search Section -->
+		<div class="mb-6">
+			<div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+				<div class="flex items-center space-x-4">
+					<div class="flex-1 max-w-md">
+						<div class="relative">
+							<Search class="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+							<input
+								type="text"
+								placeholder="Search organizations..."
+								bind:value={searchTerm}
+								class="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+							/>
+						</div>
 					</div>
-				{:else if filteredOrganizations.length === 0}
-					<div class="p-8 text-center">
-						<Building2 class="w-16 h-16 text-gray-400 mx-auto mb-4" />
-						<h3 class="text-lg font-medium text-gray-900 mb-2">No organizations found</h3>
-						<p class="text-gray-500">
-							{searchTerm ? 'Try adjusting your search terms.' : 'Get started by adding your first organization.'}
-						</p>
+					<div class="text-sm text-gray-500">
+						{filteredOrganizations.length} organization{filteredOrganizations.length !== 1 ? 's' : ''} found
 					</div>
-				{:else}
-					<div class="overflow-x-auto">
-						<table class="min-w-full divide-y divide-gray-200">
-							<thead class="bg-gray-50">
-								<tr>
-									<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Organization</th>
-									<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Contact</th>
-									<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Location</th>
-									<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-								</tr>
-							</thead>
-							<tbody class="bg-white divide-y divide-gray-200">
-								{#each filteredOrganizations as org}
-									<tr class="hover:bg-gray-50">
-										<td class="px-6 py-4 whitespace-nowrap">
-											<div>
-												<div class="text-sm font-medium text-gray-900">{org.name}</div>
-												<div class="text-sm text-gray-500">ID: {org.org_id}</div>
-											</div>
-										</td>
-										<td class="px-6 py-4 whitespace-nowrap">
-											<div class="text-sm text-gray-900">{org.contact_email}</div>
-											<div class="text-sm text-gray-500">{org.contact_phone}</div>
-										</td>
-										<td class="px-6 py-4 whitespace-nowrap">
-											<div class="text-sm text-gray-900">{org.city}, {org.state}</div>
-											<div class="text-sm text-gray-500">{org.zip_code}</div>
-										</td>
-										<td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-											<div class="flex space-x-2">
-												<button
-													onclick={() => openEditModal(org)}
-													class="text-blue-600 hover:text-blue-900 p-1 rounded"
-													title="Edit"
-												>
-													<Edit class="w-4 h-4" />
-												</button>
-												<button
-													onclick={() => openDeleteModal(org)}
-													class="text-red-600 hover:text-red-900 p-1 rounded"
-													title="Delete"
-												>
-													<Trash2 class="w-4 h-4" />
-												</button>
-											</div>
-										</td>
-									</tr>
-								{/each}
-							</tbody>
-						</table>
-					</div>
-				{/if}
+				</div>
 			</div>
+		</div>
+
+		<!-- Organizations Table -->
+		<div class="bg-white rounded-lg shadow-sm border border-gray-200">
+			{#if isLoading}
+				<div class="p-8 text-center">
+					<div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+					<p class="mt-2 text-gray-500">Loading organizations...</p>
+				</div>
+			{:else if filteredOrganizations.length === 0}
+				<div class="p-8 text-center">
+					<Building2 class="w-16 h-16 text-gray-400 mx-auto mb-4" />
+					<h3 class="text-lg font-medium text-gray-900 mb-2">
+						{searchTerm ? 'No organizations found' : 'No organizations yet'}
+					</h3>
+					<p class="text-gray-500 mb-4">
+						{searchTerm ? 'Try adjusting your search terms.' : 'Get started by adding your first organization.'}
+					</p>
+					{#if !searchTerm}
+						<button
+							onclick={openAddModal}
+							class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
+						>
+							<Plus class="w-4 h-4 mr-2" />
+							Add First Organization
+						</button>
+					{/if}
+				</div>
+			{:else}
+				<div class="overflow-x-auto">
+					<table class="min-w-full divide-y divide-gray-200">
+						<thead class="bg-gray-50">
+							<tr>
+								<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Organization</th>
+								<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Contact</th>
+								<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Location</th>
+								<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+							</tr>
+						</thead>
+						<tbody class="bg-white divide-y divide-gray-200">
+							{#each filteredOrganizations as org}
+								<tr class="hover:bg-gray-50">
+									<td class="px-6 py-4 whitespace-nowrap">
+										<div>
+											<div class="text-sm font-medium text-gray-900">{org.name}</div>
+											<div class="text-sm text-gray-500">ID: {org.org_id}</div>
+										</div>
+									</td>
+									<td class="px-6 py-4 whitespace-nowrap">
+										<div class="flex items-center space-x-2">
+											<Mail class="w-4 h-4 text-gray-400" />
+											<div>
+												<div class="text-sm text-gray-900">{org.contact_email}</div>
+												<div class="text-sm text-gray-500 flex items-center">
+													<Phone class="w-3 h-3 mr-1" />
+													{org.contact_phone}
+												</div>
+											</div>
+										</div>
+									</td>
+									<td class="px-6 py-4 whitespace-nowrap">
+										<div class="flex items-center space-x-2">
+											<MapPin class="w-4 h-4 text-gray-400" />
+											<div>
+												<div class="text-sm text-gray-900">{org.city}, {org.state}</div>
+												<div class="text-sm text-gray-500">{org.zip_code}</div>
+											</div>
+										</div>
+									</td>
+									<td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+										<div class="flex space-x-2">
+											<button
+												onclick={() => openEditModal(org)}
+												class="text-blue-600 hover:text-blue-900 p-1 rounded-md hover:bg-blue-50"
+												title="Edit Organization"
+											>
+												<Edit class="w-4 h-4" />
+											</button>
+											<button
+												onclick={() => openDeleteModal(org)}
+												class="text-red-600 hover:text-red-900 p-1 rounded-md hover:bg-red-50"
+												title="Delete Organization"
+											>
+												<Trash2 class="w-4 h-4" />
+											</button>
+										</div>
+									</td>
+								</tr>
+							{/each}
+						</tbody>
+					</table>
+				</div>
+			{/if}
 		</div>
 	</div>
 
 	<!-- Add Organization Modal -->
 	{#if showAddModal}
 		<div class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-			<div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+			<div class="relative top-20 mx-auto p-5 border w-full max-w-md shadow-lg rounded-md bg-white">
 				<div class="mt-3">
 					<div class="flex items-center justify-between mb-4">
 						<h3 class="text-lg font-medium text-gray-900">Add Organization</h3>
@@ -423,7 +500,7 @@
 	<!-- Edit Organization Modal -->
 	{#if showEditModal}
 		<div class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-			<div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+			<div class="relative top-20 mx-auto p-5 border w-full max-w-md shadow-lg rounded-md bg-white">
 				<div class="mt-3">
 					<div class="flex items-center justify-between mb-4">
 						<h3 class="text-lg font-medium text-gray-900">Edit Organization</h3>
@@ -448,7 +525,7 @@
 							<input
 								type="email"
 								bind:value={formData.contact_email}
-								required
+									required
 								class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
 							/>
 						</div>
@@ -529,7 +606,7 @@
 	<!-- Delete Confirmation Modal -->
 	{#if showDeleteModal && selectedOrg}
 		<div class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-			<div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+			<div class="relative top-20 mx-auto p-5 border w-full max-w-md shadow-lg rounded-md bg-white">
 				<div class="mt-3">
 					<div class="flex items-center justify-between mb-4">
 						<h3 class="text-lg font-medium text-gray-900">Delete Organization</h3>
@@ -563,4 +640,4 @@
 			</div>
 		</div>
 	{/if}
-</RoleGuard>
+</div>
