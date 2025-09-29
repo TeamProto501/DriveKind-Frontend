@@ -7,6 +7,7 @@
   import { authStore } from '$lib/stores/auth';
   import { toastStore } from '$lib/toast';
   import type { PageData } from './$types';
+  import { page } from '$app/stores'; // Add this import
 
   export let data: PageData;
 

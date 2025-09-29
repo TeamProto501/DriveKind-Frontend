@@ -1,11 +1,11 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
   import { createStaffProfile, updateStaffProfile } from '$lib/api';
-  import { authStore } from '$lib/stores/auth';
-  import { get } from 'svelte/store';
+  import type { Session } from '@supabase/supabase-js';
 
   export let user: StaffProfile | null = null;
   export let createMode: boolean = false;
+  export let session: Session; // Add this prop
 
   const dispatch = createEventDispatcher();
 
@@ -84,11 +84,17 @@
     errorMessage = validateForm();
     if (errorMessage) return;
 
-    const authInfo = get(authStore);
-    if (!authInfo) {
+    if (!session) {
       errorMessage = 'No session found. Please refresh and try again.';
       return;
     }
+
+    // Create auth info object from session
+    const authInfo = {
+      access_token: session.access_token,
+      refresh_token: session.refresh_token,
+      user: session.user
+    };
 
     saving = true;
     try {
@@ -98,8 +104,8 @@
         await updateStaffProfile(user.user_id, form, authInfo);
       }
 
-      dispatch('updated'); // notify parent to refresh list
-      dispatch('close');   // close sidebar
+      dispatch('updated');
+      dispatch('close');
     } catch (err: any) {
       console.error(err);
       errorMessage = err.message || 'Failed to save user';

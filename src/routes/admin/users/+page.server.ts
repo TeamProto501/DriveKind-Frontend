@@ -7,7 +7,6 @@ export const load = async (event) => {
   const tab = event.url.searchParams.get("tab") ?? "clients";
 
   try {
-    // Get Supabase session instead of using authenticatedFetch
     const supabase = createSupabaseServerClient(event);
     const { data: { session } } = await supabase.auth.getSession();
 
@@ -18,7 +17,6 @@ export const load = async (event) => {
 
     console.log('Fetching staff profiles with Supabase token');
     
-    // Use the Supabase access token directly
     const res = await fetch(`${API_BASE_URL}/staff-profiles`, {
       headers: {
         'Content-Type': 'application/json',
@@ -31,7 +29,6 @@ export const load = async (event) => {
       const errorText = await res.text();
       console.error('Error response body:', errorText);
       
-      // If unauthorized, redirect to login
       if (res.status === 401 || res.status === 403) {
         throw redirect(302, '/login');
       }
@@ -56,18 +53,17 @@ export const load = async (event) => {
 
     return { 
       tab, 
-      staffProfiles: data 
+      staffProfiles: data,
+      session // Add session to return data
     };
 
   } catch (err) {
     console.error("Error in load function:", err);
     
-    // Handle redirect errors
     if (err.status === 302) {
       throw err;
     }
     
-    // If it's already a SvelteKit error, re-throw it
     if (err.status) {
       throw err;
     }
