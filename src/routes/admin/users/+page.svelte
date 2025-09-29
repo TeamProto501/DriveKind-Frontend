@@ -9,6 +9,11 @@
   import type { PageData } from './$types';
   import { page } from '$app/stores'; // Add this import
 
+  $: {
+    console.log('Page data:', $page.data);
+    console.log('Session from page data:', $page.data.session);
+  }
+
   export let data: PageData;
 
   type StaffProfile = {
@@ -279,6 +284,7 @@
       <UserSidebar
         user={selectedUser}
         createMode={isCreateMode}
+        session={$page.data.session}
         on:close={closeSidebar}
         on:updated={handleUserUpdated}
       />

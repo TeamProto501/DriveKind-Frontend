@@ -2,12 +2,13 @@
   import { createEventDispatcher } from 'svelte';
   import { createStaffProfile, updateStaffProfile } from '$lib/api';
   import type { Session } from '@supabase/supabase-js';
+  import type { AuthInfo } from '$lib/types';
   import { browser } from '$app/environment';
   import { supabase } from '$lib/supabase';
 
   export let user: StaffProfile | null = null;
   export let createMode: boolean = false;
-  export let session: Session | undefined = undefined; // Make it optional
+  export let session: any = undefined; // Make it optional
 
   const dispatch = createEventDispatcher();
 
@@ -83,55 +84,79 @@
   }
 
   async function saveUser() {
+    console.log('=== SAVE USER DEBUG ===');
+    console.log('1. Received session prop:', session);
+    console.log('2. Browser environment:', browser);
+    
     errorMessage = validateForm();
     if (errorMessage) return;
 
     saving = true;
     
     try {
-      // Try to get session from multiple sources
-      let authInfo;
+      let authInfo: AuthInfo;
       
       if (session) {
-        // Use passed session
+        console.log('3. Using passed session');
+        console.log('   - access_token exists:', !!session.access_token);
+        console.log('   - user exists:', !!session.user);
+        
         authInfo = {
+          token: session.access_token,
           access_token: session.access_token,
           refresh_token: session.refresh_token,
-          user: session.user
+          user: session.user,
+          userId: session.user?.id
         };
-        console.log('Using passed session');
+        console.log('4. Created authInfo from session:', authInfo);
       } else if (browser) {
-        // Fallback: get fresh session from Supabase client
-        const { data: { session: freshSession } } = await supabase.auth.getSession();
+        console.log('3. Session prop is undefined, trying Supabase fallback');
+        const { data: { session: freshSession }, error } = await supabase.auth.getSession();
+        
+        console.log('   - Fresh session:', freshSession);
+        console.log('   - Error:', error);
         
         if (!freshSession) {
+          console.error('4. No fresh session available');
           errorMessage = 'No session found. Please refresh and try again.';
           saving = false;
           return;
         }
         
         authInfo = {
+          token: freshSession.access_token,
           access_token: freshSession.access_token,
           refresh_token: freshSession.refresh_token,
-          user: freshSession.user
+          user: freshSession.user,
+          userId: freshSession.user?.id
         };
-        console.log('Using fresh Supabase session');
+        console.log('4. Created authInfo from fresh session:', authInfo);
       } else {
+        console.error('3. Not in browser environment and no session prop');
         errorMessage = 'No session found. Please refresh and try again.';
         saving = false;
         return;
       }
 
+      console.log('5. Final authInfo before API call:', {
+        hasToken: !!authInfo.token,
+        hasAccessToken: !!authInfo.access_token,
+        hasUser: !!authInfo.user
+      });
+
       if (createMode) {
+        console.log('6. Calling createStaffProfile');
         await createStaffProfile({ ...defaultInsert, ...form }, authInfo);
       } else if (user) {
+        console.log('6. Calling updateStaffProfile for user:', user.user_id);
         await updateStaffProfile(user.user_id, form, authInfo);
       }
 
+      console.log('7. API call successful');
       dispatch('updated');
       dispatch('close');
     } catch (err: any) {
-      console.error('Save user error:', err);
+      console.error('8. Save user error:', err);
       errorMessage = err.message || 'Failed to save user';
     } finally {
       saving = false;
