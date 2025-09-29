@@ -19,7 +19,7 @@
 	// State
 	let organizations: Organization[] = [];
 	let filteredOrganizations: Organization[] = [];
-	let isLoading = $state(false);
+	let isLoading = $state(true);
 	let searchTerm = $state('');
 	let showAddModal = $state(false);
 	let showEditModal = $state(false);
@@ -44,6 +44,10 @@
 	onMount(async () => {
 		console.log('🏢 Organizations page loaded for Super Admin');
 		await loadOrganizations();
+		// Ensure filteredOrganizations is initialized
+		if (filteredOrganizations.length === 0 && organizations.length > 0) {
+			filteredOrganizations = organizations;
+		}
 	});
 
 	// Function to pull fresh data from organization table
@@ -128,6 +132,11 @@
 	// Filter organizations based on search term
 	$effect(() => {
 		console.log('🔍 Search effect triggered - searchTerm:', searchTerm, 'organizations.length:', organizations.length);
+		if (organizations.length === 0) {
+			filteredOrganizations = [];
+			return;
+		}
+		
 		if (!searchTerm.trim()) {
 			filteredOrganizations = organizations;
 		} else {
