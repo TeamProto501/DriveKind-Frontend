@@ -2,10 +2,12 @@
   import { createEventDispatcher } from 'svelte';
   import { createStaffProfile, updateStaffProfile } from '$lib/api';
   import type { Session } from '@supabase/supabase-js';
+  import { browser } from '$app/environment';
+  import { supabase } from '$lib/supabase';
 
   export let user: StaffProfile | null = null;
   export let createMode: boolean = false;
-  export let session: Session; // Add this prop
+  export let session: Session | undefined = undefined; // Make it optional
 
   const dispatch = createEventDispatcher();
 
@@ -84,20 +86,42 @@
     errorMessage = validateForm();
     if (errorMessage) return;
 
-    if (!session) {
-      errorMessage = 'No session found. Please refresh and try again.';
-      return;
-    }
-
-    // Create auth info object from session
-    const authInfo = {
-      access_token: session.access_token,
-      refresh_token: session.refresh_token,
-      user: session.user
-    };
-
     saving = true;
+    
     try {
+      // Try to get session from multiple sources
+      let authInfo;
+      
+      if (session) {
+        // Use passed session
+        authInfo = {
+          access_token: session.access_token,
+          refresh_token: session.refresh_token,
+          user: session.user
+        };
+        console.log('Using passed session');
+      } else if (browser) {
+        // Fallback: get fresh session from Supabase client
+        const { data: { session: freshSession } } = await supabase.auth.getSession();
+        
+        if (!freshSession) {
+          errorMessage = 'No session found. Please refresh and try again.';
+          saving = false;
+          return;
+        }
+        
+        authInfo = {
+          access_token: freshSession.access_token,
+          refresh_token: freshSession.refresh_token,
+          user: freshSession.user
+        };
+        console.log('Using fresh Supabase session');
+      } else {
+        errorMessage = 'No session found. Please refresh and try again.';
+        saving = false;
+        return;
+      }
+
       if (createMode) {
         await createStaffProfile({ ...defaultInsert, ...form }, authInfo);
       } else if (user) {
@@ -107,7 +131,7 @@
       dispatch('updated');
       dispatch('close');
     } catch (err: any) {
-      console.error(err);
+      console.error('Save user error:', err);
       errorMessage = err.message || 'Failed to save user';
     } finally {
       saving = false;
