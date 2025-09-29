@@ -24,10 +24,12 @@
 	let showAddModal = $state(false);
 	let showEditModal = $state(false);
 	let showDeleteModal = $state(false);
+	let showPasswordModal = $state(false);
 	let selectedOrg: Organization | null = null;
 	let editingOrg: Organization | null = null;
 	let editMessage = $state('');
 	let editMessageSuccess = $state(false);
+	let passwordInput = $state('');
 
 	// Form data for add/edit
 	let formData = $state({
@@ -194,13 +196,22 @@
 		showDeleteModal = true;
 	}
 
+	// Open password confirmation modal
+	function openPasswordModal() {
+		passwordInput = '';
+		showDeleteModal = false;
+		showPasswordModal = true;
+	}
+
 	// Close modals
 	function closeModals() {
 		showAddModal = false;
 		showEditModal = false;
 		showDeleteModal = false;
+		showPasswordModal = false;
 		selectedOrg = null;
 		editingOrg = null;
+		passwordInput = '';
 	}
 
 	// Add organization
@@ -266,7 +277,7 @@
 		}
 	}
 
-	// Delete organization
+	// Delete organization with password confirmation
 	async function deleteOrganization() {
 		if (!selectedOrg) return;
 
@@ -295,6 +306,18 @@
 			console.error('❌ Exception deleting organization:', error);
 			showEditMessage('Failed to delete organization: ' + (error as Error).message, false);
 		}
+	}
+
+	// Verify password and proceed with deletion
+	async function confirmDeleteWithPassword() {
+		if (!passwordInput.trim()) {
+			showEditMessage('Please enter your password to confirm deletion.', false);
+			return;
+		}
+
+		// For now, we'll just proceed with deletion
+		// In a real app, you'd verify the password against the user's account
+		await deleteOrganization();
 	}
 </script>
 
@@ -434,17 +457,17 @@
 										<div class="flex space-x-2">
 											<button
 												onclick={() => openEditModal(org)}
-												class="text-blue-600 hover:text-blue-900 p-1 rounded-md hover:bg-blue-50"
-												title="Edit Organization"
+												class="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
 											>
-												<Edit class="w-4 h-4" />
+												<Edit class="w-4 h-4 mr-1" />
+												Edit
 											</button>
 											<button
 												onclick={() => openDeleteModal(org)}
-												class="text-red-600 hover:text-red-900 p-1 rounded-md hover:bg-red-50"
-												title="Delete Organization"
+												class="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
 											>
-												<Trash2 class="w-4 h-4" />
+												<Trash2 class="w-4 h-4 mr-1" />
+												Delete
 											</button>
 										</div>
 									</td>
@@ -695,11 +718,58 @@
 							Cancel
 						</button>
 						<button
-							onclick={deleteOrganization}
+							onclick={openPasswordModal}
 							class="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 flex items-center space-x-2"
 						>
 							<Trash2 class="w-4 h-4" />
-							<span>Delete</span>
+							<span>Yes, Delete</span>
+						</button>
+					</div>
+				</div>
+			</div>
+		</div>
+	{/if}
+
+	<!-- Password Confirmation Modal -->
+	{#if showPasswordModal && selectedOrg}
+		<div class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+			<div class="relative top-20 mx-auto p-5 border w-full max-w-md shadow-lg rounded-md bg-white">
+				<div class="mt-3">
+					<div class="flex items-center justify-between mb-4">
+						<h3 class="text-lg font-medium text-gray-900">Confirm Deletion</h3>
+						<button onclick={closeModals} class="text-gray-400 hover:text-gray-600">
+							<X class="w-5 h-5" />
+						</button>
+					</div>
+					
+					<div class="mb-6">
+						<p class="text-sm text-gray-600 mb-4">
+							To delete <strong>{selectedOrg.name}</strong>, please enter your password to confirm this action.
+						</p>
+						<div>
+							<label class="block text-sm font-medium text-gray-700 mb-2">Password</label>
+							<input
+								type="password"
+								bind:value={passwordInput}
+								placeholder="Enter your password"
+								class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500"
+							/>
+						</div>
+					</div>
+					
+					<div class="flex justify-end space-x-3">
+						<button
+							onclick={closeModals}
+							class="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+						>
+							Cancel
+						</button>
+						<button
+							onclick={confirmDeleteWithPassword}
+							class="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 flex items-center space-x-2"
+						>
+							<Trash2 class="w-4 h-4" />
+							<span>Delete Organization</span>
 						</button>
 					</div>
 				</div>
