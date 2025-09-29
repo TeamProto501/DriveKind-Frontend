@@ -163,7 +163,9 @@
 			filteredOrganizations = organizations; // Update filtered list immediately
 			showEditMessage('Organization added successfully!', true);
 			closeModals();
-			// Refresh all data
+			
+			// Refresh all data on success
+			console.log('Organization added successfully, invalidating cache');
 			await invalidateAll();
 		} catch (error) {
 			console.error('❌ Exception adding organization:', error);
@@ -201,7 +203,9 @@
 			);
 			showEditMessage('Organization updated successfully!', true);
 			closeModals();
-			// Refresh all data
+			
+			// Refresh all data on success
+			console.log('Organization updated successfully, invalidating cache');
 			await invalidateAll();
 		} catch (error) {
 			console.error('❌ Exception updating organization:', error);
@@ -233,7 +237,9 @@
 			filteredOrganizations = filteredOrganizations.filter(org => org.org_id !== selectedOrg.org_id);
 			showEditMessage('Organization deleted successfully!', true);
 			closeModals();
-			// Refresh all data
+			
+			// Refresh all data on success
+			console.log('Organization deleted successfully, invalidating cache');
 			await invalidateAll();
 		} catch (error) {
 			console.error('❌ Exception deleting organization:', error);
