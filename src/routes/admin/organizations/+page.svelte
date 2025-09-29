@@ -2,6 +2,7 @@
 	import { Building2, Plus, Search, Edit, Trash2, Save, X, Mail, Phone, MapPin } from '@lucide/svelte';
 	import { onMount } from 'svelte';
 	import { supabase } from '$lib/supabase';
+	import { invalidateAll } from '$app/navigation';
 
 	// Organization interface matching your Supabase schema
 	interface Organization {
@@ -65,10 +66,6 @@
 			organizations = data || [];
 			filteredOrganizations = organizations;
 			console.log('📊 Total organizations:', organizations.length);
-			
-			if (organizations.length === 0) {
-				showEditMessage('No organizations found. Click "Add Organization" to create the first one.', true);
-			}
 		} catch (error) {
 			console.error('❌ Exception loading organizations:', error);
 			showEditMessage('Failed to load organizations: ' + (error as Error).message, false);
@@ -166,6 +163,8 @@
 			filteredOrganizations = organizations; // Update filtered list immediately
 			showEditMessage('Organization added successfully!', true);
 			closeModals();
+			// Refresh all data
+			await invalidateAll();
 		} catch (error) {
 			console.error('❌ Exception adding organization:', error);
 			showEditMessage('Failed to add organization: ' + (error as Error).message, false);
@@ -202,6 +201,8 @@
 			);
 			showEditMessage('Organization updated successfully!', true);
 			closeModals();
+			// Refresh all data
+			await invalidateAll();
 		} catch (error) {
 			console.error('❌ Exception updating organization:', error);
 			showEditMessage('Failed to update organization: ' + (error as Error).message, false);
@@ -232,6 +233,8 @@
 			filteredOrganizations = filteredOrganizations.filter(org => org.org_id !== selectedOrg.org_id);
 			showEditMessage('Organization deleted successfully!', true);
 			closeModals();
+			// Refresh all data
+			await invalidateAll();
 		} catch (error) {
 			console.error('❌ Exception deleting organization:', error);
 			showEditMessage('Failed to delete organization: ' + (error as Error).message, false);
