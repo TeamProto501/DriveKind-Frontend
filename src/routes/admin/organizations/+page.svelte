@@ -46,6 +46,35 @@
 		await loadOrganizations();
 	});
 
+	// Function to pull fresh data from organization table
+	async function refreshOrganizations() {
+		try {
+			console.log('🔄 Refreshing organizations data...');
+			isLoading = true;
+			
+			const { data, error } = await supabase
+				.from('organization')
+				.select('*')
+				.order('name');
+
+			if (error) {
+				console.error('❌ Error refreshing organizations:', error);
+				showEditMessage('Failed to refresh organizations: ' + error.message, false);
+				return;
+			}
+
+			console.log('✅ Organizations refreshed:', data);
+			organizations = data || [];
+			filteredOrganizations = organizations;
+			console.log('📊 Total organizations after refresh:', organizations.length);
+		} catch (error) {
+			console.error('❌ Exception refreshing organizations:', error);
+			showEditMessage('Failed to refresh organizations: ' + (error as Error).message, false);
+		} finally {
+			isLoading = false;
+		}
+	}
+
 	// Load organizations from Supabase
 	async function loadOrganizations() {
 		try {
@@ -159,14 +188,12 @@
 			}
 
 			console.log('✅ Organization added:', data);
-			organizations = [...organizations, data];
-			filteredOrganizations = organizations; // Update filtered list immediately
 			showEditMessage('Organization added successfully!', true);
 			closeModals();
 			
-			// Refresh all data on success
-			console.log('Organization added successfully, invalidating cache');
-			await invalidateAll();
+			// Pull fresh data from database after successful add
+			console.log('Organization added successfully, refreshing data...');
+			await refreshOrganizations();
 		} catch (error) {
 			console.error('❌ Exception adding organization:', error);
 			showEditMessage('Failed to add organization: ' + (error as Error).message, false);
@@ -194,19 +221,12 @@
 			}
 
 			console.log('✅ Organization updated:', data);
-			organizations = organizations.map(org => 
-				org.org_id === editingOrg.org_id ? data : org
-			);
-			// Update filtered list immediately
-			filteredOrganizations = filteredOrganizations.map(org => 
-				org.org_id === editingOrg.org_id ? data : org
-			);
 			showEditMessage('Organization updated successfully!', true);
 			closeModals();
 			
-			// Refresh all data on success
-			console.log('Organization updated successfully, invalidating cache');
-			await invalidateAll();
+			// Pull fresh data from database after successful update
+			console.log('Organization updated successfully, refreshing data...');
+			await refreshOrganizations();
 		} catch (error) {
 			console.error('❌ Exception updating organization:', error);
 			showEditMessage('Failed to update organization: ' + (error as Error).message, false);
@@ -232,15 +252,12 @@
 			}
 
 			console.log('✅ Organization deleted');
-			organizations = organizations.filter(org => org.org_id !== selectedOrg.org_id);
-			// Update filtered list immediately
-			filteredOrganizations = filteredOrganizations.filter(org => org.org_id !== selectedOrg.org_id);
 			showEditMessage('Organization deleted successfully!', true);
 			closeModals();
 			
-			// Refresh all data on success
-			console.log('Organization deleted successfully, invalidating cache');
-			await invalidateAll();
+			// Pull fresh data from database after successful delete
+			console.log('Organization deleted successfully, refreshing data...');
+			await refreshOrganizations();
 		} catch (error) {
 			console.error('❌ Exception deleting organization:', error);
 			showEditMessage('Failed to delete organization: ' + (error as Error).message, false);
