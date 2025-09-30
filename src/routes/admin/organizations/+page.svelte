@@ -30,6 +30,7 @@
 	let editMessage = $state('');
 	let editMessageSuccess = $state(false);
 	let passwordInput = $state('');
+	let passwordError = $state('');
 
 	// Form data for add/edit
 	let formData = $state({
@@ -199,6 +200,7 @@
 	// Open password confirmation modal
 	function openPasswordModal() {
 		passwordInput = '';
+		passwordError = '';
 		showDeleteModal = false;
 		showPasswordModal = true;
 	}
@@ -212,6 +214,7 @@
 		selectedOrg = null;
 		editingOrg = null;
 		passwordInput = '';
+		passwordError = '';
 	}
 
 	// Add organization
@@ -311,15 +314,18 @@
 	// Verify password and proceed with deletion
 	async function confirmDeleteWithPassword() {
 		if (!passwordInput.trim()) {
-			showEditMessage('Please enter your password to confirm deletion.', false);
+			passwordError = 'Please enter your password to confirm deletion.';
 			return;
 		}
 
 		try {
+			// Clear any previous errors
+			passwordError = '';
+
 			// Verify the password by attempting to sign in with current user's email
 			const { data: { user } } = await supabase.auth.getUser();
 			if (!user?.email) {
-				showEditMessage('Unable to verify user identity.', false);
+				passwordError = 'Unable to verify user identity.';
 				return;
 			}
 
@@ -330,7 +336,7 @@
 			});
 
 			if (signInError) {
-				showEditMessage('Invalid password. Please try again.', false);
+				passwordError = 'Invalid password. Please try again.';
 				return;
 			}
 
@@ -338,7 +344,7 @@
 			await deleteOrganization();
 		} catch (error) {
 			console.error('❌ Error verifying password:', error);
-			showEditMessage('Error verifying password. Please try again.', false);
+			passwordError = 'Error verifying password. Please try again.';
 		}
 	}
 </script>
@@ -774,8 +780,11 @@
 								type="password"
 								bind:value={passwordInput}
 								placeholder="Enter your password"
-								class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500"
+								class="w-full px-3 py-2 border {passwordError ? 'border-red-300' : 'border-gray-300'} rounded-md focus:outline-none focus:ring-2 focus:ring-red-500"
 							/>
+							{#if passwordError}
+								<p class="mt-2 text-sm text-red-600">{passwordError}</p>
+							{/if}
 						</div>
 					</div>
 					
