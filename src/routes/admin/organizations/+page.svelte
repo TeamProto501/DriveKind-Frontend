@@ -315,9 +315,31 @@
 			return;
 		}
 
-		// For now, we'll just proceed with deletion
-		// In a real app, you'd verify the password against the user's account
-		await deleteOrganization();
+		try {
+			// Verify the password by attempting to sign in with current user's email
+			const { data: { user } } = await supabase.auth.getUser();
+			if (!user?.email) {
+				showEditMessage('Unable to verify user identity.', false);
+				return;
+			}
+
+			// Attempt to sign in with the provided password to verify it
+			const { error: signInError } = await supabase.auth.signInWithPassword({
+				email: user.email,
+				password: passwordInput
+			});
+
+			if (signInError) {
+				showEditMessage('Invalid password. Please try again.', false);
+				return;
+			}
+
+			// Password is correct, proceed with deletion
+			await deleteOrganization();
+		} catch (error) {
+			console.error('❌ Error verifying password:', error);
+			showEditMessage('Error verifying password. Please try again.', false);
+		}
 	}
 </script>
 
