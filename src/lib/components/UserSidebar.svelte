@@ -1,14 +1,13 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
   import { createStaffProfile, updateStaffProfile } from '$lib/api';
-  import type { Session } from '@supabase/supabase-js';
   import type { AuthInfo } from '$lib/types';
   import { browser } from '$app/environment';
   import { supabase } from '$lib/supabase';
 
   export let user: StaffProfile | null = null;
   export let createMode: boolean = false;
-  export let session: any = undefined; // Make it optional
+  export let session: any = undefined;
 
   const dispatch = createEventDispatcher();
 
@@ -35,8 +34,8 @@
   let errorMessage: string | null = null;
   let showMoreInfo = false;
   let expanded = { personal: false, training: false, preferences: false };
+  let tempPassword = ''; // For creating new users
 
-  // --- Initialize form ---
   function initializeForm(): StaffForm {
     if (user && !createMode) {
       return {
@@ -66,7 +65,6 @@
     };
   }
 
-  // --- Reactive: reset form whenever user or createMode changes ---
   $: form = initializeForm();
 
   function validateForm(): string | null {
@@ -74,6 +72,10 @@
     if (!form.last_name.trim()) return 'Last name is required.';
     if (!form.email?.trim() && !form.primary_phone?.trim())
       return 'Either email or phone is required.';
+    if (createMode && !form.email?.trim()) 
+      return 'Email is required when creating a new user.';
+    if (createMode && !tempPassword) 
+      return 'Temporary password is required for new users.';
     return null;
   }
 
@@ -85,8 +87,6 @@
 
   async function saveUser() {
     console.log('=== SAVE USER DEBUG ===');
-    console.log('1. Received session prop:', session);
-    console.log('2. Browser environment:', browser);
     
     errorMessage = validateForm();
     if (errorMessage) return;
@@ -97,10 +97,6 @@
       let authInfo: AuthInfo;
       
       if (session) {
-        console.log('3. Using passed session');
-        console.log('   - access_token exists:', !!session.access_token);
-        console.log('   - user exists:', !!session.user);
-        
         authInfo = {
           token: session.access_token,
           access_token: session.access_token,
@@ -108,16 +104,10 @@
           user: session.user,
           userId: session.user?.id
         };
-        console.log('4. Created authInfo from session:', authInfo);
       } else if (browser) {
-        console.log('3. Session prop is undefined, trying Supabase fallback');
         const { data: { session: freshSession }, error } = await supabase.auth.getSession();
         
-        console.log('   - Fresh session:', freshSession);
-        console.log('   - Error:', error);
-        
         if (!freshSession) {
-          console.error('4. No fresh session available');
           errorMessage = 'No session found. Please refresh and try again.';
           saving = false;
           return;
@@ -130,33 +120,56 @@
           user: freshSession.user,
           userId: freshSession.user?.id
         };
-        console.log('4. Created authInfo from fresh session:', authInfo);
       } else {
-        console.error('3. Not in browser environment and no session prop');
         errorMessage = 'No session found. Please refresh and try again.';
         saving = false;
         return;
       }
 
-      console.log('5. Final authInfo before API call:', {
-        hasToken: !!authInfo.token,
-        hasAccessToken: !!authInfo.access_token,
-        hasUser: !!authInfo.user
-      });
-
       if (createMode) {
-        console.log('6. Calling createStaffProfile');
-        await createStaffProfile({ ...defaultInsert, ...form }, authInfo);
+        console.log('Creating new Supabase auth user...');
+        
+        // Step 1: Create Supabase auth user
+        const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+          email: form.email!,
+          password: tempPassword,
+          email_confirm: true, // Auto-confirm email
+          user_metadata: {
+            first_name: form.first_name,
+            last_name: form.last_name
+          }
+        });
+
+        if (authError || !authData.user) {
+          console.error('Failed to create auth user:', authError);
+          errorMessage = authError?.message || 'Failed to create user account';
+          saving = false;
+          return;
+        }
+
+        console.log('Auth user created with ID:', authData.user.id);
+
+        // Step 2: Create staff profile with the new user_id
+        const profileData = {
+          ...defaultInsert,
+          ...form,
+          user_id: authData.user.id // Include the user_id!
+        };
+
+        console.log('Creating staff profile with data:', profileData);
+        await createStaffProfile(profileData, authInfo);
+        
       } else if (user) {
-        console.log('6. Calling updateStaffProfile for user:', user.user_id);
+        console.log('Updating staff profile for user:', user.user_id);
         await updateStaffProfile(user.user_id, form, authInfo);
       }
 
-      console.log('7. API call successful');
+      console.log('Operation successful');
       dispatch('updated');
       dispatch('close');
+      
     } catch (err: any) {
-      console.error('8. Save user error:', err);
+      console.error('Save user error:', err);
       errorMessage = err.message || 'Failed to save user';
     } finally {
       saving = false;
@@ -164,7 +177,7 @@
   }
 </script>
 
-<div class="fixed top-0 right-0 w-96 h-full bg-white shadow-xl border-l border-gray-200 flex flex-col">
+<div class="fixed top-0 right-0 w-96 h-full bg-white shadow-xl border-l border-gray-200 flex flex-col z-50">
   <!-- Header -->
   <div class="px-6 py-4 border-b flex items-center justify-between">
     <h2 class="text-lg font-semibold text-gray-900">
@@ -176,7 +189,9 @@
   <!-- Body -->
   <div class="flex-1 overflow-y-auto p-6 space-y-4">
     {#if errorMessage}
-      <p class="text-sm text-red-600">{errorMessage}</p>
+      <div class="rounded-md bg-red-50 p-4">
+        <p class="text-sm text-red-600">{errorMessage}</p>
+      </div>
     {/if}
 
     <!-- Basic Info -->
@@ -189,9 +204,31 @@
       <input type="text" bind:value={form.last_name} class="mt-1 block w-full border rounded px-3 py-2 text-sm" />
     </div>
     <div>
-      <label class="block text-sm font-medium text-gray-700">Email</label>
-      <input type="email" bind:value={form.email} class="mt-1 block w-full border rounded px-3 py-2 text-sm" />
+      <label class="block text-sm font-medium text-gray-700">Email {createMode ? '*' : ''}</label>
+      <input 
+        type="email" 
+        bind:value={form.email} 
+        disabled={!createMode && !!user}
+        class="mt-1 block w-full border rounded px-3 py-2 text-sm disabled:bg-gray-100" 
+      />
+      {#if !createMode && user}
+        <p class="mt-1 text-xs text-gray-500">Email cannot be changed after creation</p>
+      {/if}
     </div>
+
+    {#if createMode}
+      <div>
+        <label class="block text-sm font-medium text-gray-700">Temporary Password *</label>
+        <input 
+          type="password" 
+          bind:value={tempPassword} 
+          placeholder="User will be able to change this"
+          class="mt-1 block w-full border rounded px-3 py-2 text-sm" 
+        />
+        <p class="mt-1 text-xs text-gray-500">Minimum 6 characters. User can change this after first login.</p>
+      </div>
+    {/if}
+
     <div>
       <label class="block text-sm font-medium text-gray-700">Phone</label>
       <input type="tel" bind:value={form.primary_phone} class="mt-1 block w-full border rounded px-3 py-2 text-sm" />
@@ -229,9 +266,18 @@
         </button>
         {#if expanded.personal}
           <div class="p-4 space-y-4">
-            <input type="date" bind:value={form.dob} class="w-full border rounded px-3 py-2 text-sm" />
-            <input type="text" bind:value={form.city} placeholder="City" class="w-full border rounded px-3 py-2 text-sm" />
-            <input type="text" bind:value={form.state} placeholder="State" class="w-full border rounded px-3 py-2 text-sm" />
+            <div>
+              <label class="block text-sm font-medium text-gray-700">Date of Birth</label>
+              <input type="date" bind:value={form.dob} class="mt-1 w-full border rounded px-3 py-2 text-sm" />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700">City</label>
+              <input type="text" bind:value={form.city} class="mt-1 w-full border rounded px-3 py-2 text-sm" />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700">State</label>
+              <input type="text" bind:value={form.state} class="mt-1 w-full border rounded px-3 py-2 text-sm" />
+            </div>
           </div>
         {/if}
       </div>
@@ -278,8 +324,18 @@
 
   <!-- Footer -->
   <div class="px-6 py-4 border-t flex justify-end space-x-2">
-    <button on:click={() => dispatch('close')} class="px-4 py-2 rounded-lg border text-gray-700 hover:bg-gray-50">Cancel</button>
-    <button on:click={saveUser} disabled={saving} class="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50">
+    <button 
+      on:click={() => dispatch('close')} 
+      disabled={saving}
+      class="px-4 py-2 rounded-lg border text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+    >
+      Cancel
+    </button>
+    <button 
+      on:click={saveUser} 
+      disabled={saving} 
+      class="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
+    >
       {saving ? 'Saving...' : (createMode ? 'Create User' : 'Save Changes')}
     </button>
   </div>
