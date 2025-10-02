@@ -37,31 +37,34 @@
   let tempPassword = '';
 
   function initializeForm(): StaffForm {
-    if (user && !createMode) {
+    // Check for null/createMode first to avoid accessing null properties
+    if (!user || createMode) {
       return {
-        first_name: user.first_name || '',
-        last_name: user.last_name || '',
-        email: user.email || '',
-        primary_phone: user.primary_phone || '',
-        role: Array.isArray(user.role) ? user.role : [user.role],
-        dob: user.dob || '1970-01-01',
-        city: user.city || 'N/A',
-        state: user.state || 'N/A',
-        training_completed: user.training_completed ?? false,
-        mileage_reimbursement: user.mileage_reimbursement ?? false
+        first_name: '',
+        last_name: '',
+        email: '',
+        primary_phone: '',
+        role: [],
+        dob: '1970-01-01',
+        city: 'N/A',
+        state: 'N/A',
+        training_completed: false,
+        mileage_reimbursement: false
       };
-    } 
+    }
+    
+    // Only access user properties if we confirmed user exists
     return {
-      first_name: '',
-      last_name: '',
-      email: '',
-      primary_phone: '',
-      role: [],
-      dob: '1970-01-01',
-      city: 'N/A',
-      state: 'N/A',
-      training_completed: false,
-      mileage_reimbursement: false
+      first_name: user.first_name || '',
+      last_name: user.last_name || '',
+      email: user.email || '',
+      primary_phone: user.primary_phone || '',
+      role: Array.isArray(user.role) ? user.role : [user.role],
+      dob: user.dob || '1970-01-01',
+      city: user.city || 'N/A',
+      state: user.state || 'N/A',
+      training_completed: user.training_completed ?? false,
+      mileage_reimbursement: user.mileage_reimbursement ?? false
     };
   }
 
@@ -142,7 +145,6 @@
         
         // Check if data is an array (weird structure in your output)
         if (Array.isArray(actionData)) {
-          // Your response seems to be: [{"success":1,"userId":2}, true, "actual-uuid"]
           const actualData = actionData[0];
           if (actualData && actualData.success) {
             console.log('User created successfully!');
@@ -162,6 +164,11 @@
         }
 
         console.log('User created successfully');
+        // Don't call updateStaffProfile here - the server action already created everything
+        
+      } else if (user) {
+        // Update existing user
+        console.log('Updating staff profile for user:', user.user_id);
         
         let authInfo: AuthInfo;
         if (session) {
