@@ -3,8 +3,7 @@
   import Breadcrumbs from '$lib/components/Breadcrumbs.svelte';
   import { Users, Plus, Search, Filter } from '@lucide/svelte';
   import UserSidebar from '$lib/components/UserSidebar.svelte';
-  import { getAllStaffProfiles } from '$lib/api'; // Client-side API
-  import { authStore } from '$lib/stores/auth';
+  import { getAllStaffProfiles } from '$lib/api';
   import { toastStore } from '$lib/toast';
   import type { PageData } from './$types';
 
@@ -71,7 +70,22 @@
     
     try {
       isRefreshing = true;
-      const authInfo = $authStore;
+      
+      // Use session from page data instead of authStore
+      if (!data.session) {
+        toastStore.error('No session available');
+        isRefreshing = false;
+        return;
+      }
+      
+      const authInfo = {
+        token: data.session.access_token,
+        access_token: data.session.access_token,
+        refresh_token: data.session.refresh_token,
+        user: data.session.user,
+        userId: data.session.user?.id
+      };
+      
       const updatedProfiles = await getAllStaffProfiles(authInfo);
       staffProfiles = updatedProfiles;
       applyFilters();
@@ -278,6 +292,7 @@
       <UserSidebar
         user={selectedUser}
         createMode={isCreateMode}
+        session={data.session}
         on:close={closeSidebar}
         on:updated={handleUserUpdated}
       />

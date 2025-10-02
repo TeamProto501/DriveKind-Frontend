@@ -5,7 +5,7 @@ import { toastStore } from './toast';
 import type { AuthInfo } from './types';
 
 // DriveKind API Configuration
-export const API_BASE_URL = 'https://drive-kind-api.vercel.app/';
+export const API_BASE_URL = 'https://drive-kind-api.vercel.app';
 
 export async function authenticatedFetch(
   url: string, 
@@ -18,8 +18,11 @@ export async function authenticatedFetch(
 
   let token: string | undefined;
   
+  // Support multiple auth info formats
   if (authInfo?.token) {
     token = authInfo.token;
+  } else if (authInfo?.access_token) {
+    token = authInfo.access_token;
   } else {
     // Get token from client-side Supabase
     const { data: { session } } = await supabase.auth.getSession();
@@ -41,7 +44,8 @@ export async function authenticatedFetch(
     return fetch(url, {
       ...options,
       headers,
-      credentials: 'include'
+      // Remove credentials: 'include' - this might help with CORS
+      // credentials: 'include'
     });
   };
 
@@ -77,10 +81,16 @@ export async function authenticatedFetch(
 
 // Client-side API helper
 async function fetchJson(url: string, options?: RequestInit, authInfo?: AuthInfo) {
+  console.log(`API call to ${url}`, { 
+    hasAuth: !!authInfo, 
+    authType: authInfo?.token ? 'token' : authInfo?.access_token ? 'access_token' : 'none' 
+  });
+  
   const res = await authenticatedFetch(url, options, authInfo);
   
   if (!res.ok) {
     const errorText = await res.text();
+    console.error(`API Error ${res.status} for ${url}:`, errorText);
     throw new Error(`API Error ${res.status}: ${errorText}`);
   }
   
@@ -95,17 +105,21 @@ export async function getClients(authInfo?: AuthInfo): Promise<Response> {
 export const getAllClients = (authInfo?: AuthInfo) =>
   fetchJson(`${API_BASE_URL}/clients`, {}, authInfo);
 
-export const createStaffProfile = (data: any, authInfo?: AuthInfo) =>
-  fetchJson(`${API_BASE_URL}/staff-profiles`, { 
+export const createStaffProfile = (data: any, authInfo?: AuthInfo) => {
+  console.log('createStaffProfile called with auth:', authInfo ? 'Auth present' : 'No auth');
+  return fetchJson(`${API_BASE_URL}/staff-profiles`, { 
     method: 'POST', 
     body: JSON.stringify(data) 
   }, authInfo);
+};
 
-export const updateStaffProfile = (id: string, data: any, authInfo?: AuthInfo) =>
-  fetchJson(`${API_BASE_URL}/staff-profiles/${id}`, { 
+export const updateStaffProfile = (id: string, data: any, authInfo?: AuthInfo) => {
+  console.log('updateStaffProfile called with auth:', authInfo ? 'Auth present' : 'No auth');
+  return fetchJson(`${API_BASE_URL}/staff-profiles/${id}`, { 
     method: 'PUT', 
     body: JSON.stringify(data) 
   }, authInfo);
+};
 
 export const deleteStaffProfile = (id: string, authInfo?: AuthInfo) =>
   fetchJson(`${API_BASE_URL}/staff-profiles/${id}`, { 

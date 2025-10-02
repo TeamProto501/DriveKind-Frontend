@@ -2,12 +2,12 @@
 import { API_BASE_URL } from "$lib/api";
 import { error, redirect } from '@sveltejs/kit';
 import { createSupabaseServerClient } from '$lib/supabase.server';
+import type { Actions } from './$types';
 
 export const load = async (event) => {
   const tab = event.url.searchParams.get("tab") ?? "clients";
 
   try {
-    // Get Supabase session instead of using authenticatedFetch
     const supabase = createSupabaseServerClient(event);
     const { data: { session } } = await supabase.auth.getSession();
 
@@ -18,7 +18,6 @@ export const load = async (event) => {
 
     console.log('Fetching staff profiles with Supabase token');
     
-    // Use the Supabase access token directly
     const res = await fetch(`${API_BASE_URL}/staff-profiles`, {
       headers: {
         'Content-Type': 'application/json',
@@ -31,7 +30,6 @@ export const load = async (event) => {
       const errorText = await res.text();
       console.error('Error response body:', errorText);
       
-      // If unauthorized, redirect to login
       if (res.status === 401 || res.status === 403) {
         throw redirect(302, '/login');
       }
@@ -56,18 +54,17 @@ export const load = async (event) => {
 
     return { 
       tab, 
-      staffProfiles: data 
+      staffProfiles: data,
+      session
     };
 
   } catch (err) {
     console.error("Error in load function:", err);
     
-    // Handle redirect errors
     if (err.status === 302) {
       throw err;
     }
     
-    // If it's already a SvelteKit error, re-throw it
     if (err.status) {
       throw err;
     }
@@ -75,3 +72,71 @@ export const load = async (event) => {
     throw error(500, `Failed to load staff profiles: ${err.message}`);
   }
 };
+
+export const actions = {
+  createUser: async (event) => {
+    const supabase = createSupabaseServerClient(event);
+    const { data: { session } } = await supabase.auth.getSession();
+
+    if (!session) {
+      return { success: false, error: 'No session found' };
+    }
+
+    const formData = await event.request.formData();
+    const email = formData.get('email') as string;
+    const password = formData.get('password') as string;
+    const firstName = formData.get('first_name') as string;
+    const lastName = formData.get('last_name') as string;
+    const profileData = JSON.parse(formData.get('profileData') as string);
+
+    try {
+      console.log('Creating auth user server-side:', email);
+      
+      // Create auth user (works server-side with service role key)
+      const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+        email,
+        password,
+        email_confirm: true,
+        user_metadata: {
+          first_name: firstName,
+          last_name: lastName
+        }
+      });
+
+      if (authError || !authData.user) {
+        console.error('Failed to create auth user:', authError);
+        return { success: false, error: authError?.message || 'Failed to create user' };
+      }
+
+      console.log('Auth user created with ID:', authData.user.id);
+
+      // Create staff profile via your API
+      const res = await fetch(`${API_BASE_URL}/staff-profiles`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          ...profileData,
+          user_id: authData.user.id
+        })
+      });
+
+      if (!res.ok) {
+        console.error('Failed to create staff profile, rolling back auth user');
+        // Rollback: delete the auth user if profile creation fails
+        await supabase.auth.admin.deleteUser(authData.user.id);
+        const errorText = await res.text();
+        return { success: false, error: `Failed to create staff profile: ${errorText}` };
+      }
+
+      console.log('Staff profile created successfully');
+      return { success: true, userId: authData.user.id };
+      
+    } catch (err: any) {
+      console.error('Create user error:', err);
+      return { success: false, error: err.message || 'Unknown error occurred' };
+    }
+  }
+} satisfies Actions;
