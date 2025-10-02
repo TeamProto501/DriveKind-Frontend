@@ -1,6 +1,6 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
-  import { createStaffProfile, updateStaffProfile } from '$lib/api';
+  import { updateStaffProfile } from '$lib/api';
   import type { AuthInfo } from '$lib/types';
   import { browser } from '$app/environment';
   import { supabase } from '$lib/supabase';
@@ -34,7 +34,7 @@
   let errorMessage: string | null = null;
   let showMoreInfo = false;
   let expanded = { personal: false, training: false, preferences: false };
-  let tempPassword = ''; // For creating new users
+  let tempPassword = '';
 
   function initializeForm(): StaffForm {
     if (user && !createMode) {
@@ -76,6 +76,8 @@
       return 'Email is required when creating a new user.';
     if (createMode && !tempPassword) 
       return 'Temporary password is required for new users.';
+    if (createMode && tempPassword.length < 6)
+      return 'Password must be at least 6 characters.';
     return null;
   }
 
@@ -94,77 +96,76 @@
     saving = true;
     
     try {
-      let authInfo: AuthInfo;
-      
-      if (session) {
-        authInfo = {
-          token: session.access_token,
-          access_token: session.access_token,
-          refresh_token: session.refresh_token,
-          user: session.user,
-          userId: session.user?.id
-        };
-      } else if (browser) {
-        const { data: { session: freshSession }, error } = await supabase.auth.getSession();
-        
-        if (!freshSession) {
-          errorMessage = 'No session found. Please refresh and try again.';
-          saving = false;
-          return;
-        }
-        
-        authInfo = {
-          token: freshSession.access_token,
-          access_token: freshSession.access_token,
-          refresh_token: freshSession.refresh_token,
-          user: freshSession.user,
-          userId: freshSession.user?.id
-        };
-      } else {
-        errorMessage = 'No session found. Please refresh and try again.';
-        saving = false;
-        return;
-      }
-
       if (createMode) {
-        console.log('Creating new Supabase auth user...');
+        console.log('Creating new user via server action...');
         
-        // Step 1: Create Supabase auth user
-        const { data: authData, error: authError } = await supabase.auth.admin.createUser({
-          email: form.email!,
-          password: tempPassword,
-          email_confirm: true, // Auto-confirm email
-          user_metadata: {
-            first_name: form.first_name,
-            last_name: form.last_name
-          }
+        // Use FormData to call server action
+        const formData = new FormData();
+        formData.append('email', form.email!);
+        formData.append('password', tempPassword);
+        formData.append('first_name', form.first_name);
+        formData.append('last_name', form.last_name);
+        formData.append('profileData', JSON.stringify({
+          ...defaultInsert,
+          ...form
+        }));
+
+        const response = await fetch('?/createUser', {
+          method: 'POST',
+          body: formData
         });
 
-        if (authError || !authData.user) {
-          console.error('Failed to create auth user:', authError);
-          errorMessage = authError?.message || 'Failed to create user account';
+        const result = await response.json();
+        
+        if (result.type === 'error') {
+          errorMessage = result.error?.message || 'Failed to create user';
           saving = false;
           return;
         }
 
-        console.log('Auth user created with ID:', authData.user.id);
+        if (!result.data?.success) {
+          errorMessage = result.data?.error || 'Failed to create user';
+          saving = false;
+          return;
+        }
 
-        // Step 2: Create staff profile with the new user_id
-        const profileData = {
-          ...defaultInsert,
-          ...form,
-          user_id: authData.user.id // Include the user_id!
-        };
-
-        console.log('Creating staff profile with data:', profileData);
-        await createStaffProfile(profileData, authInfo);
+        console.log('User created successfully');
         
       } else if (user) {
         console.log('Updating staff profile for user:', user.user_id);
+        
+        let authInfo: AuthInfo;
+        if (session) {
+          authInfo = {
+            token: session.access_token,
+            access_token: session.access_token,
+            refresh_token: session.refresh_token,
+            user: session.user,
+            userId: session.user?.id
+          };
+        } else if (browser) {
+          const { data: { session: freshSession } } = await supabase.auth.getSession();
+          if (!freshSession) {
+            errorMessage = 'No session found';
+            saving = false;
+            return;
+          }
+          authInfo = {
+            token: freshSession.access_token,
+            access_token: freshSession.access_token,
+            refresh_token: freshSession.refresh_token,
+            user: freshSession.user,
+            userId: freshSession.user?.id
+          };
+        } else {
+          errorMessage = 'No session found';
+          saving = false;
+          return;
+        }
+        
         await updateStaffProfile(user.user_id, form, authInfo);
       }
 
-      console.log('Operation successful');
       dispatch('updated');
       dispatch('close');
       
