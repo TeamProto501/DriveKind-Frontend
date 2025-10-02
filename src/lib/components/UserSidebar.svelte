@@ -98,7 +98,7 @@
     try {
       if (createMode) {
         console.log('Creating new user via server action...');
-  
+        
         const formData = new FormData();
         formData.append('email', form.email!);
         formData.append('password', tempPassword);
@@ -116,24 +116,52 @@
 
         const result = await response.json();
         
-        console.log('Server action result:', result); // Debug log
+        console.log('Server action result:', result);
         
-        // Handle SvelteKit action response structure
+        // Parse data if it's a string
+        let actionData = result.data;
+        if (typeof actionData === 'string') {
+          try {
+            actionData = JSON.parse(actionData);
+          } catch (e) {
+            console.error('Failed to parse action data:', e);
+            errorMessage = 'Invalid response from server';
+            saving = false;
+            return;
+          }
+        }
+        
+        console.log('Parsed action data:', actionData);
+        
+        // Handle error types
         if (result.type === 'failure' || result.type === 'error') {
-          errorMessage = result.data?.error || result.error?.message || 'Failed to create user';
+          errorMessage = actionData?.error || result.error?.message || 'Failed to create user';
           saving = false;
           return;
         }
         
-        // Check the actual data returned
-        const actionData = result.data;
-        if (!actionData || actionData.success !== true) {
-          errorMessage = actionData?.error || 'Failed to create user';
-          saving = false;
-          return;
+        // Check if data is an array (weird structure in your output)
+        if (Array.isArray(actionData)) {
+          // Your response seems to be: [{"success":1,"userId":2}, true, "actual-uuid"]
+          const actualData = actionData[0];
+          if (actualData && actualData.success) {
+            console.log('User created successfully!');
+            // Success - continue to dispatch
+          } else {
+            errorMessage = actualData?.error || 'Failed to create user';
+            saving = false;
+            return;
+          }
+        } else {
+          // Normal object response
+          if (!actionData || actionData.success !== true) {
+            errorMessage = actionData?.error || 'Failed to create user';
+            saving = false;
+            return;
+          }
         }
 
-        console.log('User created successfully with ID:', actionData.userId);
+        console.log('User created successfully');
         
         let authInfo: AuthInfo;
         if (session) {
