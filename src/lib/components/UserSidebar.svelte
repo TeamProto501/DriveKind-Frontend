@@ -98,8 +98,7 @@
     try {
       if (createMode) {
         console.log('Creating new user via server action...');
-        
-        // Use FormData to call server action
+  
         const formData = new FormData();
         formData.append('email', form.email!);
         formData.append('password', tempPassword);
@@ -117,22 +116,24 @@
 
         const result = await response.json();
         
-        if (result.type === 'error') {
-          errorMessage = result.error?.message || 'Failed to create user';
-          saving = false;
-          return;
-        }
-
-        if (!result.data?.success) {
-          errorMessage = result.data?.error || 'Failed to create user';
-          saving = false;
-          return;
-        }
-
-        console.log('User created successfully');
+        console.log('Server action result:', result); // Debug log
         
-      } else if (user) {
-        console.log('Updating staff profile for user:', user.user_id);
+        // Handle SvelteKit action response structure
+        if (result.type === 'failure' || result.type === 'error') {
+          errorMessage = result.data?.error || result.error?.message || 'Failed to create user';
+          saving = false;
+          return;
+        }
+        
+        // Check the actual data returned
+        const actionData = result.data;
+        if (!actionData || actionData.success !== true) {
+          errorMessage = actionData?.error || 'Failed to create user';
+          saving = false;
+          return;
+        }
+
+        console.log('User created successfully with ID:', actionData.userId);
         
         let authInfo: AuthInfo;
         if (session) {
