@@ -1,6 +1,7 @@
 <script lang="ts">
   import TableViewer from './TableViewer.svelte';
-  export let data;
+  
+  let { data } = $props();
   
   let selectedTable = $state('');
 </script>
