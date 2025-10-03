@@ -1,7 +1,7 @@
 <script lang="ts">
 	import RoleGuard from '$lib/components/RoleGuard.svelte';
 	import Breadcrumbs from '$lib/components/Breadcrumbs.svelte';
-	import { User, Mail, Phone, MapPin, Calendar, Shield, Award, Clock, Home, Car, AlertTriangle } from '@lucide/svelte';
+	import { User, Mail, Phone, MapPin, Calendar, Shield, Award, Clock, Home, Car, AlertTriangle, Edit, Save, X } from '@lucide/svelte';
 	import { getContext, onMount } from 'svelte';
 	import { supabase } from '$lib/supabase';
 
@@ -42,8 +42,38 @@
 	}
 
 	let profile: StaffProfile | null = null;
+	let originalProfile: StaffProfile | null = null;
 	let isLoading = true;
 	let error = '';
+	let showEditModal = false;
+	let editMessage = '';
+	let editMessageSuccess = false;
+	let isSubmitting = false;
+
+	// Form data for editing
+	let formData = {
+		first_name: '',
+		last_name: '',
+		user_name: '',
+		dob: '',
+		address: '',
+		address2: '',
+		city: '',
+		state: '',
+		zipcode: '',
+		primary_phone: '',
+		secondary_phone: '',
+		primary_is_cell: false,
+		primary_can_text: false,
+		secondary_is_cell: false,
+		secondary_can_text: false,
+		contact_type_pref: '',
+		emergency_contact: '',
+		emergency_reln: '',
+		emergency_phone: '',
+		max_riders: '',
+		destination_limitation: ''
+	};
 
 	// Load profile data on mount
 	onMount(async () => {
@@ -100,6 +130,175 @@
 		if (!roles || roles.length === 0) return '-';
 		return roles.join(', ');
 	}
+
+	// Validation functions
+	function validateForm(): string[] {
+		const errors: string[] = [];
+
+		// Required fields
+		if (!formData.first_name.trim()) errors.push('First name is required');
+		if (!formData.last_name.trim()) errors.push('Last name is required');
+		if (!formData.dob.trim()) errors.push('Date of birth is required');
+		if (!formData.city.trim()) errors.push('City is required');
+		if (!formData.state.trim()) errors.push('State is required');
+
+		// Phone validation (if provided)
+		if (formData.primary_phone && !/^[\d\-\+\(\)\s]+$/.test(formData.primary_phone)) {
+			errors.push('Primary phone format is invalid');
+		}
+		if (formData.secondary_phone && !/^[\d\-\+\(\)\s]+$/.test(formData.secondary_phone)) {
+			errors.push('Secondary phone format is invalid');
+		}
+		if (formData.emergency_phone && !/^[\d\-\+\(\)\s]+$/.test(formData.emergency_phone)) {
+			errors.push('Emergency phone format is invalid');
+		}
+
+		// Zip code validation (if provided)
+		if (formData.zipcode && !/^\d{5}(-\d{4})?$/.test(formData.zipcode)) {
+			errors.push('Zip code must be 5 digits or 5+4 format');
+		}
+
+		// Date validation
+		if (formData.dob) {
+			const dobDate = new Date(formData.dob);
+			const today = new Date();
+			if (isNaN(dobDate.getTime())) {
+				errors.push('Invalid date of birth');
+			} else if (dobDate >= today) {
+				errors.push('Date of birth must be in the past');
+			}
+		}
+
+		// Max riders validation (if provided)
+		if (formData.max_riders && (isNaN(Number(formData.max_riders)) || Number(formData.max_riders) < 1)) {
+			errors.push('Max riders must be a positive number');
+		}
+
+		return errors;
+	}
+
+	// Open edit modal
+	function openEditModal() {
+		if (!profile) return;
+		
+		// Store original profile for cancel
+		originalProfile = { ...profile };
+		
+		// Populate form data
+		formData = {
+			first_name: profile.first_name || '',
+			last_name: profile.last_name || '',
+			user_name: profile.user_name || '',
+			dob: profile.dob || '',
+			address: profile.address || '',
+			address2: profile.address2 || '',
+			city: profile.city || '',
+			state: profile.state || '',
+			zipcode: profile.zipcode?.toString() || '',
+			primary_phone: profile.primary_phone || '',
+			secondary_phone: profile.secondary_phone || '',
+			primary_is_cell: profile.primary_is_cell || false,
+			primary_can_text: profile.primary_can_text || false,
+			secondary_is_cell: profile.secondary_is_cell || false,
+			secondary_can_text: profile.secondary_can_text || false,
+			contact_type_pref: profile.contact_type_pref || '',
+			emergency_contact: profile.emergency_contact || '',
+			emergency_reln: profile.emergency_reln || '',
+			emergency_phone: profile.emergency_phone || '',
+			max_riders: profile.max_riders?.toString() || '',
+			destination_limitation: profile.destination_limitation || ''
+		};
+		
+		showEditModal = true;
+		editMessage = '';
+	}
+
+	// Close edit modal
+	function closeEditModal() {
+		showEditModal = false;
+		// Restore original profile if it exists
+		if (originalProfile) {
+			profile = { ...originalProfile };
+		}
+	}
+
+	// Show message
+	function showMessage(message: string, success: boolean) {
+		editMessage = message;
+		editMessageSuccess = success;
+		setTimeout(() => {
+			editMessage = '';
+		}, 5000);
+	}
+
+	// Save profile changes
+	async function saveProfile(event: Event) {
+		event.preventDefault();
+		
+		const validationErrors = validateForm();
+		if (validationErrors.length > 0) {
+			showMessage('Please fix the following errors:\n• ' + validationErrors.join('\n• '), false);
+			return;
+		}
+
+		isSubmitting = true;
+		try {
+			console.log('💾 Saving profile changes...');
+
+			// Prepare data for database
+			const updateData: any = {
+				first_name: formData.first_name.trim(),
+				last_name: formData.last_name.trim(),
+				user_name: formData.user_name.trim() || null,
+				dob: formData.dob,
+				address: formData.address.trim() || null,
+				address2: formData.address2.trim() || null,
+				city: formData.city.trim(),
+				state: formData.state.trim(),
+				zipcode: formData.zipcode ? parseInt(formData.zipcode) : null,
+				primary_phone: formData.primary_phone.trim() || null,
+				secondary_phone: formData.secondary_phone.trim() || null,
+				primary_is_cell: formData.primary_phone ? formData.primary_is_cell : null,
+				primary_can_text: formData.primary_phone ? formData.primary_can_text : null,
+				secondary_is_cell: formData.secondary_phone ? formData.secondary_is_cell : null,
+				secondary_can_text: formData.secondary_phone ? formData.secondary_can_text : null,
+				contact_type_pref: formData.contact_type_pref.trim() || null,
+				emergency_contact: formData.emergency_contact.trim() || null,
+				emergency_reln: formData.emergency_reln.trim() || null,
+				emergency_phone: formData.emergency_phone.trim() || null
+			};
+
+			if (formData.max_riders) {
+				updateData.max_riders = parseInt(formData.max_riders);
+			}
+			
+			updateData.destination_limitation = formData.destination_limitation.trim() || null;
+
+			const { data, error: updateError } = await supabase
+				.from('staff_profiles')
+				.update(updateData)
+				.eq('user_id', session.user.id)
+				.select()
+				.single();
+
+			if (updateError) {
+				console.error('❌ Error updating profile:', updateError);
+				showMessage('Failed to update profile: ' + updateError.message, false);
+				return;
+			}
+
+			console.log('✅ Profile updated successfully:', data);
+			profile = data;
+			showEditModal = false;
+			showMessage('Profile updated successfully!');
+
+		} catch (error) {
+			console.error('❌ Exception updating profile:', error);
+			showMessage('Failed to update profile: ' + (error as Error).message, false);
+		} finally {
+			isSubmitting = false;
+		}
+	}
 </script>
 
 <RoleGuard requiredRoles={['Admin', 'Dispatcher', 'Driver', 'Volunteer', 'Super Admin']}>
@@ -107,10 +306,36 @@
 		<Breadcrumbs />
 		
 		<div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-			<div class="mb-8">
-				<h1 class="text-3xl font-bold text-gray-900">Profile Information</h1>
-				<p class="text-gray-600 mt-2">View your complete staff profile information.</p>
+			<div class="mb-8 flex justify-between items-center">
+				<div>
+					<h1 class="text-3xl font-bold text-gray-900">Profile Information</h1>
+					<p class="text-gray-600 mt-2">View your complete staff profile information.</p>
+				</div>
+				{#if profile}
+					<button
+						onclick={openEditModal}
+						class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+					>
+						<Edit class="w-4 h-4 mr-2" />
+						Edit Profile
+					</button>
+				{/if}
 			</div>
+			
+			<!-- Success/Error Messages -->
+			{#if editMessage}
+				<div class="mb-6">
+					<div class="rounded-md p-4 {editMessageSuccess ? 'bg-green-50' : 'bg-red-50'} border {editMessageSuccess ? 'border-green-200' : 'border-red-200'}">
+						<div class="flex">
+							<div class="ml-3">
+								<p class="text-sm font-medium {editMessageSuccess ? 'text-green-800' : 'text-red-800'}">
+									{editMessage}
+								</p>
+							</div>
+						</div>
+					</div>
+				</div>
+			{/if}
 
 			{#if isLoading}
 				<div class="bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center">
@@ -130,11 +355,11 @@
 			{:else if profile}
 				<div class="space-y-6">
 					<!-- Personal Information -->
-					<div class="bg-white rounded-lg shadow-sm border border-gray-200">
-						<div class="px-6 py-4 border-b border-gray-200">
+			<div class="bg-white rounded-lg shadow-sm border border-gray-200">
+				<div class="px-6 py-4 border-b border-gray-200">
 							<div class="flex items-center">
 								<User class="w-5 h-5 text-blue-600 mr-2" />
-								<h2 class="text-lg font-medium text-gray-900">Personal Information</h2>
+					<h2 class="text-lg font-medium text-gray-900">Personal Information</h2>
 							</div>
 						</div>
 						<div class="p-6">
@@ -289,8 +514,8 @@
 								</div>
 							</div>
 						</div>
-					</div>
-
+				</div>
+				
 					<!-- Work Information -->
 					<div class="bg-white rounded-lg shadow-sm border border-gray-200">
 						<div class="px-6 py-4 border-b border-gray-200">
@@ -299,7 +524,7 @@
 								<h2 class="text-lg font-medium text-gray-900">Work Information</h2>
 							</div>
 						</div>
-						<div class="p-6">
+				<div class="p-6">
 							<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
 								<div>
 									<label class="block text-sm font-medium text-gray-700">Organization ID</label>
@@ -363,8 +588,243 @@
 					<User class="w-16 h-16 text-gray-400 mx-auto mb-4" />
 					<h3 class="text-lg font-medium text-gray-900 mb-2">No Profile Found</h3>
 					<p class="text-gray-500">Your staff profile could not be loaded. Please contact your administrator.</p>
-				</div>
+			</div>
 			{/if}
 		</div>
 	</div>
+
+	<!-- Edit Profile Modal -->
+	{#if showEditModal && profile}
+		<div class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+			<div class="relative top-20 mx-auto p-5 border w-full max-w-4xl shadow-lg rounded-md bg-white">
+				<div class="mt-3">
+					<div class="flex items-center justify-between mb-6">
+						<h3 class="text-xl font-medium text-gray-900">Edit Profile Information</h3>
+						<button onclick={closeEditModal} class="text-gray-400 hover:text-gray-600">
+							<X class="w-5 h-5" />
+						</button>
+					</div>
+					
+					<form onsubmit={saveProfile} class="space-y-6">
+						<!-- Personal Information -->
+						<div>
+							<h4 class="text-lg font-medium text-gray-900 mb-4">Personal Information</h4>
+							<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+								<div>
+									<label class="block text-sm font-medium text-gray-700">First Name *</label>
+									<input
+										type="text"
+										bind:value={formData.first_name}
+										required
+										class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+									/>
+								</div>
+								<div>
+									<label class="block text-sm font-medium text-gray-700">Last Name *</label>
+									<input
+										type="text"
+										bind:value={formData.last_name}
+										required
+										class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+									/>
+								</div>
+								<div>
+									<label class="block text-sm font-medium text-gray-700">Username</label>
+									<input
+										type="text"
+										bind:value={formData.user_name}
+										class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+									/>
+								</div>
+								<div>
+									<label class="block text-sm font-medium text-gray-700">Date of Birth *</label>
+									<input
+										type="date"
+										bind:value={formData.dob}
+										required
+										class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+									/>
+								</div>
+							</div>
+						</div>
+
+						<!-- Contact Information -->
+						<div>
+							<h4 class="text-lg font-medium text-gray-900 mb-4">Contact Information</h4>
+							<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+								<div>
+									<label class="block text-sm font-medium text-gray-700">Primary Phone</label>
+									<input
+										type="tel"
+										bind:value={formData.primary_phone}
+										class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+									/>
+									<div class="mt-2 flex space-x-4">
+										<label class="flex items-center">
+											<input type="checkbox" bind:checked={formData.primary_is_cell} class="rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+											<span class="ml-2 text-sm text-gray-700">Mobile</span>
+										</label>
+										<label class="flex items-center">
+											<input type="checkbox" bind:checked={formData.primary_can_text} class="rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+											<span class="ml-2 text-sm text-gray-700">Can text</span>
+										</label>
+									</div>
+								</div>
+								<div>
+									<label class="block text-sm font-medium text-gray-700">Secondary Phone</label>
+											<input
+												type="tel"
+												bind:value={formData.secondary_phone}
+												class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+											/>
+									<div class="mt-2 flex space-x-4">
+										<label class="flex items-center">
+											<input type="checkbox" bind:checked={formData.secondary_is_cell} class="rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+											<span class="ml-2 text-sm text-gray-700">Mobile</span>
+										</label>
+										<label class="flex items-center">
+											<input type="checkbox" bind:checked={formData.secondary_can_text} class="rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+											<span class="ml-2 text-sm text-gray-700">Can text</span>
+										</label>
+									</div>
+								</div>
+								<div>
+									<label class="block text-sm font-medium text-gray-700">Contact Preference</label>
+									<input
+										type="text"
+										bind:value={formData.contact_type_pref}
+										class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+									/>
+								</div>
+							</div>
+						</div>
+
+						<!-- Address Information -->
+						<div>
+							<h4 class="text-lg font-medium text-gray-900 mb-4">Address Information</h4>
+							<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+								<div>
+									<label class="block text-sm font-medium text-gray-700">Address</label>
+									<input
+										type="text"
+										bind:value={formData.address}
+										class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+									/>
+								</div>
+								<div>
+									<label class="block text-sm font-medium text-gray-700">Address Line 2</label>
+									<input
+										type="text"
+										bind:value={formData.address2}
+										class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+									/>
+								</div>
+								<div>
+									<label class="block text-sm font-medium text-gray-700">City *</label>
+									<input
+										type="text"
+										bind:value={formData.city}
+										required
+										class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+									/>
+								</div>
+								<div>
+									<label class="block text-sm font-medium text-gray-700">State *</label>
+									<input
+										type="text"
+										bind:value={formData.state}
+										required
+										class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+									/>
+								</div>
+								<div>
+									<label class="block text-sm font-medium text-gray-700">Zip Code</label>
+									<input
+										type="text"
+										bind:value={formData.zipcode}
+										pattern="\d{5}(-\d{4})?"
+										class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+									/>
+								</div>
+							</div>
+						</div>
+
+						<!-- Emergency Contact -->
+						<div>
+							<h4 class="text-lg font-medium text-gray-900 mb-4">Emergency Contact</h4>
+							<div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+								<div>
+									<label class="block text-sm font-medium text-gray-700">Emergency Contact Name</label>
+									<input
+										type="text"
+										bind:value={formData.emergency_contact}
+										class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+									/>
+								</div>
+								<div>
+									<label class="block text-sm font-medium text-gray-700">Relationship</label>
+									<input
+										type="text"
+										bind:value={formData.emergency_reln}
+										class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+									/>
+								</div>
+								<div>
+									<label class="block text-sm font-medium text-gray-700">Emergency Phone</label>
+									<input
+										type="tel"
+										bind:value={formData.emergency_phone}
+										class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+									/>
+								</div>
+							</div>
+						</div>
+
+						<!-- Work Information -->
+						<div>
+							<h4 class="text-lg font-medium text-gray-900 mb-4">Work Information</h4>
+							<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+								<div>
+									<label class="block text-sm font-medium text-gray-700">Max Riders</label>
+									<input
+										type="number"
+										min="1"
+										bind:value={formData.max_riders}
+										class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+									/>
+								</div>
+								<div class="md:col-span-2">
+									<label class="block text-sm font-medium text-gray-700">Destination Limitations</label>
+									<textarea
+										bind:value={formData.destination_limitation}
+										rows="3"
+										class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+									></textarea>
+								</div>
+							</div>
+						</div>
+
+						<div class="flex justify-end space-x-3 pt-4">
+							<button
+								type="button"
+								onclick={closeEditModal}
+								disabled={isSubmitting}
+								class="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+							>
+								Cancel
+							</button>
+							<button
+								type="submit"
+								disabled={isSubmitting}
+								class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 flex items-center space-x-2"
+							>
+								<Save class="w-4 h-4" />
+								<span>{isSubmitting ? 'Saving...' : 'Save Changes'}</span>
+							</button>
+						</div>
+					</form>
+				</div>
+			</div>
+		</div>
+	{/if}
 </RoleGuard>
