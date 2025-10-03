@@ -2,8 +2,7 @@
 <script lang="ts">
   import { supabase } from '$lib/supabase';
   
-  export let tableName: string;
-  export let orgId: number;
+  let { tableName, orgId }: { tableName: string, orgId: number } = $props();
   
   let records = $state([]);
   let columns = $state([]);
