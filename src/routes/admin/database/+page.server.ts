@@ -21,21 +21,26 @@ export const load = async (event) => {
     throw error(403, 'User profile not found');
   }
 
-  // Get table information (this is simplified - you'd need to query pg_catalog for real table stats)
-  const tables = ['staff_profiles', 'rides', 'organizations', 'audit_logs'];
+  // Define tables to query
+  const tables = [
+    { name: 'staff_profiles', display: 'Staff Profiles', icon: 'users' },
+    { name: 'clients', display: 'Clients', icon: 'user' },
+    { name: 'rides', display: 'Rides', icon: 'car' },
+    { name: 'vehicles', display: 'Vehicles', icon: 'truck' },
+    { name: 'calls', display: 'Calls', icon: 'phone' }
+  ];
   
   const tableData = await Promise.all(
-    tables.map(async (tableName) => {
-      // Count records in this org
-      const { count } = await supabase
-        .from(tableName)
+    tables.map(async (table) => {
+      const { count, error } = await supabase
+        .from(table.name)
         .select('*', { count: 'exact', head: true })
         .eq('org_id', userProfile.org_id);
 
       return {
-        name: tableName,
+        ...table,
         records: count || 0,
-        org_id: userProfile.org_id
+        error: error?.message
       };
     })
   );
