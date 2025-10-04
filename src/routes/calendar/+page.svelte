@@ -60,27 +60,25 @@
         target: calendarEl,
         props: {
           plugins: [TimeGrid, DayGrid, Interaction],
-          options: {
-            view: 'timeGridWeek',
-            headerToolbar: {
-              start: 'prev,next today',
-              center: 'title',
-              end: 'dayGridMonth,timeGridWeek,timeGridDay'
-            },
-            height: '700px',
-            events: events,
-            eventClick: (info: any) => {
-              const reason = info.event.extendedProps?.reason;
-              alert(`Unavailability reason: ${reason || 'No reason provided'}`);
-            },
-            slotMinTime: '06:00:00',
-            slotMaxTime: '22:00:00',
-            allDaySlot: true,
-            nowIndicator: true,
-            selectable: true,
-            select: (info: any) => {
-              console.log('Selected:', info);
-            }
+          view: 'timeGridWeek',
+          headerToolbar: {
+            start: 'prev,next today',
+            center: 'title',
+            end: 'dayGridMonth,timeGridWeek,timeGridDay'
+          },
+          height: '700px',
+          events: events,
+          eventClick: (info: any) => {
+            const reason = info.event.extendedProps?.reason;
+            alert(`Unavailability reason: ${reason || 'No reason provided'}`);
+          },
+          slotMinTime: '06:00:00',
+          slotMaxTime: '22:00:00',
+          allDaySlot: true,
+          nowIndicator: true,
+          selectable: true,
+          select: (info: any) => {
+            console.log('Selected:', info);
           }
         }
       });
