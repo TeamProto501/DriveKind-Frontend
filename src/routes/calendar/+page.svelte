@@ -80,9 +80,7 @@
             selectable: true,
             select: (info: any) => {
               console.log('Selected:', info);
-            },
-            dayMaxEvents: true,
-            eventDisplay: 'block'
+            }
           }
         }
       });
