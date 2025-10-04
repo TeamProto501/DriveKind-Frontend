@@ -60,8 +60,8 @@
     try {
       ec = new Calendar({
         target: calendarEl,
-        props: {
-          plugins: [TimeGrid, DayGrid, Interaction],
+        plugins: [TimeGrid, DayGrid, Interaction],
+        options: {
           view: 'timeGridWeek',
           headerToolbar: {
             start: 'prev,next today',
