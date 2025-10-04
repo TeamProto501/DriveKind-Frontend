@@ -18,15 +18,34 @@
     console.log('Calendar mounting...');
     console.log('Unavailability data:', data.unavailability);
     
-    const events = data.unavailability.map((item: any) => {
-      const driverName = `${item.staff_profiles.first_name} ${item.staff_profiles.last_name}`;
-      
-      if (item.all_day) {
+    const events = data.unavailability
+      .filter((item: any) => item.unavailable_date) // Skip entries without dates
+      .map((item: any) => {
+        const driverName = `${item.staff_profiles.first_name} ${item.staff_profiles.last_name}`;
+        
+        if (item.all_day) {
+          return {
+            id: String(item.id),
+            title: `${driverName} - Unavailable`,
+            start: item.unavailable_date,
+            allDay: true,
+            backgroundColor: '#ef4444',
+            borderColor: '#dc2626',
+            extendedProps: {
+              reason: item.reason,
+              driverId: item.user_id
+            }
+          };
+        }
+        
+        const startDateTime = `${item.unavailable_date}T${item.start_time}`;
+        const endDateTime = `${item.unavailable_date}T${item.end_time}`;
+        
         return {
           id: String(item.id),
           title: `${driverName} - Unavailable`,
-          start: item.unavailable_date,
-          allDay: true,
+          start: startDateTime,
+          end: endDateTime,
           backgroundColor: '#ef4444',
           borderColor: '#dc2626',
           extendedProps: {
@@ -34,25 +53,8 @@
             driverId: item.user_id
           }
         };
-      }
-      
-      const startDateTime = `${item.unavailable_date}T${item.start_time}`;
-      const endDateTime = `${item.unavailable_date}T${item.end_time}`;
-      
-      return {
-        id: String(item.id),
-        title: `${driverName} - Unavailable`,
-        start: startDateTime,
-        end: endDateTime,
-        backgroundColor: '#ef4444',
-        borderColor: '#dc2626',
-        extendedProps: {
-          reason: item.reason,
-          driverId: item.user_id
-        }
-      };
-    });
-    
+      });
+ 
     console.log('Transformed events:', events);
     
     try {
