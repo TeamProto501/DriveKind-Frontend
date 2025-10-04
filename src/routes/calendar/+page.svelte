@@ -7,7 +7,7 @@
   import Interaction from '@event-calendar/interaction';
   import RoleGuard from '$lib/components/RoleGuard.svelte';
   import Breadcrumbs from '$lib/components/Breadcrumbs.svelte';
-  import { Calendar as CalendarIcon } from 'lucide-svelte';
+  import { Calendar as CalendarIcon } from '@lucide/svelte';
   
   let { data } = $props();
   
