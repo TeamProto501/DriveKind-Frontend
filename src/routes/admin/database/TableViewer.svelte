@@ -1,7 +1,8 @@
 <!-- src/routes/admin/database/TableViewer.svelte -->
 <script lang="ts">
   import { supabase } from '$lib/supabase';
-  import { Loader2, AlertCircle } from '@lucide/svelte';
+  import { Loader2, AlertCircle, Download } from '@lucide/svelte';
+  import { exportToCSV } from '$lib/utils/csvExport';
   
   let { tableName, orgId }: { tableName: string, orgId: number } = $props();
   
@@ -9,6 +10,7 @@
   let columns = $state([]);
   let loading = $state(true);
   let error = $state<string | null>(null);
+  let exporting = $state(false);
   
   async function loadTableData() {
     loading = true;
@@ -35,6 +37,31 @@
       console.error('Error loading table data:', err);
     } finally {
       loading = false;
+    }
+  }
+  
+  async function handleExport() {
+    exporting = true;
+    
+    try {
+      // Fetch ALL records for export (not just the displayed 100)
+      const { data, error: fetchError } = await supabase
+        .from(tableName)
+        .select('*')
+        .eq('org_id', orgId);
+      
+      if (fetchError) throw fetchError;
+      
+      if (data && data.length > 0) {
+        exportToCSV(data, tableName);
+      } else {
+        alert('No data to export');
+      }
+    } catch (err: any) {
+      alert(`Export failed: ${err.message}`);
+      console.error('Export error:', err);
+    } finally {
+      exporting = false;
     }
   }
   
@@ -72,6 +99,20 @@
       <p class="text-sm text-gray-600">
         Showing <span class="font-medium text-gray-900">{records.length}</span> records
       </p>
+      
+      <button
+        onclick={handleExport}
+        disabled={exporting}
+        class="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        {#if exporting}
+          <Loader2 class="w-4 h-4 animate-spin" />
+          Exporting...
+        {:else}
+          <Download class="w-4 h-4" />
+          Export to CSV
+        {/if}
+      </button>
     </div>
     
     <div class="overflow-x-auto border border-gray-200 rounded-lg">
