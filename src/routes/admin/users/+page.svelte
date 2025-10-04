@@ -2,7 +2,7 @@
   import RoleGuard from '$lib/components/RoleGuard.svelte';
   import Breadcrumbs from '$lib/components/Breadcrumbs.svelte';
   import { Users, Plus, Search, Filter } from '@lucide/svelte';
-  import UserSidebar from '$lib/components/UserSidebar.svelte';
+  import UserSidebar from './UserSidebar.svelte';
   import { getAllStaffProfiles } from '$lib/api';
   import { toastStore } from '$lib/toast';
   import type { PageData } from './$types';
