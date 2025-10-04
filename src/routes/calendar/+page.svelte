@@ -7,7 +7,7 @@
   import Interaction from '@event-calendar/interaction';
   import RoleGuard from '$lib/components/RoleGuard.svelte';
   import Breadcrumbs from '$lib/components/Breadcrumbs.svelte';
-  import { Calendar as CalendarIcon } from '@lucide-svelte';
+  import { Calendar as CalendarIcon } from 'lucide-svelte';
   
   let { data } = $props();
   
@@ -18,7 +18,6 @@
     console.log('Calendar mounting...');
     console.log('Unavailability data:', data.unavailability);
     
-    // Transform data into events
     const events = data.unavailability.map((item: any) => {
       const driverName = `${item.staff_profiles.first_name} ${item.staff_profiles.last_name}`;
       
@@ -68,15 +67,10 @@
               center: 'title',
               end: 'dayGridMonth,timeGridWeek,timeGridDay'
             },
-            views: {
-              timeGridWeek: {
-                pointer: true
-              }
-            },
             height: '700px',
             events: events,
             eventClick: (info: any) => {
-              const reason = info.event.extendedProps.reason;
+              const reason = info.event.extendedProps?.reason;
               alert(`Unavailability reason: ${reason || 'No reason provided'}`);
             },
             slotMinTime: '06:00:00',
@@ -99,13 +93,15 @@
     }
     
     return () => {
-      if (ec) ec.$destroy();
+      if (ec) {
+        ec.$destroy();
+      }
     };
   });
 </script>
 
 <svelte:head>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@event-calendar/core/index.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@event-calendar/core@3/index.min.css">
 </svelte:head>
 
 <RoleGuard requiredRoles={['Admin', 'Dispatcher']}>
@@ -123,7 +119,6 @@
         </p>
       </div>
 
-      <!-- Calendar Container with explicit dimensions -->
       <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
         <div bind:this={calendarEl} class="calendar-container"></div>
       </div>
