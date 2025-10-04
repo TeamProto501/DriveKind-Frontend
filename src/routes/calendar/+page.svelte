@@ -7,7 +7,7 @@
   import Interaction from '@event-calendar/interaction';
   import RoleGuard from '$lib/components/RoleGuard.svelte';
   import Breadcrumbs from '$lib/components/Breadcrumbs.svelte';
-  import { Calendar as CalendarIcon } from '@lucide/svelte';
+  import { Calendar as CalendarIcon } from '@lucide-svelte';
   
   let { data } = $props();
   
@@ -15,12 +15,16 @@
   let ec: any;
   
   onMount(() => {
+    console.log('Calendar mounting...');
+    console.log('Unavailability data:', data.unavailability);
+    
+    // Transform data into events
     const events = data.unavailability.map((item: any) => {
       const driverName = `${item.staff_profiles.first_name} ${item.staff_profiles.last_name}`;
       
       if (item.all_day) {
         return {
-          id: item.id,
+          id: String(item.id),
           title: `${driverName} - Unavailable`,
           start: item.unavailable_date,
           allDay: true,
@@ -37,7 +41,7 @@
       const endDateTime = `${item.unavailable_date}T${item.end_time}`;
       
       return {
-        id: item.id,
+        id: String(item.id),
         title: `${driverName} - Unavailable`,
         start: startDateTime,
         end: endDateTime,
@@ -50,34 +54,49 @@
       };
     });
     
-    ec = new Calendar({
-      target: calendarEl,
-      props: {
-        plugins: [TimeGrid, DayGrid, Interaction],
-        options: {
-          view: 'timeGridWeek',
-          headerToolbar: {
-            start: 'prev,next today',
-            center: 'title',
-            end: 'dayGridMonth,timeGridWeek,timeGridDay'
-          },
-          height: '700px',
-          events: events,
-          eventClick: (info: any) => {
-            const reason = info.event.extendedProps.reason;
-            alert(`Unavailability reason: ${reason || 'No reason provided'}`);
-          },
-          slotMinTime: '06:00:00',
-          slotMaxTime: '22:00:00',
-          allDaySlot: true,
-          nowIndicator: true,
-          selectable: true,
-          select: (info: any) => {
-            console.log('Selected:', info);
+    console.log('Transformed events:', events);
+    
+    try {
+      ec = new Calendar({
+        target: calendarEl,
+        props: {
+          plugins: [TimeGrid, DayGrid, Interaction],
+          options: {
+            view: 'timeGridWeek',
+            headerToolbar: {
+              start: 'prev,next today',
+              center: 'title',
+              end: 'dayGridMonth,timeGridWeek,timeGridDay'
+            },
+            views: {
+              timeGridWeek: {
+                pointer: true
+              }
+            },
+            height: '700px',
+            events: events,
+            eventClick: (info: any) => {
+              const reason = info.event.extendedProps.reason;
+              alert(`Unavailability reason: ${reason || 'No reason provided'}`);
+            },
+            slotMinTime: '06:00:00',
+            slotMaxTime: '22:00:00',
+            allDaySlot: true,
+            nowIndicator: true,
+            selectable: true,
+            select: (info: any) => {
+              console.log('Selected:', info);
+            },
+            dayMaxEvents: true,
+            eventDisplay: 'block'
           }
         }
-      }
-    });
+      });
+      
+      console.log('Calendar initialized successfully');
+    } catch (error) {
+      console.error('Error initializing calendar:', error);
+    }
     
     return () => {
       if (ec) ec.$destroy();
@@ -104,8 +123,9 @@
         </p>
       </div>
 
+      <!-- Calendar Container with explicit dimensions -->
       <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-        <div bind:this={calendarEl}></div>
+        <div bind:this={calendarEl} class="calendar-container"></div>
       </div>
 
       <div class="mt-6 bg-white rounded-lg shadow-sm border border-gray-200 p-4">
@@ -122,11 +142,28 @@
 </RoleGuard>
 
 <style>
+  .calendar-container {
+    min-height: 700px;
+    width: 100%;
+  }
+
   :global(.ec) {
     --ec-border-color: #e5e7eb;
     --ec-button-bg-color: #3b82f6;
     --ec-button-border-color: #2563eb;
     --ec-button-text-color: #ffffff;
+    --ec-button-hover-bg-color: #2563eb;
     --ec-today-bg-color: #eff6ff;
+    --ec-bg-color: #ffffff;
+    font-family: system-ui, -apple-system, sans-serif;
+  }
+  
+  :global(.ec-toolbar) {
+    margin-bottom: 1rem;
+  }
+  
+  :global(.ec-button) {
+    padding: 0.5rem 1rem;
+    border-radius: 0.375rem;
   }
 </style>

@@ -1,4 +1,4 @@
-// src/routes/calendar/+page.server.ts
+// src/routes/schedule/+page.server.ts
 import { createSupabaseServerClient } from '$lib/supabase.server';
 import { error, redirect } from '@sveltejs/kit';
 
@@ -10,7 +10,6 @@ export const load = async (event) => {
     throw redirect(302, '/login');
   }
 
-  // Get user's org_id
   const { data: userProfile } = await supabase
     .from('staff_profiles')
     .select('org_id')
@@ -21,8 +20,6 @@ export const load = async (event) => {
     throw error(403, 'User profile not found');
   }
 
-  // Fetch all driver unavailability for the org
-  // Join with staff_profiles to get driver names
   const { data: unavailabilityData, error: fetchError } = await supabase
     .from('driver_unavailability')
     .select(`
@@ -39,6 +36,8 @@ export const load = async (event) => {
   if (fetchError) {
     console.error('Error fetching unavailability:', fetchError);
   }
+
+  console.log('Server: Fetched unavailability records:', unavailabilityData?.length || 0);
 
   return {
     unavailability: unavailabilityData || [],
