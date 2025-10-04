@@ -135,43 +135,76 @@
 	function validateForm(): string[] {
 		const errors: string[] = [];
 
-		// Required fields
+		// Required fields validation
 		if (!formData.first_name.trim()) errors.push('First name is required');
 		if (!formData.last_name.trim()) errors.push('Last name is required');
 		if (!formData.dob.trim()) errors.push('Date of birth is required');
 		if (!formData.city.trim()) errors.push('City is required');
 		if (!formData.state.trim()) errors.push('State is required');
 
-		// Phone validation (if provided)
-		if (formData.primary_phone && !/^[\d\-\+\(\)\s]+$/.test(formData.primary_phone)) {
-			errors.push('Primary phone format is invalid');
+		// String length validation (matching database constraints)
+		if (formData.first_name.length > 50) errors.push('First name must be 50 characters or less');
+		if (formData.last_name.length > 50) errors.push('Last name must be 50 characters or less');
+		if (formData.user_name && formData.user_name.length > 50) errors.push('Username must be 50 characters or less');
+		if (formData.address && formData.address.length > 100) errors.push('Address must be 100 characters or less');
+		if (formData.address2 && formData.address2.length > 100) errors.push('Address line 2 must be 100 characters or less');
+		if (formData.city.length > 50) errors.push('City must be 50 characters or less');
+		if (formData.state.length > 2) errors.push('State must be 2 characters or less');
+		if (formData.contact_type_pref && formData.contact_type_pref.length > 20) errors.push('Contact preference must be 20 characters or less');
+		if (formData.emergency_contact && formData.emergency_contact.length > 50) errors.push('Emergency contact name must be 50 characters or less');
+		if (formData.emergency_reln && formData.emergency_reln.length > 20) errors.push('Emergency relationship must be 20 characters or less');
+		if (formData.destination_limitation && formData.destination_limitation.length > 200) errors.push('Destination limitation must be 200 characters or less');
+
+		// Phone validation (if provided) - more strict format
+		if (formData.primary_phone && !/^[\d\-\+\(\)\s]{10,15}$/.test(formData.primary_phone.replace(/\s/g, ''))) {
+			errors.push('Primary phone must be 10-15 digits');
 		}
-		if (formData.secondary_phone && !/^[\d\-\+\(\)\s]+$/.test(formData.secondary_phone)) {
-			errors.push('Secondary phone format is invalid');
+		if (formData.secondary_phone && !/^[\d\-\+\(\)\s]{10,15}$/.test(formData.secondary_phone.replace(/\s/g, ''))) {
+			errors.push('Secondary phone must be 10-15 digits');
 		}
-		if (formData.emergency_phone && !/^[\d\-\+\(\)\s]+$/.test(formData.emergency_phone)) {
-			errors.push('Emergency phone format is invalid');
+		if (formData.emergency_phone && !/^[\d\-\+\(\)\s]{10,15}$/.test(formData.emergency_phone.replace(/\s/g, ''))) {
+			errors.push('Emergency phone must be 10-15 digits');
 		}
 
-		// Zip code validation (if provided)
+		// Zip code validation (if provided) - must be valid US format
 		if (formData.zipcode && !/^\d{5}(-\d{4})?$/.test(formData.zipcode)) {
-			errors.push('Zip code must be 5 digits or 5+4 format');
+			errors.push('Zip code must be 5 digits or 5+4 format (e.g., 12345 or 12345-6789)');
 		}
 
 		// Date validation
 		if (formData.dob) {
 			const dobDate = new Date(formData.dob);
 			const today = new Date();
+			const minAge = new Date();
+			minAge.setFullYear(today.getFullYear() - 100); // Max age 100
+			
 			if (isNaN(dobDate.getTime())) {
-				errors.push('Invalid date of birth');
+				errors.push('Invalid date of birth format');
 			} else if (dobDate >= today) {
 				errors.push('Date of birth must be in the past');
+			} else if (dobDate < minAge) {
+				errors.push('Date of birth cannot be more than 100 years ago');
 			}
 		}
 
-		// Max riders validation (if provided)
-		if (formData.max_riders && (isNaN(Number(formData.max_riders)) || Number(formData.max_riders) < 1)) {
-			errors.push('Max riders must be a positive number');
+		// Max riders validation (if provided) - must be reasonable number
+		if (formData.max_riders) {
+			const maxRiders = Number(formData.max_riders);
+			if (isNaN(maxRiders) || maxRiders < 1 || maxRiders > 50) {
+				errors.push('Max riders must be between 1 and 50');
+			}
+		}
+
+		// Contact preference validation - must be valid enum value
+		const validContactPrefs = ['phone', 'email', 'text', 'mail', 'none'];
+		if (formData.contact_type_pref && !validContactPrefs.includes(formData.contact_type_pref.toLowerCase())) {
+			errors.push('Contact preference must be one of: phone, email, text, mail, or none');
+		}
+
+		// Emergency relationship validation - must be valid enum value
+		const validRelationships = ['spouse', 'parent', 'child', 'sibling', 'friend', 'other'];
+		if (formData.emergency_reln && !validRelationships.includes(formData.emergency_reln.toLowerCase())) {
+			errors.push('Emergency relationship must be one of: spouse, parent, child, sibling, friend, or other');
 		}
 
 		return errors;
@@ -616,6 +649,7 @@
 										type="text"
 										bind:value={formData.first_name}
 										required
+										maxlength="50"
 										class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
 									/>
 								</div>
@@ -625,6 +659,7 @@
 										type="text"
 										bind:value={formData.last_name}
 										required
+										maxlength="50"
 										class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
 									/>
 								</div>
@@ -633,6 +668,7 @@
 									<input
 										type="text"
 										bind:value={formData.user_name}
+										maxlength="50"
 										class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
 									/>
 								</div>
@@ -690,11 +726,17 @@
 								</div>
 								<div>
 									<label class="block text-sm font-medium text-gray-700">Contact Preference</label>
-									<input
-										type="text"
+									<select
 										bind:value={formData.contact_type_pref}
 										class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-									/>
+									>
+										<option value="">Select preference</option>
+										<option value="phone">Phone</option>
+										<option value="email">Email</option>
+										<option value="text">Text</option>
+										<option value="mail">Mail</option>
+										<option value="none">None</option>
+									</select>
 								</div>
 							</div>
 						</div>
@@ -708,6 +750,7 @@
 									<input
 										type="text"
 										bind:value={formData.address}
+										maxlength="100"
 										class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
 									/>
 								</div>
@@ -716,6 +759,7 @@
 									<input
 										type="text"
 										bind:value={formData.address2}
+										maxlength="100"
 										class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
 									/>
 								</div>
@@ -725,6 +769,7 @@
 										type="text"
 										bind:value={formData.city}
 										required
+										maxlength="50"
 										class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
 									/>
 								</div>
@@ -734,6 +779,8 @@
 										type="text"
 										bind:value={formData.state}
 										required
+										maxlength="2"
+										placeholder="e.g., CA"
 										class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
 									/>
 								</div>
@@ -743,6 +790,7 @@
 										type="text"
 										bind:value={formData.zipcode}
 										pattern="\d{5}(-\d{4})?"
+										placeholder="12345 or 12345-6789"
 										class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
 									/>
 								</div>
@@ -758,16 +806,24 @@
 									<input
 										type="text"
 										bind:value={formData.emergency_contact}
+										maxlength="50"
 										class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
 									/>
 								</div>
 								<div>
 									<label class="block text-sm font-medium text-gray-700">Relationship</label>
-									<input
-										type="text"
+									<select
 										bind:value={formData.emergency_reln}
 										class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-									/>
+									>
+										<option value="">Select relationship</option>
+										<option value="spouse">Spouse</option>
+										<option value="parent">Parent</option>
+										<option value="child">Child</option>
+										<option value="sibling">Sibling</option>
+										<option value="friend">Friend</option>
+										<option value="other">Other</option>
+									</select>
 								</div>
 								<div>
 									<label class="block text-sm font-medium text-gray-700">Emergency Phone</label>
@@ -789,7 +845,9 @@
 									<input
 										type="number"
 										min="1"
+										max="50"
 										bind:value={formData.max_riders}
+										placeholder="1-50"
 										class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
 									/>
 								</div>
@@ -798,6 +856,8 @@
 									<textarea
 										bind:value={formData.destination_limitation}
 										rows="3"
+										maxlength="200"
+										placeholder="Describe any destination limitations..."
 										class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
 									></textarea>
 								</div>
