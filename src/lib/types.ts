@@ -196,6 +196,9 @@ export interface NavigationItem {
 export interface AuthInfo {
   token?: string;
   user?: any;
+  access_token?: string;
+  refresh_token?: string;
+  userId?: string;
 }
 
 export interface Todo {

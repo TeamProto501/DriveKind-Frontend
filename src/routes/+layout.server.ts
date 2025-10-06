@@ -1,3 +1,4 @@
+// src/routes/+layout.server.ts
 import type { LayoutServerLoad } from './$types';
 import { createSupabaseServerClient } from '$lib/supabase.server';
 
