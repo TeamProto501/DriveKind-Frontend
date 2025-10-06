@@ -1,7 +1,7 @@
 // src/lib/supabase.server.ts
 import { createServerClient } from '@supabase/ssr';
 import { PUBLIC_SUPABASE_URL } from '$env/static/public';
-import { PUBLIC_SUPABASE_ANON_KEY } from '$env/static/private';
+import { PUBLIC_SUPABASE_ANON_KEY } from '$env/static/public';
 import type { RequestEvent } from '@sveltejs/kit';
 
 export function createSupabaseServerClient(event: RequestEvent) {
