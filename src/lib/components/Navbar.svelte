@@ -136,13 +136,13 @@
     if (currentRole === 'Driver') {
 			items.push(
         { label: 'My Rides', href: '/driver/rides', icon: 'Car', badge: null },
-        { label: 'Schedule', href: '/driver/schedule', icon: 'Calendar', badge: null }
       );
     }
     
     // Common items for all roles
     items.push(
       { label: 'Profile', href: '/profile', icon: 'User', badge: null },
+      { label: 'Schedule', href: '/calendar', icon: 'Calendar', badge: null, roles: ['Super Admin', 'Admin', 'Dispatcher', 'Driver'] },
       { label: 'Help', href: '/help', icon: 'HelpCircle', badge: null }
     );
 		
