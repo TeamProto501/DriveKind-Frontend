@@ -9,17 +9,6 @@
     (currentPage - 1) * pageSize,
     currentPage * pageSize
   );
-  const formatTimestamp = (timestamp: string) => {
-    if (!timestamp) return "-";
-    return new Date(timestamp).toLocaleString("ko-KR", {
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-    });
-  };
   const getActionClass = (action: string) => {
     switch (action) {
       case "INSERT":
@@ -58,6 +47,12 @@
           <Table.Head class="px-4 py-2 font-medium whitespace-nowrap"
             >Field Name</Table.Head
           >
+          <Table.Head class="px-4 py-2 font-medium whitespace-nowrap"
+            >Previous Value</Table.Head
+          >
+          <Table.Head class="px-4 py-2 font-medium whitespace-nowrap"
+            >New Value</Table.Head
+          >
         </Table.Row>
       </Table.Header>
       <Table.Body class="divide-y divide-gray-200">
@@ -68,7 +63,7 @@
                 {(currentPage - 1) * pageSize + i + 1}
               </Table.Cell>
               <Table.Cell class="px-4 py-3 text-sm">
-                {formatTimestamp(row.timestamp)}
+                {row.timestamp}
               </Table.Cell>
               <Table.Cell class="px-4 py-3 font-medium">
                 {row.name ?? "-"}
@@ -83,6 +78,12 @@
               </Table.Cell>
               <Table.Cell class="px-4 py-3">
                 {row.field_name ?? "-"}
+              </Table.Cell>
+              <Table.Cell class="px-4 py-3">
+                {row.old_value ?? "-"}
+              </Table.Cell>
+              <Table.Cell class="px-4 py-3">
+                {row.new_value ?? "-"}
               </Table.Cell>
             </Table.Row>
           {/each}
