@@ -115,6 +115,14 @@
       );
     }
     
+    // Super Admin items - Only Organizations
+    if (currentRole === 'Super Admin') {
+			items.push(
+        { label: 'Organizations', href: '/admin/organizations', icon: 'Building2', badge: null }
+      );
+    }
+    
+    
     // Dispatcher items
     if (currentRole === 'Dispatcher') {
 			items.push(
@@ -128,13 +136,13 @@
     if (currentRole === 'Driver') {
 			items.push(
         { label: 'My Rides', href: '/driver/rides', icon: 'Car', badge: null },
-        { label: 'Schedule', href: '/driver/schedule', icon: 'Calendar', badge: null }
       );
     }
     
     // Common items for all roles
     items.push(
       { label: 'Profile', href: '/profile', icon: 'User', badge: null },
+      { label: 'Schedule', href: '/calendar', icon: 'Calendar', badge: null, roles: ['Super Admin', 'Admin', 'Dispatcher', 'Driver'] },
       { label: 'Help', href: '/help', icon: 'HelpCircle', badge: null }
     );
 		
@@ -156,10 +164,17 @@
     return actions;
   });
 
-  // Load mock user data on mount
+  // Load user data on mount
   onMount(() => {
-    // Simulate loading user data
-    setTimeout(() => {
+    if (data?.profile) {
+      // Use real profile if available
+      userProfile = data.profile as any;
+      if (Array.isArray(data.roles)) {
+        userRoles = data.roles as RoleEnum[];
+        activeRole = userRoles[0]; // Set first role as active
+      }
+    } else {
+      // Fallback to mock data for testing
       userProfile = {
         user_id: "mock-user-id",
         org_id: 1,
@@ -176,9 +191,9 @@
         state: "CA",
         zip_code: "12345",
         lives_alone: true,
-      };
-      userRoles = ["Admin", "Dispatcher"];
-      activeRole = "Admin"; // Set initial active role
+      } as unknown as Profile;
+      userRoles = ["Super Admin"]; // Set as Super Admin for testing
+      activeRole = "Super Admin";
       userOrganization = {
         org_id: 1,
         name: "DriveKind Transit Services",
@@ -188,9 +203,10 @@
         city: "Anytown",
         state: "CA",
         zip_code: "12345",
-      };
-      isLoading = false;
-    }, 1000);
+      } as Organization;
+    }
+    
+    isLoading = false;
   });
 
   // Logout function
@@ -224,7 +240,19 @@
   // Role switching function
   function switchRole(role: RoleEnum) {
     activeRole = role;
-	}
+
+    // Redirect user to default dashboard for their role
+    if (role === "Admin") {
+      goto("/admin/dash");
+    } else if (role === "Dispatcher") {
+      goto("/dispatcher/dashboard");
+    } else if (role === "Driver") {
+      goto("/driver/rides");
+    } else {
+      // fallback route
+      goto("/profile");
+    }
+  }
 </script>
 
 <!-- Sidebar Provider -->
@@ -251,21 +279,25 @@
       <Sidebar.Group>
         <Sidebar.GroupLabel class="text-slate-600 font-medium text-sm uppercase tracking-wide mb-3">Navigation</Sidebar.GroupLabel>
         <Sidebar.Menu>
-          {#each roleBasedItems() as item}
-            <Sidebar.MenuItem>
-              <Sidebar.MenuButton 
-                onclick={() => navigateTo(item.href)}
-                class="w-full justify-start text-slate-700 hover:text-slate-900 hover:bg-slate-100 {isActiveRoute(item.href) ? 'bg-blue-50 text-blue-700 border-r-2 border-blue-600' : ''}"
-              >
-                {@const IconComponent = getIconComponent(item.icon)}
-                <IconComponent class="w-4 h-4" />
-                <span>{item.label}</span>
-                {#if item.badge}
-                  <Badge variant="secondary" class="ml-auto">{item.badge}</Badge>
-                {/if}
-              </Sidebar.MenuButton>
-            </Sidebar.MenuItem>
-					{/each}
+          {#if isLoading}
+            <div class="p-4 text-center text-gray-500">Loading navigation...</div>
+          {:else}
+            {#each roleBasedItems() as item}
+              <Sidebar.MenuItem>
+                <Sidebar.MenuButton 
+                  onclick={() => navigateTo(item.href)}
+                  class="w-full justify-start text-slate-700 hover:text-slate-900 hover:bg-slate-100 {isActiveRoute(item.href) ? 'bg-blue-50 text-blue-700 border-r-2 border-blue-600' : ''}"
+                >
+                  {@const IconComponent = getIconComponent(item.icon)}
+                  <IconComponent class="w-4 h-4" />
+                  <span>{item.label}</span>
+                  {#if item.badge}
+                    <Badge variant="secondary" class="ml-auto">{item.badge}</Badge>
+                  {/if}
+                </Sidebar.MenuButton>
+              </Sidebar.MenuItem>
+            {/each}
+          {/if}
         </Sidebar.Menu>
       </Sidebar.Group>
 

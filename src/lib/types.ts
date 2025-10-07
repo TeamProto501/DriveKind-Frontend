@@ -52,18 +52,20 @@ export interface Profile {
 export interface Organization {
   org_id: number;
   name: string;
+  contact_email: string;
+  contact_phone: string;
+  address: string;
+  city: string;
+  state: string;
+  zip_code: string;
   logo_url?: string;
-  head_admin_id: string;
-  street_address?: string;
+  head_admin_id?: string;
   address2?: string;
-  city?: string;
-  state?: string;
-  zip_code?: string;
   phone?: string;
   email?: string;
   website?: string;
-  created_at: Date;
-  updated_at: Date;
+  created_at?: Date;
+  updated_at?: Date;
 }
 
 export interface Ride {
@@ -194,6 +196,9 @@ export interface NavigationItem {
 export interface AuthInfo {
   token?: string;
   user?: any;
+  access_token?: string;
+  refresh_token?: string;
+  userId?: string;
 }
 
 export interface Todo {

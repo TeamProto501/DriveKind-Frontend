@@ -171,18 +171,12 @@
           Sign in to access your dashboard and manage your transportation needs.
         </p>
         
-        <div class="flex flex-col sm:flex-row gap-4 justify-center">
+        <div class="flex justify-center">
           <button
             onclick={() => goto('/login')}
             class="px-8 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
           >
             Sign In
-          </button>
-          <button
-            onclick={() => goto('/signup')}
-            class="px-8 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 transition-colors"
-          >
-            Sign Up
           </button>
         </div>
       </div>
