@@ -305,7 +305,7 @@
               {#if selectedClient.car_height_needed_enum}
                 <div class="flex items-center gap-2">
                   <Car class="w-4 h-4 text-blue-600" />
-                  <span>Seat: {selected Client.car_height_needed_enum}</span>
+                  <span>Seat: {selectedClient.car_height_needed_enum}</span>
                 </div>
               {/if}
               {#if selectedClient.service_animal}
