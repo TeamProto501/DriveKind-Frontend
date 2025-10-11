@@ -4,7 +4,6 @@
   import { X, Users, MapPin, Calendar, Clock, AlertCircle } from '@lucide/svelte';
   import { Button } from "$lib/components/ui/button";
   import { Input } from "$lib/components/ui/input";
-  import { Label } from "$lib/components/ui/label";
   import { Badge } from "$lib/components/ui/badge";
   
   let {
@@ -21,7 +20,7 @@
   
   const dispatch = createEventDispatcher();
   
-  let step = $state(1); // 1: Select Client, 2: Ride Details, 3: Select Driver
+  let step = $state(1);
   let selectedClient = $state<any>(null);
   let pickupFromHome = $state(true);
   let roundTrip = $state(false);
@@ -35,23 +34,16 @@
   let selectedDriver = $state<any>(null);
   let selectedVehicle = $state<any>(null);
   let availableDrivers = $state<any[]>([]);
+  let altPickupAddress = $state('');
   
-  // Check driver availability
   async function checkDriverAvailability() {
     if (!appointmentTime) return;
     
-    const rideDate = new Date(appointmentTime).toISOString().split('T')[0];
-    const rideTime = new Date(appointmentTime).toTimeString().split(' ')[0];
-    
-    // Filter drivers based on vehicle match and availability
     const matched = drivers.filter(driver => {
       if (!driver.vehicles || driver.vehicles.length === 0) return false;
       
-      // Check if driver has appropriate vehicle
       const hasMatchingVehicle = driver.vehicles.some((vehicle: any) => {
         if (vehicle.driver_status !== 'active') return false;
-        
-        // Match vehicle requirements with client needs
         if (selectedClient.service_animal && vehicle.max_passengers < 2) return false;
         if (selectedClient.car_height_needed_enum === 'high' && vehicle.seat_height_enum !== 'high') return false;
         if (riders > vehicle.max_passengers) return false;
@@ -79,7 +71,7 @@
     formData.append('pickup_from_home', pickupFromHome.toString());
     
     if (!pickupFromHome) {
-      formData.append('alt_pickup_address', (document.getElementById('alt_pickup_address') as HTMLInputElement)?.value || '');
+      formData.append('alt_pickup_address', altPickupAddress);
     }
     
     formData.append('destination_name', destination);
@@ -167,59 +159,59 @@
           
           <div class="grid grid-cols-2 gap-4">
             <div>
-              <Label>Appointment Date & Time *</Label>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Appointment Date & Time *</label>
               <Input type="datetime-local" bind:value={appointmentTime} required />
             </div>
             <div>
-              <Label>Pickup Time (if different)</Label>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Pickup Time (if different)</label>
               <Input type="datetime-local" bind:value={pickupTime} />
             </div>
           </div>
           
           <div>
-            <Label class="flex items-center gap-2">
+            <label class="flex items-center gap-2 text-sm">
               <input type="checkbox" bind:checked={pickupFromHome} />
               Pickup from home address
-            </Label>
+            </label>
           </div>
           
           {#if !pickupFromHome}
             <div>
-              <Label>Alternate Pickup Address *</Label>
-              <Input id="alt_pickup_address" placeholder="Enter pickup address" required />
+              <label class="block text-sm font-medium text-gray-700 mb-1">Alternate Pickup Address *</label>
+              <Input bind:value={altPickupAddress} placeholder="Enter pickup address" required />
             </div>
           {/if}
           
           <div>
-            <Label>Destination Name *</Label>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Destination Name *</label>
             <Input bind:value={destination} placeholder="e.g., Strong Memorial Hospital" required />
           </div>
           
           <div>
-            <Label>Dropoff Address *</Label>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Dropoff Address *</label>
             <Input bind:value={dropoffAddress} placeholder="Enter dropoff address" required />
           </div>
           
           <div>
-            <Label>Purpose of Trip *</Label>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Purpose of Trip *</label>
             <Input bind:value={purpose} placeholder="e.g., Medical appointment" required />
           </div>
           
           <div class="grid grid-cols-2 gap-4">
             <div>
-              <Label>Number of Riders</Label>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Number of Riders</label>
               <Input type="number" bind:value={riders} min="1" />
             </div>
-            <div>
-              <Label class="flex items-center gap-2">
+            <div class="flex items-center">
+              <label class="flex items-center gap-2 text-sm">
                 <input type="checkbox" bind:checked={roundTrip} />
                 Round Trip
-              </Label>
+              </label>
             </div>
           </div>
           
           <div>
-            <Label>Notes</Label>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Notes</label>
             <textarea bind:value={notes} class="w-full border rounded-lg px-3 py-2" rows="3"></textarea>
           </div>
         </div>
