@@ -21,6 +21,9 @@
         return "text-gray-600";
     }
   };
+  $: keys = items[0] ? Object.keys(items[0]) : [];
+  const formatLabel = (k: string) =>
+    k.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
   function handlePageChange(page: number) {
     currentPage = page;
   }
@@ -32,61 +35,30 @@
       <Table.Header class="ltr:text-left rtl:text-right bg-gray-100">
         <Table.Row>
           <Table.Head class="sticky inset-y-0 start-0 px-4 py-4">#</Table.Head>
-          <Table.Head class="px-4 py-2 font-medium whitespace-nowrap"
-            >TimeStamp</Table.Head
-          >
-          <Table.Head class="px-4 py-2 font-medium whitespace-nowrap"
-            >User</Table.Head
-          >
-          <Table.Head class="px-4 py-2 font-medium whitespace-nowrap"
-            >Action</Table.Head
-          >
-          <Table.Head class="px-4 py-2 font-medium whitespace-nowrap"
-            >Table Name</Table.Head
-          >
-          <Table.Head class="px-4 py-2 font-medium whitespace-nowrap"
-            >Field Name</Table.Head
-          >
-          <Table.Head class="px-4 py-2 font-medium whitespace-nowrap"
-            >Previous Value</Table.Head
-          >
-          <Table.Head class="px-4 py-2 font-medium whitespace-nowrap"
-            >New Value</Table.Head
-          >
+          {#each keys as key}
+            <Table.Head class="px-4 py-2 font-medium whitespace-nowrap"
+              >{formatLabel(key)}</Table.Head
+            >
+          {/each}
         </Table.Row>
       </Table.Header>
       <Table.Body class="divide-y divide-gray-200">
         {#if pagedData.length > 0}
           {#each pagedData as row, i}
-            <Table.Row class="hover:bg-gray-50">
-              <Table.Cell class="px-4 py-3 text-gray-500">
-                {(currentPage - 1) * pageSize + i + 1}
-              </Table.Cell>
-              <Table.Cell class="px-4 py-3 text-sm">
-                {row.timestamp}
-              </Table.Cell>
-              <Table.Cell class="px-4 py-3 font-medium">
-                {row.name ?? "-"}
-              </Table.Cell>
-              <Table.Cell class="px-4 py-3">
-                <span class={getActionClass(row.action)}>
-                  {row.action ?? "-"}
-                </span>
-              </Table.Cell>
-              <Table.Cell class="px-4 py-3">
-                {row.table_name ?? "-"}
-              </Table.Cell>
-              <Table.Cell class="px-4 py-3">
-                {row.field_name ?? "-"}
-              </Table.Cell>
-              <Table.Cell class="px-4 py-3">
-                {row.old_value ?? "-"}
-              </Table.Cell>
-              <Table.Cell class="px-4 py-3">
-                {row.new_value ?? "-"}
-              </Table.Cell>
+            <Table.Row class="px-4 py-2">
+              <Table.Cell>{(currentPage - 1) * pageSize + i + 1}</Table.Cell>
+              {#each keys as key}
+                <Table.Cell>{row[key] ?? "-"}</Table.Cell>
+              {/each}
             </Table.Row>
           {/each}
+          {#if pagedData.length === 0}
+            <Table.Row>
+              <Table.Cell colspan={keys.length + 1} class="text-center"
+                >No data</Table.Cell
+              >
+            </Table.Row>
+          {/if}
         {:else}
           <Table.Row>
             <Table.Cell class="text-center py-8 text-gray-500 col-span-6">
