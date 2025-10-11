@@ -11,7 +11,6 @@ export const load = async (event) => {
     throw redirect(302, '/login');
   }
 
-  // Get user's org_id
   const { data: userProfile } = await supabase
     .from('staff_profiles')
     .select('org_id, role')
@@ -22,13 +21,12 @@ export const load = async (event) => {
     throw error(403, 'User profile not found');
   }
 
-  // Check if user is dispatcher or admin
   const hasAccess = userProfile.role.includes('Dispatcher') || userProfile.role.includes('Admin');
   if (!hasAccess) {
     throw error(403, 'Access denied');
   }
 
-  // Fetch rides for the organization
+  // Fetch rides with full details
   const { data: rides } = await supabase
     .from('rides')
     .select(`
@@ -41,7 +39,11 @@ export const load = async (event) => {
         mobility_assistance_enum,
         car_height_needed_enum,
         service_animal,
-        service_animal_size_enum
+        service_animal_size_enum,
+        oxygen,
+        allergies,
+        other_limitations,
+        pick_up_instructions
       ),
       vehicles (
         vehicle_id,
@@ -53,13 +55,14 @@ export const load = async (event) => {
       driver:staff_profiles!rides_driver_user_id_fkey (
         user_id,
         first_name,
-        last_name
+        last_name,
+        primary_phone
       )
     `)
     .eq('org_id', userProfile.org_id)
     .order('appointment_time', { ascending: false });
 
-  // Fetch clients for the organization
+  // Fetch clients with full details
   const { data: clients } = await supabase
     .from('clients')
     .select('*')
@@ -67,7 +70,7 @@ export const load = async (event) => {
     .eq('client_status_enum', 'active')
     .order('last_name');
 
-  // Fetch available drivers with their vehicles
+  // Fetch drivers with vehicles
   const { data: drivers } = await supabase
     .from('staff_profiles')
     .select(`
@@ -76,6 +79,8 @@ export const load = async (event) => {
       last_name,
       primary_phone,
       max_rides,
+      destination_limitation,
+      town_preference,
       vehicles (
         vehicle_id,
         type_of_vehicle_enum,
@@ -150,5 +155,34 @@ export const actions = {
     }
 
     return { success: true, rideId: data.ride_id };
+  },
+  
+  checkDriverAvailability: async (event) => {
+    const supabase = createSupabaseServerClient(event);
+    const { data: { session } } = await supabase.auth.getSession();
+
+    if (!session) {
+      return fail(401, { error: 'Unauthorized' });
+    }
+
+    const formData = await event.request.formData();
+    const driverUserId = formData.get('driver_user_id') as string;
+    const appointmentTime = formData.get('appointment_time') as string;
+
+    const appointmentDate = new Date(appointmentTime);
+    const dateStr = appointmentDate.toISOString().split('T')[0];
+    const timeStr = appointmentDate.toTimeString().split(' ')[0];
+
+    // Check driver unavailability
+    const { data: unavailability } = await supabase
+      .from('driver_unavailability')
+      .select('*')
+      .eq('user_id', driverUserId)
+      .or(`unavailable_date.eq.${dateStr},unavailable_date.is.null`)
+      .or('all_day.eq.true,and(start_time.lte.${timeStr},end_time.gte.${timeStr})');
+
+    const isAvailable = !unavailability || unavailability.length === 0;
+
+    return { available: isAvailable };
   }
 } satisfies Actions;

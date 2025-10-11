@@ -1,7 +1,7 @@
 <!-- src/routes/dispatcher/rides/CreateRideModal.svelte -->
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
-  import { X, Users, MapPin, Calendar, Clock, AlertCircle } from '@lucide/svelte';
+  import { X, AlertCircle, CheckCircle, Clock, Car, Users, Heart, Wind } from '@lucide/svelte';
   import { Button } from "$lib/components/ui/button";
   import { Input } from "$lib/components/ui/input";
   import { Badge } from "$lib/components/ui/badge";
@@ -20,46 +20,140 @@
   
   const dispatch = createEventDispatcher();
   
+  type MatchedDriver = {
+    driver: any;
+    vehicle: any;
+    score: number;
+    matchReasons: string[];
+    warnings: string[];
+  };
+  
   let step = $state(1);
   let selectedClient = $state<any>(null);
   let pickupFromHome = $state(true);
   let roundTrip = $state(false);
   let appointmentTime = $state('');
+  let appointmentDate = $state('');
+  let appointmentTimeOnly = $state('');
   let pickupTime = $state('');
   let destination = $state('');
   let dropoffAddress = $state('');
+  let dropoffCity = $state('');
+  let dropoffState = $state('');
+  let dropoffZipcode = $state('');
   let purpose = $state('');
   let notes = $state('');
   let riders = $state(1);
   let selectedDriver = $state<any>(null);
   let selectedVehicle = $state<any>(null);
-  let availableDrivers = $state<any[]>([]);
+  let matchedDrivers = $state<MatchedDriver[]>([]);
   let altPickupAddress = $state('');
+  let estimatedLength = $state('');
   
-  async function checkDriverAvailability() {
-    if (!appointmentTime) return;
+  function calculateDriverMatch(driver: any, vehicle: any): MatchedDriver {
+    let score = 100;
+    const matchReasons: string[] = [];
+    const warnings: string[] = [];
     
-    const matched = drivers.filter(driver => {
-      if (!driver.vehicles || driver.vehicles.length === 0) return false;
-      
-      const hasMatchingVehicle = driver.vehicles.some((vehicle: any) => {
-        if (vehicle.driver_status !== 'active') return false;
-        if (selectedClient.service_animal && vehicle.max_passengers < 2) return false;
-        if (selectedClient.car_height_needed_enum === 'high' && vehicle.seat_height_enum !== 'high') return false;
-        if (riders > vehicle.max_passengers) return false;
-        
-        return true;
-      });
-      
-      return hasMatchingVehicle;
-    });
+    // Vehicle capacity check
+    if (vehicle.max_passengers < riders + (selectedClient.service_animal ? 1 : 0)) {
+      score -= 50;
+      warnings.push('Vehicle capacity insufficient');
+    } else {
+      matchReasons.push('Adequate passenger capacity');
+    }
     
-    availableDrivers = matched;
+    // Seat height match
+    if (selectedClient.car_height_needed_enum === 'high') {
+      if (vehicle.seat_height_enum === 'high') {
+        score += 20;
+        matchReasons.push('Perfect seat height match');
+      } else {
+        score -= 30;
+        warnings.push('Seat height may not be suitable');
+      }
+    }
+    
+    // Mobility assistance
+    if (selectedClient.mobility_assistance_enum) {
+      if (vehicle.type_of_vehicle_enum === 'van' || vehicle.type_of_vehicle_enum === 'wheelchair_van') {
+        score += 15;
+        matchReasons.push('Suitable for mobility assistance');
+      } else {
+        score -= 20;
+        warnings.push('Limited mobility assistance capability');
+      }
+    }
+    
+    // Service animal
+    if (selectedClient.service_animal) {
+      if (vehicle.max_passengers >= riders + 1) {
+        matchReasons.push('Can accommodate service animal');
+      } else {
+        score -= 25;
+        warnings.push('May not accommodate service animal');
+      }
+    }
+    
+    // Oxygen
+    if (selectedClient.oxygen) {
+      matchReasons.push('Note: Client requires oxygen');
+    }
+    
+    // Vehicle status
+    if (vehicle.driver_status !== 'active') {
+      score -= 100;
+      warnings.push('Vehicle not currently active');
+    }
+    
+    // Driver preferences (town/destination limitations)
+    if (driver.destination_limitation && dropoffCity) {
+      if (!driver.destination_limitation.toLowerCase().includes(dropoffCity.toLowerCase())) {
+        score -= 15;
+        warnings.push('Outside driver\'s preferred area');
+      }
+    }
+    
+    return {
+      driver,
+      vehicle,
+      score: Math.max(0, score),
+      matchReasons,
+      warnings
+    };
   }
   
-  function selectDriver(driver: any, vehicle: any) {
-    selectedDriver = driver;
-    selectedVehicle = vehicle;
+  function matchDrivers() {
+    if (!selectedClient || !appointmentTime) return;
+    
+    const matches: MatchedDriver[] = [];
+    
+    for (const driver of drivers) {
+      if (!driver.vehicles || driver.vehicles.length === 0) continue;
+      
+      for (const vehicle of driver.vehicles) {
+        if (vehicle.driver_status !== 'active') continue;
+        
+        const match = calculateDriverMatch(driver, vehicle);
+        matches.push(match);
+      }
+    }
+    
+    // Sort by score descending
+    matches.sort((a, b) => b.score - a.score);
+    matchedDrivers = matches;
+  }
+  
+  function selectDriver(match: MatchedDriver) {
+    selectedDriver = match.driver;
+    selectedVehicle = match.vehicle;
+  }
+  
+  function getScoreColor(score: number): string {
+    if (score >= 90) return 'bg-green-100 text-green-800 border-green-300';
+    if (score >= 70) return 'bg-blue-100 text-blue-800 border-blue-300';
+    if (score >= 50) return 'bg-yellow-100 text-yellow-800 border-yellow-300';
+    return 'bg-red-100 text-red-800 border-red-300';
   }
   
   async function submitRide() {
@@ -76,10 +170,14 @@
     
     formData.append('destination_name', destination);
     formData.append('dropoff_address', dropoffAddress);
+    formData.append('dropoff_city', dropoffCity);
+    formData.append('dropoff_state', dropoffState);
+    formData.append('dropoff_zipcode', dropoffZipcode);
     formData.append('appointment_time', appointmentTime);
     formData.append('pickup_time', pickupTime);
     formData.append('round_trip', roundTrip.toString());
     formData.append('purpose', purpose);
+    formData.append('estimated_appointment_length', estimatedLength);
     formData.append('riders', riders.toString());
     formData.append('notes', notes);
     
@@ -97,8 +195,14 @@
   }
   
   $effect(() => {
-    if (appointmentTime && selectedClient) {
-      checkDriverAvailability();
+    if (appointmentDate && appointmentTimeOnly) {
+      appointmentTime = `${appointmentDate}T${appointmentTimeOnly}`;
+    }
+  });
+  
+  $effect(() => {
+    if (step === 3 && appointmentTime && selectedClient) {
+      matchDrivers();
     }
   });
 </script>
@@ -107,7 +211,10 @@
   <div class="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col">
     <!-- Header -->
     <div class="px-6 py-4 border-b flex items-center justify-between">
-      <h2 class="text-xl font-semibold">Create New Ride - Step {step} of 3</h2>
+      <div>
+        <h2 class="text-xl font-semibold">Create New Ride</h2>
+        <p class="text-sm text-gray-600">Step {step} of 3</p>
+      </div>
       <button onclick={onClose} class="p-2 hover:bg-gray-100 rounded-lg">
         <X class="w-5 h-5" />
       </button>
@@ -119,25 +226,51 @@
         <!-- Step 1: Select Client -->
         <div class="space-y-4">
           <h3 class="text-lg font-medium">Select Client</h3>
-          <div class="grid gap-3">
+          <Input placeholder="Search clients..." class="mb-4" />
+          <div class="grid gap-3 max-h-[500px] overflow-y-auto">
             {#each clients as client}
               <button
                 onclick={() => { selectedClient = client; step = 2; }}
                 class="p-4 border rounded-lg text-left hover:border-blue-500 hover:bg-blue-50 transition-colors"
               >
-                <div class="font-medium">{client.first_name} {client.last_name}</div>
-                <div class="text-sm text-gray-600">{client.primary_phone}</div>
-                <div class="text-xs text-gray-500 mt-1">
-                  {client.street_address}, {client.city}, {client.state}
-                </div>
-                {#if client.mobility_assistance_enum || client.service_animal}
-                  <div class="flex gap-2 mt-2">
-                    {#if client.mobility_assistance_enum}
-                      <Badge variant="outline">{client.mobility_assistance_enum}</Badge>
-                    {/if}
+                <div class="flex items-start justify-between">
+                  <div class="flex-1">
+                    <div class="font-medium text-lg">{client.first_name} {client.last_name}</div>
+                    <div class="text-sm text-gray-600">{client.primary_phone}</div>
+                    <div class="text-xs text-gray-500 mt-1">
+                      {client.street_address}, {client.city}, {client.state} {client.zip_code}
+                    </div>
+                  </div>
+                  <div class="flex flex-col gap-1">
                     {#if client.service_animal}
-                      <Badge variant="outline">Service Animal</Badge>
+                      <Badge variant="outline" class="flex items-center gap-1">
+                        <Heart class="w-3 h-3" />
+                        Service Animal
+                      </Badge>
                     {/if}
+                    {#if client.oxygen}
+                      <Badge variant="outline" class="flex items-center gap-1">
+                        <Wind class="w-3 h-3" />
+                        Oxygen
+                      </Badge>
+                    {/if}
+                  </div>
+                </div>
+                
+                {#if client.mobility_assistance_enum || client.car_height_needed_enum}
+                  <div class="flex gap-2 mt-3">
+                    {#if client.mobility_assistance_enum}
+                      <Badge variant="secondary">{client.mobility_assistance_enum}</Badge>
+                    {/if}
+                    {#if client.car_height_needed_enum}
+                      <Badge variant="secondary">{client.car_height_needed_enum} seat height</Badge>
+                    {/if}
+                  </div>
+                {/if}
+                
+                {#if client.allergies}
+                  <div class="mt-2 text-xs text-red-600">
+                    ⚠️ Allergies: {client.allergies}
                   </div>
                 {/if}
               </button>
@@ -152,27 +285,84 @@
             <Button variant="outline" size="sm" onclick={() => step = 1}>Change Client</Button>
           </div>
           
-          <div class="p-4 bg-gray-50 rounded-lg">
-            <div class="font-medium">{selectedClient.first_name} {selectedClient.last_name}</div>
-            <div class="text-sm text-gray-600">{selectedClient.primary_phone}</div>
+          <!-- Client Summary Card -->
+          <div class="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+            <div class="flex items-start justify-between mb-3">
+              <div>
+                <div class="font-semibold text-lg">{selectedClient.first_name} {selectedClient.last_name}</div>
+                <div class="text-sm text-gray-700">{selectedClient.primary_phone}</div>
+              </div>
+              <Users class="w-5 h-5 text-blue-600" />
+            </div>
+            
+            <div class="grid grid-cols-2 gap-2 text-sm">
+              {#if selectedClient.mobility_assistance_enum}
+                <div class="flex items-center gap-2">
+                  <CheckCircle class="w-4 h-4 text-blue-600" />
+                  <span>Mobility: {selectedClient.mobility_assistance_enum}</span>
+                </div>
+              {/if}
+              {#if selectedClient.car_height_needed_enum}
+                <div class="flex items-center gap-2">
+                  <Car class="w-4 h-4 text-blue-600" />
+                  <span>Seat: {selected Client.car_height_needed_enum}</span>
+                </div>
+              {/if}
+              {#if selectedClient.service_animal}
+                <div class="flex items-center gap-2">
+                  <Heart class="w-4 h-4 text-blue-600" />
+                  <span>Service Animal ({selectedClient.service_animal_size_enum})</span>
+                </div>
+              {/if}
+              {#if selectedClient.oxygen}
+                <div class="flex items-center gap-2">
+                  <Wind class="w-4 h-4 text-blue-600" />
+                  <span>Requires Oxygen</span>
+                </div>
+              {/if}
+            </div>
+            
+            {#if selectedClient.allergies}
+              <div class="mt-3 p-2 bg-red-50 border border-red-200 rounded text-sm">
+                <strong>⚠️ Allergies:</strong> {selectedClient.allergies}
+              </div>
+            {/if}
+            
+            {#if selectedClient.other_limitations}
+              <div class="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded text-sm">
+                <strong>Limitations:</strong> {selectedClient.other_limitations}
+              </div>
+            {/if}
+            
+            {#if selectedClient.pick_up_instructions}
+              <div class="mt-2 p-2 bg-gray-50 border border-gray-200 rounded text-sm">
+                <strong>Pickup Instructions:</strong> {selectedClient.pick_up_instructions}
+              </div>
+            {/if}
           </div>
           
+          <!-- Ride Details Form -->
           <div class="grid grid-cols-2 gap-4">
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">Appointment Date & Time *</label>
-              <Input type="datetime-local" bind:value={appointmentTime} required />
+              <label class="block text-sm font-medium text-gray-700 mb-1">Appointment Date *</label>
+              <Input type="date" bind:value={appointmentDate} required />
             </div>
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">Pickup Time (if different)</label>
-              <Input type="datetime-local" bind:value={pickupTime} />
+              <label class="block text-sm font-medium text-gray-700 mb-1">Appointment Time *</label>
+              <Input type="time" bind:value={appointmentTimeOnly} required />
             </div>
           </div>
           
           <div>
             <label class="flex items-center gap-2 text-sm">
               <input type="checkbox" bind:checked={pickupFromHome} />
-              Pickup from home address
+              Pickup from client's home address
             </label>
+            {#if pickupFromHome}
+              <div class="mt-2 p-3 bg-gray-50 rounded text-sm text-gray-700">
+                📍 {selectedClient.street_address}, {selectedClient.city}, {selectedClient.state} {selectedClient.zip_code}
+              </div>
+            {/if}
           </div>
           
           {#if !pickupFromHome}
@@ -187,9 +377,25 @@
             <Input bind:value={destination} placeholder="e.g., Strong Memorial Hospital" required />
           </div>
           
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Dropoff Address *</label>
-            <Input bind:value={dropoffAddress} placeholder="Enter dropoff address" required />
+          <div class="grid gap-4">
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Dropoff Address *</label>
+              <Input bind:value={dropoffAddress} placeholder="Street address" required />
+            </div>
+            <div class="grid grid-cols-3 gap-4">
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">City</label>
+                <Input bind:value={dropoffCity} placeholder="City" />
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">State</label>
+                <Input bind:value={dropoffState} placeholder="State" />
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Zip Code</label>
+                <Input bind:value={dropoffZipcode} placeholder="Zip" />
+              </div>
+            </div>
           </div>
           
           <div>
@@ -197,12 +403,16 @@
             <Input bind:value={purpose} placeholder="e.g., Medical appointment" required />
           </div>
           
-          <div class="grid grid-cols-2 gap-4">
+          <div class="grid grid-cols-3 gap-4">
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-1">Number of Riders</label>
               <Input type="number" bind:value={riders} min="1" />
             </div>
-            <div class="flex items-center">
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Estimated Length</label>
+              <Input bind:value={estimatedLength} placeholder="e.g., 1 hour" />
+            </div>
+            <div class="flex items-end">
               <label class="flex items-center gap-2 text-sm">
                 <input type="checkbox" bind:checked={roundTrip} />
                 Round Trip
@@ -211,44 +421,77 @@
           </div>
           
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Notes</label>
-            <textarea bind:value={notes} class="w-full border rounded-lg px-3 py-2" rows="3"></textarea>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Additional Notes</label>
+            <textarea bind:value={notes} class="w-full border rounded-lg px-3 py-2 text-sm" rows="3" placeholder="Any special instructions or notes..."></textarea>
           </div>
         </div>
       {:else if step === 3}
-        <!-- Step 3: Select Driver -->
+        <!-- Step 3: Select Driver - Smart Matching -->
         <div class="space-y-4">
-          <h3 class="text-lg font-medium">Select Driver & Vehicle</h3>
+          <h3 class="text-lg font-medium">Recommended Drivers</h3>
           
-          {#if availableDrivers.length === 0}
-            <div class="p-4 bg-yellow-50 border border-yellow-200 rounded-lg flex items-start gap-3">
-              <AlertCircle class="w-5 h-5 text-yellow-600 mt-0.5" />
+          {#if matchedDrivers.length === 0}
+            <div class="p-6 bg-yellow-50 border border-yellow-200 rounded-lg flex items-start gap-3">
+              <AlertCircle class="w-6 h-6 text-yellow-600 mt-0.5 flex-shrink-0" />
               <div>
                 <p class="font-medium text-yellow-900">No drivers available</p>
-                <p class="text-sm text-yellow-700">No drivers with appropriate vehicles are available for this time slot.</p>
+                <p class="text-sm text-yellow-700 mt-1">No drivers with suitable vehicles are available for this ride.</p>
               </div>
             </div>
-          {/if}
-          
-          <div class="grid gap-3">
-            {#each availableDrivers as driver}
-              {#each driver.vehicles.filter((v: any) => v.driver_status === 'active') as vehicle}
+          {:else}
+            <div class="grid gap-3 max-h-[500px] overflow-y-auto">
+              {#each matchedDrivers as match}
                 <button
-                  onclick={() => selectDriver(driver, vehicle)}
-                  class="p-4 border rounded-lg text-left hover:border-blue-500 hover:bg-blue-50 transition-colors {selectedDriver?.user_id === driver.user_id && selectedVehicle?.vehicle_id === vehicle.vehicle_id ? 'border-blue-500 bg-blue-50' : ''}"
+                  onclick={() => selectDriver(match)}
+                  class="p-4 border-2 rounded-lg text-left hover:border-blue-500 transition-colors {selectedDriver?.user_id === match.driver.user_id && selectedVehicle?.vehicle_id === match.vehicle.vehicle_id ? 'border-blue-500 bg-blue-50' : ''}"
                 >
-                  <div class="font-medium">{driver.first_name} {driver.last_name}</div>
-                  <div class="text-sm text-gray-600">{driver.primary_phone}</div>
-                  <div class="flex gap-2 mt-2">
-                    <Badge>{vehicle.type_of_vehicle_enum}</Badge>
-                    <Badge variant="outline">{vehicle.seat_height_enum} seat</Badge>
-                    <Badge variant="outline">{vehicle.max_passengers} passengers</Badge>
-                    <Badge variant="outline">{vehicle.vehicle_color}</Badge>
+                  <div class="flex items-start justify-between mb-3">
+                    <div class="flex-1">
+                      <div class="font-semibold text-lg">{match.driver.first_name} {match.driver.last_name}</div>
+                      <div class="text-sm text-gray-600">{match.driver.primary_phone}</div>
+                    </div>
+                    <div class="flex flex-col items-end gap-2">
+                      <Badge class={getScoreColor(match.score) + ' border'}>
+                        Match: {match.score}%
+                      </Badge>
+                    </div>
                   </div>
+                  
+                  <!-- Vehicle Info -->
+                  <div class="flex gap-2 mb-3">
+                    <Badge>{match.vehicle.type_of_vehicle_enum}</Badge>
+                    <Badge variant="outline">{match.vehicle.seat_height_enum} seat</Badge>
+                    <Badge variant="outline">{match.vehicle.max_passengers} passengers</Badge>
+                    <Badge variant="outline">{match.vehicle.vehicle_color}</Badge>
+                  </div>
+                  
+                  <!-- Match Reasons -->
+                  {#if match.matchReasons.length > 0}
+                    <div class="mb-2">
+                      {#each match.matchReasons as reason}
+                        <div class="flex items-center gap-2 text-sm text-green-700 mb-1">
+                          <CheckCircle class="w-4 h-4" />
+                          <span>{reason}</span>
+                        </div>
+                      {/each}
+                    </div>
+                  {/if}
+                  
+                  <!-- Warnings -->
+                  {#if match.warnings.length > 0}
+                    <div>
+                      {#each match.warnings as warning}
+                        <div class="flex items-center gap-2 text-sm text-amber-700 mb-1">
+                          <AlertCircle class="w-4 h-4" />
+                          <span>{warning}</span>
+                        </div>
+                      {/each}
+                    </div>
+                  {/if}
                 </button>
               {/each}
-            {/each}
-          </div>
+            </div>
+          {/if}
         </div>
       {/if}
     </div>
@@ -261,11 +504,19 @@
           <Button variant="outline" onclick={() => step--}>Back</Button>
         {/if}
         {#if step < 3}
-          <Button onclick={() => step++} disabled={step === 1 && !selectedClient || step === 2 && (!appointmentTime || !destination || !dropoffAddress || !purpose)}>
+          <Button 
+            onclick={() => step++} 
+            disabled={
+              (step === 1 && !selectedClient) || 
+              (step === 2 && (!appointmentDate || !appointmentTimeOnly || !destination || !dropoffAddress || !purpose))
+            }
+          >
             Next
           </Button>
         {:else}
-          <Button onclick={submitRide} disabled={!selectedDriver}>Create Ride</Button>
+          <Button onclick={submitRide} disabled={!selectedDriver}>
+            Create Ride
+          </Button>
         {/if}
       </div>
     </div>
