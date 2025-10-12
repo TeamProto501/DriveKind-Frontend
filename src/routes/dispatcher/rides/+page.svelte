@@ -4,9 +4,9 @@
   import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "$lib/components/ui/card";
   import { Input } from "$lib/components/ui/input";
   import { Select, SelectContent, SelectItem, SelectTrigger } from "$lib/components/ui/select";
-  import { Textarea } from "$lib/components/ui/textarea";
+  import Textarea from "$lib/components/ui/textarea.svelte";
   // Removed Dialog import - using simple modal approach
-  import { Label } from "$lib/components/ui/label";
+  import Label from "$lib/components/ui/label.svelte";
   import { Car, Clock, MapPin, User, Phone, Calendar, Filter, Search, Navigation, Plus, Edit, Trash2, UserCheck } from "@lucide/svelte";
   import { enhance } from '$app/forms';
   import { invalidateAll } from '$app/navigation';
