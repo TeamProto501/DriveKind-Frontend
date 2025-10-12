@@ -20,37 +20,29 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 			return json({ error: 'Unauthorized' }, { status: 401 });
 		}
 
-		// For development, if rides table doesn't exist, just return success
-		try {
-			// Verify the ride belongs to this driver
-			const { data: ride, error: rideError } = await supabase
-				.from('rides')
-				.select('ride_id, driver_id, status')
-				.eq('ride_id', rideId)
-				.eq('driver_id', user.id)
-				.single();
+		// Verify the ride belongs to this driver
+		const { data: ride, error: rideError } = await supabase
+			.from('rides')
+			.select('ride_id, driver_user_id, status')
+			.eq('ride_id', rideId)
+			.eq('driver_user_id', user.id)
+			.single();
 
-			if (rideError || !ride) {
-				console.log('Ride not found in database, but allowing update for development');
-				return json({ success: true, message: 'Status updated (development mode)' });
-			}
+		if (rideError || !ride) {
+			return json({ error: 'Ride not found or access denied' }, { status: 404 });
+		}
 
-			// Update the ride status
-			const { error: updateError } = await supabase
-				.from('rides')
-				.update({ 
-					status,
-					updated_at: new Date().toISOString()
-				})
-				.eq('ride_id', rideId);
+		// Update the ride status
+		const { error: updateError } = await supabase
+			.from('rides')
+			.update({ 
+				status
+			})
+			.eq('ride_id', rideId);
 
-			if (updateError) {
-				console.error('Error updating ride status:', updateError);
-				return json({ error: 'Failed to update ride status' }, { status: 500 });
-			}
-		} catch (error) {
-			console.log('Rides table not available, allowing update for development');
-			return json({ success: true, message: 'Status updated (development mode)' });
+		if (updateError) {
+			console.error('Error updating ride status:', updateError);
+			return json({ error: 'Failed to update ride status' }, { status: 500 });
 		}
 
 		// If completing a ride, create a completed ride record

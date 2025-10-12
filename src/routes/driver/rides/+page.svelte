@@ -23,7 +23,7 @@
       const clientName = ride.clients ? `${ride.clients.first_name} ${ride.clients.last_name}` : 'Unknown Client';
       const matchesSearch = clientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
                            ride.dropoff_address.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                           ride.pickup_address.toLowerCase().includes(searchTerm.toLowerCase());
+                           (ride.alt_pickup_address && ride.alt_pickup_address.toLowerCase().includes(searchTerm.toLowerCase()));
       const matchesStatus = statusFilter === "all" || ride.status === statusFilter;
       return matchesSearch && matchesStatus;
     });
@@ -40,17 +40,16 @@
     }
   }
 
-  function formatDateTime(date: string, time: string) {
-    const dateTime = new Date(`${date}T${time}`);
-    return dateTime.toLocaleString();
+  function formatDateTime(timestamp: string) {
+    return new Date(timestamp).toLocaleString();
   }
 
-  function formatDate(date: string) {
-    return new Date(date).toLocaleDateString();
+  function formatDate(timestamp: string) {
+    return new Date(timestamp).toLocaleDateString();
   }
 
-  function formatTime(time: string) {
-    return new Date(`2000-01-01T${time}`).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  function formatTime(timestamp: string) {
+    return new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   }
 
   function getClientName(ride: any) {
@@ -185,7 +184,7 @@
                   {ride.status.toUpperCase()}
                 </Badge>
                 <Badge variant="outline">
-                  {ride.ride_type}
+                  {ride.purpose}
                 </Badge>
               </div>
               
@@ -196,40 +195,53 @@
                 </div>
                 <div class="flex items-center gap-2">
                   <Calendar class="w-4 h-4" />
-                  {formatDate(ride.scheduled_date)} at {formatTime(ride.scheduled_time)}
+                  {formatDate(ride.appointment_time)} at {formatTime(ride.appointment_time)}
                 </div>
                 <div class="flex items-center gap-2">
                   <MapPin class="w-4 h-4" />
                   <div>
                     <div class="font-medium">Pickup:</div>
-                    <div>{ride.pickup_address}</div>
-                    {#if ride.pickup_address2}
-                      <div>{ride.pickup_address2}</div>
+                    {#if ride.pickup_from_home}
+                      <div>Client's Home</div>
+                    {:else if ride.alt_pickup_address}
+                      <div>{ride.alt_pickup_address}</div>
+                      {#if ride.alt_pickup_address2}
+                        <div>{ride.alt_pickup_address2}</div>
+                      {/if}
+                      <div>{ride.alt_pickup_city}, {ride.alt_pickup_state} {ride.alt_pickup_zipcode}</div>
+                    {:else}
+                      <div>Client's Home</div>
                     {/if}
-                    <div>{ride.pickup_city}, {ride.pickup_state} {ride.pickup_zip}</div>
                   </div>
                 </div>
                 <div class="flex items-center gap-2">
                   <MapPin class="w-4 h-4" />
                   <div>
                     <div class="font-medium">Dropoff:</div>
+                    <div>{ride.destination_name}</div>
                     <div>{ride.dropoff_address}</div>
                     {#if ride.dropoff_address2}
                       <div>{ride.dropoff_address2}</div>
                     {/if}
-                    <div>{ride.dropoff_city}, {ride.dropoff_state} {ride.dropoff_zip}</div>
+                    <div>{ride.dropoff_city}, {ride.dropoff_state} {ride.dropoff_zipcode}</div>
                   </div>
                 </div>
-                {#if ride.is_recurring}
+                {#if ride.estimated_appointment_length}
                   <div class="flex items-center gap-2">
                     <Clock class="w-4 h-4" />
-                    Recurring: {ride.recurring_pattern}
+                    Estimated: {ride.estimated_appointment_length}
                   </div>
                 {/if}
-                {#if !ride.is_one_way}
+                {#if ride.round_trip}
                   <div class="flex items-center gap-2">
                     <Car class="w-4 h-4" />
                     Round trip
+                  </div>
+                {/if}
+                {#if ride.riders > 0}
+                  <div class="flex items-center gap-2">
+                    <User class="w-4 h-4" />
+                    {ride.riders} passenger{ride.riders > 1 ? 's' : ''}
                   </div>
                 {/if}
               </div>
