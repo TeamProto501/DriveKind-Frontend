@@ -25,6 +25,7 @@
   // Form data for creating/editing rides
   let rideForm = $state({
     client_id: '',
+    client_search: '',
     purpose: '',
     destination_name: '',
     dropoff_address: '',
@@ -44,6 +45,25 @@
     estimated_appointment_length: '',
     notes: '',
     donation: false
+  });
+
+  // Client search functionality
+  let showClientDropdown = $state(false);
+  let filteredClients = $derived(() => {
+    if (!rideForm.client_search) return data.clients || [];
+    return (data.clients || []).filter(client => 
+      `${client.first_name} ${client.last_name}`.toLowerCase().includes(rideForm.client_search.toLowerCase()) ||
+      client.primary_phone?.includes(rideForm.client_search)
+    );
+  });
+
+  // Driver search functionality
+  let driverSearch = $state('');
+  let filteredDrivers = $derived(() => {
+    if (!driverSearch) return data.drivers || [];
+    return (data.drivers || []).filter(driver => 
+      `${driver.first_name} ${driver.last_name}`.toLowerCase().includes(driverSearch.toLowerCase())
+    );
   });
 
   // Filter rides based on search and status
@@ -107,6 +127,7 @@
   function openCreateModal() {
     rideForm = {
       client_id: '',
+      client_search: '',
       purpose: '',
       destination_name: '',
       dropoff_address: '',
@@ -127,7 +148,20 @@
       notes: '',
       donation: false
     };
+    showClientDropdown = false;
     showCreateModal = true;
+  }
+
+  function selectClient(client) {
+    rideForm.client_id = client.client_id.toString();
+    rideForm.client_search = `${client.first_name} ${client.last_name}`;
+    showClientDropdown = false;
+  }
+
+  function clearClient() {
+    rideForm.client_id = '';
+    rideForm.client_search = '';
+    showClientDropdown = false;
   }
 
   function openEditModal(ride: any) {
@@ -163,6 +197,40 @@
   }
 
   async function createRide() {
+    // Validate required fields
+    if (!rideForm.client_id) {
+      alert('Please select a client');
+      return;
+    }
+    if (!rideForm.purpose) {
+      alert('Please select a purpose');
+      return;
+    }
+    if (!rideForm.destination_name) {
+      alert('Please enter destination name');
+      return;
+    }
+    if (!rideForm.dropoff_address) {
+      alert('Please enter dropoff address');
+      return;
+    }
+    if (!rideForm.dropoff_city) {
+      alert('Please enter dropoff city');
+      return;
+    }
+    if (!rideForm.dropoff_state) {
+      alert('Please enter dropoff state');
+      return;
+    }
+    if (!rideForm.dropoff_zipcode) {
+      alert('Please enter dropoff zip code');
+      return;
+    }
+    if (!rideForm.appointment_time) {
+      alert('Please select appointment time');
+      return;
+    }
+
     isUpdating = true;
     try {
       const response = await fetch('/dispatcher/rides/create', {
@@ -176,11 +244,14 @@
       if (response.ok) {
         showCreateModal = false;
         await invalidateAll();
+        alert('Ride created successfully!');
       } else {
-        console.error('Failed to create ride');
+        const error = await response.json();
+        alert(`Failed to create ride: ${error.error || 'Unknown error'}`);
       }
     } catch (error) {
       console.error('Error creating ride:', error);
+      alert('Error creating ride. Please try again.');
     } finally {
       isUpdating = false;
     }
@@ -497,66 +568,120 @@
     
     <div class="grid gap-4 py-4">
       <div class="grid grid-cols-2 gap-4">
-        <div>
-          <Label for="client_id">Client</Label>
-          <Select bind:value={rideForm.client_id}>
-            <SelectTrigger>
-              <span>Select client</span>
-            </SelectTrigger>
-            <SelectContent>
-              {#each data.clients as client}
-                <SelectItem value={client.client_id.toString()}>
-                  {client.first_name} {client.last_name}
-                </SelectItem>
+        <div class="relative">
+          <Label for="client_search">Client *</Label>
+          <div class="relative">
+            <input 
+              id="client_search"
+              type="text"
+              bind:value={rideForm.client_search}
+              onfocus={() => showClientDropdown = true}
+              placeholder="Search for client..."
+              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            />
+            {#if rideForm.client_id}
+              <button 
+                onclick={clearClient}
+                class="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              >
+                ×
+              </button>
+            {/if}
+          </div>
+          
+          {#if showClientDropdown && filteredClients().length > 0}
+            <div class="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+              {#each filteredClients() as client}
+                <button
+                  onclick={() => selectClient(client)}
+                  class="w-full px-3 py-2 text-left hover:bg-gray-100 flex items-center justify-between"
+                >
+                  <div>
+                    <div class="font-medium">{client.first_name} {client.last_name}</div>
+                    <div class="text-sm text-gray-500">{client.primary_phone}</div>
+                  </div>
+                </button>
               {/each}
-            </SelectContent>
-          </Select>
+            </div>
+          {/if}
         </div>
         
         <div>
-          <Label for="purpose">Purpose</Label>
-          <Select bind:value={rideForm.purpose}>
-            <SelectTrigger>
-              <span>Select purpose</span>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="Medical">Medical</SelectItem>
-              <SelectItem value="Shopping">Shopping</SelectItem>
-              <SelectItem value="Social">Social</SelectItem>
-              <SelectItem value="Other">Other</SelectItem>
-            </SelectContent>
-          </Select>
+          <Label for="purpose">Purpose *</Label>
+          <select 
+            id="purpose"
+            bind:value={rideForm.purpose}
+            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          >
+            <option value="">Select purpose</option>
+            <option value="Medical">Medical</option>
+            <option value="Shopping">Shopping</option>
+            <option value="Social">Social</option>
+            <option value="Other">Other</option>
+          </select>
         </div>
       </div>
       
       <div>
-        <Label for="destination_name">Destination Name</Label>
-        <Input id="destination_name" bind:value={rideForm.destination_name} placeholder="e.g., Strong Memorial Hospital" />
+        <Label for="destination_name">Destination Name *</Label>
+        <input 
+          id="destination_name" 
+          type="text"
+          bind:value={rideForm.destination_name} 
+          placeholder="e.g., Strong Memorial Hospital"
+          class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+        />
       </div>
       
       <div>
-        <Label for="dropoff_address">Dropoff Address</Label>
-        <Input id="dropoff_address" bind:value={rideForm.dropoff_address} placeholder="Street address" />
+        <Label for="dropoff_address">Dropoff Address *</Label>
+        <input 
+          id="dropoff_address" 
+          type="text"
+          bind:value={rideForm.dropoff_address} 
+          placeholder="Street address"
+          class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+        />
       </div>
       
       <div class="grid grid-cols-3 gap-4">
         <div>
-          <Label for="dropoff_city">City</Label>
-          <Input id="dropoff_city" bind:value={rideForm.dropoff_city} />
+          <Label for="dropoff_city">City *</Label>
+          <input 
+            id="dropoff_city" 
+            type="text"
+            bind:value={rideForm.dropoff_city}
+            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          />
         </div>
         <div>
-          <Label for="dropoff_state">State</Label>
-          <Input id="dropoff_state" bind:value={rideForm.dropoff_state} />
+          <Label for="dropoff_state">State *</Label>
+          <input 
+            id="dropoff_state" 
+            type="text"
+            bind:value={rideForm.dropoff_state}
+            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          />
         </div>
         <div>
-          <Label for="dropoff_zipcode">ZIP Code</Label>
-          <Input id="dropoff_zipcode" bind:value={rideForm.dropoff_zipcode} />
+          <Label for="dropoff_zipcode">ZIP Code *</Label>
+          <input 
+            id="dropoff_zipcode" 
+            type="text"
+            bind:value={rideForm.dropoff_zipcode}
+            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          />
         </div>
       </div>
       
       <div>
-        <Label for="appointment_time">Appointment Time</Label>
-        <Input id="appointment_time" type="datetime-local" bind:value={rideForm.appointment_time} />
+        <Label for="appointment_time">Appointment Time *</Label>
+        <input 
+          id="appointment_time" 
+          type="datetime-local" 
+          bind:value={rideForm.appointment_time}
+          class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+        />
       </div>
       
       <div class="flex items-center space-x-2">
@@ -789,11 +914,22 @@
         <p class="text-sm text-gray-600">Select a driver for this ride.</p>
       </div>
       
-      <div class="space-y-2 mb-6">
-        {#each data.drivers as driver}
-          <div class="flex items-center justify-between p-3 border rounded-lg">
+      <!-- Driver Search -->
+      <div class="mb-4">
+        <input 
+          type="text"
+          bind:value={driverSearch}
+          placeholder="Search drivers..."
+          class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+        />
+      </div>
+      
+      <div class="space-y-2 mb-6 max-h-64 overflow-y-auto">
+        {#each filteredDrivers() as driver}
+          <div class="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50">
             <div>
-              <div class="font-medium">{driver.first_name} {driver.last_name}</div>
+              <div class="font-medium text-gray-900">{driver.first_name} {driver.last_name}</div>
+              <div class="text-sm text-gray-500">Driver</div>
             </div>
             <button 
               onclick={() => assignDriver(driver.user_id)}
@@ -804,6 +940,12 @@
             </button>
           </div>
         {/each}
+        
+        {#if filteredDrivers().length === 0}
+          <div class="text-center py-4 text-gray-500">
+            No drivers found
+          </div>
+        {/if}
       </div>
       
       <div class="flex justify-end">
