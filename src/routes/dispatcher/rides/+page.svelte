@@ -264,123 +264,123 @@
   <title>Ride Management - DriveKind</title>
 </svelte:head>
 
-<div class="space-y-6">
+<div class="min-h-screen bg-gray-50 p-6">
+  <div class="max-w-7xl mx-auto space-y-6">
   <!-- Header -->
+    <div class="bg-white rounded-lg shadow-sm border p-6">
   <div class="flex items-center justify-between">
     <div>
-      <h1 class="text-3xl font-bold tracking-tight">Ride Management</h1>
-      <p class="text-muted-foreground">Manage and track ride requests and assignments</p>
+          <h1 class="text-2xl font-bold text-gray-900">Ride Management</h1>
+          <p class="text-gray-600 mt-1">Manage and track ride requests and assignments</p>
+        </div>
+        <button 
+          onclick={openCreateModal}
+          class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors"
+        >
+          <Plus class="w-4 h-4" />
+          New Ride
+        </button>
+      </div>
     </div>
-    <Button onclick={openCreateModal}>
-      <Plus class="w-4 h-4 mr-2" />
-      New Ride
-    </Button>
-  </div>
 
-  <!-- Error Message -->
-  {#if data.error}
-    <Card class="border-red-200 bg-red-50">
-      <CardContent class="p-4">
+    <!-- Error Message -->
+    {#if data.error}
+      <div class="bg-red-50 border border-red-200 rounded-lg p-4">
         <p class="text-red-800">{data.error}</p>
-      </CardContent>
-    </Card>
-  {/if}
+  </div>
+    {/if}
 
   <!-- Filters -->
-  <Card>
-    <CardHeader>
-      <CardTitle class="flex items-center gap-2">
-        <Filter class="w-5 h-5" />
-        Filters
-      </CardTitle>
-    </CardHeader>
-    <CardContent>
+    <div class="bg-white rounded-lg shadow-sm border p-6">
+      <div class="flex items-center gap-2 mb-4">
+        <Filter class="w-5 h-5 text-gray-600" />
+        <h2 class="text-lg font-semibold text-gray-900">Filters</h2>
+      </div>
       <div class="flex gap-4">
         <div class="flex-1">
           <div class="relative">
-            <Search class="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
-            <Input 
+            <Search class="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+            <input 
+              type="text"
               placeholder="Search rides..." 
               bind:value={searchTerm}
-              class="pl-10"
+              class="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
         </div>
-        <Select bind:value={statusFilter}>
-          <SelectTrigger class="w-48">
-            <span class="text-muted-foreground">Filter by status</span>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Statuses</SelectItem>
-            <SelectItem value="Requested">Requested</SelectItem>
-            <SelectItem value="Scheduled">Scheduled</SelectItem>
-            <SelectItem value="Assigned">Assigned</SelectItem>
-            <SelectItem value="In Progress">In Progress</SelectItem>
-            <SelectItem value="Completed">Completed</SelectItem>
-            <SelectItem value="Cancelled">Cancelled</SelectItem>
-          </SelectContent>
-        </Select>
+        <div class="w-48">
+          <select 
+            bind:value={statusFilter}
+            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          >
+            <option value="all">All Statuses</option>
+            <option value="Requested">Requested</option>
+            <option value="Scheduled">Scheduled</option>
+            <option value="Assigned">Assigned</option>
+            <option value="In Progress">In Progress</option>
+            <option value="Completed">Completed</option>
+            <option value="Cancelled">Cancelled</option>
+          </select>
+        </div>
       </div>
-    </CardContent>
-  </Card>
+    </div>
 
   <!-- Rides List -->
-  <div class="grid gap-4">
+    <div class="space-y-4">
     {#each filteredRides() as ride}
-      <Card>
-        <CardContent class="p-6">
+        <div class="bg-white rounded-lg shadow-sm border p-6">
           <div class="flex items-start justify-between">
-            <div class="space-y-2">
-              <div class="flex items-center gap-2">
-                <h3 class="text-lg font-semibold">{getClientName(ride)}</h3>
-                <Badge class={getStatusColor(ride.status)}>
+            <div class="space-y-3">
+              <div class="flex items-center gap-3">
+                <h3 class="text-lg font-semibold text-gray-900">{getClientName(ride)}</h3>
+                <span class="px-2 py-1 text-xs font-medium rounded-full {getStatusColor(ride.status)}">
                   {ride.status.toUpperCase()}
-                </Badge>
-                <Badge variant="outline">
+                </span>
+                <span class="px-2 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-800">
                   {ride.purpose}
-                </Badge>
+                </span>
               </div>
               
-              <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-muted-foreground">
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-600">
                 <div class="flex items-center gap-2">
-                  <Phone class="w-4 h-4" />
+                  <Phone class="w-4 h-4 text-gray-400" />
                   {getClientPhone(ride)}
                 </div>
                 <div class="flex items-center gap-2">
-                  <Calendar class="w-4 h-4" />
+                  <Calendar class="w-4 h-4 text-gray-400" />
                   {formatDate(ride.appointment_time)} at {formatTime(ride.appointment_time)}
                 </div>
                 <div class="flex items-center gap-2">
-                  <User class="w-4 h-4" />
+                  <User class="w-4 h-4 text-gray-400" />
                   Driver: {getDriverName(ride)}
                 </div>
                 <div class="flex items-center gap-2">
-                  <MapPin class="w-4 h-4" />
+                  <MapPin class="w-4 h-4 text-gray-400" />
                   <div>
-                    <div class="font-medium">Pickup:</div>
+                    <div class="font-medium text-gray-900">Pickup:</div>
                     {#if ride.pickup_from_home}
-                      <div>Client's Home</div>
+                      <div class="text-gray-600">Client's Home</div>
                     {:else if ride.alt_pickup_address}
-                      <div>{ride.alt_pickup_address}</div>
+                      <div class="text-gray-600">{ride.alt_pickup_address}</div>
                       {#if ride.alt_pickup_address2}
-                        <div>{ride.alt_pickup_address2}</div>
+                        <div class="text-gray-600">{ride.alt_pickup_address2}</div>
                       {/if}
-                      <div>{ride.alt_pickup_city}, {ride.alt_pickup_state} {ride.alt_pickup_zipcode}</div>
+                      <div class="text-gray-600">{ride.alt_pickup_city}, {ride.alt_pickup_state} {ride.alt_pickup_zipcode}</div>
                     {:else}
-                      <div>Client's Home</div>
+                      <div class="text-gray-600">Client's Home</div>
                     {/if}
                   </div>
                 </div>
                 <div class="flex items-center gap-2">
-                  <MapPin class="w-4 h-4" />
+                  <MapPin class="w-4 h-4 text-gray-400" />
                   <div>
-                    <div class="font-medium">Dropoff:</div>
-                    <div>{ride.destination_name}</div>
-                    <div>{ride.dropoff_address}</div>
+                    <div class="font-medium text-gray-900">Dropoff:</div>
+                    <div class="text-gray-600">{ride.destination_name}</div>
+                    <div class="text-gray-600">{ride.dropoff_address}</div>
                     {#if ride.dropoff_address2}
-                      <div>{ride.dropoff_address2}</div>
+                      <div class="text-gray-600">{ride.dropoff_address2}</div>
                     {/if}
-                    <div>{ride.dropoff_city}, {ride.dropoff_state} {ride.dropoff_zipcode}</div>
+                    <div class="text-gray-600">{ride.dropoff_city}, {ride.dropoff_state} {ride.dropoff_zipcode}</div>
                   </div>
                 </div>
                 {#if ride.estimated_appointment_length}
@@ -390,8 +390,8 @@
                   </div>
                 {/if}
                 {#if ride.round_trip}
-                  <div class="flex items-center gap-2">
-                    <Car class="w-4 h-4" />
+                <div class="flex items-center gap-2">
+                  <Car class="w-4 h-4" />
                     Round trip
                   </div>
                 {/if}
@@ -399,7 +399,7 @@
                   <div class="flex items-center gap-2">
                     <User class="w-4 h-4" />
                     {ride.riders} passenger{ride.riders > 1 ? 's' : ''}
-                  </div>
+                </div>
                 {/if}
               </div>
               
@@ -412,85 +412,78 @@
             
             <div class="flex gap-2">
               {#if ride.status === "Requested" || ride.status === "Scheduled"}
-                <Button 
-                  size="sm" 
+                <button 
                   onclick={() => openAssignDriverModal(ride)}
                   disabled={isUpdating}
+                  class="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg text-sm flex items-center gap-1 transition-colors disabled:opacity-50"
                 >
-                  <UserCheck class="w-4 h-4 mr-1" />
+                  <UserCheck class="w-4 h-4" />
                   Assign Driver
-                </Button>
+                </button>
               {/if}
               
-              <Button 
-                variant="outline" 
-                size="sm"
+              <button 
                 onclick={() => openEditModal(ride)}
                 disabled={isUpdating}
+                class="bg-gray-600 hover:bg-gray-700 text-white px-3 py-1.5 rounded-lg text-sm flex items-center gap-1 transition-colors disabled:opacity-50"
               >
-                <Edit class="w-4 h-4 mr-1" />
+                <Edit class="w-4 h-4" />
                 Edit
-              </Button>
+              </button>
               
               {#if ride.status === "Requested"}
-                <Button 
-                  variant="outline" 
-                  size="sm"
+                <button 
                   onclick={() => updateRideStatus(ride.ride_id, 'Scheduled')}
                   disabled={isUpdating}
+                  class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-sm transition-colors disabled:opacity-50"
                 >
                   Schedule
-                </Button>
+                </button>
               {:else if ride.status === "Scheduled"}
-                <Button 
-                  variant="outline" 
-                  size="sm"
+                <button 
                   onclick={() => updateRideStatus(ride.ride_id, 'Requested')}
                   disabled={isUpdating}
+                  class="bg-yellow-600 hover:bg-yellow-700 text-white px-3 py-1.5 rounded-lg text-sm transition-colors disabled:opacity-50"
                 >
                   Unschedule
-                </Button>
+                </button>
               {:else if ride.status === "Assigned"}
-                <Button 
-                  variant="outline" 
-                  size="sm"
+                <button 
                   onclick={() => updateRideStatus(ride.ride_id, 'In Progress')}
                   disabled={isUpdating}
+                  class="bg-orange-600 hover:bg-orange-700 text-white px-3 py-1.5 rounded-lg text-sm transition-colors disabled:opacity-50"
                 >
                   Start Ride
-                </Button>
+                </button>
               {:else if ride.status === "In Progress"}
-                <Button 
-                  variant="outline" 
-                  size="sm"
+                <button 
                   onclick={() => updateRideStatus(ride.ride_id, 'Completed')}
                   disabled={isUpdating}
+                  class="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg text-sm transition-colors disabled:opacity-50"
                 >
                   Complete
-                </Button>
+                </button>
               {/if}
             </div>
           </div>
-        </CardContent>
-      </Card>
+        </div>
     {/each}
   </div>
 
   {#if filteredRides().length === 0}
-    <Card>
-      <CardContent class="p-12 text-center">
-        <Car class="w-12 h-12 mx-auto text-muted-foreground mb-4" />
-        <h3 class="text-lg font-semibold mb-2">No rides found</h3>
-        <p class="text-muted-foreground">
+      <div class="bg-white rounded-lg shadow-sm border p-12 text-center">
+        <Car class="w-12 h-12 mx-auto text-gray-400 mb-4" />
+        <h3 class="text-lg font-semibold text-gray-900 mb-2">No rides found</h3>
+        <p class="text-gray-600">
           {#if data.rides && data.rides.length === 0}
             No rides have been created yet.
           {:else}
             No rides match your current filters.
           {/if}
         </p>
-      </CardContent>
-    </Card>
+      </div>
   {/if}
+  </div>
 </div>
 
 <!-- Create Ride Modal -->
@@ -622,10 +615,19 @@
     </div>
     
       <div class="flex justify-end gap-2 mt-6">
-        <Button variant="outline" onclick={() => showCreateModal = false}>Cancel</Button>
-        <Button onclick={createRide} disabled={isUpdating}>
+        <button 
+          onclick={() => showCreateModal = false}
+          class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+        >
+          Cancel
+        </button>
+        <button 
+          onclick={createRide} 
+          disabled={isUpdating}
+          class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50"
+        >
           {isUpdating ? 'Creating...' : 'Create Ride'}
-        </Button>
+        </button>
       </div>
     </div>
   </div>
@@ -760,10 +762,19 @@
     </div>
     
       <div class="flex justify-end gap-2 mt-6">
-        <Button variant="outline" onclick={() => showEditModal = false}>Cancel</Button>
-        <Button onclick={updateRide} disabled={isUpdating}>
+        <button 
+          onclick={() => showEditModal = false}
+          class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+        >
+          Cancel
+        </button>
+        <button 
+          onclick={updateRide} 
+          disabled={isUpdating}
+          class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50"
+        >
           {isUpdating ? 'Updating...' : 'Update Ride'}
-        </Button>
+        </button>
       </div>
     </div>
   </div>
@@ -784,19 +795,24 @@
             <div>
               <div class="font-medium">{driver.first_name} {driver.last_name}</div>
             </div>
-            <Button 
-              size="sm" 
+            <button 
               onclick={() => assignDriver(driver.user_id)}
               disabled={isUpdating}
+              class="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm transition-colors disabled:opacity-50"
             >
               Assign
-            </Button>
+            </button>
           </div>
         {/each}
       </div>
       
       <div class="flex justify-end">
-        <Button variant="outline" onclick={() => showAssignDriverModal = false}>Cancel</Button>
+        <button 
+          onclick={() => showAssignDriverModal = false}
+          class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+        >
+          Cancel
+        </button>
       </div>
     </div>
   </div>
