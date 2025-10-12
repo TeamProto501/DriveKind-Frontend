@@ -1,60 +1,29 @@
-<!-- src/routes/driver/rides/+page.svelte -->
 <script lang="ts">
   import { Button } from "$lib/components/ui/button";
   import { Badge } from "$lib/components/ui/badge";
   import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "$lib/components/ui/card";
   import { Input } from "$lib/components/ui/input";
   import { Select, SelectContent, SelectItem, SelectTrigger } from "$lib/components/ui/select";
-  import { Car, Clock, MapPin, User, Phone, Calendar, Filter, Search, Navigation } from "@lucide/svelte";
+  import { Car, Clock, MapPin, User, Phone, Calendar, Filter, Search, Navigation, Play, CheckCircle, XCircle } from "@lucide/svelte";
+  import { enhance } from '$app/forms';
+  import { invalidateAll } from '$app/navigation';
+  import type { PageData } from './$types';
 
-  // Mock ride data for current driver
-  let rides = $state([
-    {
-      id: 1,
-      clientName: "John Smith",
-      clientPhone: "+1-555-0123",
-      pickupAddress: "123 Main St, Rochester, NY",
-      destination: "Strong Memorial Hospital",
-      scheduledTime: "2024-01-15T10:00:00Z",
-      status: "assigned",
-      notes: "Wheelchair accessible",
-      estimatedDuration: "25 minutes",
-      distance: "8.5 miles"
-    },
-    {
-      id: 2,
-      clientName: "Sarah Wilson",
-      clientPhone: "+1-555-0124",
-      pickupAddress: "456 Oak Ave, Rochester, NY",
-      destination: "Rochester General Hospital",
-      scheduledTime: "2024-01-15T14:30:00Z",
-      status: "completed",
-      notes: "Assistance needed",
-      estimatedDuration: "20 minutes",
-      distance: "6.2 miles"
-    },
-    {
-      id: 3,
-      clientName: "Robert Davis",
-      clientPhone: "+1-555-0125",
-      pickupAddress: "789 Pine St, Rochester, NY",
-      destination: "University of Rochester Medical Center",
-      scheduledTime: "2024-01-15T16:00:00Z",
-      status: "scheduled",
-      notes: "Regular pickup",
-      estimatedDuration: "15 minutes",
-      distance: "4.8 miles"
-    }
-  ]);
+  let { data }: { data: PageData } = $props();
 
   let searchTerm = $state("");
   let statusFilter = $state("all");
+  let isUpdating = $state(false);
 
   // Filter rides based on search and status
   let filteredRides = $derived(() => {
-    return rides.filter(ride => {
-      const matchesSearch = ride.clientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                           ride.destination.toLowerCase().includes(searchTerm.toLowerCase());
+    if (!data.rides) return [];
+    
+    return data.rides.filter(ride => {
+      const clientName = ride.clients ? `${ride.clients.first_name} ${ride.clients.last_name}` : 'Unknown Client';
+      const matchesSearch = clientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                           ride.dropoff_address.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                           ride.pickup_address.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesStatus = statusFilter === "all" || ride.status === statusFilter;
       return matchesSearch && matchesStatus;
     });
@@ -62,31 +31,75 @@
 
   function getStatusColor(status: string) {
     switch (status) {
-      case "scheduled": return "bg-blue-100 text-blue-800";
-      case "assigned": return "bg-yellow-100 text-yellow-800";
-      case "in-progress": return "bg-orange-100 text-orange-800";
-      case "completed": return "bg-green-100 text-green-800";
-      case "cancelled": return "bg-red-100 text-red-800";
+      case "Pending": return "bg-gray-100 text-gray-800";
+      case "Assigned": return "bg-blue-100 text-blue-800";
+      case "In Progress": return "bg-yellow-100 text-yellow-800";
+      case "Completed": return "bg-green-100 text-green-800";
+      case "Cancelled": return "bg-red-100 text-red-800";
       default: return "bg-gray-100 text-gray-800";
     }
   }
 
-  function formatTime(timeString: string) {
-    return new Date(timeString).toLocaleString();
+  function formatDateTime(date: string, time: string) {
+    const dateTime = new Date(`${date}T${time}`);
+    return dateTime.toLocaleString();
   }
 
-  function startRide(rideId: number) {
-    // Update ride status to in-progress
-    rides = rides.map(ride => 
-      ride.id === rideId ? { ...ride, status: "in-progress" } : ride
-    );
+  function formatDate(date: string) {
+    return new Date(date).toLocaleDateString();
   }
 
-  function completeRide(rideId: number) {
-    // Update ride status to completed
-    rides = rides.map(ride => 
-      ride.id === rideId ? { ...ride, status: "completed" } : ride
-    );
+  function formatTime(time: string) {
+    return new Date(`2000-01-01T${time}`).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+
+  function getClientName(ride: any) {
+    if (ride.clients) {
+      return `${ride.clients.first_name} ${ride.clients.last_name}`;
+    }
+    return 'Unknown Client';
+  }
+
+  function getClientPhone(ride: any) {
+    return ride.clients?.primary_phone || 'No phone';
+  }
+
+  async function updateRideStatus(rideId: number, newStatus: string) {
+    isUpdating = true;
+    try {
+      const response = await fetch(`/driver/rides/update`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          rideId,
+          status: newStatus
+        })
+      });
+
+      if (response.ok) {
+        await invalidateAll();
+      } else {
+        console.error('Failed to update ride status');
+      }
+    } catch (error) {
+      console.error('Error updating ride status:', error);
+    } finally {
+      isUpdating = false;
+    }
+  }
+
+  async function startRide(rideId: number) {
+    await updateRideStatus(rideId, 'In Progress');
+  }
+
+  async function completeRide(rideId: number) {
+    await updateRideStatus(rideId, 'Completed');
+  }
+
+  async function cancelRide(rideId: number) {
+    await updateRideStatus(rideId, 'Cancelled');
   }
 </script>
 
@@ -112,6 +125,15 @@
       </Button>
     </div>
   </div>
+
+  <!-- Error Message -->
+  {#if data.error}
+    <Card class="border-red-200 bg-red-50">
+      <CardContent class="p-4">
+        <p class="text-red-800">{data.error}</p>
+      </CardContent>
+    </Card>
+  {/if}
 
   <!-- Filters -->
   <Card>
@@ -139,11 +161,11 @@
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Statuses</SelectItem>
-            <SelectItem value="scheduled">Scheduled</SelectItem>
-            <SelectItem value="assigned">Assigned</SelectItem>
-            <SelectItem value="in-progress">In Progress</SelectItem>
-            <SelectItem value="completed">Completed</SelectItem>
-            <SelectItem value="cancelled">Cancelled</SelectItem>
+            <SelectItem value="Pending">Pending</SelectItem>
+            <SelectItem value="Assigned">Assigned</SelectItem>
+            <SelectItem value="In Progress">In Progress</SelectItem>
+            <SelectItem value="Completed">Completed</SelectItem>
+            <SelectItem value="Cancelled">Cancelled</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -158,52 +180,131 @@
           <div class="flex items-start justify-between">
             <div class="space-y-2">
               <div class="flex items-center gap-2">
-                <h3 class="text-lg font-semibold">{ride.clientName}</h3>
+                <h3 class="text-lg font-semibold">{getClientName(ride)}</h3>
                 <Badge class={getStatusColor(ride.status)}>
-                  {ride.status.replace('-', ' ').toUpperCase()}
+                  {ride.status.toUpperCase()}
+                </Badge>
+                <Badge variant="outline">
+                  {ride.ride_type}
                 </Badge>
               </div>
               
               <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-muted-foreground">
                 <div class="flex items-center gap-2">
                   <Phone class="w-4 h-4" />
-                  {ride.clientPhone}
+                  {getClientPhone(ride)}
                 </div>
                 <div class="flex items-center gap-2">
                   <Calendar class="w-4 h-4" />
-                  {formatTime(ride.scheduledTime)}
+                  {formatDate(ride.scheduled_date)} at {formatTime(ride.scheduled_time)}
                 </div>
                 <div class="flex items-center gap-2">
                   <MapPin class="w-4 h-4" />
-                  {ride.pickupAddress}
+                  <div>
+                    <div class="font-medium">Pickup:</div>
+                    <div>{ride.pickup_address}</div>
+                    {#if ride.pickup_address2}
+                      <div>{ride.pickup_address2}</div>
+                    {/if}
+                    <div>{ride.pickup_city}, {ride.pickup_state} {ride.pickup_zip}</div>
+                  </div>
                 </div>
                 <div class="flex items-center gap-2">
                   <MapPin class="w-4 h-4" />
-                  {ride.destination}
+                  <div>
+                    <div class="font-medium">Dropoff:</div>
+                    <div>{ride.dropoff_address}</div>
+                    {#if ride.dropoff_address2}
+                      <div>{ride.dropoff_address2}</div>
+                    {/if}
+                    <div>{ride.dropoff_city}, {ride.dropoff_state} {ride.dropoff_zip}</div>
+                  </div>
                 </div>
-                <div class="flex items-center gap-2">
-                  <Clock class="w-4 h-4" />
-                  {ride.estimatedDuration}
-                </div>
-                <div class="flex items-center gap-2">
-                  <Car class="w-4 h-4" />
-                  {ride.distance}
-                </div>
+                {#if ride.is_recurring}
+                  <div class="flex items-center gap-2">
+                    <Clock class="w-4 h-4" />
+                    Recurring: {ride.recurring_pattern}
+                  </div>
+                {/if}
+                {#if !ride.is_one_way}
+                  <div class="flex items-center gap-2">
+                    <Car class="w-4 h-4" />
+                    Round trip
+                  </div>
+                {/if}
               </div>
               
               {#if ride.notes}
-                <p class="text-sm text-muted-foreground italic">{ride.notes}</p>
+                <div class="text-sm">
+                  <span class="font-medium">Notes:</span> {ride.notes}
+                </div>
+              {/if}
+              
+              {#if ride.special_requirements}
+                <div class="text-sm">
+                  <span class="font-medium">Special Requirements:</span> {ride.special_requirements}
+                </div>
+              {/if}
+
+              <!-- Completed ride details -->
+              {#if ride.status === 'Completed' && data.completedRidesData[ride.ride_id]}
+                {@const completed = data.completedRidesData[ride.ride_id]}
+                <div class="text-sm bg-green-50 p-3 rounded-md">
+                  <div class="font-medium text-green-800">Completed Details:</div>
+                  <div class="text-green-700">
+                    {#if completed.actual_start}
+                      <div>Started: {new Date(completed.actual_start).toLocaleString()}</div>
+                    {/if}
+                    {#if completed.actual_end}
+                      <div>Ended: {new Date(completed.actual_end).toLocaleString()}</div>
+                    {/if}
+                    {#if completed.miles_driven}
+                      <div>Miles: {completed.miles_driven}</div>
+                    {/if}
+                    {#if completed.hours}
+                      <div>Hours: {completed.hours}</div>
+                    {/if}
+                    {#if completed.donation_amount}
+                      <div>Donation: ${completed.donation_amount}</div>
+                    {/if}
+                  </div>
+                </div>
               {/if}
             </div>
             
             <div class="flex gap-2">
-              {#if ride.status === "assigned"}
-                <Button size="sm" onclick={() => startRide(ride.id)}>Start Ride</Button>
-              {:else if ride.status === "in-progress"}
-                <Button size="sm" onclick={() => completeRide(ride.id)}>Complete Ride</Button>
-              {:else}
-                <Button variant="outline" size="sm">View Details</Button>
+              {#if ride.status === "Assigned"}
+                <Button 
+                  size="sm" 
+                  onclick={() => startRide(ride.ride_id)}
+                  disabled={isUpdating}
+                >
+                  <Play class="w-4 h-4 mr-1" />
+                  Start Ride
+                </Button>
+              {:else if ride.status === "In Progress"}
+                <Button 
+                  size="sm" 
+                  onclick={() => completeRide(ride.ride_id)}
+                  disabled={isUpdating}
+                >
+                  <CheckCircle class="w-4 h-4 mr-1" />
+                  Complete Ride
+                </Button>
               {/if}
+              
+              {#if ride.status !== "Completed" && ride.status !== "Cancelled"}
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onclick={() => cancelRide(ride.ride_id)}
+                  disabled={isUpdating}
+                >
+                  <XCircle class="w-4 h-4 mr-1" />
+                  Cancel
+                </Button>
+              {/if}
+              
               <Button variant="outline" size="sm">
                 <Navigation class="w-4 h-4 mr-1" />
                 Navigate
@@ -220,7 +321,13 @@
       <CardContent class="p-12 text-center">
         <Car class="w-12 h-12 mx-auto text-muted-foreground mb-4" />
         <h3 class="text-lg font-semibold mb-2">No rides found</h3>
-        <p class="text-muted-foreground">You don't have any rides matching your criteria.</p>
+        <p class="text-muted-foreground">
+          {#if data.rides && data.rides.length === 0}
+            You don't have any assigned rides yet.
+          {:else}
+            No rides match your current filters.
+          {/if}
+        </p>
       </CardContent>
     </Card>
   {/if}
