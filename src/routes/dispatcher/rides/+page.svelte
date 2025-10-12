@@ -5,7 +5,7 @@
   import { Input } from "$lib/components/ui/input";
   import { Select, SelectContent, SelectItem, SelectTrigger } from "$lib/components/ui/select";
   import { Textarea } from "$lib/components/ui/textarea";
-  import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "$lib/components/ui/dialog";
+  // Removed Dialog import - using simple modal approach
   import { Label } from "$lib/components/ui/label";
   import { Car, Clock, MapPin, User, Phone, Calendar, Filter, Search, Navigation, Plus, Edit, Trash2, UserCheck } from "@lucide/svelte";
   import { enhance } from '$app/forms';
@@ -494,14 +494,13 @@
 </div>
 
 <!-- Create Ride Modal -->
-<Dialog bind:open={showCreateModal}>
-  <DialogContent class="max-w-2xl max-h-[90vh] overflow-y-auto">
-    <DialogHeader>
-      <DialogTitle>Create New Ride</DialogTitle>
-      <DialogDescription>
-        Create a new ride request for a client.
-      </DialogDescription>
-    </DialogHeader>
+{#if showCreateModal}
+  <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+    <div class="bg-white rounded-lg p-6 max-w-2xl max-h-[90vh] overflow-y-auto w-full mx-4">
+      <div class="mb-4">
+        <h2 class="text-xl font-semibold">Create New Ride</h2>
+        <p class="text-sm text-gray-600">Create a new ride request for a client.</p>
+      </div>
     
     <div class="grid gap-4 py-4">
       <div class="grid grid-cols-2 gap-4">
@@ -622,24 +621,24 @@
       </div>
     </div>
     
-    <DialogFooter>
-      <Button variant="outline" onclick={() => showCreateModal = false}>Cancel</Button>
-      <Button onclick={createRide} disabled={isUpdating}>
-        {isUpdating ? 'Creating...' : 'Create Ride'}
-      </Button>
-    </DialogFooter>
-  </DialogContent>
-</Dialog>
+      <div class="flex justify-end gap-2 mt-6">
+        <Button variant="outline" onclick={() => showCreateModal = false}>Cancel</Button>
+        <Button onclick={createRide} disabled={isUpdating}>
+          {isUpdating ? 'Creating...' : 'Create Ride'}
+        </Button>
+      </div>
+    </div>
+  </div>
+{/if}
 
 <!-- Edit Ride Modal -->
-<Dialog bind:open={showEditModal}>
-  <DialogContent class="max-w-2xl max-h-[90vh] overflow-y-auto">
-    <DialogHeader>
-      <DialogTitle>Edit Ride</DialogTitle>
-      <DialogDescription>
-        Update ride information.
-      </DialogDescription>
-    </DialogHeader>
+{#if showEditModal}
+  <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+    <div class="bg-white rounded-lg p-6 max-w-2xl max-h-[90vh] overflow-y-auto w-full mx-4">
+      <div class="mb-4">
+        <h2 class="text-xl font-semibold">Edit Ride</h2>
+        <p class="text-sm text-gray-600">Update ride information.</p>
+      </div>
     
     <div class="grid gap-4 py-4">
       <div class="grid grid-cols-2 gap-4">
@@ -760,27 +759,26 @@
       </div>
     </div>
     
-    <DialogFooter>
-      <Button variant="outline" onclick={() => showEditModal = false}>Cancel</Button>
-      <Button onclick={updateRide} disabled={isUpdating}>
-        {isUpdating ? 'Updating...' : 'Update Ride'}
-      </Button>
-    </DialogFooter>
-  </DialogContent>
-</Dialog>
+      <div class="flex justify-end gap-2 mt-6">
+        <Button variant="outline" onclick={() => showEditModal = false}>Cancel</Button>
+        <Button onclick={updateRide} disabled={isUpdating}>
+          {isUpdating ? 'Updating...' : 'Update Ride'}
+        </Button>
+      </div>
+    </div>
+  </div>
+{/if}
 
 <!-- Assign Driver Modal -->
-<Dialog bind:open={showAssignDriverModal}>
-  <DialogContent>
-    <DialogHeader>
-      <DialogTitle>Assign Driver</DialogTitle>
-      <DialogDescription>
-        Select a driver for this ride.
-      </DialogDescription>
-    </DialogHeader>
-    
-    <div class="py-4">
-      <div class="space-y-2">
+{#if showAssignDriverModal}
+  <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+    <div class="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+      <div class="mb-4">
+        <h2 class="text-xl font-semibold">Assign Driver</h2>
+        <p class="text-sm text-gray-600">Select a driver for this ride.</p>
+      </div>
+      
+      <div class="space-y-2 mb-6">
         {#each data.drivers as driver}
           <div class="flex items-center justify-between p-3 border rounded-lg">
             <div>
@@ -796,10 +794,10 @@
           </div>
         {/each}
       </div>
+      
+      <div class="flex justify-end">
+        <Button variant="outline" onclick={() => showAssignDriverModal = false}>Cancel</Button>
+      </div>
     </div>
-    
-    <DialogFooter>
-      <Button variant="outline" onclick={() => showAssignDriverModal = false}>Cancel</Button>
-    </DialogFooter>
-  </DialogContent>
-</Dialog>
+  </div>
+{/if}
