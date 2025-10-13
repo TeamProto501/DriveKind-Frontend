@@ -12,6 +12,13 @@
   let showSidePanel = $state(false);
   let selectedDayRides = $state<any[]>([]);
   let selectedDate = $state<string>('');
+
+  // Create a sorted version of selectedDayRides - FIXED
+  let sortedSelectedDayRides = $derived(
+    [...selectedDayRides].sort((a, b) => 
+      new Date(a.appointment_time).getTime() - new Date(b.appointment_time).getTime()
+    )
+  );
   
   // Group rides by date
   function groupRidesByDate(rides: any[]) {
@@ -323,9 +330,9 @@ Round Trip: ${props.roundTrip ? 'Yes' : 'No'}
               </button>
             </div>
 
-            <!-- Rides List -->
+            <!-- Rides List - FIXED: Use sortedSelectedDayRides instead -->
             <div class="flex-1 overflow-y-auto p-4 space-y-3">
-              {#each selectedDayRides.sort((a, b) => new Date(a.appointment_time).getTime() - new Date(b.appointment_time).getTime()) as ride}
+              {#each sortedSelectedDayRides as ride}
                 <div class="border border-gray-200 rounded-lg p-4 hover:border-blue-300 transition-colors">
                   <div class="flex items-start justify-between mb-2">
                     <div class="flex-1">
