@@ -283,29 +283,49 @@
   }
 
   async function assignDriver(driverId: string) {
-    isUpdating = true;
-    try {
-      const response = await fetch(`/dispatcher/rides/assign/${selectedRide.ride_id}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ driver_user_id: driverId })
-      });
+  console.log('Assigning driver:', driverId, 'to ride:', selectedRide.ride_id);
+  
+  isUpdating = true;
+  try {
+    // Call your Express API endpoint
+    const url = `${import.meta.env.VITE_API_URL}/rides/${selectedRide.ride_id}/assign`;
+    const payload = { driver_user_id: driverId };
+    
+    console.log('Fetching:', url);
+    console.log('Payload:', payload);
+    
+    // Get the auth token from your session
+    const token = data.session?.access_token;
+    
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify(payload)
+    });
 
-      if (response.ok) {
-        showAssignDriverModal = false;
-        selectedRide = null;
-        await invalidateAll();
-      } else {
-        console.error('Failed to assign driver');
-      }
-    } catch (error) {
-      console.error('Error assigning driver:', error);
-    } finally {
-      isUpdating = false;
+    console.log('Response status:', response.status);
+    const result = await response.json();
+    console.log('Response body:', result);
+
+    if (response.ok && result.success) {
+      showAssignDriverModal = false;
+      selectedRide = null;
+      await invalidateAll();
+      alert('Driver assigned successfully!');
+    } else {
+      console.error('Failed to assign driver:', result);
+      alert(`Failed to assign driver: ${result.error || 'Unknown error'}`);
     }
+  } catch (error) {
+    console.error('Error assigning driver:', error);
+    alert('Error assigning driver. Check console for details.');
+  } finally {
+    isUpdating = false;
   }
+}
 
   async function updateRideStatus(rideId: number, newStatus: string) {
     isUpdating = true;
