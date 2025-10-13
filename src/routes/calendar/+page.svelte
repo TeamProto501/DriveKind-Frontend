@@ -3,21 +3,30 @@
   import { Calendar, TimeGrid, DayGrid, Interaction } from '@event-calendar/core';
   import RoleGuard from '$lib/components/RoleGuard.svelte';
   import Breadcrumbs from '$lib/components/Breadcrumbs.svelte';
-  import { Calendar as CalendarIcon, Car, Users, MapPin, Building2 } from '@lucide/svelte';
+  import { Calendar as CalendarIcon, Car, Users, MapPin, Building2, X, Clock, Phone } from '@lucide/svelte';
   
   let { data } = $props();
-
-  // Add these debug logs at the top
-  console.log('===== CALENDAR DEBUG =====');
-  console.log('My rides count:', data.myRides?.length);
-  console.log('My rides data:', data.myRides);
-  console.log('All rides count:', data.allRides?.length);
-  console.log('All rides data:', data.allRides);
-  console.log('Is admin/dispatcher:', data.isAdminOrDispatcher);
-  console.log('========================');
   
   type ViewType = 'unavailability' | 'myRides' | 'allRides' | 'all';
   let activeView = $state<ViewType>(data.isAdminOrDispatcher ? 'all' : 'myRides');
+  let showSidePanel = $state(false);
+  let selectedDayRides = $state<any[]>([]);
+  let selectedDate = $state<string>('');
+  
+  // Group rides by date
+  function groupRidesByDate(rides: any[]) {
+    const grouped = new Map<string, any[]>();
+    
+    rides.forEach(ride => {
+      const date = new Date(ride.appointment_time).toISOString().split('T')[0];
+      if (!grouped.has(date)) {
+        grouped.set(date, []);
+      }
+      grouped.get(date)!.push(ride);
+    });
+    
+    return grouped;
+  }
   
   // Transform unavailability events
   const unavailabilityEvents = data.unavailability
@@ -56,50 +65,28 @@
       };
     });
   
-// Function to get driver name from driver_user_id
-  async function getDriverName(driverUserId: string | null) {
-    if (!driverUserId) return 'Unassigned';
-    
-    // You could fetch this from data.session or make a separate lookup
-    // For now, return a placeholder
-    return 'Driver Assigned';
-  }
-  
-  // Transform ride events - Updated
+  // Transform ride events - individual rides
   function transformRidesToEvents(rides: any[]) {
-    console.log('Transforming rides:', rides?.length || 0);
-    
-    if (!rides || rides.length === 0) {
-      console.log('No rides to transform');
-      return [];
-    }
-    
-    const events = rides.map((ride: any) => {
-      console.log('Processing ride:', ride.ride_id, 'appointment_time:', ride.appointment_time);
-      
+    return rides.map((ride: any) => {
       const clientName = ride.clients 
         ? `${ride.clients.first_name} ${ride.clients.last_name}`
         : 'Unknown Client';
       
-      // Driver name will be looked up separately or shown as status
-      const driverName = ride.driver_user_id ? 'Assigned' : 'Unassigned';
-      
-      // Determine color based on status
-      let backgroundColor = '#3b82f6'; // blue for scheduled
+      let backgroundColor = '#3b82f6';
       let borderColor = '#2563eb';
       
       if (ride.status === 'Requested') {
-        backgroundColor = '#6b7280'; // gray
+        backgroundColor = '#6b7280';
         borderColor = '#4b5563';
       } else if (ride.status === 'Assigned') {
-        backgroundColor = '#f59e0b'; // amber
+        backgroundColor = '#f59e0b';
         borderColor = '#d97706';
       } else if (ride.status === 'In Progress') {
-        backgroundColor = '#8b5cf6'; // purple
+        backgroundColor = '#8b5cf6';
         borderColor = '#7c3aed';
       }
       
-      const event = {
+      return {
         id: `ride-${ride.ride_id}`,
         title: `🚗 ${clientName} → ${ride.destination_name}`,
         start: ride.appointment_time,
@@ -109,51 +96,57 @@
           type: 'ride',
           rideId: ride.ride_id,
           clientName,
-          driverName,
           destination: ride.destination_name,
           dropoffAddress: ride.dropoff_address,
           status: ride.status,
           roundTrip: ride.round_trip,
-          purpose: ride.purpose
+          purpose: ride.purpose,
+          rideData: ride
         }
       };
-      
-      console.log('Created event:', event);
-      return event;
+    });
+  }
+  
+  // Create summary events for all rides (one per day)
+  function createDailySummaryEvents(rides: any[]) {
+    const groupedByDate = groupRidesByDate(rides);
+    const summaryEvents: any[] = [];
+    
+    groupedByDate.forEach((dayRides, date) => {
+      // Create an all-day event showing the count
+      summaryEvents.push({
+        id: `summary-${date}`,
+        title: `📅 ${dayRides.length} Ride${dayRides.length > 1 ? 's' : ''} Scheduled`,
+        start: date,
+        allDay: true,
+        backgroundColor: '#3b82f6',
+        borderColor: '#2563eb',
+        extendedProps: {
+          type: 'summary',
+          date: date,
+          rides: dayRides,
+          count: dayRides.length
+        }
+      });
     });
     
-    console.log('Total events created:', events.length);
-    return events;
+    return summaryEvents;
   }
-
-  // Transform ride events
+  
   const myRideEvents = transformRidesToEvents(data.myRides);
-  const allRideEvents = transformRidesToEvents(data.allRides || []);
+  const allRidesSummaryEvents = createDailySummaryEvents(data.allRides || []);
+  const allRidesDetailEvents = transformRidesToEvents(data.allRides || []);
   
   // Combine events based on active view
-  // Add logging to displayEvents
   let displayEvents = $derived.by(() => {
-    console.log('Active view:', activeView);
-    
-    if (activeView === 'unavailability') {
-      console.log('Showing unavailability events:', unavailabilityEvents.length);
-      return unavailabilityEvents;
-    }
-    if (activeView === 'myRides') {
-      console.log('Showing my ride events:', myRideEvents.length);
-      return myRideEvents;
-    }
-    if (activeView === 'allRides') {
-      console.log('Showing all ride events:', allRideEvents.length);
-      return allRideEvents;
-    }
-    // 'all' view - show everything
-    const combined = [...unavailabilityEvents, ...allRideEvents];
-    console.log('Showing all events:', combined.length);
-    return combined;
+    if (activeView === 'unavailability') return unavailabilityEvents;
+    if (activeView === 'myRides') return myRideEvents;
+    if (activeView === 'allRides') return allRidesSummaryEvents; // Show summaries
+    // 'all' view - show detailed rides + unavailability
+    return [...unavailabilityEvents, ...allRidesDetailEvents];
   });
   
-  // Calendar options using $state for Svelte 5
+  // Calendar options
   let options = $state({
     view: 'timeGridWeek',
     headerToolbar: {
@@ -166,7 +159,12 @@
     eventClick: (info: any) => {
       const props = info.event.extendedProps;
       
-      if (props.type === 'unavailability') {
+      if (props.type === 'summary') {
+        // Open side panel with all rides for that day
+        selectedDate = props.date;
+        selectedDayRides = props.rides;
+        showSidePanel = true;
+      } else if (props.type === 'unavailability') {
         const reason = props.reason || 'No reason provided';
         alert(`Driver Unavailability\n\nReason: ${reason}`);
       } else if (props.type === 'ride') {
@@ -174,7 +172,6 @@
 Ride Details
 
 Client: ${props.clientName}
-Driver: ${props.driverName}
 Destination: ${props.destination}
 Address: ${props.dropoffAddress}
 Status: ${props.status}
@@ -198,6 +195,39 @@ Round Trip: ${props.roundTrip ? 'Yes' : 'No'}
   $effect(() => {
     options.events = displayEvents;
   });
+  
+  function closeSidePanel() {
+    showSidePanel = false;
+    selectedDayRides = [];
+    selectedDate = '';
+  }
+  
+  function formatTime(timestamp: string) {
+    return new Date(timestamp).toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit'
+    });
+  }
+  
+  function formatDate(date: string) {
+    return new Date(date).toLocaleDateString('en-US', {
+      weekday: 'long',
+      month: 'long',
+      day: 'numeric',
+      year: 'numeric'
+    });
+  }
+  
+  function getStatusColor(status: string) {
+    const colors = {
+      'Requested': 'bg-gray-100 text-gray-800',
+      'Scheduled': 'bg-blue-100 text-blue-800',
+      'Assigned': 'bg-amber-100 text-amber-800',
+      'In Progress': 'bg-purple-100 text-purple-800',
+      'Completed': 'bg-green-100 text-green-800'
+    };
+    return colors[status as keyof typeof colors] || 'bg-gray-100 text-gray-800';
+  }
 </script>
 
 <svelte:head>
@@ -225,7 +255,7 @@ Round Trip: ${props.roundTrip ? 'Yes' : 'No'}
           <nav class="flex -mb-px overflow-x-auto">
             {#if data.isAdminOrDispatcher}
               <button
-                onclick={() => activeView = 'all'}
+                onclick={() => { activeView = 'all'; showSidePanel = false; }}
                 class="px-6 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap {activeView === 'all' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}"
               >
                 <div class="flex items-center gap-2">
@@ -235,7 +265,7 @@ Round Trip: ${props.roundTrip ? 'Yes' : 'No'}
               </button>
               
               <button
-                onclick={() => activeView = 'allRides'}
+                onclick={() => { activeView = 'allRides'; showSidePanel = false; }}
                 class="px-6 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap {activeView === 'allRides' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}"
               >
                 <div class="flex items-center gap-2">
@@ -246,7 +276,7 @@ Round Trip: ${props.roundTrip ? 'Yes' : 'No'}
             {/if}
             
             <button
-              onclick={() => activeView = 'myRides'}
+              onclick={() => { activeView = 'myRides'; showSidePanel = false; }}
               class="px-6 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap {activeView === 'myRides' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}"
             >
               <div class="flex items-center gap-2">
@@ -256,7 +286,7 @@ Round Trip: ${props.roundTrip ? 'Yes' : 'No'}
             </button>
             
             <button
-              onclick={() => activeView = 'unavailability'}
+              onclick={() => { activeView = 'unavailability'; showSidePanel = false; }}
               class="px-6 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap {activeView === 'unavailability' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}"
             >
               <div class="flex items-center gap-2">
@@ -268,16 +298,95 @@ Round Trip: ${props.roundTrip ? 'Yes' : 'No'}
         </div>
       </div>
 
-      <!-- Calendar -->
-      <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-        <Calendar plugins={[TimeGrid, DayGrid, Interaction]} {options} />
+      <!-- Calendar Grid with Side Panel -->
+      <div class="flex gap-6">
+        <!-- Calendar -->
+        <div class="flex-1 bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+          <Calendar plugins={[TimeGrid, DayGrid, Interaction]} {options} />
+        </div>
+
+        <!-- Side Panel for Daily Rides -->
+        {#if showSidePanel}
+          <div class="w-96 bg-white rounded-lg shadow-lg border border-gray-200 flex flex-col max-h-[700px]">
+            <!-- Header -->
+            <div class="px-6 py-4 border-b flex items-center justify-between">
+              <div>
+                <h3 class="text-lg font-semibold text-gray-900">Rides for {formatDate(selectedDate)}</h3>
+                <p class="text-sm text-gray-600">{selectedDayRides.length} ride{selectedDayRides.length !== 1 ? 's' : ''}</p>
+              </div>
+              <button onclick={closeSidePanel} class="p-2 hover:bg-gray-100 rounded-lg transition-colors">
+                <X class="w-5 h-5" />
+              </button>
+            </div>
+
+            <!-- Rides List -->
+            <div class="flex-1 overflow-y-auto p-4 space-y-3">
+              {#each selectedDayRides as ride}
+                <div class="border border-gray-200 rounded-lg p-4 hover:border-blue-300 transition-colors">
+                  <div class="flex items-start justify-between mb-2">
+                    <div class="flex-1">
+                      <div class="font-medium text-gray-900">
+                        {ride.clients ? `${ride.clients.first_name} ${ride.clients.last_name}` : 'Unknown Client'}
+                      </div>
+                      <div class="text-xs text-gray-500">
+                        {ride.clients?.primary_phone || 'No phone'}
+                      </div>
+                    </div>
+                    <span class="px-2 py-1 text-xs rounded-full {getStatusColor(ride.status)}">
+                      {ride.status}
+                    </span>
+                  </div>
+
+                  <div class="space-y-2 text-sm">
+                    <div class="flex items-center gap-2 text-gray-600">
+                      <Clock class="w-4 h-4 flex-shrink-0" />
+                      <span>{formatTime(ride.appointment_time)}</span>
+                    </div>
+
+                    <div class="flex items-start gap-2 text-gray-600">
+                      <MapPin class="w-4 h-4 flex-shrink-0 mt-0.5" />
+                      <div class="flex-1">
+                        <div class="font-medium text-gray-900">{ride.destination_name}</div>
+                        <div class="text-xs">{ride.dropoff_address}</div>
+                        {#if ride.dropoff_city && ride.dropoff_state}
+                          <div class="text-xs">{ride.dropoff_city}, {ride.dropoff_state}</div>
+                        {/if}
+                      </div>
+                    </div>
+
+                    {#if ride.purpose}
+                      <div class="text-xs text-gray-500">
+                        Purpose: {ride.purpose}
+                      </div>
+                    {/if}
+
+                    {#if ride.round_trip}
+                      <div class="flex items-center gap-1 text-xs text-blue-600">
+                        <Car class="w-3 h-3" />
+                        <span>Round Trip</span>
+                      </div>
+                    {/if}
+                  </div>
+                </div>
+              {/each}
+            </div>
+          </div>
+        {/if}
       </div>
 
       <!-- Legend -->
       <div class="mt-6 bg-white rounded-lg shadow-sm border border-gray-200 p-4">
         <h3 class="text-sm font-semibold text-gray-900 mb-3">Legend</h3>
         
-        {#if activeView === 'all' || activeView === 'myRides' || activeView === 'allRides'}
+        {#if activeView === 'allRides'}
+          <div>
+            <p class="text-sm text-gray-600 mb-2">Click on any day to see all rides scheduled for that day.</p>
+            <div class="flex items-center gap-2">
+              <div class="w-4 h-4 bg-blue-500 rounded"></div>
+              <span class="text-sm text-gray-700">Daily Ride Summary</span>
+            </div>
+          </div>
+        {:else if activeView === 'all' || activeView === 'myRides'}
           <div class="mb-4">
             <h4 class="text-xs font-medium text-gray-700 mb-2">Rides</h4>
             <div class="flex flex-wrap gap-3">
@@ -304,11 +413,9 @@ Round Trip: ${props.roundTrip ? 'Yes' : 'No'}
         {#if activeView === 'all' || activeView === 'unavailability'}
           <div>
             <h4 class="text-xs font-medium text-gray-700 mb-2">Availability</h4>
-            <div class="flex flex-wrap gap-3">
-              <div class="flex items-center gap-2">
-                <div class="w-4 h-4 bg-red-500 rounded"></div>
-                <span class="text-sm text-gray-700">Driver Unavailable</span>
-              </div>
+            <div class="flex items-center gap-2">
+              <div class="w-4 h-4 bg-red-500 rounded"></div>
+              <span class="text-sm text-gray-700">Driver Unavailable</span>
             </div>
           </div>
         {/if}
