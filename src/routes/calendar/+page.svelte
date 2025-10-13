@@ -3,11 +3,12 @@
   import { Calendar, TimeGrid, DayGrid, Interaction } from '@event-calendar/core';
   import RoleGuard from '$lib/components/RoleGuard.svelte';
   import Breadcrumbs from '$lib/components/Breadcrumbs.svelte';
-  import { Calendar as CalendarIcon, Car, Users, MapPin } from '@lucide/svelte';
+  import { Calendar as CalendarIcon, Car, Users, MapPin, Building2 } from '@lucide/svelte';
   
   let { data } = $props();
   
-  let activeView = $state<'unavailability' | 'rides' | 'all'>('all');
+  type ViewType = 'unavailability' | 'myRides' | 'allRides' | 'all';
+  let activeView = $state<ViewType>(data.isAdminOrDispatcher ? 'all' : 'myRides');
   
   // Transform unavailability events
   const unavailabilityEvents = data.unavailability
@@ -46,55 +47,63 @@
       };
     });
   
-  // Transform ride events
-  const rideEvents = data.rides.map((ride: any) => {
-    const clientName = ride.clients 
-      ? `${ride.clients.first_name} ${ride.clients.last_name}`
-      : 'Unknown Client';
-    const driverName = ride.driver
-      ? `${ride.driver.first_name} ${ride.driver.last_name}`
-      : 'Unassigned';
-    
-    // Determine color based on status
-    let backgroundColor = '#3b82f6'; // blue for scheduled
-    let borderColor = '#2563eb';
-    
-    if (ride.status === 'Requested') {
-      backgroundColor = '#6b7280'; // gray
-      borderColor = '#4b5563';
-    } else if (ride.status === 'Assigned') {
-      backgroundColor = '#f59e0b'; // amber
-      borderColor = '#d97706';
-    } else if (ride.status === 'In Progress') {
-      backgroundColor = '#8b5cf6'; // purple
-      borderColor = '#7c3aed';
-    }
-    
-    return {
-      id: `ride-${ride.ride_id}`,
-      title: `🚗 ${clientName} → ${ride.destination_name}`,
-      start: ride.appointment_time,
-      backgroundColor,
-      borderColor,
-      extendedProps: {
-        type: 'ride',
-        rideId: ride.ride_id,
-        clientName,
-        driverName,
-        destination: ride.destination_name,
-        dropoffAddress: ride.dropoff_address,
-        status: ride.status,
-        roundTrip: ride.round_trip,
-        purpose: ride.purpose
+  // Function to transform rides to events
+  function transformRidesToEvents(rides: any[]) {
+    return rides.map((ride: any) => {
+      const clientName = ride.clients 
+        ? `${ride.clients.first_name} ${ride.clients.last_name}`
+        : 'Unknown Client';
+      const driverName = ride.driver
+        ? `${ride.driver.first_name} ${ride.driver.last_name}`
+        : 'Unassigned';
+      
+      // Determine color based on status
+      let backgroundColor = '#3b82f6'; // blue for scheduled
+      let borderColor = '#2563eb';
+      
+      if (ride.status === 'Requested') {
+        backgroundColor = '#6b7280'; // gray
+        borderColor = '#4b5563';
+      } else if (ride.status === 'Assigned') {
+        backgroundColor = '#f59e0b'; // amber
+        borderColor = '#d97706';
+      } else if (ride.status === 'In Progress') {
+        backgroundColor = '#8b5cf6'; // purple
+        borderColor = '#7c3aed';
       }
-    };
-  });
+      
+      return {
+        id: `ride-${ride.ride_id}`,
+        title: `🚗 ${clientName} → ${ride.destination_name}`,
+        start: ride.appointment_time,
+        backgroundColor,
+        borderColor,
+        extendedProps: {
+          type: 'ride',
+          rideId: ride.ride_id,
+          clientName,
+          driverName,
+          destination: ride.destination_name,
+          dropoffAddress: ride.dropoff_address,
+          status: ride.status,
+          roundTrip: ride.round_trip,
+          purpose: ride.purpose
+        }
+      };
+    });
+  }
+  
+  // Transform ride events
+  const myRideEvents = transformRidesToEvents(data.myRides);
+  const allRideEvents = transformRidesToEvents(data.allRides || []);
   
   // Combine events based on active view
   let displayEvents = $derived.by(() => {
     if (activeView === 'unavailability') return unavailabilityEvents;
-    if (activeView === 'rides') return rideEvents;
-    return [...unavailabilityEvents, ...rideEvents];
+    if (activeView === 'myRides') return myRideEvents;
+    if (activeView === 'allRides') return allRideEvents;
+    // 'all' view - show everything
+    return [...unavailabilityEvents, ...allRideEvents];
   });
   
   // Calendar options using $state for Svelte 5
@@ -142,23 +151,13 @@ Round Trip: ${props.roundTrip ? 'Yes' : 'No'}
   $effect(() => {
     options.events = displayEvents;
   });
-  
-  function getStatusBadgeColor(status: string) {
-    const colors = {
-      'Requested': 'bg-gray-100 text-gray-800',
-      'Scheduled': 'bg-blue-100 text-blue-800',
-      'Assigned': 'bg-amber-100 text-amber-800',
-      'In Progress': 'bg-purple-100 text-purple-800'
-    };
-    return colors[status as keyof typeof colors] || 'bg-gray-100 text-gray-800';
-  }
 </script>
 
 <svelte:head>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@event-calendar/core@3/index.min.css">
 </svelte:head>
 
-<RoleGuard requiredRoles={['Admin', 'Dispatcher']}>
+<RoleGuard requiredRoles={['Admin', 'Dispatcher', 'Driver']}>
   <div class="min-h-screen bg-gray-50">
     <Breadcrumbs />
 
@@ -176,28 +175,42 @@ Round Trip: ${props.roundTrip ? 'Yes' : 'No'}
       <!-- View Toggle Tabs -->
       <div class="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
         <div class="border-b border-gray-200">
-          <nav class="flex -mb-px">
+          <nav class="flex -mb-px overflow-x-auto">
+            {#if data.isAdminOrDispatcher}
+              <button
+                onclick={() => activeView = 'all'}
+                class="px-6 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap {activeView === 'all' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}"
+              >
+                <div class="flex items-center gap-2">
+                  <CalendarIcon class="w-4 h-4" />
+                  All Events
+                </div>
+              </button>
+              
+              <button
+                onclick={() => activeView = 'allRides'}
+                class="px-6 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap {activeView === 'allRides' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}"
+              >
+                <div class="flex items-center gap-2">
+                  <Building2 class="w-4 h-4" />
+                  All Organization Rides ({data.allRides?.length || 0})
+                </div>
+              </button>
+            {/if}
+            
             <button
-              onclick={() => activeView = 'all'}
-              class="px-6 py-3 text-sm font-medium border-b-2 transition-colors {activeView === 'all' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}"
-            >
-              <div class="flex items-center gap-2">
-                <CalendarIcon class="w-4 h-4" />
-                All Events
-              </div>
-            </button>
-            <button
-              onclick={() => activeView = 'rides'}
-              class="px-6 py-3 text-sm font-medium border-b-2 transition-colors {activeView === 'rides' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}"
+              onclick={() => activeView = 'myRides'}
+              class="px-6 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap {activeView === 'myRides' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}"
             >
               <div class="flex items-center gap-2">
                 <Car class="w-4 h-4" />
-                Scheduled Rides ({data.rides.length})
+                My Scheduled Rides ({data.myRides.length})
               </div>
             </button>
+            
             <button
               onclick={() => activeView = 'unavailability'}
-              class="px-6 py-3 text-sm font-medium border-b-2 transition-colors {activeView === 'unavailability' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}"
+              class="px-6 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap {activeView === 'unavailability' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}"
             >
               <div class="flex items-center gap-2">
                 <Users class="w-4 h-4" />
@@ -217,7 +230,7 @@ Round Trip: ${props.roundTrip ? 'Yes' : 'No'}
       <div class="mt-6 bg-white rounded-lg shadow-sm border border-gray-200 p-4">
         <h3 class="text-sm font-semibold text-gray-900 mb-3">Legend</h3>
         
-        {#if activeView === 'all' || activeView === 'rides'}
+        {#if activeView === 'all' || activeView === 'myRides' || activeView === 'allRides'}
           <div class="mb-4">
             <h4 class="text-xs font-medium text-gray-700 mb-2">Rides</h4>
             <div class="flex flex-wrap gap-3">
@@ -255,32 +268,46 @@ Round Trip: ${props.roundTrip ? 'Yes' : 'No'}
       </div>
 
       <!-- Stats Summary -->
-      <div class="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div class="mt-6 grid grid-cols-1 md:grid-cols-4 gap-4">
         <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
           <div class="flex items-center gap-3">
             <div class="p-2 bg-blue-100 rounded-lg">
               <Car class="w-5 h-5 text-blue-600" />
             </div>
             <div>
-              <p class="text-sm text-gray-600">Total Rides</p>
-              <p class="text-2xl font-bold text-gray-900">{data.rides.length}</p>
+              <p class="text-sm text-gray-600">My Rides</p>
+              <p class="text-2xl font-bold text-gray-900">{data.myRides.length}</p>
             </div>
           </div>
         </div>
         
-        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-          <div class="flex items-center gap-3">
-            <div class="p-2 bg-amber-100 rounded-lg">
-              <Users class="w-5 h-5 text-amber-600" />
-            </div>
-            <div>
-              <p class="text-sm text-gray-600">Unassigned Rides</p>
-              <p class="text-2xl font-bold text-gray-900">
-                {data.rides.filter((r: any) => r.status === 'Requested' || r.status === 'Scheduled').length}
-              </p>
+        {#if data.isAdminOrDispatcher}
+          <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+            <div class="flex items-center gap-3">
+              <div class="p-2 bg-green-100 rounded-lg">
+                <Building2 class="w-5 h-5 text-green-600" />
+              </div>
+              <div>
+                <p class="text-sm text-gray-600">All Org Rides</p>
+                <p class="text-2xl font-bold text-gray-900">{data.allRides?.length || 0}</p>
+              </div>
             </div>
           </div>
-        </div>
+          
+          <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+            <div class="flex items-center gap-3">
+              <div class="p-2 bg-amber-100 rounded-lg">
+                <Users class="w-5 h-5 text-amber-600" />
+              </div>
+              <div>
+                <p class="text-sm text-gray-600">Unassigned Rides</p>
+                <p class="text-2xl font-bold text-gray-900">
+                  {(data.allRides || []).filter((r: any) => r.status === 'Requested' || r.status === 'Scheduled').length}
+                </p>
+              </div>
+            </div>
+          </div>
+        {/if}
         
         <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
           <div class="flex items-center gap-3">
