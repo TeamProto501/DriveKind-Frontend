@@ -26,7 +26,6 @@ export const load = async (event) => {
 
   console.log('User profile:', userProfile);
 
-  // Check if user is admin or dispatcher
   const isAdminOrDispatcher = userProfile.role && (
     Array.isArray(userProfile.role)
       ? (userProfile.role.includes('Admin') || userProfile.role.includes('Dispatcher'))
@@ -53,13 +52,12 @@ export const load = async (event) => {
     console.error('Error fetching unavailability:', fetchError);
   }
 
-  // Fetch rides - NO JOINS, just raw ride data
-  console.log('=== FETCHING MY RIDES (NO JOINS) ===');
+  // Fetch rides - NO STATUS FILTER
+  console.log('=== FETCHING MY RIDES (NO STATUS FILTER) ===');
   const { data: myRidesData, error: myRidesError } = await supabase
     .from('rides')
     .select('*')
     .eq('driver_user_id', session.user.id)
-    .in('status', ['Requested', 'Scheduled', 'Assigned', 'In Progress'])
     .order('appointment_time', { ascending: true });
 
   console.log('My rides error:', myRidesError);
@@ -68,70 +66,67 @@ export const load = async (event) => {
     console.log('Sample my ride:', JSON.stringify(myRidesData[0], null, 2));
   }
 
-  // Fetch clients separately
-  let clientsMap = new Map();
+  // Fetch clients for my rides
+  let myRidesWithClients = [];
   if (myRidesData && myRidesData.length > 0) {
-    const clientIds = myRidesData.map(r => r.client_id).filter(Boolean);
+    const clientIds = [...new Set(myRidesData.map(r => r.client_id).filter(Boolean))];
     if (clientIds.length > 0) {
       const { data: clientsData } = await supabase
         .from('clients')
         .select('client_id, first_name, last_name, primary_phone')
         .in('client_id', clientIds);
       
+      const clientsMap = new Map();
       if (clientsData) {
         clientsData.forEach(client => {
           clientsMap.set(client.client_id, client);
         });
       }
+      
+      myRidesWithClients = myRidesData.map(ride => ({
+        ...ride,
+        clients: clientsMap.get(ride.client_id) || null
+      }));
     }
   }
 
-  // Attach client data to rides
-  const myRidesWithClients = myRidesData?.map(ride => ({
-    ...ride,
-    clients: clientsMap.get(ride.client_id) || null
-  })) || [];
-
-  // Fetch ALL rides for organization - NO JOINS
-  let allRidesData = null;
+  // Fetch ALL rides for organization - NO STATUS FILTER
   let allRidesWithClients = [];
   if (isAdminOrDispatcher) {
-    console.log('=== FETCHING ALL ORG RIDES (NO JOINS) ===');
-    const { data, error: allRidesError } = await supabase
+    console.log('=== FETCHING ALL ORG RIDES (NO STATUS FILTER) ===');
+    const { data: allRidesData, error: allRidesError } = await supabase
       .from('rides')
       .select('*')
       .eq('org_id', userProfile.org_id)
-      .in('status', ['Requested', 'Scheduled', 'Assigned', 'In Progress'])
       .order('appointment_time', { ascending: true });
 
     console.log('All rides error:', allRidesError);
-    console.log('All rides count:', data?.length || 0);
-    if (data && data.length > 0) {
-      console.log('Sample org ride:', JSON.stringify(data[0], null, 2));
+    console.log('All rides count:', allRidesData?.length || 0);
+    if (allRidesData && allRidesData.length > 0) {
+      console.log('Sample org ride:', JSON.stringify(allRidesData[0], null, 2));
+      console.log('Status values found:', [...new Set(allRidesData.map(r => r.status))]);
     }
     
-    allRidesData = data;
-
     // Fetch clients for all rides
     if (allRidesData && allRidesData.length > 0) {
-      const allClientIds = allRidesData.map(r => r.client_id).filter(Boolean);
+      const allClientIds = [...new Set(allRidesData.map(r => r.client_id).filter(Boolean))];
       if (allClientIds.length > 0) {
         const { data: allClientsData } = await supabase
           .from('clients')
           .select('client_id, first_name, last_name, primary_phone')
           .in('client_id', allClientIds);
         
+        const allClientsMap = new Map();
         if (allClientsData) {
-          const allClientsMap = new Map();
           allClientsData.forEach(client => {
             allClientsMap.set(client.client_id, client);
           });
-          
-          allRidesWithClients = allRidesData.map(ride => ({
-            ...ride,
-            clients: allClientsMap.get(ride.client_id) || null
-          }));
         }
+        
+        allRidesWithClients = allRidesData.map(ride => ({
+          ...ride,
+          clients: allClientsMap.get(ride.client_id) || null
+        }));
       }
     }
   }
