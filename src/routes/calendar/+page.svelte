@@ -18,6 +18,7 @@
     const grouped = new Map<string, any[]>();
     
     rides.forEach(ride => {
+      // Get just the date part in YYYY-MM-DD format
       const date = new Date(ride.appointment_time).toISOString().split('T')[0];
       if (!grouped.has(date)) {
         grouped.set(date, []);
@@ -107,23 +108,25 @@
     });
   }
   
-  // Create summary events for all rides (one per day)
+  // Create summary events for all rides (one per day) - FIXED
   function createDailySummaryEvents(rides: any[]) {
     const groupedByDate = groupRidesByDate(rides);
     const summaryEvents: any[] = [];
     
-    groupedByDate.forEach((dayRides, date) => {
-      // Create an all-day event showing the count
+    groupedByDate.forEach((dayRides, dateStr) => {
+      // Use the exact date string in YYYY-MM-DD format
+      // This ensures it appears on the correct day
       summaryEvents.push({
-        id: `summary-${date}`,
-        title: `📅 ${dayRides.length} Ride${dayRides.length > 1 ? 's' : ''} Scheduled`,
-        start: date,
+        id: `summary-${dateStr}`,
+        title: `📅 ${dayRides.length} Ride${dayRides.length > 1 ? 's' : ''}`,
+        start: dateStr, // Just the date, no time
+        end: dateStr,   // Same day
         allDay: true,
         backgroundColor: '#3b82f6',
         borderColor: '#2563eb',
         extendedProps: {
           type: 'summary',
-          date: date,
+          date: dateStr,
           rides: dayRides,
           count: dayRides.length
         }
@@ -141,9 +144,9 @@
   let displayEvents = $derived.by(() => {
     if (activeView === 'unavailability') return unavailabilityEvents;
     if (activeView === 'myRides') return myRideEvents;
-    if (activeView === 'allRides') return allRidesSummaryEvents; // Show summaries
-    // 'all' view - show detailed rides + unavailability
-    return [...unavailabilityEvents, ...allRidesDetailEvents];
+    if (activeView === 'allRides') return allRidesSummaryEvents;
+    // 'all' view - show daily summaries + unavailability
+    return [...allRidesSummaryEvents, ...unavailabilityEvents];
   });
   
   // Calendar options
@@ -188,7 +191,8 @@ Round Trip: ${props.roundTrip ? 'Yes' : 'No'}
     selectable: true,
     select: (info: any) => {
       console.log('Selected:', info);
-    }
+    },
+    eventOrder: 'start,-duration,allDay,title' // Ensure proper ordering
   });
   
   // Update calendar events when view changes
@@ -210,7 +214,7 @@ Round Trip: ${props.roundTrip ? 'Yes' : 'No'}
   }
   
   function formatDate(date: string) {
-    return new Date(date).toLocaleDateString('en-US', {
+    return new Date(date + 'T00:00:00').toLocaleDateString('en-US', {
       weekday: 'long',
       month: 'long',
       day: 'numeric',
@@ -321,7 +325,7 @@ Round Trip: ${props.roundTrip ? 'Yes' : 'No'}
 
             <!-- Rides List -->
             <div class="flex-1 overflow-y-auto p-4 space-y-3">
-              {#each selectedDayRides as ride}
+              {#each selectedDayRides.sort((a, b) => new Date(a.appointment_time).getTime() - new Date(b.appointment_time).getTime()) as ride}
                 <div class="border border-gray-200 rounded-lg p-4 hover:border-blue-300 transition-colors">
                   <div class="flex items-start justify-between mb-2">
                     <div class="flex-1">
@@ -340,7 +344,7 @@ Round Trip: ${props.roundTrip ? 'Yes' : 'No'}
                   <div class="space-y-2 text-sm">
                     <div class="flex items-center gap-2 text-gray-600">
                       <Clock class="w-4 h-4 flex-shrink-0" />
-                      <span>{formatTime(ride.appointment_time)}</span>
+                      <span class="font-medium">{formatTime(ride.appointment_time)}</span>
                     </div>
 
                     <div class="flex items-start gap-2 text-gray-600">
@@ -380,13 +384,31 @@ Round Trip: ${props.roundTrip ? 'Yes' : 'No'}
         
         {#if activeView === 'allRides'}
           <div>
-            <p class="text-sm text-gray-600 mb-2">Click on any day to see all rides scheduled for that day.</p>
+            <p class="text-sm text-gray-600 mb-2">Click on any day's ride summary to see all rides scheduled for that day.</p>
             <div class="flex items-center gap-2">
               <div class="w-4 h-4 bg-blue-500 rounded"></div>
               <span class="text-sm text-gray-700">Daily Ride Summary</span>
             </div>
           </div>
-        {:else if activeView === 'all' || activeView === 'myRides'}
+        {:else if activeView === 'all'}
+          <div class="space-y-3">
+            <div>
+              <h4 class="text-xs font-medium text-gray-700 mb-2">Rides</h4>
+              <p class="text-xs text-gray-600 mb-2">Click on the daily summary at the top of each day to see all rides.</p>
+              <div class="flex items-center gap-2">
+                <div class="w-4 h-4 bg-blue-500 rounded"></div>
+                <span class="text-sm text-gray-700">Daily Ride Summary</span>
+              </div>
+            </div>
+            <div>
+              <h4 class="text-xs font-medium text-gray-700 mb-2">Availability</h4>
+              <div class="flex items-center gap-2">
+                <div class="w-4 h-4 bg-red-500 rounded"></div>
+                <span class="text-sm text-gray-700">Driver Unavailable</span>
+              </div>
+            </div>
+          </div>
+        {:else if activeView === 'myRides'}
           <div class="mb-4">
             <h4 class="text-xs font-medium text-gray-700 mb-2">Rides</h4>
             <div class="flex flex-wrap gap-3">
@@ -408,9 +430,7 @@ Round Trip: ${props.roundTrip ? 'Yes' : 'No'}
               </div>
             </div>
           </div>
-        {/if}
-        
-        {#if activeView === 'all' || activeView === 'unavailability'}
+        {:else if activeView === 'unavailability'}
           <div>
             <h4 class="text-xs font-medium text-gray-700 mb-2">Availability</h4>
             <div class="flex items-center gap-2">
