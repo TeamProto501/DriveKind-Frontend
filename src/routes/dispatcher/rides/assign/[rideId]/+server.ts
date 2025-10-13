@@ -2,18 +2,19 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { createSupabaseServerClient } from '$lib/supabase.server';
 
-export const POST: RequestHandler = async ({ request, cookies, params }) => {
+export const POST: RequestHandler = async (event) => {
 	try {
-		const rideId = parseInt(params.rideId);
-		const { driver_user_id } = await request.json();
+		const rideId = parseInt(event.params.rideId);
+		const { driver_user_id } = await event.request.json();
 
-		// Create Supabase client
-		const supabase = createSupabaseServerClient({ cookies });
+		// Create Supabase client - pass the full event object
+		const supabase = createSupabaseServerClient(event);
 
 		// Get the current user
 		const { data: { user }, error: userError } = await supabase.auth.getUser();
 		
 		if (userError || !user) {
+			console.error('Auth error:', userError);
 			return json({ error: 'Unauthorized' }, { status: 401 });
 		}
 
@@ -25,12 +26,15 @@ export const POST: RequestHandler = async ({ request, cookies, params }) => {
 			.single();
 
 		if (profileError || !profile) {
+			console.error('Profile error:', profileError);
 			return json({ error: 'Profile not found' }, { status: 404 });
 		}
 
-		// Check if user has dispatcher role
+		// Check if user has dispatcher or admin role
 		const hasDispatcherRole = profile.role && (
-			Array.isArray(profile.role) ? profile.role.includes('Dispatcher') : profile.role === 'Dispatcher'
+			Array.isArray(profile.role) 
+				? (profile.role.includes('Dispatcher') || profile.role.includes('Admin'))
+				: (profile.role === 'Dispatcher' || profile.role === 'Admin')
 		);
 
 		if (!hasDispatcherRole) {
@@ -46,6 +50,7 @@ export const POST: RequestHandler = async ({ request, cookies, params }) => {
 			.single();
 
 		if (rideError || !existingRide) {
+			console.error('Ride error:', rideError);
 			return json({ error: 'Ride not found or access denied' }, { status: 404 });
 		}
 
@@ -58,6 +63,7 @@ export const POST: RequestHandler = async ({ request, cookies, params }) => {
 			.single();
 
 		if (driverError || !driver) {
+			console.error('Driver error:', driverError);
 			return json({ error: 'Driver not found or access denied' }, { status: 404 });
 		}
 
@@ -70,11 +76,23 @@ export const POST: RequestHandler = async ({ request, cookies, params }) => {
 			return json({ error: 'Selected user is not a driver' }, { status: 400 });
 		}
 
-		// Assign the driver to the ride
+		// Get the driver's active vehicle
+		const { data: vehicle, error: vehicleError } = await supabase
+			.from('vehicles')
+			.select('vehicle_id')
+			.eq('user_id', driver_user_id)
+			.eq('driver_status', 'active')
+			.limit(1)
+			.maybeSingle();
+
+		console.log('Assigning driver:', driver_user_id, 'vehicle:', vehicle?.vehicle_id);
+
+		// Assign the driver to the ride (and vehicle if found)
 		const { error: updateError } = await supabase
 			.from('rides')
 			.update({
 				driver_user_id: driver_user_id,
+				vehicle_id: vehicle?.vehicle_id || null,
 				status: 'Assigned'
 			})
 			.eq('ride_id', rideId);
@@ -84,6 +102,7 @@ export const POST: RequestHandler = async ({ request, cookies, params }) => {
 			return json({ error: 'Failed to assign driver' }, { status: 500 });
 		}
 
+		console.log('Driver assigned successfully to ride:', rideId);
 		return json({ success: true });
 
 	} catch (error) {
