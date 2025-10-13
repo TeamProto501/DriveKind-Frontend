@@ -56,7 +56,16 @@
       };
     });
   
-  // Add logging to the transform function
+// Function to get driver name from driver_user_id
+  async function getDriverName(driverUserId: string | null) {
+    if (!driverUserId) return 'Unassigned';
+    
+    // You could fetch this from data.session or make a separate lookup
+    // For now, return a placeholder
+    return 'Driver Assigned';
+  }
+  
+  // Transform ride events - Updated
   function transformRidesToEvents(rides: any[]) {
     console.log('Transforming rides:', rides?.length || 0);
     
@@ -71,9 +80,9 @@
       const clientName = ride.clients 
         ? `${ride.clients.first_name} ${ride.clients.last_name}`
         : 'Unknown Client';
-      const driverName = ride.driver
-        ? `${ride.driver.first_name} ${ride.driver.last_name}`
-        : 'Unassigned';
+      
+      // Driver name will be looked up separately or shown as status
+      const driverName = ride.driver_user_id ? 'Assigned' : 'Unassigned';
       
       // Determine color based on status
       let backgroundColor = '#3b82f6'; // blue for scheduled
@@ -116,7 +125,7 @@
     console.log('Total events created:', events.length);
     return events;
   }
-  
+
   // Transform ride events
   const myRideEvents = transformRidesToEvents(data.myRides);
   const allRideEvents = transformRidesToEvents(data.allRides || []);

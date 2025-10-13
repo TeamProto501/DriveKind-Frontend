@@ -13,13 +13,14 @@ export const load = async (event) => {
   console.log('===== SCHEDULE PAGE SERVER =====');
   console.log('Current user:', session.user.id);
 
-  const { data: userProfile } = await supabase
+  const { data: userProfile, error: profileError } = await supabase
     .from('staff_profiles')
     .select('org_id, role')
     .eq('user_id', session.user.id)
     .single();
 
-  if (!userProfile) {
+  if (profileError || !userProfile) {
+    console.error('Profile error:', profileError);
     throw error(403, 'User profile not found');
   }
 
@@ -52,81 +53,54 @@ export const load = async (event) => {
     console.error('Error fetching unavailability:', fetchError);
   }
 
-  // Fetch rides assigned to current user (for drivers)
-  console.log('Fetching my rides for user:', session.user.id);
+  // Fetch rides assigned to current user - SIMPLIFIED QUERY
+  console.log('=== FETCHING MY RIDES ===');
   const { data: myRidesData, error: myRidesError } = await supabase
     .from('rides')
     .select(`
-      ride_id,
-      appointment_time,
-      pickup_time,
-      destination_name,
-      dropoff_address,
-      dropoff_city,
-      status,
-      round_trip,
-      purpose,
-      clients (
+      *,
+      clients!rides_client_id_fkey (
         first_name,
         last_name,
         primary_phone
-      ),
-      driver:staff_profiles!rides_driver_user_id_fkey (
-        first_name,
-        last_name
       )
     `)
     .eq('driver_user_id', session.user.id)
     .in('status', ['Requested', 'Scheduled', 'Assigned', 'In Progress'])
     .order('appointment_time', { ascending: true });
 
-  if (myRidesError) {
-    console.error('Error fetching my rides:', myRidesError);
+  console.log('My rides error:', myRidesError);
+  console.log('My rides count:', myRidesData?.length || 0);
+  if (myRidesData && myRidesData.length > 0) {
+    console.log('Sample my ride:', JSON.stringify(myRidesData[0], null, 2));
   }
-  console.log('My rides fetched:', myRidesData?.length || 0);
-  console.log('My rides data:', JSON.stringify(myRidesData, null, 2));
 
-  // Fetch ALL rides for organization (only for admin/dispatcher)
+  // Fetch ALL rides for organization - SIMPLIFIED QUERY
   let allRidesData = null;
   if (isAdminOrDispatcher) {
-    console.log('Fetching all rides for org:', userProfile.org_id);
+    console.log('=== FETCHING ALL ORG RIDES ===');
     const { data, error: allRidesError } = await supabase
       .from('rides')
       .select(`
-        ride_id,
-        appointment_time,
-        pickup_time,
-        destination_name,
-        dropoff_address,
-        dropoff_city,
-        status,
-        round_trip,
-        purpose,
-        clients (
+        *,
+        clients!rides_client_id_fkey (
           first_name,
           last_name,
           primary_phone
-        ),
-        driver:staff_profiles!rides_driver_user_id_fkey (
-          first_name,
-          last_name
         )
       `)
       .eq('org_id', userProfile.org_id)
       .in('status', ['Requested', 'Scheduled', 'Assigned', 'In Progress'])
       .order('appointment_time', { ascending: true });
 
-    if (allRidesError) {
-      console.error('Error fetching all rides:', allRidesError);
+    console.log('All rides error:', allRidesError);
+    console.log('All rides count:', data?.length || 0);
+    if (data && data.length > 0) {
+      console.log('Sample org ride:', JSON.stringify(data[0], null, 2));
     }
     allRidesData = data;
-    console.log('All org rides fetched:', allRidesData?.length || 0);
-    console.log('All rides data:', JSON.stringify(allRidesData, null, 2));
   }
 
-  console.log('Server: Fetched unavailability records:', unavailabilityData?.length || 0);
-  console.log('Server: Fetched my rides:', myRidesData?.length || 0);
-  console.log('Server: Fetched all org rides:', allRidesData?.length || 0);
   console.log('================================');
 
   return {
