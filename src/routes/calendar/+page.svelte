@@ -6,6 +6,15 @@
   import { Calendar as CalendarIcon, Car, Users, MapPin, Building2 } from '@lucide/svelte';
   
   let { data } = $props();
+
+  // Add these debug logs at the top
+  console.log('===== CALENDAR DEBUG =====');
+  console.log('My rides count:', data.myRides?.length);
+  console.log('My rides data:', data.myRides);
+  console.log('All rides count:', data.allRides?.length);
+  console.log('All rides data:', data.allRides);
+  console.log('Is admin/dispatcher:', data.isAdminOrDispatcher);
+  console.log('========================');
   
   type ViewType = 'unavailability' | 'myRides' | 'allRides' | 'all';
   let activeView = $state<ViewType>(data.isAdminOrDispatcher ? 'all' : 'myRides');
@@ -47,9 +56,18 @@
       };
     });
   
-  // Function to transform rides to events
+  // Add logging to the transform function
   function transformRidesToEvents(rides: any[]) {
-    return rides.map((ride: any) => {
+    console.log('Transforming rides:', rides?.length || 0);
+    
+    if (!rides || rides.length === 0) {
+      console.log('No rides to transform');
+      return [];
+    }
+    
+    const events = rides.map((ride: any) => {
+      console.log('Processing ride:', ride.ride_id, 'appointment_time:', ride.appointment_time);
+      
       const clientName = ride.clients 
         ? `${ride.clients.first_name} ${ride.clients.last_name}`
         : 'Unknown Client';
@@ -72,7 +90,7 @@
         borderColor = '#7c3aed';
       }
       
-      return {
+      const event = {
         id: `ride-${ride.ride_id}`,
         title: `🚗 ${clientName} → ${ride.destination_name}`,
         start: ride.appointment_time,
@@ -90,7 +108,13 @@
           purpose: ride.purpose
         }
       };
+      
+      console.log('Created event:', event);
+      return event;
     });
+    
+    console.log('Total events created:', events.length);
+    return events;
   }
   
   // Transform ride events
@@ -98,12 +122,26 @@
   const allRideEvents = transformRidesToEvents(data.allRides || []);
   
   // Combine events based on active view
+  // Add logging to displayEvents
   let displayEvents = $derived.by(() => {
-    if (activeView === 'unavailability') return unavailabilityEvents;
-    if (activeView === 'myRides') return myRideEvents;
-    if (activeView === 'allRides') return allRideEvents;
+    console.log('Active view:', activeView);
+    
+    if (activeView === 'unavailability') {
+      console.log('Showing unavailability events:', unavailabilityEvents.length);
+      return unavailabilityEvents;
+    }
+    if (activeView === 'myRides') {
+      console.log('Showing my ride events:', myRideEvents.length);
+      return myRideEvents;
+    }
+    if (activeView === 'allRides') {
+      console.log('Showing all ride events:', allRideEvents.length);
+      return allRideEvents;
+    }
     // 'all' view - show everything
-    return [...unavailabilityEvents, ...allRideEvents];
+    const combined = [...unavailabilityEvents, ...allRideEvents];
+    console.log('Showing all events:', combined.length);
+    return combined;
   });
   
   // Calendar options using $state for Svelte 5
