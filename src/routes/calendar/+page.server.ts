@@ -53,18 +53,11 @@ export const load = async (event) => {
     console.error('Error fetching unavailability:', fetchError);
   }
 
-  // Fetch rides assigned to current user - SIMPLIFIED QUERY
-  console.log('=== FETCHING MY RIDES ===');
+  // Fetch rides - NO JOINS, just raw ride data
+  console.log('=== FETCHING MY RIDES (NO JOINS) ===');
   const { data: myRidesData, error: myRidesError } = await supabase
     .from('rides')
-    .select(`
-      *,
-      clients!rides_client_id_fkey (
-        first_name,
-        last_name,
-        primary_phone
-      )
-    `)
+    .select('*')
     .eq('driver_user_id', session.user.id)
     .in('status', ['Requested', 'Scheduled', 'Assigned', 'In Progress'])
     .order('appointment_time', { ascending: true });
@@ -75,20 +68,38 @@ export const load = async (event) => {
     console.log('Sample my ride:', JSON.stringify(myRidesData[0], null, 2));
   }
 
-  // Fetch ALL rides for organization - SIMPLIFIED QUERY
+  // Fetch clients separately
+  let clientsMap = new Map();
+  if (myRidesData && myRidesData.length > 0) {
+    const clientIds = myRidesData.map(r => r.client_id).filter(Boolean);
+    if (clientIds.length > 0) {
+      const { data: clientsData } = await supabase
+        .from('clients')
+        .select('client_id, first_name, last_name, primary_phone')
+        .in('client_id', clientIds);
+      
+      if (clientsData) {
+        clientsData.forEach(client => {
+          clientsMap.set(client.client_id, client);
+        });
+      }
+    }
+  }
+
+  // Attach client data to rides
+  const myRidesWithClients = myRidesData?.map(ride => ({
+    ...ride,
+    clients: clientsMap.get(ride.client_id) || null
+  })) || [];
+
+  // Fetch ALL rides for organization - NO JOINS
   let allRidesData = null;
+  let allRidesWithClients = [];
   if (isAdminOrDispatcher) {
-    console.log('=== FETCHING ALL ORG RIDES ===');
+    console.log('=== FETCHING ALL ORG RIDES (NO JOINS) ===');
     const { data, error: allRidesError } = await supabase
       .from('rides')
-      .select(`
-        *,
-        clients!rides_client_id_fkey (
-          first_name,
-          last_name,
-          primary_phone
-        )
-      `)
+      .select('*')
       .eq('org_id', userProfile.org_id)
       .in('status', ['Requested', 'Scheduled', 'Assigned', 'In Progress'])
       .order('appointment_time', { ascending: true });
@@ -98,15 +109,41 @@ export const load = async (event) => {
     if (data && data.length > 0) {
       console.log('Sample org ride:', JSON.stringify(data[0], null, 2));
     }
+    
     allRidesData = data;
+
+    // Fetch clients for all rides
+    if (allRidesData && allRidesData.length > 0) {
+      const allClientIds = allRidesData.map(r => r.client_id).filter(Boolean);
+      if (allClientIds.length > 0) {
+        const { data: allClientsData } = await supabase
+          .from('clients')
+          .select('client_id, first_name, last_name, primary_phone')
+          .in('client_id', allClientIds);
+        
+        if (allClientsData) {
+          const allClientsMap = new Map();
+          allClientsData.forEach(client => {
+            allClientsMap.set(client.client_id, client);
+          });
+          
+          allRidesWithClients = allRidesData.map(ride => ({
+            ...ride,
+            clients: allClientsMap.get(ride.client_id) || null
+          }));
+        }
+      }
+    }
   }
 
+  console.log('Final my rides with clients:', myRidesWithClients.length);
+  console.log('Final all rides with clients:', allRidesWithClients.length);
   console.log('================================');
 
   return {
     unavailability: unavailabilityData || [],
-    myRides: myRidesData || [],
-    allRides: allRidesData || [],
+    myRides: myRidesWithClients,
+    allRides: allRidesWithClients,
     userOrgId: userProfile.org_id,
     isAdminOrDispatcher,
     session
