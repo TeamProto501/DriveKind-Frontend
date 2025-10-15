@@ -284,9 +284,6 @@
 	async function saveProfile(event: Event) {
 		event.preventDefault();
 		
-		// Simple test to see if function is called
-		alert('Save profile function called!');
-		
 		console.log('🔍 Save profile clicked - starting validation...');
 		console.log('📝 Form data:', formData);
 		console.log('👤 Session user ID:', session?.user?.id);
@@ -905,7 +902,6 @@
 							<button
 								type="submit"
 								disabled={isSubmitting}
-								onclick={() => console.log('🖱️ Save Changes button clicked')}
 								class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 flex items-center space-x-2"
 							>
 								<Save class="w-4 h-4" />
