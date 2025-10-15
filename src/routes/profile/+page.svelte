@@ -284,6 +284,9 @@
 	async function saveProfile(event: Event) {
 		event.preventDefault();
 		
+		// Simple test to see if function is called
+		alert('Save profile function called!');
+		
 		console.log('🔍 Save profile clicked - starting validation...');
 		console.log('📝 Form data:', formData);
 		console.log('👤 Session user ID:', session?.user?.id);
