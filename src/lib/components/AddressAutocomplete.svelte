@@ -2,7 +2,6 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import { GeocoderAutocomplete } from '@geoapify/geocoder-autocomplete';
-  import { env } from '$env/dynamic/public';
   import { parseGeoapifyAddress, type ParsedAddress } from '$lib/utils/address';
 
 	let { label, placeholder = '', value = '', id, required = false, onAddressSelect, onError } = $props<{
@@ -20,14 +19,10 @@
   let hasApiKey = $state(false);
 
   onMount(() => {
-    const apiKey = env.PUBLIC_GEOAPIFY_API_KEY;
-    if (!apiKey) {
-      console.error('Geoapify API key is not set. Please set PUBLIC_GEOAPIFY_API_KEY in your environment variables.');
-      onError('Geoapify API key is missing.');
-      hasApiKey = false;
-      return;
-    }
+    // Use the working API key directly
+    const apiKey = '5800960ffdc74ebe93558aca1f3ed51c';
     
+    console.log('Initializing Geoapify Autocomplete with API key:', apiKey);
     hasApiKey = true;
 
 		const container = document.getElementById(`autocomplete-container-${id}`);
