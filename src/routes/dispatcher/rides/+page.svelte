@@ -11,6 +11,8 @@
   import { enhance } from '$app/forms';
   import { invalidateAll } from '$app/navigation';
   import type { PageData } from './$types';
+  import AddressAutocomplete from '$lib/components/AddressAutocomplete.svelte';
+  import type { ParsedAddress } from '$lib/utils/address';
 
   let { data }: { data: PageData } = $props();
 
@@ -122,6 +124,31 @@
       return `${ride.drivers.first_name} ${ride.drivers.last_name}`;
     }
     return 'Unassigned';
+  }
+
+  // Address autocomplete handlers
+  function handleDropoffAddressSelect(address: ParsedAddress) {
+    rideForm.dropoff_address = address.street;
+    rideForm.dropoff_city = address.city;
+    rideForm.dropoff_state = address.state;
+    rideForm.dropoff_zipcode = address.zip;
+  }
+
+  function handleDropoffAddressError(error: string) {
+    console.error('Dropoff address autocomplete error:', error);
+    alert('Address autocomplete error: ' + error);
+  }
+
+  function handleAltPickupAddressSelect(address: ParsedAddress) {
+    rideForm.alt_pickup_address = address.street;
+    rideForm.alt_pickup_city = address.city;
+    rideForm.alt_pickup_state = address.state;
+    rideForm.alt_pickup_zipcode = address.zip;
+  }
+
+  function handleAltPickupAddressError(error: string) {
+    console.error('Alternative pickup address autocomplete error:', error);
+    alert('Address autocomplete error: ' + error);
   }
 
   function openCreateModal() {
@@ -654,13 +681,14 @@
       </div>
       
       <div>
-        <Label for="dropoff_address">Dropoff Address *</Label>
-        <input 
-          id="dropoff_address" 
-          type="text"
-          bind:value={rideForm.dropoff_address} 
-          placeholder="Street address"
-          class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+        <AddressAutocomplete
+          label="Dropoff Address"
+          placeholder="Enter dropoff address..."
+          value={rideForm.dropoff_address}
+          id="create_dropoff_address"
+          required={true}
+          onAddressSelect={handleDropoffAddressSelect}
+          onError={handleDropoffAddressError}
         />
       </div>
       
@@ -671,7 +699,8 @@
             id="dropoff_city" 
             type="text"
             bind:value={rideForm.dropoff_city}
-            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            readonly
+            class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50"
           />
         </div>
         <div>
@@ -680,7 +709,8 @@
             id="dropoff_state" 
             type="text"
             bind:value={rideForm.dropoff_state}
-            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            readonly
+            class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50"
           />
         </div>
         <div>
@@ -689,7 +719,8 @@
             id="dropoff_zipcode" 
             type="text"
             bind:value={rideForm.dropoff_zipcode}
-            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            readonly
+            class="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50"
           />
         </div>
       </div>
@@ -711,22 +742,28 @@
       
       {#if !rideForm.pickup_from_home}
         <div>
-          <Label for="alt_pickup_address">Alternative Pickup Address</Label>
-          <Input id="alt_pickup_address" bind:value={rideForm.alt_pickup_address} />
+          <AddressAutocomplete
+            label="Alternative Pickup Address"
+            placeholder="Enter alternative pickup address..."
+            value={rideForm.alt_pickup_address}
+            id="create_alt_pickup_address"
+            onAddressSelect={handleAltPickupAddressSelect}
+            onError={handleAltPickupAddressError}
+          />
         </div>
         
         <div class="grid grid-cols-3 gap-4">
           <div>
             <Label for="alt_pickup_city">City</Label>
-            <Input id="alt_pickup_city" bind:value={rideForm.alt_pickup_city} />
+            <Input id="alt_pickup_city" bind:value={rideForm.alt_pickup_city} readonly class="bg-gray-50" />
           </div>
           <div>
             <Label for="alt_pickup_state">State</Label>
-            <Input id="alt_pickup_state" bind:value={rideForm.alt_pickup_state} />
+            <Input id="alt_pickup_state" bind:value={rideForm.alt_pickup_state} readonly class="bg-gray-50" />
           </div>
           <div>
             <Label for="alt_pickup_zipcode">ZIP Code</Label>
-            <Input id="alt_pickup_zipcode" bind:value={rideForm.alt_pickup_zipcode} />
+            <Input id="alt_pickup_zipcode" bind:value={rideForm.alt_pickup_zipcode} readonly class="bg-gray-50" />
           </div>
         </div>
       {/if}
@@ -827,22 +864,28 @@
       </div>
       
       <div>
-        <Label for="edit_dropoff_address">Dropoff Address</Label>
-        <Input id="edit_dropoff_address" bind:value={rideForm.dropoff_address} />
+        <AddressAutocomplete
+          label="Dropoff Address"
+          placeholder="Enter dropoff address..."
+          value={rideForm.dropoff_address}
+          id="edit_dropoff_address"
+          onAddressSelect={handleDropoffAddressSelect}
+          onError={handleDropoffAddressError}
+        />
       </div>
       
       <div class="grid grid-cols-3 gap-4">
         <div>
           <Label for="edit_dropoff_city">City</Label>
-          <Input id="edit_dropoff_city" bind:value={rideForm.dropoff_city} />
+          <Input id="edit_dropoff_city" bind:value={rideForm.dropoff_city} readonly class="bg-gray-50" />
         </div>
         <div>
           <Label for="edit_dropoff_state">State</Label>
-          <Input id="edit_dropoff_state" bind:value={rideForm.dropoff_state} />
+          <Input id="edit_dropoff_state" bind:value={rideForm.dropoff_state} readonly class="bg-gray-50" />
         </div>
         <div>
           <Label for="edit_dropoff_zipcode">ZIP Code</Label>
-          <Input id="edit_dropoff_zipcode" bind:value={rideForm.dropoff_zipcode} />
+          <Input id="edit_dropoff_zipcode" bind:value={rideForm.dropoff_zipcode} readonly class="bg-gray-50" />
         </div>
       </div>
       
@@ -858,22 +901,28 @@
       
       {#if !rideForm.pickup_from_home}
         <div>
-          <Label for="edit_alt_pickup_address">Alternative Pickup Address</Label>
-          <Input id="edit_alt_pickup_address" bind:value={rideForm.alt_pickup_address} />
+          <AddressAutocomplete
+            label="Alternative Pickup Address"
+            placeholder="Enter alternative pickup address..."
+            value={rideForm.alt_pickup_address}
+            id="edit_alt_pickup_address"
+            onAddressSelect={handleAltPickupAddressSelect}
+            onError={handleAltPickupAddressError}
+          />
         </div>
         
         <div class="grid grid-cols-3 gap-4">
           <div>
             <Label for="edit_alt_pickup_city">City</Label>
-            <Input id="edit_alt_pickup_city" bind:value={rideForm.alt_pickup_city} />
+            <Input id="edit_alt_pickup_city" bind:value={rideForm.alt_pickup_city} readonly class="bg-gray-50" />
           </div>
           <div>
             <Label for="edit_alt_pickup_state">State</Label>
-            <Input id="edit_alt_pickup_state" bind:value={rideForm.alt_pickup_state} />
+            <Input id="edit_alt_pickup_state" bind:value={rideForm.alt_pickup_state} readonly class="bg-gray-50" />
           </div>
           <div>
             <Label for="edit_alt_pickup_zipcode">ZIP Code</Label>
-            <Input id="edit_alt_pickup_zipcode" bind:value={rideForm.alt_pickup_zipcode} />
+            <Input id="edit_alt_pickup_zipcode" bind:value={rideForm.alt_pickup_zipcode} readonly class="bg-gray-50" />
           </div>
         </div>
       {/if}

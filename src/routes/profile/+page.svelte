@@ -4,6 +4,8 @@
 	import { User, Mail, Phone, MapPin, Calendar, Shield, Award, Clock, Home, Car, AlertTriangle, Edit, Save, X } from '@lucide/svelte';
 	import { getContext, onMount } from 'svelte';
 	import { supabase } from '$lib/supabase';
+	import AddressAutocomplete from '$lib/components/AddressAutocomplete.svelte';
+	import type { ParsedAddress } from '$lib/utils/address';
 
 	const session = getContext<any>('session');
 	
@@ -262,6 +264,20 @@
 		setTimeout(() => {
 			editMessage = '';
 		}, 5000);
+	}
+
+	// Address autocomplete handler
+	function handleAddressSelect(address: ParsedAddress) {
+		formData.address = address.street;
+		formData.city = address.city;
+		formData.state = address.state;
+		formData.zipcode = address.zip;
+	}
+
+	function handleAddressError(error: string) {
+		console.error('Address autocomplete error:', error);
+		editMessage = 'Address autocomplete error: ' + error;
+		editMessageSuccess = false;
 	}
 
 	// Save profile changes
@@ -746,12 +762,13 @@
 							<h4 class="text-lg font-medium text-gray-900 mb-4">Address Information</h4>
 							<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
 								<div>
-									<label class="block text-sm font-medium text-gray-700">Address</label>
-									<input
-										type="text"
-										bind:value={formData.address}
-										maxlength="100"
-										class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+									<AddressAutocomplete
+										label="Address"
+										placeholder="Enter your address..."
+										value={formData.address || ''}
+										id="profile_address"
+										onAddressSelect={handleAddressSelect}
+										onError={handleAddressError}
 									/>
 								</div>
 								<div>
@@ -770,7 +787,8 @@
 										bind:value={formData.city}
 										required
 										maxlength="50"
-										class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+										readonly
+										class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 bg-gray-50"
 									/>
 								</div>
 								<div>
@@ -781,7 +799,8 @@
 										required
 										maxlength="2"
 										placeholder="e.g., CA"
-										class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+										readonly
+										class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 bg-gray-50"
 									/>
 								</div>
 								<div>
@@ -791,7 +810,8 @@
 										bind:value={formData.zipcode}
 										pattern="\d{5}(-\d{4})?"
 										placeholder="12345 or 12345-6789"
-										class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+										readonly
+										class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 bg-gray-50"
 									/>
 								</div>
 							</div>
