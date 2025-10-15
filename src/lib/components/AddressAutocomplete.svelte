@@ -1,7 +1,6 @@
 <!-- src/lib/components/AddressAutocomplete.svelte -->
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
-  import { GeocoderAutocomplete } from '@geoapify/geocoder-autocomplete';
   import { parseGeoapifyAddress, type ParsedAddress } from '$lib/utils/address';
 
 	let { label, placeholder = '', value = '', id, required = false, onAddressSelect, onError } = $props<{
@@ -14,73 +13,15 @@
 		onError: (error: string) => void;
 	}>();
 
-  let autocompleteInput: HTMLInputElement;
-  let geocoderAutocomplete: GeocoderAutocomplete;
-  let hasApiKey = $state(false);
+  let inputElement: HTMLInputElement;
+  let suggestions: any[] = [];
+  let showSuggestions = $state(false);
+  let selectedIndex = $state(-1);
+  let isLoading = $state(false);
+  let debounceTimer: NodeJS.Timeout;
 
-  onMount(() => {
-    // Use the working API key directly
-    const apiKey = '5800960ffdc74ebe93558aca1f3ed51c';
-    
-    console.log('Initializing Geoapify Autocomplete with API key:', apiKey);
-    console.log('Component ID:', id);
-    console.log('Container element:', document.getElementById(`autocomplete-container-${id}`));
-    
-    hasApiKey = true;
-
-		const container = document.getElementById(`autocomplete-container-${id}`);
-		if (!container) {
-			console.error(`Container for Geoapify Autocomplete with ID 'autocomplete-container-${id}' not found.`);
-			onError('Autocomplete container not found.');
-			return;
-		}
-
-    geocoderAutocomplete = new GeocoderAutocomplete(
-      container,
-      apiKey,
-      {
-        placeholder: placeholder,
-        skipIcons: true,
-        addDetails: true,
-        lang: 'en',
-        limit: 5
-      }
-    );
-
-		geocoderAutocomplete.on('select', (location) => {
-			if (location) {
-				const parsedAddress = parseGeoapifyAddress(location);
-				onAddressSelect(parsedAddress);
-			}
-		});
-
-		geocoderAutocomplete.on('suggestions', (suggestions) => {
-			// console.log('Suggestions:', suggestions);
-		});
-
-		geocoderAutocomplete.on('input', (input) => {
-			// console.log('Input:', input);
-		});
-
-		geocoderAutocomplete.on('error', (error) => {
-			console.error('Geoapify Autocomplete Error:', error);
-			onError(error.message || 'An unknown error occurred with Geoapify Autocomplete.');
-		});
-
-		// Set initial value if provided
-		if (value) {
-			geocoderAutocomplete.setValue(value);
-		}
-	});
-
-	onDestroy(() => {
-		if (geocoderAutocomplete) {
-			geocoderAutocomplete.off('select');
-			geocoderAutocomplete.off('suggestions');
-			geocoderAutocomplete.off('input');
-			geocoderAutocomplete.off('error');
-		}
-	});
+  // Use the working API key directly
+  const apiKey = '5800960ffdc74ebe93558aca1f3ed51c';
 
   // Handle manual input when API key is not available
   function handleManualInput(event: Event) {
@@ -97,100 +38,159 @@
     onAddressSelect(address);
   }
 
-  // Reactively update the autocomplete value if the prop changes externally
-  $effect(() => {
-    if (hasApiKey && geocoderAutocomplete && value !== geocoderAutocomplete.getValue()) {
-      geocoderAutocomplete.setValue(value);
+  // Search for addresses using Geoapify Geocoding API
+  async function searchAddresses(query: string) {
+    if (!query || query.length < 2) {
+      suggestions = [];
+      showSuggestions = false;
+      return;
     }
+
+    isLoading = true;
+    try {
+      const response = await fetch(
+        `https://api.geoapify.com/v1/geocode/search?text=${encodeURIComponent(query)}&limit=5&format=json&apiKey=${apiKey}`
+      );
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      suggestions = data.results || [];
+      showSuggestions = suggestions.length > 0;
+      selectedIndex = -1;
+    } catch (error) {
+      console.error('Geoapify search error:', error);
+      onError('Failed to search addresses. Please try again.');
+      suggestions = [];
+      showSuggestions = false;
+    } finally {
+      isLoading = false;
+    }
+  }
+
+  // Handle input with debouncing
+  function handleInput(event: Event) {
+    const target = event.target as HTMLInputElement;
+    const query = target.value;
+    
+    // Clear previous timer
+    if (debounceTimer) {
+      clearTimeout(debounceTimer);
+    }
+    
+    // Set new timer for debounced search
+    debounceTimer = setTimeout(() => {
+      searchAddresses(query);
+    }, 300);
+    
+    // Also call manual input handler for immediate feedback
+    handleManualInput(event);
+  }
+
+  // Handle keyboard navigation
+  function handleKeydown(event: KeyboardEvent) {
+    if (!showSuggestions) return;
+
+    switch (event.key) {
+      case 'ArrowDown':
+        event.preventDefault();
+        selectedIndex = Math.min(selectedIndex + 1, suggestions.length - 1);
+        break;
+      case 'ArrowUp':
+        event.preventDefault();
+        selectedIndex = Math.max(selectedIndex - 1, -1);
+        break;
+      case 'Enter':
+        event.preventDefault();
+        if (selectedIndex >= 0 && suggestions[selectedIndex]) {
+          selectAddress(suggestions[selectedIndex]);
+        }
+        break;
+      case 'Escape':
+        showSuggestions = false;
+        selectedIndex = -1;
+        break;
+    }
+  }
+
+  // Select an address from suggestions
+  function selectAddress(address: any) {
+    const parsedAddress = parseGeoapifyAddress(address);
+    onAddressSelect(parsedAddress);
+    showSuggestions = false;
+    selectedIndex = -1;
+    suggestions = [];
+  }
+
+  // Hide suggestions when clicking outside
+  function handleClickOutside(event: MouseEvent) {
+    const target = event.target as HTMLElement;
+    if (!target.closest('.autocomplete-container')) {
+      showSuggestions = false;
+    }
+  }
+
+  onMount(() => {
+    console.log('AddressAutocomplete component mounted');
+    document.addEventListener('click', handleClickOutside);
+  });
+
+  onDestroy(() => {
+    if (debounceTimer) {
+      clearTimeout(debounceTimer);
+    }
+    document.removeEventListener('click', handleClickOutside);
   });
 </script>
 
-<div class="form-group">
+<div class="form-group autocomplete-container">
   <label for={id} class="block text-sm font-medium text-gray-700">{label} {#if required}*{/if}</label>
-  <div id="autocomplete-container-{id}" class="mt-1">
-    <!-- Geoapify Autocomplete will render its input here -->
-    <!-- Fallback input in case Geoapify doesn't initialize -->
+  <div class="relative">
     <input
+      bind:this={inputElement}
       type="text"
       id={id}
       bind:value={value}
       placeholder={placeholder}
       required={required}
-      oninput={handleManualInput}
+      oninput={handleInput}
+      onkeydown={handleKeydown}
       class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
     />
+    
+    {#if isLoading}
+      <div class="absolute right-3 top-1/2 transform -translate-y-1/2">
+        <div class="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
+      </div>
+    {/if}
+    
+    {#if showSuggestions && suggestions.length > 0}
+      <div class="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto">
+        {#each suggestions as suggestion, index}
+          <div
+            class="px-3 py-2 cursor-pointer hover:bg-gray-100 {selectedIndex === index ? 'bg-blue-50' : ''}"
+            onclick={() => selectAddress(suggestion)}
+          >
+            <div class="font-medium text-gray-900">
+              {suggestion.formatted || suggestion.address_line1}
+            </div>
+            {#if suggestion.address_line2}
+              <div class="text-sm text-gray-500">
+                {suggestion.address_line2}
+              </div>
+            {/if}
+          </div>
+        {/each}
+      </div>
+    {/if}
   </div>
 </div>
 
 <style>
-	/* You can import Geoapify's default styles or customize them here */
-	@import "@geoapify/geocoder-autocomplete/styles/minimal.css";
-
-	/* Custom styling for the input to match Tailwind forms */
-	:global(.geoapify-autocomplete-input) {
-		display: block;
-		width: 100%;
-		border: 1px solid #d1d5db; /* gray-300 */
-		border-radius: 0.375rem; /* rounded-md */
-		padding: 0.5rem 0.75rem; /* px-3 py-2 */
-		font-size: 0.875rem; /* text-sm */
-		line-height: 1.25rem; /* leading-5 */
-		--tw-ring-offset-width: 0px;
-		--tw-ring-color: transparent;
-		transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
-	}
-
-	:global(.geoapify-autocomplete-input:focus) {
-		outline: none;
-		border-color: #3b82f6; /* blue-500 */
-		--tw-ring-color: #3b82f6; /* blue-500 */
-		box-shadow: var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow);
-		--tw-ring-offset-shadow: var(--tw-ring-inset) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);
-		--tw-ring-shadow: var(--tw-ring-inset) 0 0 0 calc(1px + var(--tw-ring-offset-width)) var(--tw-ring-color);
-		box-shadow: var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow, 0 0 #0000);
-	}
-
-	/* Adjust dropdown styling to fit better */
-	:global(.geoapify-autocomplete-items) {
-		border: 1px solid #e5e7eb; /* gray-200 */
-		border-radius: 0.375rem; /* rounded-md */
-		box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06); /* shadow-md */
-		max-height: 200px;
-		overflow-y: auto;
-		z-index: 1000; /* Ensure it's above other content */
-	}
-
-	:global(.geoapify-autocomplete-item) {
-		padding: 0.5rem 0.75rem;
-		font-size: 0.875rem;
-		color: #1f2937; /* gray-900 */
-	}
-
-	:global(.geoapify-autocomplete-item.active),
-	:global(.geoapify-autocomplete-item:hover) {
-		background-color: #f3f4f6; /* gray-100 */
-		cursor: pointer;
-	}
-
-	:global(.geoapify-autocomplete-item .main-part) {
-		font-weight: 500; /* medium */
-	}
-
-	:global(.geoapify-autocomplete-item .secondary-part) {
-		color: #6b7280; /* gray-500 */
-		font-size: 0.75rem; /* text-xs */
-	}
-
-	:global(.geoapify-close-button) {
-		color: #9ca3af; /* gray-400 */
-		font-size: 1.25rem; /* text-xl */
-		line-height: 1;
-		padding: 0.25rem;
-		border-radius: 0.25rem;
-		transition: color 0.15s ease-in-out;
-	}
-
-	:global(.geoapify-close-button:hover) {
-		color: #4b5563; /* gray-600 */
-	}
+  /* Custom styles for our autocomplete component */
+  .autocomplete-container {
+    position: relative;
+  }
 </style>
