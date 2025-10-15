@@ -23,6 +23,9 @@
     const apiKey = '5800960ffdc74ebe93558aca1f3ed51c';
     
     console.log('Initializing Geoapify Autocomplete with API key:', apiKey);
+    console.log('Component ID:', id);
+    console.log('Container element:', document.getElementById(`autocomplete-container-${id}`));
+    
     hasApiKey = true;
 
 		const container = document.getElementById(`autocomplete-container-${id}`);
@@ -104,11 +107,9 @@
 
 <div class="form-group">
   <label for={id} class="block text-sm font-medium text-gray-700">{label} {#if required}*{/if}</label>
-  {#if hasApiKey}
-    <div id="autocomplete-container-{id}" class="mt-1">
-      <!-- Geoapify Autocomplete will render its input here -->
-    </div>
-  {:else}
+  <div id="autocomplete-container-{id}" class="mt-1">
+    <!-- Geoapify Autocomplete will render its input here -->
+    <!-- Fallback input in case Geoapify doesn't initialize -->
     <input
       type="text"
       id={id}
@@ -118,8 +119,7 @@
       oninput={handleManualInput}
       class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
     />
-    <p class="mt-1 text-sm text-gray-500">Address autocomplete is not available. Please enter the address manually.</p>
-  {/if}
+  </div>
 </div>
 
 <style>
