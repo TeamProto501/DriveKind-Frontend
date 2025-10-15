@@ -1,9 +1,9 @@
 <!-- src/lib/components/AddressAutocomplete.svelte -->
 <script lang="ts">
-	import { onMount, onDestroy } from 'svelte';
-	import { GeocoderAutocomplete } from '@geoapify/geocoder-autocomplete';
-	import { PUBLIC_GEOAPIFY_API_KEY } from '$env/static/public';
-	import { parseGeoapifyAddress, type ParsedAddress } from '$lib/utils/address';
+  import { onMount, onDestroy } from 'svelte';
+  import { GeocoderAutocomplete } from '@geoapify/geocoder-autocomplete';
+  import { env } from '$env/dynamic/public';
+  import { parseGeoapifyAddress, type ParsedAddress } from '$lib/utils/address';
 
 	let { label, placeholder = '', value = '', id, required = false, onAddressSelect, onError } = $props<{
 		label: string;
@@ -15,15 +15,20 @@
 		onError: (error: string) => void;
 	}>();
 
-	let autocompleteInput: HTMLInputElement;
-	let geocoderAutocomplete: GeocoderAutocomplete;
+  let autocompleteInput: HTMLInputElement;
+  let geocoderAutocomplete: GeocoderAutocomplete;
+  let hasApiKey = $state(false);
 
-	onMount(() => {
-		if (!PUBLIC_GEOAPIFY_API_KEY) {
-			console.error('Geoapify API key is not set. Please set PUBLIC_GEOAPIFY_API_KEY in your .env.local file.');
-			onError('Geoapify API key is missing.');
-			return;
-		}
+  onMount(() => {
+    const apiKey = env.PUBLIC_GEOAPIFY_API_KEY;
+    if (!apiKey) {
+      console.error('Geoapify API key is not set. Please set PUBLIC_GEOAPIFY_API_KEY in your environment variables.');
+      onError('Geoapify API key is missing.');
+      hasApiKey = false;
+      return;
+    }
+    
+    hasApiKey = true;
 
 		const container = document.getElementById(`autocomplete-container-${id}`);
 		if (!container) {
@@ -32,17 +37,17 @@
 			return;
 		}
 
-		geocoderAutocomplete = new GeocoderAutocomplete(
-			container,
-			PUBLIC_GEOAPIFY_API_KEY,
-			{
-				placeholder: placeholder,
-				skipIcons: true,
-				addDetails: true,
-				lang: 'en',
-				limit: 5
-			}
-		);
+    geocoderAutocomplete = new GeocoderAutocomplete(
+      container,
+      apiKey,
+      {
+        placeholder: placeholder,
+        skipIcons: true,
+        addDetails: true,
+        lang: 'en',
+        limit: 5
+      }
+    );
 
 		geocoderAutocomplete.on('select', (location) => {
 			if (location) {
@@ -79,19 +84,47 @@
 		}
 	});
 
-	// Reactively update the autocomplete value if the prop changes externally
-	$effect(() => {
-		if (geocoderAutocomplete && value !== geocoderAutocomplete.getValue()) {
-			geocoderAutocomplete.setValue(value);
-		}
-	});
+  // Handle manual input when API key is not available
+  function handleManualInput(event: Event) {
+    const target = event.target as HTMLInputElement;
+    const address: ParsedAddress = {
+      street: target.value,
+      city: '',
+      state: '',
+      zip: '',
+      country: '',
+      lat: 0,
+      lon: 0
+    };
+    onAddressSelect(address);
+  }
+
+  // Reactively update the autocomplete value if the prop changes externally
+  $effect(() => {
+    if (hasApiKey && geocoderAutocomplete && value !== geocoderAutocomplete.getValue()) {
+      geocoderAutocomplete.setValue(value);
+    }
+  });
 </script>
 
 <div class="form-group">
-	<label for={id} class="block text-sm font-medium text-gray-700">{label} {#if required}*{/if}</label>
-	<div id="autocomplete-container-{id}" class="mt-1">
-		<!-- Geoapify Autocomplete will render its input here -->
-	</div>
+  <label for={id} class="block text-sm font-medium text-gray-700">{label} {#if required}*{/if}</label>
+  {#if hasApiKey}
+    <div id="autocomplete-container-{id}" class="mt-1">
+      <!-- Geoapify Autocomplete will render its input here -->
+    </div>
+  {:else}
+    <input
+      type="text"
+      id={id}
+      bind:value={value}
+      placeholder={placeholder}
+      required={required}
+      oninput={handleManualInput}
+      class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+    />
+    <p class="mt-1 text-sm text-gray-500">Address autocomplete is not available. Please enter the address manually.</p>
+  {/if}
 </div>
 
 <style>
