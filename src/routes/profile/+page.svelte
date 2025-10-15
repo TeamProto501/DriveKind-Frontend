@@ -287,15 +287,18 @@
 		console.log('🔍 Save profile clicked - starting validation...');
 		console.log('📝 Form data:', formData);
 		console.log('👤 Session user ID:', session?.user?.id);
+		console.log('🔧 isSubmitting state:', isSubmitting);
 		
 		const validationErrors = validateForm();
 		console.log('✅ Validation errors:', validationErrors);
 		
 		if (validationErrors.length > 0) {
+			console.log('❌ Validation failed, showing error message');
 			showMessage('Please fix the following errors:\n• ' + validationErrors.join('\n• '), false);
 			return;
 		}
 
+		console.log('✅ Validation passed, starting save process...');
 		isSubmitting = true;
 		try {
 			console.log('💾 Saving profile changes...');
@@ -660,7 +663,7 @@
 						</button>
 					</div>
 					
-					<form onsubmit={saveProfile} class="space-y-6">
+					<form onsubmit={(e) => { console.log('📋 Form submitted!'); saveProfile(e); }} class="space-y-6">
 						<!-- Personal Information -->
 						<div>
 							<h4 class="text-lg font-medium text-gray-900 mb-4">Personal Information</h4>
