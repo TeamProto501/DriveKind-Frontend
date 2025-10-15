@@ -151,21 +151,21 @@
 		if (formData.address && formData.address.length > 100) errors.push('Address must be 100 characters or less');
 		if (formData.address2 && formData.address2.length > 100) errors.push('Address line 2 must be 100 characters or less');
 		if (formData.city.length > 50) errors.push('City must be 50 characters or less');
-		if (formData.state.length > 2) errors.push('State must be 2 characters or less');
+		if (formData.state.length > 50) errors.push('State must be 50 characters or less');
 		if (formData.contact_type_pref && formData.contact_type_pref.length > 20) errors.push('Contact preference must be 20 characters or less');
 		if (formData.emergency_contact && formData.emergency_contact.length > 50) errors.push('Emergency contact name must be 50 characters or less');
 		if (formData.emergency_reln && formData.emergency_reln.length > 20) errors.push('Emergency relationship must be 20 characters or less');
 		if (formData.destination_limitation && formData.destination_limitation.length > 200) errors.push('Destination limitation must be 200 characters or less');
 
-		// Phone validation (if provided) - more strict format
-		if (formData.primary_phone && !/^[\d\-\+\(\)\s]{10,15}$/.test(formData.primary_phone.replace(/\s/g, ''))) {
-			errors.push('Primary phone must be 10-15 digits');
+		// Phone validation (if provided) - more flexible format
+		if (formData.primary_phone && !/^[\d\-\+\(\)\s\.]{7,20}$/.test(formData.primary_phone)) {
+			errors.push('Primary phone must be 7-20 characters (digits, spaces, dashes, parentheses, dots, or +)');
 		}
-		if (formData.secondary_phone && !/^[\d\-\+\(\)\s]{10,15}$/.test(formData.secondary_phone.replace(/\s/g, ''))) {
-			errors.push('Secondary phone must be 10-15 digits');
+		if (formData.secondary_phone && !/^[\d\-\+\(\)\s\.]{7,20}$/.test(formData.secondary_phone)) {
+			errors.push('Secondary phone must be 7-20 characters (digits, spaces, dashes, parentheses, dots, or +)');
 		}
-		if (formData.emergency_phone && !/^[\d\-\+\(\)\s]{10,15}$/.test(formData.emergency_phone.replace(/\s/g, ''))) {
-			errors.push('Emergency phone must be 10-15 digits');
+		if (formData.emergency_phone && !/^[\d\-\+\(\)\s\.]{7,20}$/.test(formData.emergency_phone)) {
+			errors.push('Emergency phone must be 7-20 characters (digits, spaces, dashes, parentheses, dots, or +)');
 		}
 
 		// Zip code validation (if provided) - must be valid US format
@@ -203,10 +203,12 @@
 			errors.push('Contact preference must be one of: phone, email, text, mail, or none');
 		}
 
-		// Emergency relationship validation - must be valid enum value
-		const validRelationships = ['spouse', 'parent', 'child', 'sibling', 'friend', 'other'];
-		if (formData.emergency_reln && !validRelationships.includes(formData.emergency_reln.toLowerCase())) {
-			errors.push('Emergency relationship must be one of: spouse, parent, child, sibling, friend, or other');
+		// Emergency relationship validation - more flexible
+		if (formData.emergency_reln && formData.emergency_reln.trim()) {
+			const validRelationships = ['spouse', 'parent', 'child', 'sibling', 'friend', 'other', 'brother', 'sister', 'mother', 'father', 'son', 'daughter', 'husband', 'wife', 'partner'];
+			if (!validRelationships.includes(formData.emergency_reln.toLowerCase().trim())) {
+				errors.push('Emergency relationship must be one of: spouse, parent, child, sibling, friend, brother, sister, mother, father, son, daughter, husband, wife, partner, or other');
+			}
 		}
 
 		return errors;
