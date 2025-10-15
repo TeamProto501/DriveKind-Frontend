@@ -322,7 +322,6 @@
 				primary_can_text: formData.primary_phone ? formData.primary_can_text : null,
 				secondary_is_cell: formData.secondary_phone ? formData.secondary_is_cell : null,
 				secondary_can_text: formData.secondary_phone ? formData.secondary_can_text : null,
-				contact_type_pref: formData.contact_type_pref.trim() || null,
 				emergency_contact: formData.emergency_contact.trim() || null,
 				emergency_reln: formData.emergency_reln.trim() || null,
 				emergency_phone: formData.emergency_phone.trim() || null
