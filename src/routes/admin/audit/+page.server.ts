@@ -14,3 +14,14 @@ export const load = async (event) => {
   const data = JSON.parse(text);
   return { data, tab };
 };
+export const actions = {
+  deleteByRange: async (event) => {
+    const res = await authenticatedFetchServer(
+      API_BASE_URL + "/log/deleteByTime",
+      {},
+      event
+    );
+    const text = await res.text();
+    return { text };
+  },
+};

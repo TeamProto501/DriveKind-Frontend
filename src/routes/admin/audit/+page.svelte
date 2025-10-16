@@ -139,6 +139,144 @@
   function exportLogs() {
     console.log("Exporting audit logs...");
   }
+  //delete stuff
+  // Delete Modal State
+  let showDeleteModal = $state(false);
+  let deleteStartTime = $state("");
+  let deleteEndTime = $state("");
+  let isDeleting = $state(false);
+  let deleteError = $state("");
+  let previewData = $state<any[]>([]);
+  let isLoadingPreview = $state(false);
+
+  function openDeleteModal() {
+    showDeleteModal = true;
+    deleteError = "";
+    previewData = [];
+    // Set default values to last 24 hours
+    const now = new Date();
+    const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    deleteEndTime = now.toISOString().slice(0, 16);
+    deleteStartTime = yesterday.toISOString().slice(0, 16);
+  }
+
+  function closeDeleteModal() {
+    showDeleteModal = false;
+    deleteStartTime = "";
+    deleteEndTime = "";
+    deleteError = "";
+    previewData = [];
+  }
+
+  async function loadPreviewData() {
+    if (!deleteStartTime || !deleteEndTime) {
+      deleteError = "Enter Both Start and End Time.";
+      return;
+    }
+
+    const start = new Date(deleteStartTime);
+    const end = new Date(deleteEndTime);
+
+    if (start >= end) {
+      deleteError = "Start Time must be before End Time.";
+      return;
+    }
+
+    isLoadingPreview = true;
+    deleteError = "";
+
+    try {
+      // Filter data based on time range
+      const filtered = items.filter((log) => {
+        const logDate = new Date(
+          selectedTab === "audits" ? log.timestamp : log.call_time
+        );
+        return logDate >= start && logDate <= end;
+      });
+
+      previewData = filtered;
+    } catch (error) {
+      console.error("Preview error:", error);
+      deleteError = "Error.";
+    } finally {
+      isLoadingPreview = false;
+    }
+  }
+
+  function downloadCSV() {
+    if (previewData.length === 0) {
+      alert("No data to BackUp.");
+      return;
+    }
+
+    // Get all unique keys from the data
+    const headers = Array.from(
+      new Set(previewData.flatMap((item) => Object.keys(item)))
+    );
+
+    // Create CSV content
+    const csvRows = [];
+    csvRows.push(headers.join(","));
+
+    for (const row of previewData) {
+      const values = headers.map((header) => {
+        const value = row[header];
+        // Handle values with commas, quotes, or newlines
+        if (value === null || value === undefined) return "";
+        const stringValue = String(value);
+        if (
+          stringValue.includes(",") ||
+          stringValue.includes('"') ||
+          stringValue.includes("\n")
+        ) {
+          return `"${stringValue.replace(/"/g, '""')}"`;
+        }
+        return stringValue;
+      });
+      csvRows.push(values.join(","));
+    }
+
+    const csvContent = csvRows.join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    const fileName =
+      `logs_backup_${deleteStartTime}_to_${deleteEndTime}.csv`.replace(
+        /:/g,
+        "-"
+      );
+    link.download = fileName;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function validateAndSubmit() {
+    if (!deleteStartTime || !deleteEndTime) {
+      deleteError = "Insert Start Time and End Time.";
+      return false;
+    }
+
+    const start = new Date(deleteStartTime);
+    const end = new Date(deleteEndTime);
+
+    if (start >= end) {
+      deleteError = "Start Time must be before End Time.";
+      return false;
+    }
+
+    if (
+      !confirm(
+        `Would You like to delete logs from ${deleteStartTime} to ${deleteEndTime}?`
+      )
+    ) {
+      return false;
+    }
+
+    deleteError = "";
+    isDeleting = true;
+    return true;
+  }
 </script>
 
 <RoleGuard requiredRoles={["Admin"]}>
