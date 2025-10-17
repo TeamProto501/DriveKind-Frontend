@@ -88,8 +88,6 @@ export const actions = {
     const text = await res.text();
     const data = JSON.parse(text);
     const flattenedData = flattenData(data);
-    console.log(flattenedData.length);
-    console.log(flattenedData);
     return { data: flattenedData };
   },
 };
