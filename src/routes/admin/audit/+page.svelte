@@ -533,9 +533,7 @@
           </Button>
           <Button
             type="submit"
-            variant="destructive"
-            disabled={isDeleting}
-            class="flex items-center gap-2"
+            class="flex items-center gap-2 bg-red-600 text-white"
           >
             {#if isDeleting}
               <span>Deleting...</span>
