@@ -1,7 +1,7 @@
 <script lang="ts">
   import RoleGuard from '$lib/components/RoleGuard.svelte';
   import Breadcrumbs from '$lib/components/Breadcrumbs.svelte';
-  import { Users, Plus, Search, Filter, Trash2, ChevronUp, ChevronDown, ChevronsUpDown, X } from 'lucide-svelte';
+  import { Users, Plus, Search, Filter, Trash2, ChevronUp, ChevronDown, ChevronsUpDown, X } from '@lucide/svelte';
   import UserSidebar from './UserSidebar.svelte';
   import { getAllStaffProfiles, API_BASE_URL } from '$lib/api';
   import { toastStore } from '$lib/toast';
