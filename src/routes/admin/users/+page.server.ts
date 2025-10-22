@@ -5,7 +5,7 @@ import { createSupabaseServerClient } from '$lib/supabase.server';
 import type { Actions } from './$types';
 
 export const load = async (event) => {
-  const tab = event.url.searchParams.get("tab") ?? "clients";
+  const tab = event.url.searchParams.get("tab") ?? "users";
 
   try {
     const supabase = createSupabaseServerClient(event);
@@ -18,6 +18,7 @@ export const load = async (event) => {
 
     console.log('Fetching staff profiles with Supabase token');
     
+    // Fetch staff profiles
     const res = await fetch(`${API_BASE_URL}/staff-profiles`, {
       headers: {
         'Content-Type': 'application/json',
@@ -38,23 +39,42 @@ export const load = async (event) => {
     }
 
     const text = await res.text();
-    let data;
+    let staffData;
 
     try {
-      data = JSON.parse(text);
+      staffData = JSON.parse(text);
     } catch (parseError) {
       console.error("Failed to parse JSON:", text);
       throw error(500, "Invalid API response format");
     }
 
-    if (!Array.isArray(data)) {
-      console.error("Expected array but got:", typeof data);
+    if (!Array.isArray(staffData)) {
+      console.error("Expected array but got:", typeof staffData);
       throw error(500, "API returned unexpected data format");
+    }
+
+    // Fetch clients from Supabase
+    const { data: { user } } = await supabase.auth.getUser();
+    const { data: userProfile } = await supabase
+      .from('staff_profiles')
+      .select('org_id')
+      .eq('user_id', user.id)
+      .single();
+
+    const { data: clientsData, error: clientsError } = await supabase
+      .from('clients')
+      .select('*')
+      .eq('org_id', userProfile.org_id)
+      .order('last_name', { ascending: true });
+
+    if (clientsError) {
+      console.error('Error fetching clients:', clientsError);
     }
 
     return { 
       tab, 
-      staffProfiles: data,
+      staffProfiles: staffData,
+      clients: clientsData || [],
       session
     };
 
@@ -69,7 +89,7 @@ export const load = async (event) => {
       throw err;
     }
     
-    throw error(500, `Failed to load staff profiles: ${err.message}`);
+    throw error(500, `Failed to load data: ${err.message}`);
   }
 };
 
@@ -92,7 +112,6 @@ export const actions = {
     try {
       console.log('Creating auth user server-side:', email);
       
-      // Create auth user (works server-side with service role key)
       const { data: authData, error: authError } = await supabase.auth.admin.createUser({
         email,
         password,
@@ -110,7 +129,6 @@ export const actions = {
 
       console.log('Auth user created with ID:', authData.user.id);
 
-      // Create staff profile via your API
       const res = await fetch(`${API_BASE_URL}/staff-profiles`, {
         method: 'POST',
         headers: {
@@ -125,7 +143,6 @@ export const actions = {
 
       if (!res.ok) {
         console.error('Failed to create staff profile, rolling back auth user');
-        // Rollback: delete the auth user if profile creation fails
         await supabase.auth.admin.deleteUser(authData.user.id);
         const errorText = await res.text();
         return { success: false, error: `Failed to create staff profile: ${errorText}` };
