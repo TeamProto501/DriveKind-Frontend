@@ -566,12 +566,12 @@
                       <td class="px-4 py-2 text-gray-600">{new Date(client.date_enrolled).toLocaleDateString()}</td>
                       <td class="px-4 py-2">
                         <div class="flex items-center gap-2">
-                          
+                          <a
                             href="/clients/{client.client_id}"
                             class="text-blue-600 hover:underline text-sm font-medium"
-                          >
+                            >
                             View
-                          </a>
+                          </a>  
                           <button
                             class="text-red-600 hover:underline text-sm font-medium"
                             on:click={() => openDeleteModal(client)}
