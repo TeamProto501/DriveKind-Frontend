@@ -141,7 +141,6 @@
     
     // Common items for all roles
     items.push(
-      { label: 'Profile', href: '/profile', icon: 'User', badge: null },
       { label: 'Schedule', href: '/calendar', icon: 'Calendar', badge: null, roles: ['Super Admin', 'Admin', 'Dispatcher', 'Driver'] },
       { label: 'Help', href: '/help', icon: 'HelpCircle', badge: null }
     );
@@ -207,6 +206,21 @@
     }
     
     isLoading = false;
+    
+    // Add click outside handler for profile dropdown
+    const handleClickOutside = (event: MouseEvent) => {
+      const dropdown = document.getElementById('profile-dropdown');
+      const target = event.target as Node;
+      if (dropdown && !dropdown.contains(target) && !dropdown.previousElementSibling?.contains(target)) {
+        dropdown.classList.add('hidden');
+      }
+    };
+    
+    document.addEventListener('click', handleClickOutside);
+    
+    return () => {
+      document.removeEventListener('click', handleClickOutside);
+    };
   });
 
   // Logout function
@@ -324,48 +338,101 @@
     </Sidebar.Content>
 
     <!-- Sidebar Footer -->
-    <Sidebar.Footer class="p-4 border-t border-slate-200">
-      <div class="space-y-4">
-        <!-- User Info -->
-        <div class="flex items-center gap-3 p-3 rounded-lg bg-slate-100">
-          <div class="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
-            <span class="text-white text-sm font-medium">{userInitials}</span>
-			</div>
-          <div class="flex-1 min-w-0">
-            <p class="text-sm font-medium text-slate-900 truncate">{displayName}</p>
-            <p class="text-xs text-slate-600 truncate">{data.session?.user?.email}</p>
-		</div>
-	</div>
-	
-        <!-- Role Views -->
-        <div class="space-y-2">
-          <p class="text-xs font-medium text-slate-600 uppercase tracking-wide">Views</p>
-          <div class="flex flex-wrap gap-1">
-            {#each userRoles as role}
-              <button
-                onclick={() => switchRole(role)}
-                class="text-xs px-2 py-1 rounded-md border transition-colors cursor-pointer
-                  {activeRole === role 
-                    ? 'bg-blue-600 text-white border-blue-600' 
-                    : 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100'}"
-              >
-                {role}
-              </button>
-				{/each}
-			</div>
-					</div>
-
-        <!-- Logout Button -->
-        <Button 
-          variant="ghost" 
-          size="sm" 
-          class="w-full justify-start text-slate-600 hover:text-slate-900 hover:bg-slate-100"
-          onclick={handleLogout}
-        >
-          <LogOut class="w-4 h-4 mr-2" />
-          Sign Out
-        </Button>
-				</div>
+    <Sidebar.Footer class="flex flex-col gap-2 p-2">
+      <Sidebar.Menu>
+        <Sidebar.MenuItem>
+          <Sidebar.MenuButton 
+            class="h-12 text-sm hover:bg-slate-100 data-[state=open]:bg-slate-100"
+            onclick={() => {
+              const dropdown = document.getElementById('profile-dropdown');
+              if (dropdown) {
+                dropdown.classList.toggle('hidden');
+              }
+            }}
+          >
+            <div class="relative flex shrink-0 overflow-hidden size-8 rounded-lg">
+              <div class="flex size-full items-center justify-center rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 text-xs font-semibold uppercase tracking-wide text-white">
+                {userInitials}
+              </div>
+            </div>
+            <div class="grid flex-1 text-left text-sm leading-tight">
+              <span class="truncate font-medium">{displayName}</span>
+              <span class="truncate text-xs text-slate-600">{data.session?.user?.email}</span>
+            </div>
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="ml-auto size-4">
+              <path d="m7 15 5 5 5-5"></path>
+              <path d="m7 9 5-5 5 5"></path>
+            </svg>
+          </Sidebar.MenuButton>
+        </Sidebar.MenuItem>
+      </Sidebar.Menu>
+      
+      <!-- Dropdown Menu -->
+      <div id="profile-dropdown" class="hidden absolute bottom-16 left-2 right-2 bg-white border border-slate-200 rounded-lg shadow-lg p-2 z-50">
+        <div class="space-y-1">
+          <!-- Role Switcher -->
+          {#if userRoles.length > 1}
+            <div class="px-2 py-1.5">
+              <p class="text-xs font-medium text-slate-600 mb-2">Switch View</p>
+              <div class="flex flex-wrap gap-1">
+                {#each userRoles as role}
+                  <button
+                    onclick={() => {
+                      switchRole(role);
+                      document.getElementById('profile-dropdown')?.classList.add('hidden');
+                    }}
+                    class="text-xs px-2 py-1 rounded-md border transition-colors
+                      {activeRole === role 
+                        ? 'bg-blue-600 text-white border-blue-600' 
+                        : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'}"
+                  >
+                    {role}
+                  </button>
+                {/each}
+              </div>
+            </div>
+            <div class="h-px bg-slate-200 my-1"></div>
+          {/if}
+          
+          <!-- Profile Link -->
+          <button
+            onclick={() => {
+              navigateTo('/profile');
+              document.getElementById('profile-dropdown')?.classList.add('hidden');
+            }}
+            class="w-full flex items-center gap-2 px-2 py-2 text-sm text-slate-700 hover:bg-slate-100 rounded-md transition-colors"
+          >
+            <User class="w-4 h-4" />
+            <span>Profile</span>
+          </button>
+          
+          <!-- Settings Link -->
+          <button
+            onclick={() => {
+              navigateTo('/admin/config');
+              document.getElementById('profile-dropdown')?.classList.add('hidden');
+            }}
+            class="w-full flex items-center gap-2 px-2 py-2 text-sm text-slate-700 hover:bg-slate-100 rounded-md transition-colors"
+          >
+            <Settings class="w-4 h-4" />
+            <span>Settings</span>
+          </button>
+          
+          <div class="h-px bg-slate-200 my-1"></div>
+          
+          <!-- Logout Button -->
+          <button
+            onclick={() => {
+              handleLogout();
+              document.getElementById('profile-dropdown')?.classList.add('hidden');
+            }}
+            class="w-full flex items-center gap-2 px-2 py-2 text-sm text-red-600 hover:bg-red-50 rounded-md transition-colors"
+          >
+            <LogOut class="w-4 h-4" />
+            <span>Sign Out</span>
+          </button>
+        </div>
+      </div>
     </Sidebar.Footer>
   </Sidebar.Root>
 
