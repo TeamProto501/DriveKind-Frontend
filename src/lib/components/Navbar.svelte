@@ -12,6 +12,7 @@
     HelpCircle,
     Bell,
     ChevronDown,
+    ChevronRight,
     LogOut,
     Building2,
     Users,
@@ -46,9 +47,6 @@
   let userRoles = $state<RoleEnum[]>([]);
   let userOrganization = $state<Organization | null>(null);
   let isLoading = $state(true);
-  
-  // Active role for navigation filtering
-  let activeRole = $state<RoleEnum | null>(null);
 
   // Get user initials for avatar
   const userInitials = $derived(
@@ -96,71 +94,94 @@
     return iconMap[icon] || Home;
   }
 
-  // Role-based navigation items filtered by active role
-  const roleBasedItems = $derived(() => {
-		const items = [];
-    const currentRole = activeRole || (userRoles.length > 0 ? userRoles[0] : null);
+  // Check if user has any of the required roles
+  function hasRole(roles: RoleEnum[]): boolean {
+    return roles.some(role => userRoles.includes(role));
+  }
+
+  // Navigation groups organized by feature area
+  const navigationGroups = $derived(() => {
+    const groups = [];
     
-    if (!currentRole) return items;
-		
-    // Admin items
-    if (currentRole === 'Admin') {
-			items.push(
-        { label: 'Dashboard', href: '/admin/dash', icon: 'Home', badge: null },
-        { label: 'Users', href: '/admin/users', icon: 'Users', badge: null },
-        { label: 'Database', href: '/admin/database', icon: 'Database', badge: null },
-        { label: 'Configuration', href: '/admin/config', icon: 'Settings', badge: null },
-        { label: 'Reports', href: '/admin/reports', icon: 'FileText', badge: null },
-        { label: 'Audit Logs', href: '/admin/audit', icon: 'Shield', badge: null }
-      );
+    // Platform Section - Common items
+    const platformItems = [];
+    
+    // Home (available to all)
+    platformItems.push({ label: 'Home', href: '/', icon: 'Home' });
+    
+    // Calendar (available to all)
+    platformItems.push({ label: 'Schedule', href: '/calendar', icon: 'Calendar' });
+    
+    if (platformItems.length > 0) {
+      groups.push({
+        label: 'Platform',
+        items: platformItems
+      });
     }
     
-    // Super Admin items - Only Organizations
-    if (currentRole === 'Super Admin') {
-			items.push(
-        { label: 'Organizations', href: '/admin/organizations', icon: 'Building2', badge: null }
-      );
+    // Dispatcher Section
+    if (hasRole(['Dispatcher', 'Admin', 'Super Admin'])) {
+      groups.push({
+        label: 'Dispatcher',
+        icon: 'Truck',
+        collapsible: true,
+        items: [
+          { label: 'Dashboard', href: '/dispatcher/dashboard' },
+          { label: 'Ride Management', href: '/dispatcher/rides' },
+          { label: 'Driver Management', href: '/dispatcher/drivers' }
+        ]
+      });
     }
     
-    
-    // Dispatcher items
-    if (currentRole === 'Dispatcher') {
-			items.push(
-        { label: 'Dispatcher Dashboard', href: '/dispatcher/dashboard', icon: 'Truck', badge: null },
-        { label: 'Ride Management', href: '/dispatcher/rides', icon: 'Car', badge: null },
-        { label: 'Driver Management', href: '/dispatcher/drivers', icon: 'UserCog', badge: null }
-      );
+    // Driver Section
+    if (hasRole(['Driver'])) {
+      groups.push({
+        label: 'Driver',
+        icon: 'Car',
+        collapsible: true,
+        items: [
+          { label: 'My Rides', href: '/driver/rides' },
+          { label: 'My Schedule', href: '/driver/schedule' }
+        ]
+      });
     }
     
-    // Driver items
-    if (currentRole === 'Driver') {
-			items.push(
-        { label: 'My Rides', href: '/driver/rides', icon: 'Car', badge: null },
-      );
+    // Admin Section
+    if (hasRole(['Admin', 'Super Admin'])) {
+      const adminItems = [];
+      
+      if (hasRole(['Admin', 'Super Admin'])) {
+        adminItems.push({ label: 'Dashboard', href: '/admin/dash' });
+        adminItems.push({ label: 'User Management', href: '/admin/users' });
+        adminItems.push({ label: 'Database', href: '/admin/database' });
+        adminItems.push({ label: 'Configuration', href: '/admin/config' });
+        adminItems.push({ label: 'Reports', href: '/admin/reports' });
+        adminItems.push({ label: 'Audit Logs', href: '/admin/audit' });
+      }
+      
+      if (hasRole(['Super Admin'])) {
+        adminItems.push({ label: 'Organizations', href: '/admin/organizations' });
+      }
+      
+      if (adminItems.length > 0) {
+        groups.push({
+          label: 'Admin',
+          icon: 'Shield',
+          collapsible: true,
+          items: adminItems
+        });
+      }
     }
     
-    // Common items for all roles
-    items.push(
-      { label: 'Schedule', href: '/calendar', icon: 'Calendar', badge: null, roles: ['Super Admin', 'Admin', 'Dispatcher', 'Driver'] },
-      { label: 'Help', href: '/help', icon: 'HelpCircle', badge: null }
-    );
-		
-		return items;
-	});
-	
-  // Quick actions based on active role
-  const quickActions = $derived(() => {
-    const actions = [];
-    const currentRole = activeRole || (userRoles.length > 0 ? userRoles[0] : null);
+    // Help Section
+    groups.push({
+      label: 'Support',
+      items: [
+        { label: 'Help', href: '/help', icon: 'HelpCircle' }
+      ]
+    });
     
-    if (currentRole === 'Dispatcher') {
-      actions.push(
-        { label: 'Create Ride Request', href: '/dispatcher/rides', icon: 'Plus' },
-        { label: 'Assign Driver', href: '/dispatcher/drivers', icon: 'UserCheck' }
-      );
-    }
-    
-    return actions;
+    return groups;
   });
 
   // Load user data on mount
@@ -170,7 +191,6 @@
       userProfile = data.profile as any;
       if (Array.isArray(data.roles)) {
         userRoles = data.roles as RoleEnum[];
-        activeRole = userRoles[0]; // Set first role as active
       }
     } else {
       // Fallback to mock data for testing
@@ -192,7 +212,6 @@
         lives_alone: true,
       } as unknown as Profile;
       userRoles = ["Super Admin"]; // Set as Super Admin for testing
-      activeRole = "Super Admin";
       userOrganization = {
         org_id: 1,
         name: "DriveKind Transit Services",
@@ -250,23 +269,6 @@
   function navigateTo(href: string) {
     goto(href);
   }
-
-  // Role switching function
-  function switchRole(role: RoleEnum) {
-    activeRole = role;
-
-    // Redirect user to default dashboard for their role
-    if (role === "Admin") {
-      goto("/admin/dash");
-    } else if (role === "Dispatcher") {
-      goto("/dispatcher/dashboard");
-    } else if (role === "Driver") {
-      goto("/driver/rides");
-    } else {
-      // fallback route
-      goto("/profile");
-    }
-  }
 </script>
 
 <!-- Sidebar Provider -->
@@ -288,53 +290,87 @@
     </Sidebar.Header>
 
     <!-- Sidebar Content -->
-    <Sidebar.Content class="p-4">
-      <!-- Main Navigation -->
-      <Sidebar.Group>
-        <Sidebar.GroupLabel class="text-slate-600 font-medium text-sm uppercase tracking-wide mb-3">Navigation</Sidebar.GroupLabel>
-        <Sidebar.Menu>
-          {#if isLoading}
-            <div class="p-4 text-center text-gray-500">Loading navigation...</div>
-          {:else}
-            {#each roleBasedItems() as item}
-              <Sidebar.MenuItem>
-                <Sidebar.MenuButton 
-                  onclick={() => navigateTo(item.href)}
-                  class="w-full justify-start text-slate-700 hover:text-slate-900 hover:bg-slate-100 {isActiveRoute(item.href) ? 'bg-blue-50 text-blue-700 border-r-2 border-blue-600' : ''}"
-                >
-                  {@const IconComponent = getIconComponent(item.icon)}
-                  <IconComponent class="w-4 h-4" />
-                  <span>{item.label}</span>
-                  {#if item.badge}
-                    <Badge variant="secondary" class="ml-auto">{item.badge}</Badge>
-                  {/if}
-                </Sidebar.MenuButton>
-              </Sidebar.MenuItem>
-            {/each}
-          {/if}
-        </Sidebar.Menu>
-      </Sidebar.Group>
-
-      <!-- Quick Actions -->
-      {#if quickActions().length > 0}
-        <Sidebar.Group>
-          <Sidebar.GroupLabel class="text-slate-600 font-medium text-sm uppercase tracking-wide mb-3">Quick Actions</Sidebar.GroupLabel>
-          <Sidebar.Menu>
-            {#each quickActions() as action}
-              <Sidebar.MenuItem>
-                <Sidebar.MenuButton 
-                  onclick={() => navigateTo(action.href)}
-                  class="w-full justify-start text-slate-700 hover:text-slate-900 hover:bg-slate-100"
-                >
-                  {@const IconComponent = getIconComponent(action.icon)}
-                  <IconComponent class="w-4 h-4" />
-                  <span>{action.label}</span>
-                </Sidebar.MenuButton>
-              </Sidebar.MenuItem>
-										{/each}
-          </Sidebar.Menu>
-        </Sidebar.Group>
-						{/if}
+    <Sidebar.Content class="p-2">
+      {#if isLoading}
+        <div class="p-4 text-center text-gray-500">Loading navigation...</div>
+      {:else}
+        <!-- Create Ride Button (for Dispatchers and Admins) -->
+        {#if hasRole(['Dispatcher', 'Admin', 'Super Admin'])}
+          <div class="px-2 pb-4">
+            <Button
+              onclick={() => navigateTo('/dispatcher/rides')}
+              class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium flex items-center justify-center gap-2"
+            >
+              <Plus class="w-4 h-4" />
+              Create Ride
+            </Button>
+          </div>
+        {/if}
+        
+        {#each navigationGroups() as group}
+          <Sidebar.Group>
+            {#if group.label && !group.collapsible}
+              <Sidebar.GroupLabel class="text-slate-600 font-medium text-xs uppercase tracking-wide px-2">
+                {group.label}
+              </Sidebar.GroupLabel>
+            {/if}
+            
+            <Sidebar.Menu>
+              {#if group.collapsible}
+                <!-- Collapsible Group -->
+                <Sidebar.MenuItem>
+                  <Sidebar.MenuButton
+                    onclick={() => {
+                      const content = document.getElementById(`group-${group.label}`);
+                      const chevron = document.getElementById(`chevron-${group.label}`);
+                      if (content && chevron) {
+                        content.classList.toggle('hidden');
+                        chevron.classList.toggle('rotate-90');
+                      }
+                    }}
+                    class="w-full justify-start text-slate-700 hover:text-slate-900 hover:bg-slate-100"
+                  >
+                    {@const IconComponent = getIconComponent(group.icon || 'Home')}
+                    <IconComponent class="w-4 h-4" />
+                    <span>{group.label}</span>
+                    <ChevronRight id="chevron-{group.label}" class="w-4 h-4 ml-auto transition-transform duration-200" />
+                  </Sidebar.MenuButton>
+                  
+                  <!-- Sub Menu -->
+                  <div id="group-{group.label}" class="hidden">
+                    <Sidebar.MenuSub>
+                      {#each group.items as item}
+                        <Sidebar.MenuSubItem>
+                          <Sidebar.MenuSubButton
+                            onclick={() => navigateTo(item.href)}
+                            class="text-slate-700 hover:text-slate-900 hover:bg-slate-100 {isActiveRoute(item.href) ? 'bg-blue-50 text-blue-700' : ''}"
+                          >
+                            <span>{item.label}</span>
+                          </Sidebar.MenuSubButton>
+                        </Sidebar.MenuSubItem>
+                      {/each}
+                    </Sidebar.MenuSub>
+                  </div>
+                </Sidebar.MenuItem>
+              {:else}
+                <!-- Regular Items -->
+                {#each group.items as item}
+                  <Sidebar.MenuItem>
+                    <Sidebar.MenuButton
+                      onclick={() => navigateTo(item.href)}
+                      class="w-full justify-start text-slate-700 hover:text-slate-900 hover:bg-slate-100 {isActiveRoute(item.href) ? 'bg-blue-50 text-blue-700 border-l-2 border-blue-600' : ''}"
+                    >
+                      {@const IconComponent = getIconComponent(item.icon || 'Home')}
+                      <IconComponent class="w-4 h-4" />
+                      <span>{item.label}</span>
+                    </Sidebar.MenuButton>
+                  </Sidebar.MenuItem>
+                {/each}
+              {/if}
+            </Sidebar.Menu>
+          </Sidebar.Group>
+        {/each}
+      {/if}
     </Sidebar.Content>
 
     <!-- Sidebar Footer -->
@@ -370,30 +406,6 @@
       <!-- Dropdown Menu -->
       <div id="profile-dropdown" class="hidden absolute bottom-16 left-2 right-2 bg-white border border-slate-200 rounded-lg shadow-lg p-2 z-50">
         <div class="space-y-1">
-          <!-- Role Switcher -->
-          {#if userRoles.length > 1}
-            <div class="px-2 py-1.5">
-              <p class="text-xs font-medium text-slate-600 mb-2">Switch View</p>
-              <div class="flex flex-wrap gap-1">
-                {#each userRoles as role}
-                  <button
-                    onclick={() => {
-                      switchRole(role);
-                      document.getElementById('profile-dropdown')?.classList.add('hidden');
-                    }}
-                    class="text-xs px-2 py-1 rounded-md border transition-colors
-                      {activeRole === role 
-                        ? 'bg-blue-600 text-white border-blue-600' 
-                        : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'}"
-                  >
-                    {role}
-                  </button>
-                {/each}
-              </div>
-            </div>
-            <div class="h-px bg-slate-200 my-1"></div>
-          {/if}
-          
           <!-- Profile Link -->
           <button
             onclick={() => {
@@ -406,17 +418,19 @@
             <span>Profile</span>
           </button>
           
-          <!-- Settings Link -->
-          <button
-            onclick={() => {
-              navigateTo('/admin/config');
-              document.getElementById('profile-dropdown')?.classList.add('hidden');
-            }}
-            class="w-full flex items-center gap-2 px-2 py-2 text-sm text-slate-700 hover:bg-slate-100 rounded-md transition-colors"
-          >
-            <Settings class="w-4 h-4" />
-            <span>Settings</span>
-          </button>
+          <!-- Settings Link (only show if user has admin access) -->
+          {#if hasRole(['Admin', 'Super Admin'])}
+            <button
+              onclick={() => {
+                navigateTo('/admin/config');
+                document.getElementById('profile-dropdown')?.classList.add('hidden');
+              }}
+              class="w-full flex items-center gap-2 px-2 py-2 text-sm text-slate-700 hover:bg-slate-100 rounded-md transition-colors"
+            >
+              <Settings class="w-4 h-4" />
+              <span>Settings</span>
+            </button>
+          {/if}
           
           <div class="h-px bg-slate-200 my-1"></div>
           
