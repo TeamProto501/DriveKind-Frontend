@@ -146,10 +146,13 @@
 							</select>
 							
 							<!-- Add New Request -->
-							<button class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors duration-200 flex items-center space-x-2">
+							<a 
+								href="/dispatcher/rides/new"
+								class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors duration-200 flex items-center space-x-2"
+							>
 								<Plus class="w-4 h-4" />
 								<span>New Request</span>
-							</button>
+							</a>
 						</div>
 					</div>
 				</div>
@@ -231,7 +234,7 @@
 			
 			<!-- Quick Actions -->
 			<div class="mt-8 grid grid-cols-1 md:grid-cols-3 gap-6">
-				<a href="/dispatcher/requests/create" class="group p-6 bg-white rounded-lg border border-gray-200 hover:border-gray-300 hover:shadow-md transition-all duration-200">
+				<a href="/dispatcher/rides/new" class="group p-6 bg-white rounded-lg border border-gray-200 hover:border-gray-300 hover:shadow-md transition-all duration-200">
 					<div class="flex items-center space-x-3">
 						<div class="p-2 rounded-lg bg-blue-500 text-white">
 							<Plus class="w-6 h-6" />

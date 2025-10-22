@@ -256,3 +256,69 @@ export interface PaginatedResponse<T> {
 		totalPages: number;
 	};
 }
+
+export interface ClientProfile {
+	client_id: number;
+	org_id: number;
+	user_id?: string;
+	first_name: string;
+	last_name: string;
+	street_address: string;
+	address2?: string;
+	city: string;
+	state: string;
+	zipcode: string;
+	primary_phone?: string;
+	secondary_phone?: string;
+	email?: string;
+	mobility_assistance?: string;
+	other_limitations?: string;
+	car_height_needed: boolean;
+	service_animal: boolean;
+	oxygen: boolean;
+	allergies?: string;
+	created_at?: Date;
+	updated_at?: Date;
+}
+
+export interface RideMatchingFormData {
+	// Client Information
+	firstName: string;
+	lastName: string;
+	streetAddress: string;
+	address2?: string;
+	zip: string;
+	city: string;
+	state: string;
+	mobilityAssistance?: string;
+	otherLimitations?: string;
+	carHeightNeeded: boolean;
+	serviceAnimal: boolean;
+	oxygen: boolean;
+	allergies?: string;
+	
+	// Ride Details - Pickup
+	pickupAddress: string;
+	pickupAddress2?: string;
+	pickupCity: string;
+	pickupState: string;
+	pickupZip: string;
+	useClientAddress: boolean;
+	
+	// Ride Details - Dropoff
+	dropoffAddress: string;
+	dropoffAddress2?: string;
+	dropoffCity: string;
+	dropoffState: string;
+	dropoffZip: string;
+	destinationName?: string;
+	
+	// Schedule
+	rideDate: string;
+	rideTime: string;
+	roundTrip: boolean;
+	estimatedDuration?: string;
+	numberOfRiders: number;
+	purpose: string;
+	notes?: string;
+}
