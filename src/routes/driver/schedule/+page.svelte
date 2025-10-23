@@ -5,10 +5,18 @@
   import { Input } from "$lib/components/ui/input/index.js";
   import Calendar from "$lib/components/ui/calendar/calendar.svelte";
   import { CalendarDate } from "@internationalized/date";
+  import { getLocalTimeZone, today } from "@internationalized/date";
   import * as NativeSelect from "$lib/components/ui/native-select/index.js";
+  import { enhance } from "$app/forms";
+  import type { ActionData } from "./$types";
+  interface Props {
+    form?: ActionData;
+  }
+
+  let { form }: Props = $props();
   let selectedDay = $state<string>();
   let isChecked = $state(false);
-  let value = $state<CalendarDate | undefined>(new CalendarDate(2025, 10, 20));
+  let value = $state<CalendarDate | undefined>(today(getLocalTimeZone()));
   let numberOfDates = $state(1);
   let specificDate = $state({
     allDay: false,
@@ -23,19 +31,23 @@
       allDay: boolean;
       startTime: string;
       endTime: string;
+      reason: string;
     }>
-  >([{ allDay: false, startTime: "", endTime: "" }]);
+  >([{ allDay: false, startTime: "", endTime: "", reason: "" }]);
   // if numberofdate changes change length of array
   $effect(() => {
     if (numberOfDates > regularDates.length) {
       const newItems = Array.from(
         { length: numberOfDates - regularDates.length },
-        () => ({ allDay: false, startTime: "", endTime: "" })
+        () => ({ allDay: false, startTime: "", endTime: "", reason: "" })
       );
       regularDates = [...regularDates, ...newItems];
     } else if (numberOfDates < regularDates.length) {
       regularDates = regularDates.slice(0, numberOfDates);
     }
+  });
+  $effect(() => {
+    console.log("Selected date:", value);
   });
 </script>
 
@@ -55,7 +67,12 @@
   <!-- Schedule Overview -->
   <div class="grid grid-cols-2 gap-6 rounded-lg border bg-white p-6 shadow-xl">
     <!-- Specific Date Form -->
-    <form class="space-y-6">
+    <form
+      method="POST"
+      action="?/createSpecificUnavailability"
+      use:enhance
+      class="space-y-6"
+    >
       <h3 class="text-lg font-semibold">Choose Specific Date</h3>
 
       <div>
@@ -65,6 +82,12 @@
           class="rounded-lg border shadow-sm"
           numberOfMonths={1}
         />
+        <input type="hidden" name="date" value={value?.toString()} />
+        {#if value}
+          <p class="text-sm text-blue-600 font-medium mt-2">
+            Selected: {value.toString()}
+          </p>
+        {/if}
       </div>
       <div class="grid grid-cols-2 gap-4">
         <div class="space-y-2">
@@ -99,7 +122,7 @@
 
       <div>
         <label for="reason-specific" class="text-sm font-medium">Reason</label>
-        <NativeSelect.Root>
+        <NativeSelect.Root name="reason">
           <NativeSelect.Option value="">Select Reason</NativeSelect.Option>
           <NativeSelect.Option value="Holiday">Holiday</NativeSelect.Option>
           <NativeSelect.Option value="Personal">Personal</NativeSelect.Option>
@@ -118,7 +141,11 @@
     </form>
 
     <!-- Regular Date Form -->
-    <form class="space-y-6">
+    <form
+      method="POST"
+      action="?/createRegularUnavailability"
+      class="space-y-6"
+    >
       <h3 class="text-lg font-semibold">Choose Regular Date</h3>
 
       <div class="space-y-2">
@@ -137,7 +164,7 @@
       </div>
 
       {#each regularDates as dateItem, index (index)}
-        <div class="space-y-4 rounded-lg border p-4 bg-gray-50">
+        <div class="space-y-4 rounded-lg border p-4 bg-gray-50/10">
           <h4 class="text-sm font-semibold text-gray-700">Date #{index + 1}</h4>
 
           <div class="space-y-2">
@@ -148,48 +175,13 @@
               class="shadow-sm"
               bind:value={dateItem.selectedDay}
             >
-              <ToggleGroup.Item
-                value="Monday"
-                class="data-[state=on]:bg-gray-500/35"
-              >
-                Mon
-              </ToggleGroup.Item>
-              <ToggleGroup.Item
-                value="Tuesday"
-                class="data-[state=on]:bg-gray-500/35"
-              >
-                Tue
-              </ToggleGroup.Item>
-              <ToggleGroup.Item
-                value="Wednesday"
-                class="data-[state=on]:bg-gray-500/35"
-              >
-                Wed
-              </ToggleGroup.Item>
-              <ToggleGroup.Item
-                value="Thursday"
-                class="data-[state=on]:bg-gray-500/35"
-              >
-                Thu
-              </ToggleGroup.Item>
-              <ToggleGroup.Item
-                value="Friday"
-                class="data-[state=on]:bg-gray-500/35"
-              >
-                Fri
-              </ToggleGroup.Item>
-              <ToggleGroup.Item
-                value="Saturday"
-                class="data-[state=on]:bg-gray-500/35"
-              >
-                Sat
-              </ToggleGroup.Item>
-              <ToggleGroup.Item
-                value="Sunday"
-                class="data-[state=on]:bg-gray-500/35"
-              >
-                Sun
-              </ToggleGroup.Item>
+              <ToggleGroup.Item value="Monday">Mon</ToggleGroup.Item>
+              <ToggleGroup.Item value="Tuesday">Tue</ToggleGroup.Item>
+              <ToggleGroup.Item value="Wednesday">Wed</ToggleGroup.Item>
+              <ToggleGroup.Item value="Thursday">Thu</ToggleGroup.Item>
+              <ToggleGroup.Item value="Friday">Fri</ToggleGroup.Item>
+              <ToggleGroup.Item value="Saturday">Sat</ToggleGroup.Item>
+              <ToggleGroup.Item value="Sunday">Sun</ToggleGroup.Item>
             </ToggleGroup.Root>
           </div>
 
@@ -230,9 +222,11 @@
           </div>
         </div>
         <div>
-          <label for="reason-specific" class="text-sm font-medium">Reason</label
+          <label for="reason-{index}" class="text-sm font-medium">Reason</label>
+          <NativeSelect.Root
+            name="dates[{index}][reason]"
+            bind:value={dateItem.reason}
           >
-          <NativeSelect.Root>
             <NativeSelect.Option value="">Select Reason</NativeSelect.Option>
             <NativeSelect.Option value="Holiday">Holiday</NativeSelect.Option>
             <NativeSelect.Option value="Personal">Personal</NativeSelect.Option>
@@ -242,7 +236,9 @@
             >
           </NativeSelect.Root>
         </div>
-        <hr class="border-gray-300" />
+        {#if index < regularDates.length - 1}
+          <hr class="border-gray-300" />
+        {/if}
       {/each}
 
       <button
