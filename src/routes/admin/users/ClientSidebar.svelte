@@ -89,53 +89,56 @@
     saving = true;
     
     try {
-      if (createMode) {
+        // Remove org_id from the form data - it will be added by the API middleware
+        const { org_id, ...clientData } = form;
+        
+        if (createMode) {
         // Create new client
         const response = await fetch(`${API_BASE_URL}/clients`, {
-          method: 'POST',
-          headers: {
+            method: 'POST',
+            headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${session.access_token}`
-          },
-          body: JSON.stringify(form)
+            },
+            body: JSON.stringify(clientData)
         });
 
         if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || 'Failed to create client');
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Failed to create client');
         }
 
         toastStore.success('Client created successfully');
-      } else if (client) {
-        // Update existing client
+        } else if (client) {
+        // Update existing client - include org_id for updates
         const response = await fetch(`${API_BASE_URL}/clients/${client.client_id}`, {
-          method: 'PUT',
-          headers: {
+            method: 'PUT',
+            headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${session.access_token}`
-          },
-          body: JSON.stringify(form)
+            },
+            body: JSON.stringify(form)
         });
 
         if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || 'Failed to update client');
+            const errorData = await response.json();
+            throw new Error(errorData.error || 'Failed to update client');
         }
 
         toastStore.success('Client updated successfully');
-      }
+        }
 
-      dispatch('updated');
-      dispatch('close');
-      
+        dispatch('updated');
+        dispatch('close');
+        
     } catch (err: any) {
-      console.error('Save client error:', err);
-      errorMessage = err.message || 'Failed to save client';
-      toastStore.error(errorMessage);
+        console.error('Save client error:', err);
+        errorMessage = err.message || 'Failed to save client';
+        toastStore.error(errorMessage);
     } finally {
-      saving = false;
+        saving = false;
     }
-  }
+    }
 </script>
 
 <div class="fixed top-0 right-0 w-96 h-full bg-white shadow-xl border-l border-gray-200 flex flex-col z-50">

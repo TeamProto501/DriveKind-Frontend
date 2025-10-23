@@ -53,7 +53,7 @@ export const load = async (event) => {
       throw error(500, "API returned unexpected data format");
     }
 
-    // Fetch clients from Supabase
+    // Fetch current user's profile for org_id
     const { data: { user } } = await supabase.auth.getUser();
     const { data: userProfile } = await supabase
       .from('staff_profiles')
@@ -61,6 +61,7 @@ export const load = async (event) => {
       .eq('user_id', user.id)
       .single();
 
+    // Fetch clients from Supabase
     const { data: clientsData, error: clientsError } = await supabase
       .from('clients')
       .select('*')
@@ -75,8 +76,8 @@ export const load = async (event) => {
       tab, 
       staffProfiles: staffData,
       clients: clientsData || [],
-      session,
-      userProfile
+      userProfile,
+      session
     };
 
   } catch (err) {
