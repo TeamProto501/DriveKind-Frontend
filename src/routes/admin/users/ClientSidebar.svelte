@@ -22,18 +22,18 @@
     city: string;
     state: string;
     client_status_enum: string;
-    mobility_assistance_enum?: string;
+    mobility_assistance_enum?: string | null;
     date_enrolled: string;
-    org_id: number;
+    org_id?: number;
   };
 
   const statusOptions = ['Active', 'Inactive', 'Pending'];
-  const mobilityOptions = ['None', 'Walker', 'Wheelchair', 'Cane', 'Other'];
+  // Updated to match your database enum - adjust these based on your actual enum values
+  const mobilityOptions = ['', 'Walker', 'Wheelchair', 'Cane', 'Crutches', 'Scooter'];
 
   let form: Client = initializeForm();
   let saving = false;
   let errorMessage: string | null = null;
-  let showMoreInfo = false;
 
   function initializeForm(): Client {
     if (!client || createMode) {
@@ -47,7 +47,7 @@
         city: '',
         state: '',
         client_status_enum: 'Active',
-        mobility_assistance_enum: 'None',
+        mobility_assistance_enum: null,
         date_enrolled: new Date().toISOString().split('T')[0],
         org_id: orgId
       };
@@ -64,7 +64,7 @@
       city: client.city || '',
       state: client.state || '',
       client_status_enum: client.client_status_enum || 'Active',
-      mobility_assistance_enum: client.mobility_assistance_enum || 'None',
+      mobility_assistance_enum: client.mobility_assistance_enum || null,
       date_enrolled: client.date_enrolled || new Date().toISOString().split('T')[0],
       org_id: client.org_id || orgId
     };
@@ -89,56 +89,67 @@
     saving = true;
     
     try {
-        // Remove org_id from the form data - it will be added by the API middleware
-        const { org_id, ...clientData } = form;
+      // Clean up the data before sending
+      const clientData = {
+        ...form,
+        // Convert empty string to null for mobility assistance
+        mobility_assistance_enum: form.mobility_assistance_enum === '' ? null : form.mobility_assistance_enum,
+        // Remove empty strings
+        email: form.email?.trim() || null,
+        secondary_phone: form.secondary_phone?.trim() || null
+      };
+      
+      // Remove org_id from create request - it will be added by middleware
+      if (createMode) {
+        const { org_id, client_id, ...createData } = clientData;
         
-        if (createMode) {
-        // Create new client
         const response = await fetch(`${API_BASE_URL}/clients`, {
-            method: 'POST',
-            headers: {
+          method: 'POST',
+          headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${session.access_token}`
-            },
-            body: JSON.stringify(clientData)
+          },
+          body: JSON.stringify(createData)
         });
 
         if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.error || 'Failed to create client');
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Failed to create client');
         }
 
         toastStore.success('Client created successfully');
-        } else if (client) {
-        // Update existing client - include org_id for updates
+      } else if (client) {
+        // Update existing client
+        const { client_id, ...updateData } = clientData;
+        
         const response = await fetch(`${API_BASE_URL}/clients/${client.client_id}`, {
-            method: 'PUT',
-            headers: {
+          method: 'PUT',
+          headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${session.access_token}`
-            },
-            body: JSON.stringify(form)
+          },
+          body: JSON.stringify(updateData)
         });
 
         if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.error || 'Failed to update client');
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Failed to update client');
         }
 
         toastStore.success('Client updated successfully');
-        }
+      }
 
-        dispatch('updated');
-        dispatch('close');
-        
+      dispatch('updated');
+      dispatch('close');
+      
     } catch (err: any) {
-        console.error('Save client error:', err);
-        errorMessage = err.message || 'Failed to save client';
-        toastStore.error(errorMessage);
+      console.error('Save client error:', err);
+      errorMessage = err.message || 'Failed to save client';
+      toastStore.error(errorMessage);
     } finally {
-        saving = false;
+      saving = false;
     }
-    }
+  }
 </script>
 
 <div class="fixed top-0 right-0 w-96 h-full bg-white shadow-xl border-l border-gray-200 flex flex-col z-50">
@@ -198,7 +209,7 @@
 
     <div>
       <label class="block text-sm font-medium text-gray-700">State *</label>
-      <input type="text" bind:value={form.state} maxlength="2" class="mt-1 block w-full border rounded px-3 py-2 text-sm" />
+      <input type="text" bind:value={form.state} maxlength="2" class="mt-1 block w-full border rounded px-3 py-2 text-sm uppercase" placeholder="NY" />
     </div>
 
     <div>
@@ -213,7 +224,8 @@
     <div>
       <label class="block text-sm font-medium text-gray-700">Mobility Assistance</label>
       <select bind:value={form.mobility_assistance_enum} class="mt-1 block w-full border rounded px-3 py-2 text-sm">
-        {#each mobilityOptions as mobility}
+        <option value="">None</option>
+        {#each mobilityOptions.slice(1) as mobility}
           <option value={mobility}>{mobility}</option>
         {/each}
       </select>
