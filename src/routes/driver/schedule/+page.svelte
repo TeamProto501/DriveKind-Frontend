@@ -108,6 +108,7 @@
           <Input
             type="time"
             id="start-specific"
+            name="startTime"
             bind:value={specificDate.startTime}
             disabled={specificDate.allDay}
           />
@@ -117,6 +118,7 @@
           <Input
             type="time"
             id="end-specific"
+            name="endTime"
             bind:value={specificDate.endTime}
             disabled={specificDate.allDay}
           />
@@ -124,6 +126,11 @@
       </div>
       <div class="flex items-center justify-between">
         <label for="allDay-specific" class="text-sm font-medium">All Day</label>
+        <input
+          type="hidden"
+          name="allDay-specific"
+          value={specificDate.allDay}
+        />
         <Switch
           id="allDay-specific"
           bind:checked={specificDate.allDay}
@@ -177,7 +184,26 @@
       {#each regularDates as dateItem, index (index)}
         <div class="space-y-4 rounded-lg border p-4 bg-gray-50/10">
           <h4 class="text-sm font-semibold text-gray-700">Date #{index + 1}</h4>
-
+          <input
+            type="hidden"
+            name="dates[{index}][selectedDay]"
+            value={dateItem.selectedDay || ""}
+          />
+          <input
+            type="hidden"
+            name="dates[{index}][allDay]"
+            value={dateItem.allDay}
+          />
+          <input
+            type="hidden"
+            name="dates[{index}][startTime]"
+            value={dateItem.startTime}
+          />
+          <input
+            type="hidden"
+            name="dates[{index}][endTime]"
+            value={dateItem.endTime}
+          />
           <div class="space-y-2">
             <label class="text-sm font-medium">Days of Week</label>
             <ToggleGroup.Root
