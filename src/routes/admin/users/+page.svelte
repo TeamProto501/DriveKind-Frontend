@@ -3,6 +3,7 @@
   import Breadcrumbs from '$lib/components/Breadcrumbs.svelte';
   import { Users, Plus, Search, Filter, Trash2, ChevronUp, ChevronDown, ChevronsUpDown, X } from '@lucide/svelte';
   import UserSidebar from './UserSidebar.svelte';
+  import ClientSidebar from './ClientSidebar.svelte';
   import { getAllStaffProfiles, API_BASE_URL } from '$lib/api';
   import { toastStore } from '$lib/toast';
   import { goto } from '$app/navigation';
@@ -57,6 +58,9 @@
   let userToDelete: (StaffProfile | Client) | null = null;
   let deleteConfirmEmail = '';
   let isDeleting = false;
+  let selectedClient: Client | null = null;
+  let isClientCreateMode = false;
+  let showClientSidebar = false;
 
   // Sorting
   type SortField = 'name' | 'email' | 'role' | 'status' | 'phone' | 'city' | 'enrolled';
@@ -235,6 +239,23 @@
     showSidebar = false;
   }
 
+  function openClientSidebar(client: Client | null = null) {
+    selectedClient = client;
+    isClientCreateMode = !client;
+    showClientSidebar = true;
+  }
+
+  function closeClientSidebar() {
+    selectedClient = null;
+    isClientCreateMode = false;
+    showClientSidebar = false;
+  }
+
+  async function handleClientUpdated() {
+    await refreshData();
+    closeClientSidebar();
+  }
+
   async function handleUserUpdated() {
     await refreshData();
     closeSidebar();
@@ -380,12 +401,12 @@
               <Trash2 class="w-4 h-4" /> Delete User
             </button>
           {/if}
-          
+
           <button
             class="inline-flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg shadow hover:bg-blue-700 transition"
-            on:click={() => openSidebar(null)}
+            on:click={() => activeTab === 'users' ? openSidebar(null) : openClientSidebar(null)}
           >
-            <Plus class="w-4 h-4" /> Add User
+            <Plus class="w-4 h-4" /> Add {activeTab === 'users' ? 'User' : 'Client'}
           </button>
         </div>
       </div>
@@ -566,12 +587,12 @@
                       <td class="px-4 py-2 text-gray-600">{new Date(client.date_enrolled).toLocaleDateString()}</td>
                       <td class="px-4 py-2">
                         <div class="flex items-center gap-2">
-                          <a
-                            href="/clients/{client.client_id}"
+                          <button
                             class="text-blue-600 hover:underline text-sm font-medium"
-                            >
-                            View
-                          </a>  
+                            on:click={() => openClientSidebar(client)}
+                          >
+                            Edit
+                          </button>  
                           <button
                             class="text-red-600 hover:underline text-sm font-medium"
                             on:click={() => openDeleteModal(client)}
@@ -643,6 +664,18 @@
         session={data.session}
         on:close={closeSidebar}
         on:updated={handleUserUpdated}
+      />
+    {/if}
+
+    <!-- Client Sidebar -->
+    {#if showClientSidebar}
+      <ClientSidebar
+        client={selectedClient}
+        createMode={isClientCreateMode}
+        session={data.session}
+        orgId={data.userProfile?.org_id || 1}
+        on:close={closeClientSidebar}
+        on:updated={handleClientUpdated}
       />
     {/if}
 

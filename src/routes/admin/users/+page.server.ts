@@ -75,7 +75,8 @@ export const load = async (event) => {
       tab, 
       staffProfiles: staffData,
       clients: clientsData || [],
-      session
+      session,
+      userProfile
     };
 
   } catch (err) {
