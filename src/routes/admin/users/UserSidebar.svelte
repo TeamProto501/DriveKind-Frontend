@@ -26,7 +26,7 @@
 
   type StaffProfile = StaffForm & { user_id: string };
 
-  const roles = ['Admin', 'Dispatcher', 'Driver', 'Volunteer', 'Client'];
+  const roles = ['Admin', 'Dispatcher', 'Driver', 'Volunteer'];
   const defaultInsert = { org_id: 1 };
 
   let form: StaffForm = initializeForm();
