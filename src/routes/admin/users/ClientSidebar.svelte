@@ -29,7 +29,7 @@
 
   const statusOptions = ['Active', 'Inactive', 'Pending'];
   // Updated to match your database enum - adjust these based on your actual enum values
-  const mobilityOptions = ['', 'Walker', 'Wheelchair', 'Cane', 'Crutches', 'Scooter'];
+  const mobilityOptions = ['', 'cane', 'light walker', 'roll-leader'];
 
   let form: Client = initializeForm();
   let saving = false;
@@ -225,9 +225,9 @@
       <label class="block text-sm font-medium text-gray-700">Mobility Assistance</label>
       <select bind:value={form.mobility_assistance_enum} class="mt-1 block w-full border rounded px-3 py-2 text-sm">
         <option value="">None</option>
-        {#each mobilityOptions.slice(1) as mobility}
-          <option value={mobility}>{mobility}</option>
-        {/each}
+        <option value="cane">Cane</option>
+        <option value="light walker">Light Walker</option>
+        <option value="roll-leader">Roll-Leader</option>
       </select>
     </div>
 
