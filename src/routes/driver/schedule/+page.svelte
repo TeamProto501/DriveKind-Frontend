@@ -62,6 +62,17 @@
       <h1 class="text-3xl font-bold tracking-tight">Schedule Unavailability</h1>
       <p class="text-muted-foreground">Create Unavailability</p>
     </div>
+    {#if form?.error}
+      <div class="rounded-lg border border-red-200 bg-red-50 p-4">
+        <p class="text-sm text-red-800">{form.error}</p>
+      </div>
+    {/if}
+
+    {#if form?.success}
+      <div class="rounded-lg border border-green-200 bg-green-50 p-4">
+        <p class="text-sm text-green-800">Unavailability saved successfully!</p>
+      </div>
+    {/if}
   </div>
 
   <!-- Schedule Overview -->
