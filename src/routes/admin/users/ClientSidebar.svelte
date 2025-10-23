@@ -18,6 +18,7 @@
     email?: string;
     primary_phone: string;
     secondary_phone?: string;
+    contact_pref?: string | null;
     date_of_birth: string;
     gender: string;
     street_address: string;
@@ -44,15 +45,21 @@
     allergies?: string;
     pick_up_instructions?: string;
     comments?: string;
+    other_limitations?: string;
+    temp_client_date?: string;
+    referral_method?: string;
+    driver_preference?: string;
     org_id?: number;
   };
 
-  const statusOptions = ['Active', 'Inactive', 'Pending'];
+  // All enum values must match your database exactly (case-sensitive!)
+  const statusOptions = ['Active', 'Inactive', 'Temporary Thru'];
   const mobilityOptions = ['', 'cane', 'light walker', 'roll-leader'];
-  const genderOptions = ['Male', 'Female', 'Other', 'Prefer not to say'];
-  const residenceOptions = ['House', 'Apartment', 'Assisted Living', 'Nursing Home'];
-  const carHeightOptions = ['Standard', 'High', 'Low'];
-  const serviceAnimalSizeOptions = ['', 'Small', 'Medium', 'Large'];
+  const genderOptions = ['Male', 'Female', 'Other'];
+  const residenceOptions = ['house', 'apartment', 'mobile home', 'townhouse', 'condo'];
+  const carHeightOptions = ['low', 'medium', 'high', 'low/medium', 'medium/high', 'low/medium/high'];
+  const serviceAnimalSizeOptions = ['', 'small', 'medium', 'large'];
+  const contactPrefOptions = ['', 'Phone', 'Email', 'Text'];
 
   let form: Client = initializeForm();
   let saving = false;
@@ -67,8 +74,9 @@
         email: '',
         primary_phone: '',
         secondary_phone: '',
+        contact_pref: null,
         date_of_birth: '',
-        gender: 'Prefer not to say',
+        gender: 'Other',
         street_address: '',
         address2: '',
         city: '',
@@ -83,8 +91,8 @@
         oxygen: false,
         client_status_enum: 'Active',
         mobility_assistance_enum: null,
-        residence_enum: 'House',
-        car_height_needed_enum: 'Standard',
+        residence_enum: 'house',
+        car_height_needed_enum: 'medium',
         service_animal_size_enum: null,
         date_enrolled: new Date().toISOString().split('T')[0],
         emergency_contact_name: '',
@@ -93,6 +101,10 @@
         allergies: '',
         pick_up_instructions: '',
         comments: '',
+        other_limitations: '',
+        temp_client_date: '',
+        referral_method: '',
+        driver_preference: '',
         org_id: orgId
       };
     }
@@ -124,6 +136,7 @@
     try {
       const clientData = {
         ...form,
+        contact_pref: form.contact_pref === '' ? null : form.contact_pref,
         mobility_assistance_enum: form.mobility_assistance_enum === '' ? null : form.mobility_assistance_enum,
         service_animal_size_enum: form.service_animal_size_enum === '' ? null : form.service_animal_size_enum,
         email: form.email?.trim() || null,
@@ -135,6 +148,10 @@
         allergies: form.allergies?.trim() || null,
         pick_up_instructions: form.pick_up_instructions?.trim() || null,
         comments: form.comments?.trim() || null,
+        other_limitations: form.other_limitations?.trim() || null,
+        temp_client_date: form.temp_client_date?.trim() || null,
+        referral_method: form.referral_method?.trim() || null,
+        driver_preference: form.driver_preference?.trim() || null,
       };
       
       if (createMode) {
@@ -246,6 +263,16 @@
       </div>
 
       <div>
+        <label class="block text-sm font-medium text-gray-700">Contact Preference</label>
+        <select bind:value={form.contact_pref} class="mt-1 block w-full border rounded px-3 py-2 text-sm">
+          <option value="">None</option>
+          {#each contactPrefOptions.slice(1) as pref}
+            <option value={pref}>{pref}</option>
+          {/each}
+        </select>
+      </div>
+
+      <div>
         <label class="block text-sm font-medium text-gray-700">Primary Phone *</label>
         <input type="tel" bind:value={form.primary_phone} class="mt-1 block w-full border rounded px-3 py-2 text-sm" />
         <div class="mt-2 space-y-1">
@@ -313,7 +340,7 @@
         <label class="block text-sm font-medium text-gray-700">Residence Type *</label>
         <select bind:value={form.residence_enum} class="mt-1 block w-full border rounded px-3 py-2 text-sm">
           {#each residenceOptions as residence}
-            <option value={residence}>{residence}</option>
+            <option value={residence}>{residence.charAt(0).toUpperCase() + residence.slice(1)}</option>
           {/each}
         </select>
       </div>
@@ -344,7 +371,7 @@
         <label class="block text-sm font-medium text-gray-700">Car Height Needed *</label>
         <select bind:value={form.car_height_needed_enum} class="mt-1 block w-full border rounded px-3 py-2 text-sm">
           {#each carHeightOptions as height}
-            <option value={height}>{height}</option>
+            <option value={height}>{height.charAt(0).toUpperCase() + height.slice(1)}</option>
           {/each}
         </select>
       </div>
@@ -361,9 +388,9 @@
           <label class="block text-sm font-medium text-gray-700">Service Animal Size</label>
           <select bind:value={form.service_animal_size_enum} class="mt-1 block w-full border rounded px-3 py-2 text-sm">
             <option value="">Select size</option>
-            <option value="Small">Small</option>
-            <option value="Medium">Medium</option>
-            <option value="Large">Large</option>
+            <option value="small">Small</option>
+            <option value="medium">Medium</option>
+            <option value="large">Large</option>
           </select>
         </div>
       {/if}
@@ -409,6 +436,11 @@
           </div>
 
           <div>
+            <label class="block text-sm font-medium text-gray-700">Other Limitations</label>
+            <textarea bind:value={form.other_limitations} rows="2" class="mt-1 block w-full border rounded px-3 py-2 text-sm"></textarea>
+          </div>
+
+          <div>
             <label class="block text-sm font-medium text-gray-700">Pick Up Instructions</label>
             <textarea bind:value={form.pick_up_instructions} rows="2" class="mt-1 block w-full border rounded px-3 py-2 text-sm"></textarea>
           </div>
@@ -416,6 +448,16 @@
           <div>
             <label class="block text-sm font-medium text-gray-700">Comments</label>
             <textarea bind:value={form.comments} rows="3" class="mt-1 block w-full border rounded px-3 py-2 text-sm"></textarea>
+          </div>
+
+          <div>
+            <label class="block text-sm font-medium text-gray-700">Referral Method</label>
+            <input type="text" bind:value={form.referral_method} class="mt-1 block w-full border rounded px-3 py-2 text-sm" />
+          </div>
+
+          <div>
+            <label class="block text-sm font-medium text-gray-700">Driver Preference</label>
+            <input type="text" bind:value={form.driver_preference} class="mt-1 block w-full border rounded px-3 py-2 text-sm" />
           </div>
         </div>
       {/if}
@@ -436,6 +478,13 @@
         <label class="block text-sm font-medium text-gray-700">Date Enrolled *</label>
         <input type="date" bind:value={form.date_enrolled} class="mt-1 block w-full border rounded px-3 py-2 text-sm" />
       </div>
+
+      {#if form.client_status_enum === 'Temporary Thru'}
+        <div>
+          <label class="block text-sm font-medium text-gray-700">Temporary Client Date</label>
+          <input type="date" bind:value={form.temp_client_date} class="mt-1 block w-full border rounded px-3 py-2 text-sm" />
+        </div>
+      {/if}
     </div>
   </div>
 
