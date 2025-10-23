@@ -5,6 +5,7 @@
   import { Input } from "$lib/components/ui/input/index.js";
   import Calendar from "$lib/components/ui/calendar/calendar.svelte";
   import { CalendarDate } from "@internationalized/date";
+  import * as NativeSelect from "$lib/components/ui/native-select/index.js";
   let selectedDay = $state<string>();
   let isChecked = $state(false);
   let value = $state<CalendarDate | undefined>(new CalendarDate(2025, 10, 20));
@@ -98,7 +99,15 @@
 
       <div>
         <label for="reason-specific" class="text-sm font-medium">Reason</label>
-        <Input id="reason-specific" type="text" />
+        <NativeSelect.Root>
+          <NativeSelect.Option value="">Select Reason</NativeSelect.Option>
+          <NativeSelect.Option value="Holiday">Holiday</NativeSelect.Option>
+          <NativeSelect.Option value="Personal">Personal</NativeSelect.Option>
+          <NativeSelect.Option value="Medical">Medical</NativeSelect.Option>
+          <NativeSelect.Option value="Appointment"
+            >Appointment</NativeSelect.Option
+          >
+        </NativeSelect.Root>
       </div>
       <button
         type="submit"
@@ -223,7 +232,15 @@
         <div>
           <label for="reason-specific" class="text-sm font-medium">Reason</label
           >
-          <Input id="reason-specific" type="text" />
+          <NativeSelect.Root>
+            <NativeSelect.Option value="">Select Reason</NativeSelect.Option>
+            <NativeSelect.Option value="Holiday">Holiday</NativeSelect.Option>
+            <NativeSelect.Option value="Personal">Personal</NativeSelect.Option>
+            <NativeSelect.Option value="Medical">Medical</NativeSelect.Option>
+            <NativeSelect.Option value="Appointment"
+              >Appointment</NativeSelect.Option
+            >
+          </NativeSelect.Root>
         </div>
         <hr class="border-gray-300" />
       {/each}
