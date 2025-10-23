@@ -1,7 +1,7 @@
 <script lang="ts">
   import RoleGuard from '$lib/components/RoleGuard.svelte';
   import Breadcrumbs from '$lib/components/Breadcrumbs.svelte';
-  import { Users, Plus, Search, Filter, Trash2, ChevronUp, ChevronDown, ChevronsUpDown, X } from '@lucide/svelte';
+  import { Users, Plus, Search, Filter, Trash2, ChevronUp, ChevronDown, ChevronsUpDown, X, UserX } from '@lucide/svelte';
   import UserSidebar from './UserSidebar.svelte';
   import ClientSidebar from './ClientSidebar.svelte';
   import { getAllStaffProfiles, API_BASE_URL } from '$lib/api';
@@ -53,11 +53,14 @@
   let showSidebar = false;
   let showDeleteModal = false;
   let showDeleteSearch = false;
+  let showDeactivateModal = false;
   let deleteSearchQuery = '';
   let deleteSearchResults: (StaffProfile | Client)[] = [];
   let userToDelete: (StaffProfile | Client) | null = null;
+  let clientToDeactivate: Client | null = null;
   let deleteConfirmEmail = '';
   let isDeleting = false;
+  let isDeactivating = false;
   let selectedClient: Client | null = null;
   let isClientCreateMode = false;
   let showClientSidebar = false;
@@ -76,6 +79,19 @@
     (currentPage - 1) * pageSize,
     currentPage * pageSize
   );
+
+  function getStatusColor(status: string): string {
+    switch (status) {
+      case 'Active':
+        return 'bg-green-100 text-green-800';
+      case 'Inactive':
+        return 'bg-red-100 text-red-800';
+      case 'Temporary Thru':
+        return 'bg-blue-100 text-blue-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
+    }
+  }
 
   function switchTab(tab: 'users' | 'clients') {
     activeTab = tab;
@@ -280,7 +296,7 @@
     }
 
     const q = deleteSearchQuery.toLowerCase();
-    const allUsers = activeTab === 'users' ? staffProfiles : clients;
+    const allUsers = staffProfiles;
 
     deleteSearchResults = allUsers.filter((u: any) =>
       `${u.first_name} ${u.last_name}`.toLowerCase().includes(q) ||
@@ -289,14 +305,14 @@
     ).slice(0, 10);
   }
 
-  function selectUserForDeletion(user: StaffProfile | Client) {
+  function selectUserForDeletion(user: StaffProfile) {
     userToDelete = user;
     deleteConfirmEmail = '';
     showDeleteModal = true;
     closeDeleteSearch();
   }
 
-  function openDeleteModal(user: StaffProfile | Client) {
+  function openDeleteModal(user: StaffProfile) {
     userToDelete = user;
     deleteConfirmEmail = '';
     showDeleteModal = true;
@@ -306,6 +322,49 @@
     showDeleteModal = false;
     userToDelete = null;
     deleteConfirmEmail = '';
+  }
+
+  function openDeactivateModal(client: Client) {
+    clientToDeactivate = client;
+    showDeactivateModal = true;
+  }
+
+  function closeDeactivateModal() {
+    showDeactivateModal = false;
+    clientToDeactivate = null;
+  }
+
+  async function confirmDeactivate() {
+    if (!clientToDeactivate) return;
+
+    try {
+      isDeactivating = true;
+
+      const response = await fetch(`${API_BASE_URL}/clients/${clientToDeactivate.client_id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${data.session.access_token}`
+        },
+        body: JSON.stringify({
+          client_status_enum: 'Inactive'
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to deactivate client');
+      }
+
+      toastStore.success('Client deactivated successfully');
+      closeDeactivateModal();
+      await refreshData();
+    } catch (error) {
+      console.error('Deactivate error:', error);
+      toastStore.error(`Failed to deactivate client: ${error.message}`);
+    } finally {
+      isDeactivating = false;
+    }
   }
 
   async function confirmDelete() {
@@ -321,42 +380,26 @@
     try {
       isDeleting = true;
 
-      if (activeTab === 'users') {
-        const userId = (userToDelete as StaffProfile).user_id;
-        const response = await fetch(`${API_BASE_URL}/staff-profiles/${userId}`, {
-          method: 'DELETE',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${data.session.access_token}`
-          }
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || 'Failed to delete user');
+      const userId = (userToDelete as StaffProfile).user_id;
+      const response = await fetch(`${API_BASE_URL}/staff-profiles/${userId}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${data.session.access_token}`
         }
-      } else {
-        const clientId = (userToDelete as Client).client_id;
-        const response = await fetch(`${API_BASE_URL}/clients/${clientId}`, {
-          method: 'DELETE',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${data.session.access_token}`
-          }
-        });
+      });
 
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || 'Failed to delete client');
-        }
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to delete user');
       }
 
-      toastStore.success(`${activeTab === 'users' ? 'User' : 'Client'} deleted successfully`);
+      toastStore.success('User deleted successfully');
       closeDeleteModal();
       await refreshData();
     } catch (error) {
       console.error('Delete error:', error);
-      toastStore.error(`Failed to delete ${activeTab === 'users' ? 'user' : 'client'}: ${error.message}`);
+      toastStore.error(`Failed to delete user: ${error.message}`);
     } finally {
       isDeleting = false;
     }
@@ -580,7 +623,7 @@
                       <td class="px-4 py-2 text-gray-600">{client.primary_phone}</td>
                       <td class="px-4 py-2 text-gray-600">{client.city}, {client.state}</td>
                       <td class="px-4 py-2">
-                        <span class="inline-flex items-center px-2 py-1 rounded-full text-xs bg-green-100 text-green-800">
+                        <span class="inline-flex items-center px-2 py-1 rounded-full text-xs {getStatusColor(client.client_status_enum)}">
                           {client.client_status_enum}
                         </span>
                       </td>
@@ -592,13 +635,15 @@
                             on:click={() => openClientSidebar(client)}
                           >
                             Edit
-                          </button>  
-                          <button
-                            class="text-red-600 hover:underline text-sm font-medium"
-                            on:click={() => openDeleteModal(client)}
-                          >
-                            Delete
                           </button>
+                          {#if client.client_status_enum !== 'Inactive'}
+                            <button
+                              class="text-orange-600 hover:underline text-sm font-medium"
+                              on:click={() => openDeactivateModal(client)}
+                            >
+                              Deactivate
+                            </button>
+                          {/if}
                         </div>
                       </td>
                     </tr>
@@ -679,7 +724,7 @@
       />
     {/if}
 
-    <!-- Delete Search Modal -->
+    <!-- Delete Search Modal (Users Only) -->
     {#if showDeleteSearch}
       <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
         <div class="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
@@ -716,7 +761,7 @@
                       {result.first_name} {result.last_name}
                     </div>
                     <div class="text-xs text-gray-500">
-                      {'email' in result ? result.email : result.primary_phone}
+                      {result.email || result.primary_phone}
                     </div>
                   </button>
                 {/each}
@@ -738,7 +783,7 @@
       </div>
     {/if}
 
-    <!-- Delete Confirmation Modal -->
+    <!-- Delete Confirmation Modal (Users Only) -->
     {#if showDeleteModal && userToDelete}
       <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
         <div class="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
@@ -756,7 +801,7 @@
                   {userToDelete.first_name} {userToDelete.last_name}
                 </div>
                 <div class="text-xs text-gray-500">
-                  {'email' in userToDelete ? userToDelete.email : userToDelete.primary_phone}
+                  {userToDelete.email || userToDelete.primary_phone}
                 </div>
               </div>
             </div>
@@ -771,7 +816,7 @@
               
               <div class="mb-2">
                 <code class="text-xs bg-gray-100 px-2 py-1 rounded">
-                  {'email' in userToDelete ? userToDelete.email : ''}
+                  {userToDelete.email || ''}
                 </code>
               </div>
 
@@ -799,6 +844,56 @@
               class="px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
             >
               {isDeleting ? 'Deleting...' : 'Delete User'}
+            </button>
+          </div>
+        </div>
+      </div>
+    {/if}
+
+    <!-- Deactivate Confirmation Modal (Clients Only) -->
+    {#if showDeactivateModal && clientToDeactivate}
+      <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+          <div class="px-6 py-4 border-b">
+            <h3 class="text-lg font-semibold text-orange-600">Confirm Deactivation</h3>
+          </div>
+
+          <div class="p-6">
+            <div class="mb-4">
+              <p class="text-sm text-gray-900 font-medium mb-2">
+                You are about to deactivate:
+              </p>
+              <div class="p-3 bg-gray-50 rounded-lg">
+                <div class="font-medium text-gray-900">
+                  {clientToDeactivate.first_name} {clientToDeactivate.last_name}
+                </div>
+                <div class="text-xs text-gray-500">
+                  {clientToDeactivate.primary_phone}
+                </div>
+              </div>
+            </div>
+
+            <div class="mb-4">
+              <p class="text-sm text-gray-600">
+                This will set the client's status to <strong>Inactive</strong>. The client record will be preserved and can be reactivated later by editing the client.
+              </p>
+            </div>
+          </div>
+
+          <div class="px-6 py-4 border-t flex justify-end gap-2">
+            <button
+              on:click={closeDeactivateModal}
+              disabled={isDeactivating}
+              class="px-4 py-2 rounded-lg border text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              on:click={confirmDeactivate}
+              disabled={isDeactivating}
+              class="px-4 py-2 rounded-lg bg-orange-600 text-white hover:bg-orange-700 disabled:opacity-50"
+            >
+              {isDeactivating ? 'Deactivating...' : 'Deactivate Client'}
             </button>
           </div>
         </div>
