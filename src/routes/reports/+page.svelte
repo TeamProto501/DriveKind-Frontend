@@ -1,7 +1,7 @@
 <script lang="ts">
   import RoleGuard from '$lib/components/RoleGuard.svelte';
   import Breadcrumbs from '$lib/components/Breadcrumbs.svelte';
-  import { Download, Calendar, FileText, Clock, MapPin, Car, AlertCircle } from 'lucide-svelte';
+  import { Download, Calendar, FileText, Clock, MapPin, Car, AlertCircle } from '@lucide/svelte';
   import { API_BASE_URL } from '$lib/api';
   import { toastStore } from '$lib/toast';
   import type { PageData } from './$types';
