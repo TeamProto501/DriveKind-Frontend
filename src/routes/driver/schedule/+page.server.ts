@@ -3,6 +3,17 @@ import { error, redirect, fail } from "@sveltejs/kit";
 import type { Actions } from "./$types";
 import { createSupabaseServerClient } from "$lib/supabase.server";
 
+export const load = async (event) => {
+  const res = await authenticatedFetchServer(
+    API_BASE_URL + "/driver-unavailability/by-user",
+    {},
+    event
+  );
+  const text = await res.text();
+  const data = JSON.parse(text);
+  console.log(data);
+  return { data };
+};
 function formatDate(calendarDateString: string): string {
   return calendarDateString;
 }

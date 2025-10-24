@@ -8,12 +8,14 @@
   import { getLocalTimeZone, today } from "@internationalized/date";
   import * as NativeSelect from "$lib/components/ui/native-select/index.js";
   import { enhance } from "$app/forms";
-  import type { ActionData } from "./$types";
+  import type { ActionData, PageData } from "./$types";
+  import Table from "./table.svelte";
   interface Props {
+    data: PageData;
     form?: ActionData;
   }
 
-  let { form }: Props = $props();
+  let { data, form }: Props = $props();
   let selectedDay = $state<string>();
   let isChecked = $state(false);
   let value = $state<CalendarDate | undefined>(today(getLocalTimeZone()));
@@ -59,9 +61,14 @@
   <!-- Header -->
   <div class="flex items-center justify-between">
     <div>
-      <h1 class="text-3xl font-bold tracking-tight">Schedule Unavailability</h1>
-      <p class="text-muted-foreground">Create Unavailability</p>
+      <h1 class="text-3xl font-bold tracking-tight">
+        Unavailability/Vacations
+      </h1>
+      <p class="text-muted-foreground">
+        Manage and Schedule Unavailabilities and vacations
+      </p>
     </div>
+
     {#if form?.error}
       <div class="rounded-lg border border-red-200 bg-red-50 p-4">
         <p class="text-sm text-red-800">{form.error}</p>
@@ -74,7 +81,9 @@
       </div>
     {/if}
   </div>
-
+  <div class="rounded-lg border bg-white p-6 shadow">
+    <Table data={data || []} />
+  </div>
   <!-- Schedule Overview -->
   <div class="grid grid-cols-2 gap-6 rounded-lg border bg-white p-6 shadow-xl">
     <!-- Specific Date Form -->
