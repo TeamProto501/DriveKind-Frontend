@@ -19,14 +19,21 @@
   let endDate = getDefaultEndDate();
   let hoursWorked: number | null = null;
   let mileage: number | null = null;
-  let reportName = `${data.userProfile.first_name}_${data.userProfile.last_name}_Report`;
+  
+  // Safe access to user profile with defaults
+  const firstName = data.userProfile?.first_name || 'User';
+  const lastName = data.userProfile?.last_name || 'Report';
+  let reportName = `${firstName}_${lastName}_Report`;
+  
   let isGenerating = false;
   let isFetchingRides = false;
   let rideStats: RideStats | null = null;
 
-  const userRole = Array.isArray(data.userProfile.role) 
-    ? data.userProfile.role[0] 
-    : data.userProfile.role;
+  // Safe role access with fallback
+  const userRole = data.userProfile?.role 
+    ? (Array.isArray(data.userProfile.role) ? data.userProfile.role[0] : data.userProfile.role)
+    : 'Volunteer'; // Default fallback role
+  
   const isDriver = userRole === 'Driver';
 
   function getDefaultStartDate(): string {
@@ -125,7 +132,7 @@
       yPosition += 12;
       doc.setFontSize(14);
       doc.setFont('helvetica', 'normal');
-      doc.text(`${data.userProfile.first_name} ${data.userProfile.last_name}`, pageWidth / 2, yPosition, { align: 'center' });
+      doc.text(`${firstName} ${lastName}`, pageWidth / 2, yPosition, { align: 'center' });
       
       yPosition += 8;
       doc.setFontSize(11);
