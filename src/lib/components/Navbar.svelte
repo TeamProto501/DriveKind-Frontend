@@ -110,7 +110,6 @@
         { label: 'Users', href: '/admin/users', icon: 'Users', badge: null },
         { label: 'Database', href: '/admin/database', icon: 'Database', badge: null },
         { label: 'Configuration', href: '/admin/config', icon: 'Settings', badge: null },
-        { label: 'Reports', href: '/admin/reports', icon: 'FileText', badge: null },
         { label: 'Audit Logs', href: '/admin/audit', icon: 'Shield', badge: null }
       );
     }
@@ -143,6 +142,7 @@
     items.push(
       { label: 'Profile', href: '/profile', icon: 'User', badge: null },
       { label: 'Schedule', href: '/calendar', icon: 'Calendar', badge: null, roles: ['Super Admin', 'Admin', 'Dispatcher', 'Driver'] },
+      { label: 'Reports', href: '/reports', icon: 'FileText', badge: null },
       { label: 'Help', href: '/help', icon: 'HelpCircle', badge: null }
     );
 		
