@@ -28,6 +28,7 @@
     Shield,
     UserCog,
     Truck,
+    CalendarCheck,
   } from "@lucide/svelte";
   import type { RoleEnum, Profile, Organization } from "$lib/types";
 
@@ -92,6 +93,7 @@
       Settings: Settings,
       HelpCircle: HelpCircle,
       User: User,
+      CalendarCheck: CalendarCheck,
     };
     return iconMap[icon] || Home;
   }
@@ -180,12 +182,19 @@
       });
       items.push({
         label: "Schedule Unavailability",
-        href: "/driver/schedule",
-        icon: "Calendar",
+        href: "/driver/unavail",
+        icon: "CalendarCheck",
         badge: null,
       });
     }
-
+    if (currentRole === "Volunteer") {
+      items.push({
+        label: "Schedule Unavailability",
+        href: "/volunteer/unavail",
+        icon: "CalendarCheck",
+        badge: null,
+      });
+    }
     // Common items for all roles
     items.push(
       { label: "Profile", href: "/profile", icon: "User", badge: null },
