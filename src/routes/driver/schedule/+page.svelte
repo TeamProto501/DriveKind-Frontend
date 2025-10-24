@@ -77,7 +77,7 @@
 
     {#if form?.success}
       <div class="rounded-lg border border-green-200 bg-green-50 p-4">
-        <p class="text-sm text-green-800">Unavailability saved successfully!</p>
+        <p class="text-sm text-green-800">Success</p>
       </div>
     {/if}
   </div>

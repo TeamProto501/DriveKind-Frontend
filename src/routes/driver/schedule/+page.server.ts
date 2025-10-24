@@ -172,4 +172,38 @@ export const actions: Actions = {
       });
     }
   },
+  deleteUnavailability: async (event) => {
+    try {
+      const formData = await event.request.formData();
+      const id = formData.get("id") as string;
+
+      if (!id) {
+        return fail(400, { error: "Unavailability ID is required" });
+      }
+
+      const response = await authenticatedFetchServer(
+        `${API_BASE_URL}/driver-unavailability/${id}`,
+        {
+          method: "DELETE",
+        },
+        event
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        return fail(response.status, {
+          error: errorData.error || "Failed to delete unavailability",
+        });
+      }
+
+      return { success: true };
+    } catch (err) {
+      console.error("Error deleting unavailability:", err);
+      return fail(500, {
+        error: `Failed to delete unavailability: ${
+          err instanceof Error ? err.message : "Unknown error"
+        }`,
+      });
+    }
+  },
 };
