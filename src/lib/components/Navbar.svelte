@@ -12,6 +12,7 @@
     HelpCircle,
     Bell,
     ChevronDown,
+    ChevronRight,
     LogOut,
     Building2,
     Users,
@@ -242,7 +243,6 @@
       userProfile = data.profile as any;
       if (Array.isArray(data.roles)) {
         userRoles = data.roles as RoleEnum[];
-        activeRole = userRoles[0]; // Set first role as active
       }
     } else {
       // Fallback to mock data for testing
@@ -264,7 +264,6 @@
         lives_alone: true,
       } as unknown as Profile;
       userRoles = ["Super Admin"]; // Set as Super Admin for testing
-      activeRole = "Super Admin";
       userOrganization = {
         org_id: 1,
         name: "DriveKind Transit Services",
@@ -278,6 +277,21 @@
     }
 
     isLoading = false;
+    
+    // Add click outside handler for profile dropdown
+    const handleClickOutside = (event: MouseEvent) => {
+      const dropdown = document.getElementById('profile-dropdown');
+      const target = event.target as Node;
+      if (dropdown && !dropdown.contains(target) && !dropdown.previousElementSibling?.contains(target)) {
+        dropdown.classList.add('hidden');
+      }
+    };
+    
+    document.addEventListener('click', handleClickOutside);
+    
+    return () => {
+      document.removeEventListener('click', handleClickOutside);
+    };
   });
 
   // Logout function
@@ -306,23 +320,6 @@
   // Navigation function
   function navigateTo(href: string) {
     goto(href);
-  }
-
-  // Role switching function
-  function switchRole(role: RoleEnum) {
-    activeRole = role;
-
-    // Redirect user to default dashboard for their role
-    if (role === "Admin") {
-      goto("/admin/dash");
-    } else if (role === "Dispatcher") {
-      goto("/dispatcher/dashboard");
-    } else if (role === "Driver") {
-      goto("/driver/rides");
-    } else {
-      // fallback route
-      goto("/profile");
-    }
   }
 </script>
 

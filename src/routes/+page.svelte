@@ -1,185 +1,212 @@
 <script lang="ts">
-  import { enhance } from '$app/forms';
   import { goto } from '$app/navigation';
   import { onMount } from 'svelte';
-  import type { PageData, ActionData } from './$types';
+  import type { PageData } from './$types';
+  import { Calendar, Car, Users, TrendingUp, Clock, CheckCircle } from '@lucide/svelte';
 
-  let { data, form }: { data: PageData, form: ActionData } = $props();
+  let { data }: { data: PageData } = $props();
+  
+  // User is guaranteed to be authenticated here (thanks to hooks)
   const session = data.session;
-  let loading = $state(false);
-  let testLoading = $state(false);
+  const profile = data.profile;
+  const userRoles = data.roles || [];
 
-  // Mock user roles for demonstration
-  let userRoles = $state<string[]>([]);
+  // Get user's primary role for dashboard customization
+  const primaryRole = userRoles[0] || 'User';
 
-  onMount(() => {
-    // Simulate loading user roles
-    setTimeout(() => {
-      userRoles = ["Admin", "Dispatcher"];
-    }, 1000);
+  // Dashboard stats (mock data - replace with real API calls)
+  let stats = $state({
+    totalRides: 0,
+    upcomingRides: 0,
+    completedRides: 0,
+    activeDrivers: 0
   });
 
-  // Redirect to appropriate dashboard based on user role
-  function redirectToDashboard() {
-    if (userRoles.includes('Admin')) {
-      goto('/admin/dash');
-    } else if (userRoles.includes('Dispatcher')) {
-      goto('/dispatcher/dashboard');
-    } else if (userRoles.includes('Driver')) {
-      goto('/driver/rides');
-    } else {
-      goto('/profile');
+  onMount(async () => {
+    // Load dashboard statistics based on user role
+    // This is mock data - replace with actual API calls
+    if (primaryRole === 'Dispatcher' || primaryRole === 'Admin' || primaryRole === 'Super Admin') {
+      stats = {
+        totalRides: 156,
+        upcomingRides: 23,
+        completedRides: 133,
+        activeDrivers: 12
+      };
+    } else if (primaryRole === 'Driver') {
+      stats = {
+        totalRides: 45,
+        upcomingRides: 8,
+        completedRides: 37,
+        activeDrivers: 1
+      };
     }
-  }
+  });
 </script>
 
 <svelte:head>
-  <title>DriveKind - Welcome</title>
+  <title>Dashboard - DriveKind</title>
 </svelte:head>
 
-<div class="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
-  <div class="max-w-6xl mx-auto px-4 py-12">
-    <!-- Header -->
-    <div class="text-center mb-12">
-      <div class="flex items-center justify-center mb-6">
-        <div class="w-16 h-16 bg-blue-600 rounded-xl flex items-center justify-center mr-4">
-          <span class="text-white font-bold text-2xl">DK</span>
+<div class="p-6">
+  <!-- Welcome Header -->
+  <div class="mb-8">
+    <h1 class="text-3xl font-bold text-gray-900 mb-2">
+      Welcome back, {profile?.first_name || session?.user?.email?.split('@')[0] || 'User'}!
+    </h1>
+    <p class="text-gray-600">
+      Here's what's happening with your transportation services today.
+    </p>
+  </div>
+
+  <!-- Quick Stats -->
+  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+    <div class="bg-white rounded-lg shadow p-6 border border-gray-200">
+      <div class="flex items-center justify-between mb-4">
+        <div class="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+          <Car class="w-6 h-6 text-blue-600" />
         </div>
-        <h1 class="text-5xl font-bold text-gray-900">DriveKind</h1>
+        <span class="text-2xl font-bold text-gray-900">{stats.totalRides}</span>
       </div>
-      <p class="text-xl text-gray-600 max-w-2xl mx-auto">
-        Your trusted partner for accessible transportation services. We provide safe, reliable rides for everyone who needs them.
-      </p>
+      <h3 class="text-sm font-medium text-gray-600">Total Rides</h3>
     </div>
 
-    {#if session}
-      <!-- Welcome Back Section -->
-      <div class="bg-white rounded-2xl shadow-xl p-8 mb-8">
-        <div class="text-center">
-          <h2 class="text-3xl font-bold text-gray-900 mb-4">Welcome back!</h2>
-          <p class="text-lg text-gray-600 mb-6">
-            You're signed in as <span class="font-semibold text-blue-600">{session.user?.email}</span>
-          </p>
-          
-          <div class="flex flex-col sm:flex-row gap-4 justify-center">
-            <button
-              onclick={redirectToDashboard}
-              class="px-8 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
-            >
-              Go to Dashboard
-            </button>
-            <button
-              onclick={() => goto('/profile')}
-              class="px-8 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 transition-colors"
-            >
-              View Profile
-            </button>
-          </div>
+    <div class="bg-white rounded-lg shadow p-6 border border-gray-200">
+      <div class="flex items-center justify-between mb-4">
+        <div class="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center">
+          <Clock class="w-6 h-6 text-yellow-600" />
         </div>
+        <span class="text-2xl font-bold text-gray-900">{stats.upcomingRides}</span>
       </div>
+      <h3 class="text-sm font-medium text-gray-600">Upcoming Rides</h3>
+    </div>
 
-      <!-- API Test Section -->
-      <div class="bg-white rounded-2xl shadow-xl p-8 mb-8">
-        <h2 class="text-2xl font-bold text-gray-900 mb-6">API Test</h2>
-        <div class="space-y-4">
-          <form 
-            method="POST" 
-            action="?/testClients"
-            use:enhance={() => {
-              testLoading = true;
-              return async ({ update }) => {
-                testLoading = false;
-                await update();
-              };
-            }}
-          >
-            <button
-              type="submit"
-              disabled={testLoading}
-              class="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50 transition-colors"
-            >
-              {testLoading ? 'Testing...' : 'Test Clients Endpoint'}
-            </button>
-          </form>
-
-          {#if form?.error}
-            <div class="bg-red-50 border border-red-200 rounded-lg p-4">
-              <p class="text-red-800 font-medium">Error:</p>
-              <p class="text-red-700 text-sm mt-1">{form.error}</p>
-            </div>
-          {/if}
-
-          {#if form?.success && form?.data}
-            <div class="bg-green-50 border border-green-200 rounded-lg p-4">
-              <p class="text-green-800 font-medium mb-2">Success! Client data:</p>
-              <pre class="text-green-700 text-sm bg-green-100 p-3 rounded overflow-x-auto">{JSON.stringify(form.data, null, 2)}</pre>
-            </div>
-          {/if}
+    <div class="bg-white rounded-lg shadow p-6 border border-gray-200">
+      <div class="flex items-center justify-between mb-4">
+        <div class="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
+          <CheckCircle class="w-6 h-6 text-green-600" />
         </div>
+        <span class="text-2xl font-bold text-gray-900">{stats.completedRides}</span>
       </div>
+      <h3 class="text-sm font-medium text-gray-600">Completed Rides</h3>
+    </div>
 
-      <!-- Quick Actions -->
-      <div class="grid md:grid-cols-3 gap-6">
-        <div class="bg-white rounded-xl shadow-lg p-6 text-center">
-          <div class="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mx-auto mb-4">
-            <span class="text-blue-600 text-xl">📊</span>
+    {#if primaryRole === 'Dispatcher' || primaryRole === 'Admin' || primaryRole === 'Super Admin'}
+      <div class="bg-white rounded-lg shadow p-6 border border-gray-200">
+        <div class="flex items-center justify-between mb-4">
+          <div class="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
+            <Users class="w-6 h-6 text-purple-600" />
           </div>
-          <h3 class="text-lg font-semibold text-gray-900 mb-2">Dashboard</h3>
-          <p class="text-gray-600 text-sm mb-4">View your personalized dashboard</p>
-          <button
-            onclick={redirectToDashboard}
-            class="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            Go to Dashboard
-          </button>
+          <span class="text-2xl font-bold text-gray-900">{stats.activeDrivers}</span>
         </div>
-
-        <div class="bg-white rounded-xl shadow-lg p-6 text-center">
-          <div class="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center mx-auto mb-4">
-            <span class="text-green-600 text-xl">👤</span>
-          </div>
-          <h3 class="text-lg font-semibold text-gray-900 mb-2">Profile</h3>
-          <p class="text-gray-600 text-sm mb-4">Manage your account settings</p>
-          <button
-            onclick={() => goto('/profile')}
-            class="w-full px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-          >
-            View Profile
-          </button>
-        </div>
-
-        <div class="bg-white rounded-xl shadow-lg p-6 text-center">
-          <div class="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center mx-auto mb-4">
-            <span class="text-purple-600 text-xl">❓</span>
-          </div>
-          <h3 class="text-lg font-semibold text-gray-900 mb-2">Help</h3>
-          <p class="text-gray-600 text-sm mb-4">Get support and documentation</p>
-          <button
-            onclick={() => goto('/help')}
-            class="w-full px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
-          >
-            Get Help
-          </button>
-        </div>
+        <h3 class="text-sm font-medium text-gray-600">Active Drivers</h3>
       </div>
-
     {:else}
-      <!-- Not Logged In -->
-      <div class="bg-white rounded-2xl shadow-xl p-8 text-center">
-        <h2 class="text-3xl font-bold text-gray-900 mb-4">Get Started with DriveKind</h2>
-        <p class="text-lg text-gray-600 mb-8">
-          Sign in to access your dashboard and manage your transportation needs.
-        </p>
-        
-        <div class="flex justify-center">
-          <button
-            onclick={() => goto('/login')}
-            class="px-8 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
-          >
-            Sign In
-          </button>
+      <div class="bg-white rounded-lg shadow p-6 border border-gray-200">
+        <div class="flex items-center justify-between mb-4">
+          <div class="w-12 h-12 bg-indigo-100 rounded-lg flex items-center justify-center">
+            <TrendingUp class="w-6 h-6 text-indigo-600" />
+          </div>
+          <span class="text-2xl font-bold text-gray-900">98%</span>
         </div>
+        <h3 class="text-sm font-medium text-gray-600">Completion Rate</h3>
       </div>
     {/if}
   </div>
+
+  <!-- Quick Actions -->
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+    <!-- Recent Activity -->
+    <div class="bg-white rounded-lg shadow border border-gray-200 p-6">
+      <h2 class="text-xl font-bold text-gray-900 mb-4">Recent Activity</h2>
+      <div class="space-y-4">
+        <div class="flex items-start gap-3 pb-4 border-b border-gray-200">
+          <div class="w-2 h-2 bg-green-500 rounded-full mt-2"></div>
+          <div class="flex-1">
+            <p class="text-sm font-medium text-gray-900">Ride completed</p>
+            <p class="text-xs text-gray-600">John Doe - Medical Appointment</p>
+            <p class="text-xs text-gray-400">2 hours ago</p>
+          </div>
+        </div>
+        <div class="flex items-start gap-3 pb-4 border-b border-gray-200">
+          <div class="w-2 h-2 bg-blue-500 rounded-full mt-2"></div>
+          <div class="flex-1">
+            <p class="text-sm font-medium text-gray-900">New ride scheduled</p>
+            <p class="text-xs text-gray-600">Jane Smith - Grocery Shopping</p>
+            <p class="text-xs text-gray-400">5 hours ago</p>
+          </div>
+        </div>
+        <div class="flex items-start gap-3">
+          <div class="w-2 h-2 bg-yellow-500 rounded-full mt-2"></div>
+          <div class="flex-1">
+            <p class="text-sm font-medium text-gray-900">Driver checked in</p>
+            <p class="text-xs text-gray-600">Mike Johnson</p>
+            <p class="text-xs text-gray-400">1 day ago</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Quick Actions Card -->
+    <div class="bg-white rounded-lg shadow border border-gray-200 p-6">
+      <h2 class="text-xl font-bold text-gray-900 mb-4">Quick Actions</h2>
+      <div class="space-y-3">
+        {#if primaryRole === 'Dispatcher' || primaryRole === 'Admin' || primaryRole === 'Super Admin'}
+          <button
+            onclick={() => goto('/dispatcher/rides')}
+            class="w-full flex items-center gap-3 px-4 py-3 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg transition-colors"
+          >
+            <Car class="w-5 h-5" />
+            <span class="font-medium">Create New Ride</span>
+          </button>
+          <button
+            onclick={() => goto('/dispatcher/drivers')}
+            class="w-full flex items-center gap-3 px-4 py-3 bg-purple-50 hover:bg-purple-100 text-purple-700 rounded-lg transition-colors"
+          >
+            <Users class="w-5 h-5" />
+            <span class="font-medium">Manage Drivers</span>
+          </button>
+        {/if}
+        
+        <button
+          onclick={() => goto('/calendar')}
+          class="w-full flex items-center gap-3 px-4 py-3 bg-green-50 hover:bg-green-100 text-green-700 rounded-lg transition-colors"
+        >
+          <Calendar class="w-5 h-5" />
+          <span class="font-medium">View Schedule</span>
+        </button>
+        
+        {#if primaryRole === 'Driver'}
+          <button
+            onclick={() => goto('/driver/rides')}
+            class="w-full flex items-center gap-3 px-4 py-3 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg transition-colors"
+          >
+            <Car class="w-5 h-5" />
+            <span class="font-medium">View My Rides</span>
+          </button>
+        {/if}
+      </div>
+    </div>
+  </div>
+
+  <!-- Role-specific content -->
+  {#if primaryRole === 'Admin' || primaryRole === 'Super Admin'}
+    <div class="bg-white rounded-lg shadow border border-gray-200 p-6">
+      <h2 class="text-xl font-bold text-gray-900 mb-4">System Overview</h2>
+      <p class="text-gray-600 mb-4">Monitor and manage your DriveKind system.</p>
+      <div class="flex gap-4">
+        <button
+          onclick={() => goto('/admin/users')}
+          class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+        >
+          Manage Users
+        </button>
+        <button
+          onclick={() => goto('/admin/reports')}
+          class="px-6 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+        >
+          View Reports
+        </button>
+      </div>
+    </div>
+  {/if}
 </div>
