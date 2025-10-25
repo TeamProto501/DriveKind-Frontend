@@ -35,5 +35,28 @@ export const handle: Handle = async ({ event, resolve }) => {
 		throw redirect(303, '/');
 	}
 	
-	return resolve(event);
+	// Fetch user roles if authenticated
+	if (user) {
+		const { data: profile } = await supabase
+			.from('staff_profiles')
+			.select('role')
+			.eq('user_id', user.id)
+			.single();
+
+		// Attach roles to the event.locals for use in the frontend
+		event.locals.userRoles = profile?.role || [];
+	}
+
+	return resolve(event, {
+		transformPageChunk: ({ html }) => {
+			// Inject roles into the HTML for client-side use
+			if (event.locals.userRoles) {
+				html = html.replace(
+					'</head>',
+					`<script>window.userRoles = ${JSON.stringify(event.locals.userRoles)};</script></head>`
+				);
+			}
+			return html;
+		}
+	});
 };
