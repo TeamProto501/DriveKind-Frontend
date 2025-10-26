@@ -5,7 +5,7 @@
   import { Input } from "$lib/components/ui/input";
   import { Select, SelectContent, SelectItem, SelectTrigger } from "$lib/components/ui/select";
   import { Label } from "$lib/components/ui/label";
-  import { Car, Clock, MapPin, User, Phone, Calendar, Filter, Search, Navigation, Play, CheckCircle, XCircle, X, AlertTriangle } from "@lucide/svelte";
+  import { Car, Clock, MapPin, User, Phone, Calendar, Filter, Search, Navigation, Play, CheckCircle, XCircle, X, AlertTriangle, Edit } from "@lucide/svelte";
   import { enhance } from '$app/forms';
   import { invalidateAll } from '$app/navigation';
   import type { PageData } from './$types';
@@ -423,6 +423,16 @@
                   <CheckCircle class="w-4 h-4 mr-1" />
                   Complete Ride
                 </Button>
+              {:else if ride.status === "Completed"}
+                <Button 
+                  size="sm" 
+                  onclick={() => completeRide(ride.ride_id)}
+                  disabled={isUpdating}
+                  variant="outline"
+                >
+                  <Edit class="w-4 h-4 mr-1" />
+                  Edit Completion
+                </Button>
               {/if}
               
               {#if ride.status !== "Completed" && ride.status !== "Cancelled"}
@@ -471,7 +481,13 @@
         <div class="p-6">
           <!-- Header -->
           <div class="flex items-center justify-between mb-6">
-            <h2 class="text-2xl font-bold">Complete Ride</h2>
+            <h2 class="text-2xl font-bold">
+              {#if selectedRideId && data.rides.find(r => r.ride_id === selectedRideId)?.status === 'Completed'}
+                Edit Ride Completion
+              {:else}
+                Complete Ride
+              {/if}
+            </h2>
             <button onclick={closeCompletionModal} class="text-gray-400 hover:text-gray-600">
               <X class="w-6 h-6" />
             </button>
@@ -570,7 +586,11 @@
               Cancel
             </Button>
             <Button onclick={submitRideCompletion} disabled={isUpdating}>
-              {isUpdating ? 'Completing...' : 'Complete Ride'}
+              {#if selectedRideId && data.rides.find(r => r.ride_id === selectedRideId)?.status === 'Completed'}
+                {isUpdating ? 'Updating...' : 'Update Ride'}
+              {:else}
+                {isUpdating ? 'Completing...' : 'Complete Ride'}
+              {/if}
             </Button>
           </div>
         </div>
