@@ -4,7 +4,8 @@
   import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "$lib/components/ui/card";
   import { Input } from "$lib/components/ui/input";
   import { Select, SelectContent, SelectItem, SelectTrigger } from "$lib/components/ui/select";
-  import { Car, Clock, MapPin, User, Phone, Calendar, Filter, Search, Navigation, Play, CheckCircle, XCircle } from "@lucide/svelte";
+  import { Label } from "$lib/components/ui/label";
+  import { Car, Clock, MapPin, User, Phone, Calendar, Filter, Search, Navigation, Play, CheckCircle, XCircle, X, AlertTriangle } from "@lucide/svelte";
   import { enhance } from '$app/forms';
   import { invalidateAll } from '$app/navigation';
   import type { PageData } from './$types';
@@ -14,6 +15,19 @@
   let searchTerm = $state("");
   let statusFilter = $state("all");
   let isUpdating = $state(false);
+  
+  // Ride completion modal state
+  let showCompletionModal = $state(false);
+  let selectedRideId: number | null = null;
+  let completionData = $state({
+    miles_driven: '',
+    hours: '',
+    riders: '',
+    donation: false,
+    notes: ''
+  });
+  let reasonabilityWarning = $state(false);
+  let reasonabilityMessage = $state('');
 
   // Filter rides based on search and status
   let filteredRides = $derived(() => {
@@ -93,8 +107,95 @@
     await updateRideStatus(rideId, 'In Progress');
   }
 
-  async function completeRide(rideId: number) {
-    await updateRideStatus(rideId, 'Completed');
+  function completeRide(rideId: number) {
+    selectedRideId = rideId;
+    const ride = data.rides.find(r => r.ride_id === rideId);
+    
+    // Pre-fill with existing values if available
+    if (ride) {
+      completionData = {
+        miles_driven: ride.miles_driven?.toString() || '',
+        hours: ride.hours?.toString() || '',
+        riders: ride.riders?.toString() || '',
+        donation: ride.donation || false,
+        notes: ride.notes || ''
+      };
+    }
+    
+    showCompletionModal = true;
+    reasonabilityWarning = false;
+    reasonabilityMessage = '';
+  }
+  
+  function closeCompletionModal() {
+    showCompletionModal = false;
+    selectedRideId = null;
+    completionData = {
+      miles_driven: '',
+      hours: '',
+      riders: '',
+      donation: false,
+      notes: ''
+    };
+    reasonabilityWarning = false;
+    reasonabilityMessage = '';
+  }
+  
+  function checkReasonability(miles: string): boolean {
+    const milesValue = parseFloat(miles);
+    if (isNaN(milesValue) || milesValue <= 0) {
+      return false;
+    }
+    
+    // Reasonability check: more than 200 miles might be unusual
+    if (milesValue > 200) {
+      reasonabilityWarning = true;
+      reasonabilityMessage = `You've entered ${milesValue} miles. This seems unusually high. Please confirm this is correct.`;
+      return false;
+    }
+    
+    reasonabilityWarning = false;
+    reasonabilityMessage = '';
+    return true;
+  }
+  
+  async function submitRideCompletion() {
+    if (!selectedRideId) return;
+    
+    // Reasonability check for mileage
+    if (!checkReasonability(completionData.miles_driven)) {
+      return; // Show warning, don't submit yet
+    }
+    
+    isUpdating = true;
+    try {
+      const response = await fetch(`/driver/rides/complete`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          rideId: selectedRideId,
+          miles_driven: parseFloat(completionData.miles_driven) || null,
+          hours: parseFloat(completionData.hours) || null,
+          riders: parseInt(completionData.riders) || null,
+          donation: completionData.donation,
+          notes: completionData.notes || null,
+          status: 'Completed'
+        })
+      });
+
+      if (response.ok) {
+        await invalidateAll();
+        closeCompletionModal();
+      } else {
+        console.error('Failed to complete ride');
+      }
+    } catch (error) {
+      console.error('Error completing ride:', error);
+    } finally {
+      isUpdating = false;
+    }
   }
 
   async function cancelRide(rideId: number) {
@@ -342,5 +443,119 @@
         </p>
       </CardContent>
     </Card>
+  {/if}
+  
+  <!-- Ride Completion Modal -->
+  {#if showCompletionModal}
+    <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+        <div class="p-6">
+          <!-- Header -->
+          <div class="flex items-center justify-between mb-6">
+            <h2 class="text-2xl font-bold">Complete Ride</h2>
+            <button onclick={closeCompletionModal} class="text-gray-400 hover:text-gray-600">
+              <X class="w-6 h-6" />
+            </button>
+          </div>
+          
+          <!-- Reasonability Warning -->
+          {#if reasonabilityWarning}
+            <div class="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-md">
+              <div class="flex items-start gap-2">
+                <AlertTriangle class="w-5 h-5 text-yellow-600 mt-0.5" />
+                <div>
+                  <p class="font-medium text-yellow-800">Mileage Verification</p>
+                  <p class="text-yellow-700 text-sm mt-1">{reasonabilityMessage}</p>
+                </div>
+              </div>
+            </div>
+          {/if}
+          
+          <!-- Form -->
+          <div class="space-y-4">
+            <div class="grid grid-cols-2 gap-4">
+              <div>
+                <Label for="miles_driven" class="block text-sm font-medium text-gray-700 mb-1">
+                  Miles Driven *
+                </Label>
+                <Input 
+                  id="miles_driven"
+                  type="number"
+                  step="0.1"
+                  placeholder="0.0"
+                  bind:value={completionData.miles_driven}
+                  required
+                  class="w-full"
+                />
+              </div>
+              
+              <div>
+                <Label for="hours" class="block text-sm font-medium text-gray-700 mb-1">
+                  Hours *
+                </Label>
+                <Input 
+                  id="hours"
+                  type="number"
+                  step="0.1"
+                  placeholder="0.0"
+                  bind:value={completionData.hours}
+                  required
+                  class="w-full"
+                />
+              </div>
+            </div>
+            
+            <div>
+              <Label for="riders" class="block text-sm font-medium text-gray-700 mb-1">
+                Number of Passengers
+              </Label>
+              <Input 
+                id="riders"
+                type="number"
+                step="1"
+                min="0"
+                placeholder="0"
+                bind:value={completionData.riders}
+                class="w-full"
+              />
+            </div>
+            
+            <div class="flex items-center gap-2">
+              <input 
+                type="checkbox"
+                id="donation"
+                bind:checked={completionData.donation}
+                class="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+              />
+              <Label for="donation" class="text-sm font-medium text-gray-700">
+                Donation received
+              </Label>
+            </div>
+            
+            <div>
+              <Label for="notes" class="block text-sm font-medium text-gray-700 mb-1">
+                Notes
+              </Label>
+              <textarea 
+                id="notes"
+                bind:value={completionData.notes}
+                placeholder="Add any additional notes about the ride..."
+                class="w-full min-h-[100px] p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              ></textarea>
+            </div>
+          </div>
+          
+          <!-- Footer Actions -->
+          <div class="flex justify-end gap-3 mt-6">
+            <Button variant="outline" onclick={closeCompletionModal}>
+              Cancel
+            </Button>
+            <Button onclick={submitRideCompletion} disabled={isUpdating}>
+              {isUpdating ? 'Completing...' : 'Complete Ride'}
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
   {/if}
 </div>
