@@ -155,6 +155,16 @@
   function selectClient(client) {
     rideForm.client_id = client.client_id.toString();
     rideForm.client_search = `${client.first_name} ${client.last_name}`;
+    
+    // Auto-populate pickup address if "pickup from home" is checked
+    if (rideForm.pickup_from_home) {
+      rideForm.alt_pickup_address = client.address || '';
+      rideForm.alt_pickup_address2 = client.address2 || '';
+      rideForm.alt_pickup_city = client.city || '';
+      rideForm.alt_pickup_state = client.state || '';
+      rideForm.alt_pickup_zipcode = client.zipcode || '';
+    }
+    
     showClientDropdown = false;
   }
 
@@ -162,6 +172,20 @@
     rideForm.client_id = '';
     rideForm.client_search = '';
     showClientDropdown = false;
+  }
+  
+  // Auto-populate address when checkbox changes
+  function handlePickupHomeChange() {
+    if (rideForm.pickup_from_home && rideForm.client_id) {
+      const selectedClient = data.clients.find(c => c.client_id.toString() === rideForm.client_id);
+      if (selectedClient) {
+        rideForm.alt_pickup_address = selectedClient.address || '';
+        rideForm.alt_pickup_address2 = selectedClient.address2 || '';
+        rideForm.alt_pickup_city = selectedClient.city || '';
+        rideForm.alt_pickup_state = selectedClient.state || '';
+        rideForm.alt_pickup_zipcode = selectedClient.zipcode || '';
+      }
+    }
   }
 
   function openEditModal(ride: any) {
@@ -705,7 +729,7 @@
       </div>
       
       <div class="flex items-center space-x-2">
-        <input type="checkbox" id="pickup_from_home" bind:checked={rideForm.pickup_from_home} />
+        <input type="checkbox" id="pickup_from_home" bind:checked={rideForm.pickup_from_home} onchange={handlePickupHomeChange} />
         <Label for="pickup_from_home">Pickup from client's home</Label>
       </div>
       

@@ -108,10 +108,10 @@ export const load: PageServerLoad = async (event) => {
 			console.error('Error loading drivers:', driversError);
 		}
 
-		// Get clients for ride creation
+		// Get clients for ride creation with full address info
 		const { data: clients, error: clientsError } = await supabase
 			.from('clients')
-			.select('client_id, first_name, last_name, primary_phone')
+			.select('client_id, first_name, last_name, primary_phone, address, address2, city, state, zipcode')
 			.eq('org_id', profile.org_id)
 			.order('first_name', { ascending: true });
 
