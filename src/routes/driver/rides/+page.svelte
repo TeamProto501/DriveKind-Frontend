@@ -9,6 +9,7 @@
   import { enhance } from '$app/forms';
   import { invalidateAll } from '$app/navigation';
   import type { PageData } from './$types';
+  import { validateRideCompletion, sanitizeInput } from '$lib/utils/validation';
 
   let { data }: { data: PageData } = $props();
 
@@ -162,6 +163,18 @@
   async function submitRideCompletion() {
     if (!selectedRideId) return;
     
+    // Validate input data
+    const validation = validateRideCompletion({
+      miles_driven: completionData.miles_driven,
+      hours: completionData.hours,
+      riders: completionData.riders
+    });
+    
+    if (!validation.valid) {
+      alert('Please fix the following errors:\n• ' + validation.errors.join('\n• '));
+      return;
+    }
+    
     // Reasonability check for mileage
     if (!checkReasonability(completionData.miles_driven)) {
       return; // Show warning, don't submit yet
@@ -169,6 +182,9 @@
     
     isUpdating = true;
     try {
+      // Sanitize all inputs before sending
+      const sanitizedNotes = sanitizeInput(completionData.notes);
+      
       const response = await fetch(`/driver/rides/complete`, {
         method: 'POST',
         headers: {
@@ -180,7 +196,7 @@
           hours: parseFloat(completionData.hours) || null,
           riders: parseInt(completionData.riders) || null,
           donation: completionData.donation,
-          notes: completionData.notes || null,
+          notes: sanitizedNotes || null,
           status: 'Completed'
         })
       });
@@ -190,9 +206,12 @@
         closeCompletionModal();
       } else {
         console.error('Failed to complete ride');
+        const error = await response.json();
+        alert(`Failed to complete ride: ${error.error || 'Unknown error'}`);
       }
     } catch (error) {
       console.error('Error completing ride:', error);
+      alert('Error completing ride. Please try again.');
     } finally {
       isUpdating = false;
     }
@@ -328,14 +347,14 @@
                   </div>
                 </div>
                 {#if ride.estimated_appointment_length}
-                  <div class="flex items-center gap-2">
-                    <Clock class="w-4 h-4" />
+                <div class="flex items-center gap-2">
+                  <Clock class="w-4 h-4" />
                     Estimated: {ride.estimated_appointment_length}
-                  </div>
+                </div>
                 {/if}
                 {#if ride.round_trip}
-                  <div class="flex items-center gap-2">
-                    <Car class="w-4 h-4" />
+                <div class="flex items-center gap-2">
+                  <Car class="w-4 h-4" />
                     Round trip
                   </div>
                 {/if}
@@ -343,7 +362,7 @@
                   <div class="flex items-center gap-2">
                     <User class="w-4 h-4" />
                     {ride.riders} passenger{ride.riders > 1 ? 's' : ''}
-                  </div>
+                </div>
                 {/if}
               </div>
               
@@ -543,8 +562,8 @@
                 class="w-full min-h-[100px] p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               ></textarea>
             </div>
-          </div>
-          
+</div>
+
           <!-- Footer Actions -->
           <div class="flex justify-end gap-3 mt-6">
             <Button variant="outline" onclick={closeCompletionModal}>
