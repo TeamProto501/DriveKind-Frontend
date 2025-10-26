@@ -55,7 +55,10 @@
     riders: 1,
     estimated_appointment_length: '',
     notes: '',
-    donation: false
+    donation: false,
+    miles_driven: '',
+    hours: '',
+    status: ''
   });
 
   // Client search functionality
@@ -157,7 +160,10 @@
       riders: 1,
       estimated_appointment_length: '',
       notes: '',
-      donation: false
+      donation: false,
+      miles_driven: '',
+      hours: '',
+      status: ''
     };
     showClientDropdown = false;
     showCreateModal = true;
@@ -221,7 +227,10 @@
       riders: ride.riders || 1,
       estimated_appointment_length: ride.estimated_appointment_length || '',
       notes: ride.notes || '',
-      donation: ride.donation || false
+      donation: ride.donation || false,
+      miles_driven: ride.miles_driven?.toString() || '',
+      hours: ride.hours?.toString() || '',
+      status: ride.status || ''
     };
     showEditModal = true;
   }
@@ -340,7 +349,9 @@
         alt_pickup_city: sanitizeInput(rideForm.alt_pickup_city),
         alt_pickup_state: sanitizeInput(rideForm.alt_pickup_state),
         alt_pickup_zipcode: sanitizeInput(rideForm.alt_pickup_zipcode),
-        notes: sanitizeInput(rideForm.notes)
+        notes: sanitizeInput(rideForm.notes),
+        miles_driven: rideForm.miles_driven ? parseFloat(rideForm.miles_driven) : null,
+        hours: rideForm.hours ? parseFloat(rideForm.hours) : null
       };
       
       const response = await fetch(`/dispatcher/rides/update/${selectedRide.ride_id}`, {
@@ -985,6 +996,37 @@
         <input type="checkbox" id="edit_donation" bind:checked={rideForm.donation} />
         <Label for="edit_donation">Donation ride</Label>
       </div>
+      
+      <!-- Ride Completion Data (for completed rides) -->
+      {#if rideForm.status === 'Completed'}
+        <div class="border-t border-gray-200 pt-4 mt-4">
+          <h3 class="text-lg font-semibold mb-4">Ride Completion Details</h3>
+          
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <Label for="edit_miles_driven">Miles Driven</Label>
+              <Input 
+                id="edit_miles_driven" 
+                type="number" 
+                step="0.1" 
+                bind:value={rideForm.miles_driven} 
+                placeholder="0.0"
+              />
+            </div>
+            
+            <div>
+              <Label for="edit_hours">Hours</Label>
+              <Input 
+                id="edit_hours" 
+                type="number" 
+                step="0.1" 
+                bind:value={rideForm.hours} 
+                placeholder="0.0"
+              />
+            </div>
+          </div>
+        </div>
+      {/if}
       
       <div>
         <Label for="edit_notes">Notes</Label>
