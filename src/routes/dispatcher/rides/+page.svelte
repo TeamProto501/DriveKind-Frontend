@@ -11,6 +11,17 @@
   import { enhance } from '$app/forms';
   import { invalidateAll } from '$app/navigation';
   import type { PageData } from './$types';
+  import { 
+    validateAddress, 
+    validateCity, 
+    validateState, 
+    validateZipCode, 
+    validateText, 
+    validateRequired,
+    validateDateTime,
+    sanitizeInput,
+    combineValidations
+  } from '$lib/utils/validation';
 
   let { data }: { data: PageData } = $props();
 
@@ -221,48 +232,55 @@
   }
 
   async function createRide() {
-    // Validate required fields
-    if (!rideForm.client_id) {
-      alert('Please select a client');
-      return;
-    }
-    if (!rideForm.purpose) {
-      alert('Please select a purpose');
-      return;
-    }
-    if (!rideForm.destination_name) {
-      alert('Please enter destination name');
-      return;
-    }
-    if (!rideForm.dropoff_address) {
-      alert('Please enter dropoff address');
-      return;
-    }
-    if (!rideForm.dropoff_city) {
-      alert('Please enter dropoff city');
-      return;
-    }
-    if (!rideForm.dropoff_state) {
-      alert('Please enter dropoff state');
-      return;
-    }
-    if (!rideForm.dropoff_zipcode) {
-      alert('Please enter dropoff zip code');
-      return;
-    }
-    if (!rideForm.appointment_time) {
-      alert('Please select appointment time');
+    // Validate all required fields and formats
+    const validations = combineValidations(
+      validateRequired(rideForm.client_id, 'Client'),
+      validateRequired(rideForm.purpose, 'Purpose'),
+      validateRequired(rideForm.destination_name, 'Destination name'),
+      validateText(rideForm.destination_name, 'Destination name', 200, true),
+      validateAddress(rideForm.dropoff_address, 'Dropoff address'),
+      validateCity(rideForm.dropoff_city),
+      validateState(rideForm.dropoff_state),
+      validateZipCode(rideForm.dropoff_zipcode),
+      validateDateTime(rideForm.appointment_time, 'Appointment time'),
+      // Validate alternative pickup address if provided
+      rideForm.alt_pickup_address ? validateAddress(rideForm.alt_pickup_address, 'Alternative pickup address') : { valid: true, errors: [] },
+      rideForm.alt_pickup_city ? validateCity(rideForm.alt_pickup_city) : { valid: true, errors: [] },
+      rideForm.alt_pickup_state ? validateState(rideForm.alt_pickup_state) : { valid: true, errors: [] },
+      rideForm.alt_pickup_zipcode ? validateZipCode(rideForm.alt_pickup_zipcode) : { valid: true, errors: [] },
+      rideForm.notes ? validateText(rideForm.notes, 'Notes', 500, false) : { valid: true, errors: [] }
+    );
+
+    if (!validations.valid) {
+      alert('Please fix the following errors:\n• ' + validations.errors.join('\n• '));
       return;
     }
 
     isUpdating = true;
     try {
+      // Sanitize all text inputs before sending
+      const sanitizedForm = {
+        ...rideForm,
+        destination_name: sanitizeInput(rideForm.destination_name),
+        dropoff_address: sanitizeInput(rideForm.dropoff_address),
+        dropoff_address2: sanitizeInput(rideForm.dropoff_address2),
+        dropoff_city: sanitizeInput(rideForm.dropoff_city),
+        dropoff_state: sanitizeInput(rideForm.dropoff_state),
+        dropoff_zipcode: sanitizeInput(rideForm.dropoff_zipcode),
+        alt_pickup_address: sanitizeInput(rideForm.alt_pickup_address),
+        alt_pickup_address2: sanitizeInput(rideForm.alt_pickup_address2),
+        alt_pickup_city: sanitizeInput(rideForm.alt_pickup_city),
+        alt_pickup_state: sanitizeInput(rideForm.alt_pickup_state),
+        alt_pickup_zipcode: sanitizeInput(rideForm.alt_pickup_zipcode),
+        notes: sanitizeInput(rideForm.notes)
+      };
+      
       const response = await fetch('/dispatcher/rides/create', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(rideForm)
+        body: JSON.stringify(sanitizedForm)
       });
 
       if (response.ok) {
@@ -282,25 +300,69 @@
   }
 
   async function updateRide() {
+    // Validate all fields using the same validation as create
+    const validations = combineValidations(
+      validateRequired(rideForm.client_id, 'Client'),
+      validateRequired(rideForm.purpose, 'Purpose'),
+      validateRequired(rideForm.destination_name, 'Destination name'),
+      validateText(rideForm.destination_name, 'Destination name', 200, true),
+      validateAddress(rideForm.dropoff_address, 'Dropoff address'),
+      validateCity(rideForm.dropoff_city),
+      validateState(rideForm.dropoff_state),
+      validateZipCode(rideForm.dropoff_zipcode),
+      validateDateTime(rideForm.appointment_time, 'Appointment time'),
+      // Validate alternative pickup address if provided
+      rideForm.alt_pickup_address ? validateAddress(rideForm.alt_pickup_address, 'Alternative pickup address') : { valid: true, errors: [] },
+      rideForm.alt_pickup_city ? validateCity(rideForm.alt_pickup_city) : { valid: true, errors: [] },
+      rideForm.alt_pickup_state ? validateState(rideForm.alt_pickup_state) : { valid: true, errors: [] },
+      rideForm.alt_pickup_zipcode ? validateZipCode(rideForm.alt_pickup_zipcode) : { valid: true, errors: [] },
+      rideForm.notes ? validateText(rideForm.notes, 'Notes', 500, false) : { valid: true, errors: [] }
+    );
+
+    if (!validations.valid) {
+      alert('Please fix the following errors:\n• ' + validations.errors.join('\n• '));
+      return;
+    }
+
     isUpdating = true;
     try {
+      // Sanitize all text inputs before sending
+      const sanitizedForm = {
+        ...rideForm,
+        destination_name: sanitizeInput(rideForm.destination_name),
+        dropoff_address: sanitizeInput(rideForm.dropoff_address),
+        dropoff_address2: sanitizeInput(rideForm.dropoff_address2),
+        dropoff_city: sanitizeInput(rideForm.dropoff_city),
+        dropoff_state: sanitizeInput(rideForm.dropoff_state),
+        dropoff_zipcode: sanitizeInput(rideForm.dropoff_zipcode),
+        alt_pickup_address: sanitizeInput(rideForm.alt_pickup_address),
+        alt_pickup_address2: sanitizeInput(rideForm.alt_pickup_address2),
+        alt_pickup_city: sanitizeInput(rideForm.alt_pickup_city),
+        alt_pickup_state: sanitizeInput(rideForm.alt_pickup_state),
+        alt_pickup_zipcode: sanitizeInput(rideForm.alt_pickup_zipcode),
+        notes: sanitizeInput(rideForm.notes)
+      };
+      
       const response = await fetch(`/dispatcher/rides/update/${selectedRide.ride_id}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(rideForm)
+        body: JSON.stringify(sanitizedForm)
       });
 
       if (response.ok) {
         showEditModal = false;
         selectedRide = null;
         await invalidateAll();
+        alert('Ride updated successfully!');
       } else {
-        console.error('Failed to update ride');
+        const error = await response.json();
+        alert(`Failed to update ride: ${error.error || 'Unknown error'}`);
       }
     } catch (error) {
       console.error('Error updating ride:', error);
+      alert('Error updating ride. Please try again.');
     } finally {
       isUpdating = false;
     }
