@@ -25,7 +25,9 @@
     hours: '',
     riders: '',
     donation: false,
-    notes: ''
+    notes: '',
+    start_time: '',
+    end_time: ''
   });
   let reasonabilityWarning = $state(false);
   let reasonabilityMessage = $state('');
@@ -111,15 +113,24 @@
   function completeRide(rideId: number) {
     selectedRideId = rideId;
     const ride = data.rides.find(r => r.ride_id === rideId);
+    const completedData = data.completedRidesData[rideId];
     
     // Pre-fill with existing values if available
     if (ride) {
+      // Format dates for datetime-local inputs
+      const formatDateTime = (date: string) => {
+        if (!date) return '';
+        return new Date(date).toISOString().slice(0, 16);
+      };
+      
       completionData = {
         miles_driven: ride.miles_driven?.toString() || '',
         hours: ride.hours?.toString() || '',
         riders: ride.riders?.toString() || '',
         donation: ride.donation || false,
-        notes: ride.notes || ''
+        notes: ride.notes || '',
+        start_time: completedData?.actual_start ? formatDateTime(completedData.actual_start) : '',
+        end_time: completedData?.actual_end ? formatDateTime(completedData.actual_end) : ''
       };
     }
     
@@ -136,7 +147,9 @@
       hours: '',
       riders: '',
       donation: false,
-      notes: ''
+      notes: '',
+      start_time: '',
+      end_time: ''
     };
     reasonabilityWarning = false;
     reasonabilityMessage = '';
@@ -197,6 +210,8 @@
           riders: parseInt(completionData.riders) || null,
           donation: completionData.donation,
           notes: sanitizedNotes || null,
+          start_time: completionData.start_time || null,
+          end_time: completionData.end_time || null,
           status: 'Completed'
         })
       });
@@ -538,6 +553,55 @@
                   class="w-full"
                 />
               </div>
+            </div>
+            
+            <!-- Time tracking -->
+            <div class="border-t border-gray-200 pt-4 mt-4">
+              <h3 class="text-md font-semibold mb-4">Time Tracking</h3>
+              
+              <div class="grid grid-cols-2 gap-4">
+                <div>
+                  <Label for="start_time" class="block text-sm font-medium text-gray-700 mb-1">
+                    Start Time
+                  </Label>
+                  <Input 
+                    id="start_time"
+                    type="datetime-local"
+                    bind:value={completionData.start_time}
+                    class="w-full"
+                  />
+                  <p class="text-xs text-gray-500 mt-1">When the ride started</p>
+                </div>
+                
+                <div>
+                  <Label for="end_time" class="block text-sm font-medium text-gray-700 mb-1">
+                    End Time *
+                  </Label>
+                  <Input 
+                    id="end_time"
+                    type="datetime-local"
+                    bind:value={completionData.end_time}
+                    required
+                    class="w-full"
+                  />
+                  <p class="text-xs text-gray-500 mt-1">When the ride ended</p>
+                </div>
+              </div>
+              
+              <!-- Calculated duration display -->
+              {#if completionData.start_time && completionData.end_time}
+                {@const startDate = new Date(completionData.start_time)}
+                {@const endDate = new Date(completionData.end_time)}
+                {@const durationMs = endDate.getTime() - startDate.getTime()}
+                {@const durationHours = durationMs / (1000 * 60 * 60)}
+                {#if durationMs > 0}
+                  <div class="mt-2 p-2 bg-blue-50 border border-blue-200 rounded-md">
+                    <p class="text-sm text-blue-800">
+                      <span class="font-medium">Calculated Duration:</span> {durationHours.toFixed(2)} hours
+                    </p>
+                  </div>
+                {/if}
+              {/if}
             </div>
             
             <div>

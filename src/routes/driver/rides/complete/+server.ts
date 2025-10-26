@@ -4,7 +4,7 @@ import { createSupabaseServerClient } from '$lib/supabase.server';
 
 export const POST: RequestHandler = async ({ request, cookies }) => {
 	try {
-		const { rideId, miles_driven, hours, riders, donation, notes, status } = await request.json();
+		const { rideId, miles_driven, hours, riders, donation, notes, start_time, end_time, status } = await request.json();
 
 		if (!rideId || !status) {
 			return json({ error: 'Missing required fields' }, { status: 400 });
@@ -59,16 +59,28 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 			.eq('ride_id', rideId)
 			.single();
 
+		// Prepare completed ride data
+		const completedRideData: any = {
+			miles_driven: miles_driven ? parseFloat(miles_driven) : null,
+			hours: hours ? parseFloat(hours) : null,
+			donation_amount: donation ? null : null // We'll need to handle this separately if there's a donation amount
+		};
+
+		// Add start and end times if provided
+		if (start_time) {
+			completedRideData.actual_start = new Date(start_time).toISOString();
+		}
+		if (end_time) {
+			completedRideData.actual_end = new Date(end_time).toISOString();
+		}
+
 		if (!existingCompleted) {
 			// Create new completed ride record
 			const { error: completedError } = await supabase
 				.from('completedrides')
 				.insert({
 					ride_id: rideId,
-					actual_end: new Date().toISOString(),
-					miles_driven: miles_driven ? parseFloat(miles_driven) : null,
-					hours: hours ? parseFloat(hours) : null,
-					donation_amount: donation ? null : null // We'll need to handle this separately if there's a donation amount
+					...completedRideData
 				});
 
 			if (completedError) {
@@ -78,11 +90,7 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 			// Update existing record
 			const { error: updateCompletedError } = await supabase
 				.from('completedrides')
-				.update({
-					actual_end: new Date().toISOString(),
-					miles_driven: miles_driven ? parseFloat(miles_driven) : null,
-					hours: hours ? parseFloat(hours) : null
-				})
+				.update(completedRideData)
 				.eq('ride_id', rideId);
 
 			if (updateCompletedError) {
