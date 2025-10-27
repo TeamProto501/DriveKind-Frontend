@@ -768,6 +768,7 @@
             id="dropoff_city" 
             type="text"
             bind:value={rideForm.dropoff_city}
+            placeholder="e.g., Rochester"
             class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
           />
         </div>
@@ -777,6 +778,7 @@
             id="dropoff_state" 
             type="text"
             bind:value={rideForm.dropoff_state}
+            placeholder="e.g., NY"
             class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
           />
         </div>
@@ -786,6 +788,7 @@
             id="dropoff_zipcode" 
             type="text"
             bind:value={rideForm.dropoff_zipcode}
+            placeholder="e.g., 14620"
             class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
           />
         </div>
@@ -809,21 +812,21 @@
       {#if !rideForm.pickup_from_home}
         <div>
           <Label for="alt_pickup_address">Alternative Pickup Address</Label>
-          <Input id="alt_pickup_address" bind:value={rideForm.alt_pickup_address} />
+          <Input id="alt_pickup_address" bind:value={rideForm.alt_pickup_address} placeholder="Street address" />
         </div>
         
         <div class="grid grid-cols-3 gap-4">
           <div>
             <Label for="alt_pickup_city">City</Label>
-            <Input id="alt_pickup_city" bind:value={rideForm.alt_pickup_city} />
+            <Input id="alt_pickup_city" bind:value={rideForm.alt_pickup_city} placeholder="e.g., Rochester" />
           </div>
           <div>
             <Label for="alt_pickup_state">State</Label>
-            <Input id="alt_pickup_state" bind:value={rideForm.alt_pickup_state} />
+            <Input id="alt_pickup_state" bind:value={rideForm.alt_pickup_state} placeholder="e.g., NY" />
           </div>
           <div>
             <Label for="alt_pickup_zipcode">ZIP Code</Label>
-            <Input id="alt_pickup_zipcode" bind:value={rideForm.alt_pickup_zipcode} />
+            <Input id="alt_pickup_zipcode" bind:value={rideForm.alt_pickup_zipcode} placeholder="e.g., 14620" />
           </div>
         </div>
       {/if}
@@ -831,7 +834,7 @@
       <div class="grid grid-cols-2 gap-4">
         <div>
           <Label for="riders">Number of Passengers</Label>
-          <Input id="riders" type="number" min="1" bind:value={rideForm.riders} />
+          <Input id="riders" type="number" min="1" bind:value={rideForm.riders} placeholder="e.g., 2" />
         </div>
         
         <div>
@@ -920,26 +923,26 @@
       
       <div>
         <Label for="edit_destination_name">Destination Name</Label>
-        <Input id="edit_destination_name" bind:value={rideForm.destination_name} />
+        <Input id="edit_destination_name" bind:value={rideForm.destination_name} placeholder="e.g., Strong Memorial Hospital" />
       </div>
       
       <div>
         <Label for="edit_dropoff_address">Dropoff Address</Label>
-        <Input id="edit_dropoff_address" bind:value={rideForm.dropoff_address} />
+        <Input id="edit_dropoff_address" bind:value={rideForm.dropoff_address} placeholder="Street address" />
       </div>
       
       <div class="grid grid-cols-3 gap-4">
         <div>
           <Label for="edit_dropoff_city">City</Label>
-          <Input id="edit_dropoff_city" bind:value={rideForm.dropoff_city} />
+          <Input id="edit_dropoff_city" bind:value={rideForm.dropoff_city} placeholder="e.g., Rochester" />
         </div>
         <div>
           <Label for="edit_dropoff_state">State</Label>
-          <Input id="edit_dropoff_state" bind:value={rideForm.dropoff_state} />
+          <Input id="edit_dropoff_state" bind:value={rideForm.dropoff_state} placeholder="e.g., NY" />
         </div>
         <div>
           <Label for="edit_dropoff_zipcode">ZIP Code</Label>
-          <Input id="edit_dropoff_zipcode" bind:value={rideForm.dropoff_zipcode} />
+          <Input id="edit_dropoff_zipcode" bind:value={rideForm.dropoff_zipcode} placeholder="e.g., 14620" />
         </div>
       </div>
       
@@ -956,21 +959,21 @@
       {#if !rideForm.pickup_from_home}
         <div>
           <Label for="edit_alt_pickup_address">Alternative Pickup Address</Label>
-          <Input id="edit_alt_pickup_address" bind:value={rideForm.alt_pickup_address} />
+          <Input id="edit_alt_pickup_address" bind:value={rideForm.alt_pickup_address} placeholder="Street address" />
         </div>
         
         <div class="grid grid-cols-3 gap-4">
           <div>
             <Label for="edit_alt_pickup_city">City</Label>
-            <Input id="edit_alt_pickup_city" bind:value={rideForm.alt_pickup_city} />
+            <Input id="edit_alt_pickup_city" bind:value={rideForm.alt_pickup_city} placeholder="e.g., Rochester" />
           </div>
           <div>
             <Label for="edit_alt_pickup_state">State</Label>
-            <Input id="edit_alt_pickup_state" bind:value={rideForm.alt_pickup_state} />
+            <Input id="edit_alt_pickup_state" bind:value={rideForm.alt_pickup_state} placeholder="e.g., NY" />
           </div>
           <div>
             <Label for="edit_alt_pickup_zipcode">ZIP Code</Label>
-            <Input id="edit_alt_pickup_zipcode" bind:value={rideForm.alt_pickup_zipcode} />
+            <Input id="edit_alt_pickup_zipcode" bind:value={rideForm.alt_pickup_zipcode} placeholder="e.g., 14620" />
           </div>
         </div>
       {/if}
@@ -978,12 +981,12 @@
       <div class="grid grid-cols-2 gap-4">
         <div>
           <Label for="edit_riders">Number of Passengers</Label>
-          <Input id="edit_riders" type="number" min="1" bind:value={rideForm.riders} />
+          <Input id="edit_riders" type="number" min="1" bind:value={rideForm.riders} placeholder="e.g., 2" />
         </div>
         
         <div>
           <Label for="edit_estimated_appointment_length">Estimated Duration</Label>
-          <Input id="edit_estimated_appointment_length" bind:value={rideForm.estimated_appointment_length} />
+          <Input id="edit_estimated_appointment_length" bind:value={rideForm.estimated_appointment_length} placeholder="e.g., 2 hours" />
         </div>
       </div>
       
