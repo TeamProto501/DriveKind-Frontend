@@ -18,7 +18,7 @@ export async function authenticatedFetchServer(
   } = await supabaseClient.auth.getSession();
 
   if (!session?.access_token) {
-    throw redirect(302, "/auth/login");
+    throw redirect(302, "/login");
   }
 
   const makeRequest = async (accessToken: string): Promise<Response> => {
@@ -57,7 +57,7 @@ export async function authenticatedFetchServer(
       }
 
       // Session refresh failed, redirect to login
-      throw redirect(302, "/auth/login");
+      throw redirect(302, "/login");
     }
 
     return response;
