@@ -157,6 +157,7 @@
         adminItems.push({ label: 'Configuration', href: '/admin/config' });
         adminItems.push({ label: 'Reports', href: '/admin/reports' });
         adminItems.push({ label: 'Audit Logs', href: '/admin/audit' });
+        adminItems.push({ label: 'Destinations', href: '/admin/destinations' });
       }
       
       if (hasRole(['Super Admin'])) {
