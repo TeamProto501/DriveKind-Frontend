@@ -133,6 +133,7 @@
           { label: "Dashboard", href: "/dispatcher/dashboard" },
           { label: "Ride Management", href: "/dispatcher/rides" },
           { label: "Driver Management", href: "/dispatcher/drivers" },
+          { label: "Destinations", href: "/dispatcher/destinations" },
         ],
       });
     }
