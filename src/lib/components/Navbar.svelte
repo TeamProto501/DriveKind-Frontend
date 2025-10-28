@@ -128,7 +128,8 @@
         items: [
           { label: 'Dashboard', href: '/dispatcher/dashboard' },
           { label: 'Ride Management', href: '/dispatcher/rides' },
-          { label: 'Driver Management', href: '/dispatcher/drivers' }
+          { label: 'Driver Management', href: '/dispatcher/drivers' },
+          { label: 'Destinations', href: '/dispatcher/destinations' }
         ]
       });
     }
@@ -157,7 +158,6 @@
         adminItems.push({ label: 'Configuration', href: '/admin/config' });
         adminItems.push({ label: 'Reports', href: '/admin/reports' });
         adminItems.push({ label: 'Audit Logs', href: '/admin/audit' });
-        adminItems.push({ label: 'Destinations', href: '/admin/destinations' });
       }
       
       if (hasRole(['Super Admin'])) {
