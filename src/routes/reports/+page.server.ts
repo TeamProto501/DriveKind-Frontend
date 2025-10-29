@@ -23,15 +23,23 @@ export const load: PageServerLoad = async (event) => {
 
   if (!userProfile) {
     console.error('No user profile found for user:', session.user.id);
-    // Return session but with empty profile - let the page handle it
     return {
       session,
-      userProfile: null
+      userProfile: null,
+      organization: null
     };
   }
 
+  // Get organization data
+  const { data: organization } = await supabase
+    .from('organization')
+    .select('*')
+    .eq('org_id', userProfile.org_id)
+    .single();
+
   return {
     session,
-    userProfile
+    userProfile,
+    organization
   };
 };

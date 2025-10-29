@@ -4,6 +4,8 @@
   import { Download, Calendar, FileText, Clock, MapPin, Car, AlertCircle } from '@lucide/svelte';
   import { API_BASE_URL } from '$lib/api';
   import { toastStore } from '$lib/toast';
+  import { getContext } from 'svelte';
+  import { page } from '$app/stores';
   import type { PageData } from './$types';
   import jsPDF from 'jspdf';
 
@@ -23,16 +25,32 @@
   // Safe access to user profile with defaults
   const firstName = data.userProfile?.first_name || 'User';
   const lastName = data.userProfile?.last_name || 'Report';
-  let reportName = `${firstName}_${lastName}_Report`;
+  const organizationName = data.organization?.name || 'Organization';
+  
+  // Get current date in MMDDYYYY format
+  function getCurrentDateString(): string {
+    const date = new Date();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const year = date.getFullYear();
+    return `${month}${day}${year}`;
+  }
+  
+  let reportName = `${lastName}${firstName} Report_${getCurrentDateString()}`;
   
   let isGenerating = false;
   let isFetchingRides = false;
   let rideStats: RideStats | null = null;
 
-  // Safe role access with fallback
-  const userRole = data.userProfile?.role 
-    ? (Array.isArray(data.userProfile.role) ? data.userProfile.role[0] : data.userProfile.role)
-    : 'Volunteer'; // Default fallback role
+  // Get the active role from URL params or default to first role
+  // The navbar should pass this via query param when switching roles
+  const urlParams = $page.url.searchParams;
+  const roleFromUrl = urlParams.get('role');
+  
+  const userRole = roleFromUrl || 
+    (data.userProfile?.role 
+      ? (Array.isArray(data.userProfile.role) ? data.userProfile.role[0] : data.userProfile.role)
+      : 'Volunteer');
   
   const isDriver = userRole === 'Driver';
 
@@ -134,12 +152,16 @@
       doc.setFont('helvetica', 'normal');
       doc.text(`${firstName} ${lastName}`, pageWidth / 2, yPosition, { align: 'center' });
       
-      yPosition += 8;
-      doc.setFontSize(11);
+      yPosition += 7;
+      doc.setFontSize(10);
       doc.setTextColor(100);
-      doc.text(`${userRole}`, pageWidth / 2, yPosition, { align: 'center' });
+      doc.text(organizationName, pageWidth / 2, yPosition, { align: 'center' });
       
-      yPosition += 8;
+      yPosition += 7;
+      doc.setFontSize(11);
+      doc.text(`Role: ${userRole}`, pageWidth / 2, yPosition, { align: 'center' });
+      
+      yPosition += 7;
       doc.text(`Report Period: ${formatDate(startDate)} - ${formatDate(endDate)}`, pageWidth / 2, yPosition, { align: 'center' });
       
       yPosition += 12;
@@ -156,11 +178,11 @@
       
       yPosition += 15;
 
-      // Summary boxes
-      const boxWidth = isDriver ? 85 : 85;
+      // Summary boxes - stacked vertically and centered
+      const boxWidth = 120;
       const boxHeight = 25;
-      const boxSpacing = 10;
-      let xPosition = isDriver ? 15 : 30;
+      const boxSpacing = 12;
+      let xPosition = (pageWidth - boxWidth) / 2; // Center the boxes
 
       // Total Hours Box
       doc.setFillColor(59, 130, 246);
@@ -173,7 +195,7 @@
       doc.setFont('helvetica', 'bold');
       doc.text(hoursWorked!.toFixed(2), xPosition + boxWidth / 2, yPosition + 18, { align: 'center' });
 
-      xPosition += boxWidth + boxSpacing;
+      yPosition += boxHeight + boxSpacing;
 
       // Total Mileage Box
       doc.setFillColor(34, 197, 94);
@@ -186,10 +208,9 @@
       doc.setFont('helvetica', 'bold');
       doc.text(`${mileage!.toFixed(1)} mi`, xPosition + boxWidth / 2, yPosition + 18, { align: 'center' });
 
-      // Driver-specific metrics (rides)
+      // Driver-specific metrics (rides) - also centered
       if (isDriver && rideStats) {
         yPosition += boxHeight + boxSpacing;
-        xPosition = 15;
 
         // Scheduled Rides Box
         doc.setFillColor(168, 85, 247);
@@ -202,7 +223,7 @@
         doc.setFont('helvetica', 'bold');
         doc.text(rideStats.scheduled.toString(), xPosition + boxWidth / 2, yPosition + 18, { align: 'center' });
 
-        xPosition += boxWidth + boxSpacing;
+        yPosition += boxHeight + boxSpacing;
 
         // Completed Rides Box
         doc.setFillColor(234, 88, 12);
@@ -216,68 +237,19 @@
         doc.text(rideStats.completed.toString(), xPosition + boxWidth / 2, yPosition + 18, { align: 'center' });
       }
 
-      yPosition += boxHeight + 25;
-
-      // Details Section
-      doc.setFontSize(16);
-      doc.setFont('helvetica', 'bold');
-      doc.setTextColor(0);
-      doc.text('Report Details', 20, yPosition);
-
-      yPosition += 12;
-      doc.setFontSize(11);
-      doc.setFont('helvetica', 'normal');
-      doc.setTextColor(60);
-
-      // Report period
-      doc.setFont('helvetica', 'bold');
-      doc.text('Report Period:', 25, yPosition);
-      doc.setFont('helvetica', 'normal');
-      doc.text(`${formatDate(startDate)} - ${formatDate(endDate)}`, 70, yPosition);
-
-      yPosition += 8;
-
-      // Hours worked
-      doc.setFont('helvetica', 'bold');
-      doc.text('Hours Worked:', 25, yPosition);
-      doc.setFont('helvetica', 'normal');
-      doc.text(`${hoursWorked!.toFixed(2)} hours`, 70, yPosition);
-
-      yPosition += 8;
-
-      // Mileage
-      doc.setFont('helvetica', 'bold');
-      doc.text('Total Mileage:', 25, yPosition);
-      doc.setFont('helvetica', 'normal');
-      doc.text(`${mileage!.toFixed(1)} miles`, 70, yPosition);
-
-      if (isDriver && rideStats) {
-        yPosition += 8;
-        doc.setFont('helvetica', 'bold');
-        doc.text('Scheduled Rides:', 25, yPosition);
-        doc.setFont('helvetica', 'normal');
-        doc.text(`${rideStats.scheduled} rides`, 70, yPosition);
-
-        yPosition += 8;
-        doc.setFont('helvetica', 'bold');
-        doc.text('Completed Rides:', 25, yPosition);
-        doc.setFont('helvetica', 'normal');
-        doc.text(`${rideStats.completed} rides`, 70, yPosition);
-      }
-
-      yPosition += 15;
+      yPosition += boxHeight + 20;
 
       // Note section
       doc.setFillColor(250, 250, 250);
-      doc.roundedRect(20, yPosition, pageWidth - 40, 25, 2, 2, 'F');
-      yPosition += 8;
+      doc.roundedRect(20, yPosition, pageWidth - 40, 20, 2, 2, 'F');
+      yPosition += 7;
       doc.setFontSize(9);
       doc.setTextColor(100);
       doc.setFont('helvetica', 'italic');
-      doc.text('Note: Hours and mileage values are self-reported by the user.', 25, yPosition);
+      doc.text('Note: Hours and mileage values are self-reported by the user.', pageWidth / 2, yPosition, { align: 'center' });
       if (isDriver) {
         yPosition += 6;
-        doc.text('Ride statistics are automatically calculated from system records.', 25, yPosition);
+        doc.text('Ride statistics are automatically calculated from system records.', pageWidth / 2, yPosition, { align: 'center' });
       }
 
       // Footer
@@ -291,7 +263,7 @@
         { align: 'center' }
       );
 
-      // Save PDF
+      // Save PDF with proper formatting
       const fileName = `${reportName.replace(/\s+/g, '_')}.pdf`;
       doc.save(fileName);
       
@@ -412,7 +384,7 @@
                 bind:value={mileage}
                 min="0"
                 step="0.1"
-                placeholder="Enter miles (e.g., 150)"
+                placeholder="Enter miles (e.g., 150.5)"
                 class="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 required
               />
@@ -484,7 +456,7 @@
         <div class="mt-6 bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <h3 class="text-sm font-semibold text-gray-900 mb-4">Report Preview</h3>
           
-          <div class="grid grid-cols-2 md:grid-cols-{isDriver ? '4' : '2'} gap-4">
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-{isDriver ? '4' : '2'} gap-4">
             <!-- Total Hours -->
             <div class="bg-blue-50 rounded-lg p-4 border border-blue-200">
               <div class="flex items-center gap-2 mb-2">
