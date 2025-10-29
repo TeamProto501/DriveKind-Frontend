@@ -1,6 +1,6 @@
 <script lang="ts">
-	import type { HTMLAttributes } from "svelte/elements";
 	import { cn, type WithElementRef } from "$lib/utils.js";
+	import type { HTMLAttributes } from "svelte/elements";
 
 	let {
 		ref = $bindable(null),
@@ -10,12 +10,10 @@
 	}: WithElementRef<HTMLAttributes<HTMLElement>> = $props();
 </script>
 
-<div
-	bind:this={ref}
-	data-slot="sidebar-group"
-	data-sidebar="group"
-	class={cn("relative flex w-full min-w-0 flex-col px-2", className)}
+<nav
 	{...restProps}
+	bind:this={ref}
+	class={cn("absolute inset-x-0 top-0 flex w-full items-center justify-between gap-1", className)}
 >
 	{@render children?.()}
-</div>
+</nav>
