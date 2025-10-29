@@ -1,7 +1,7 @@
 <script lang="ts">
   import RoleGuard from '$lib/components/RoleGuard.svelte';
   import Breadcrumbs from '$lib/components/Breadcrumbs.svelte';
-  import { Download, Calendar, FileText, Clock, MapPin, Car, AlertCircle } from '@lucide/svelte';
+  import { Download, Calendar, FileText, Clock, MapPin, Car, AlertCircle, AlertTriangle } from '@lucide/svelte';
   import { API_BASE_URL } from '$lib/api';
   import { toastStore } from '$lib/toast';
   import { getContext } from 'svelte';
@@ -42,8 +42,13 @@
   let isFetchingRides = false;
   let rideStats: RideStats | null = null;
 
+  // Validation state
+  let showHoursWarning = false;
+  let showMileageWarning = false;
+  let showStartDateWarning = false;
+  let showEndDateWarning = false;
+
   // Get the active role from URL params or default to first role
-  // The navbar should pass this via query param when switching roles
   const urlParams = $page.url.searchParams;
   const roleFromUrl = urlParams.get('role');
   
@@ -94,32 +99,51 @@
   }
 
   function validateForm(): boolean {
-    if (!startDate || !endDate) {
-      toastStore.error('Please select both start and end dates');
-      return false;
+    let isValid = true;
+
+    // Reset warnings
+    showStartDateWarning = false;
+    showEndDateWarning = false;
+    showHoursWarning = false;
+    showMileageWarning = false;
+
+    if (!startDate) {
+      showStartDateWarning = true;
+      toastStore.error('Please select a start date');
+      isValid = false;
     }
 
-    if (new Date(startDate) > new Date(endDate)) {
+    if (!endDate) {
+      showEndDateWarning = true;
+      toastStore.error('Please select an end date');
+      isValid = false;
+    }
+
+    if (startDate && endDate && new Date(startDate) > new Date(endDate)) {
+      showStartDateWarning = true;
+      showEndDateWarning = true;
       toastStore.error('Start date must be before end date');
-      return false;
+      isValid = false;
     }
 
     if (hoursWorked === null || hoursWorked < 0) {
+      showHoursWarning = true;
       toastStore.error('Please enter valid hours worked');
-      return false;
+      isValid = false;
     }
 
     if (mileage === null || mileage < 0) {
+      showMileageWarning = true;
       toastStore.error('Please enter valid mileage');
-      return false;
+      isValid = false;
     }
 
     if (!reportName.trim()) {
       toastStore.error('Please enter a report name');
-      return false;
+      isValid = false;
     }
 
-    return true;
+    return isValid;
   }
 
   async function generateReport() {
@@ -155,14 +179,38 @@
       yPosition += 7;
       doc.setFontSize(10);
       doc.setTextColor(100);
-      doc.text(organizationName, pageWidth / 2, yPosition, { align: 'center' });
+      // Organization with bold label
+      const orgText = `Organization: ${organizationName}`;
+      const orgTextWidth = doc.getTextWidth(orgText);
+      const orgLabelWidth = doc.getTextWidth('Organization: ');
+      const orgStartX = (pageWidth - orgTextWidth) / 2;
+      doc.setFont('helvetica', 'bold');
+      doc.text('Organization: ', orgStartX, yPosition);
+      doc.setFont('helvetica', 'normal');
+      doc.text(organizationName, orgStartX + orgLabelWidth, yPosition);
       
       yPosition += 7;
       doc.setFontSize(11);
-      doc.text(`Role: ${userRole}`, pageWidth / 2, yPosition, { align: 'center' });
+      // Role with bold label
+      const roleText = `Role: ${userRole}`;
+      const roleTextWidth = doc.getTextWidth(roleText);
+      const roleLabelWidth = doc.getTextWidth('Role: ');
+      const roleStartX = (pageWidth - roleTextWidth) / 2;
+      doc.setFont('helvetica', 'bold');
+      doc.text('Role: ', roleStartX, yPosition);
+      doc.setFont('helvetica', 'normal');
+      doc.text(userRole, roleStartX + roleLabelWidth, yPosition);
       
       yPosition += 7;
-      doc.text(`Report Period: ${formatDate(startDate)} - ${formatDate(endDate)}`, pageWidth / 2, yPosition, { align: 'center' });
+      // Report Period with bold label
+      const periodText = `Report Period: ${formatDate(startDate)} - ${formatDate(endDate)}`;
+      const periodTextWidth = doc.getTextWidth(periodText);
+      const periodLabelWidth = doc.getTextWidth('Report Period: ');
+      const periodStartX = (pageWidth - periodTextWidth) / 2;
+      doc.setFont('helvetica', 'bold');
+      doc.text('Report Period: ', periodStartX, yPosition);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`${formatDate(startDate)} - ${formatDate(endDate)}`, periodStartX + periodLabelWidth, yPosition);
       
       yPosition += 12;
       doc.setDrawColor(200);
@@ -288,6 +336,12 @@
   $: if (isDriver && startDate && endDate) {
     fetchRideStats();
   }
+
+  // Clear warnings when user starts typing/selecting
+  $: if (hoursWorked !== null) showHoursWarning = false;
+  $: if (mileage !== null) showMileageWarning = false;
+  $: if (startDate) showStartDateWarning = false;
+  $: if (endDate) showEndDateWarning = false;
 </script>
 
 <RoleGuard requiredRoles={['Admin', 'Driver', 'Dispatcher', 'Volunteer']}>
@@ -337,9 +391,15 @@
               <input
                 type="date"
                 bind:value={startDate}
-                class="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                class="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 {showStartDateWarning ? 'border-red-500 ring-2 ring-red-200' : ''}"
                 required
               />
+              {#if showStartDateWarning}
+                <div class="flex items-center gap-1 mt-1 text-xs text-red-600">
+                  <AlertTriangle class="w-3 h-3" />
+                  <span>Start date is required</span>
+                </div>
+              {/if}
             </div>
 
             <div>
@@ -350,9 +410,15 @@
               <input
                 type="date"
                 bind:value={endDate}
-                class="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                class="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 {showEndDateWarning ? 'border-red-500 ring-2 ring-red-200' : ''}"
                 required
               />
+              {#if showEndDateWarning}
+                <div class="flex items-center gap-1 mt-1 text-xs text-red-600">
+                  <AlertTriangle class="w-3 h-3" />
+                  <span>End date is required</span>
+                </div>
+              {/if}
             </div>
           </div>
 
@@ -369,9 +435,15 @@
                 min="0"
                 step="0.5"
                 placeholder="Enter hours (e.g., 30)"
-                class="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                class="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 {showHoursWarning ? 'border-red-500 ring-2 ring-red-200' : ''}"
                 required
               />
+              {#if showHoursWarning}
+                <div class="flex items-center gap-1 mt-1 text-xs text-red-600">
+                  <AlertTriangle class="w-3 h-3" />
+                  <span>Hours worked is required</span>
+                </div>
+              {/if}
             </div>
 
             <div>
@@ -385,9 +457,15 @@
                 min="0"
                 step="0.1"
                 placeholder="Enter miles (e.g., 150.5)"
-                class="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                class="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 {showMileageWarning ? 'border-red-500 ring-2 ring-red-200' : ''}"
                 required
               />
+              {#if showMileageWarning}
+                <div class="flex items-center gap-1 mt-1 text-xs text-red-600">
+                  <AlertTriangle class="w-3 h-3" />
+                  <span>Mileage is required</span>
+                </div>
+              {/if}
             </div>
           </div>
 
