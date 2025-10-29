@@ -51,14 +51,61 @@
 		}
 		return out;
 	}
+
+	// Days Off helpers
+	const MONTHS = [
+		'January','February','March','April','May','June',
+		'July','August','September','October','November','December'
+	];
+	function ordinal(n: number) {
+		const s = ['th', 'st', 'nd', 'rd'];
+		const v = n % 100;
+		return n + (s[(v - 20) % 10] || s[v] || s[0]);
+	}
+	/** Accepts "7/14, 12/25" -> ["July 14th","December 25th"] */
+	function formatDaysOff(str?: string | null): string[] {
+		if (!str) return [];
+		return String(str)
+			.split(',')
+			.map(s => s.trim())
+			.filter(Boolean)
+			.map(tok => {
+				const m = tok.match(/^(\d{1,2})\/(\d{1,2})$/);
+				if (!m) return '';
+				const mm = Math.max(1, Math.min(12, parseInt(m[1], 10)));
+				const dd = Math.max(1, Math.min(31, parseInt(m[2], 10)));
+				return `${MONTHS[mm - 1]} ${ordinal(dd)}`;
+			})
+			.filter(Boolean);
+	}
+
+	/**
+	 * Username hint generator.
+	 * Supports:
+	 * - "F1L" => first initial + full last (lowercased) e.g., John Doe -> "jdoe"
+	 * - "F{n}L{m}" => first n chars of first (original casing) + first m chars of last (lowercased)
+	 *   e.g., F2L3 for John Doe -> "Jodoe"
+	 */
 	function usernameExample(code: string | null | undefined, first = 'John', last = 'Doe') {
 		if (!code) return '';
-		const c = code.toUpperCase();
+		const c = String(code).toUpperCase().trim();
+
 		if (c === 'F1L') {
 			const ex = `${(first[0] ?? '').toLowerCase()}${(last ?? '').toLowerCase()}`;
 			return `Format “F1L”: first initial + last name. Example: ${first} ${last} → ${ex}`;
 		}
-		return `Format “${code}”.`;
+
+		const m = c.match(/^F(\d+)L(\d+)$/);
+		if (m) {
+			const n = parseInt(m[1], 10);
+			const k = parseInt(m[2], 10);
+			const firstPart = (first ?? '').slice(0, Math.max(0, n));
+			const lastPart = (last ?? '').slice(0, Math.max(0, k)).toLowerCase();
+			const ex = `${firstPart}${lastPart}`;
+			return `Format “F${n}L${k}”: first ${n} of first + first ${k} of last. Example: ${first} ${last} → ${ex}`;
+		}
+
+		return '';
 	}
 
 	// ---- Load data ----
@@ -114,6 +161,30 @@
 
 	onMount(() => { void loadOrg(); });
 
+	// ---- Derived via state+effect (TS-safe in runes mode) ----
+	type HoursRow = { day: string; open: string; close: string };
+	let workingHoursRows = $state<HoursRow[]>([]);
+	let daysOffList = $state<string[]>([]);
+	let statusLabel = $state<'Active' | 'Inactive'>('Inactive');
+	let statusPillClasses = $state('bg-red-100 text-red-800'); // default red (inactive)
+
+	$effect(() => {
+		workingHoursRows = org ? formatWorkingHours(org.working_hours) : [];
+		// Days Off: support snake_case or hyphenated column name
+		const rawDays = (org && (org.days_off ?? org['days-off'])) as string | null | undefined;
+		daysOffList = formatDaysOff(rawDays);
+
+		// Status: accept org_status, org_status_enum, status (robust + trim + case-insensitive)
+		const rawStatus =
+			(org && (org.org_status ?? org.org_status_enum ?? org.status)) ?? '';
+		const s = String(rawStatus).trim().toLowerCase();
+		statusLabel = s === 'active' ? 'Active' : s === 'inactive' ? 'Inactive' : 'Inactive';
+		statusPillClasses =
+			statusLabel === 'Active'
+				? 'bg-green-100 text-green-800'
+				: 'bg-red-100 text-red-800';
+	});
+
 	// ---- Edit modal form state ----
 	let form = $state({
 		// Overview
@@ -134,10 +205,9 @@
 		rides_phone_number: '',
 		client_min_age: '',
 		min_days_in_advance_for_ride_requests: '',
-		// Contacts
+		// Contacts (no phone fields)
 		primary_contact_name: '',
 		primary_contact_email: '',
-		primary_contact_phone: '',
 		primary_contact_address: '',
 		primary_contact_address2: '',
 		primary_contact_city: '',
@@ -145,7 +215,6 @@
 		primary_contact_zipcode: '',
 		secondary_contact_name: '',
 		secondary_contact_email: '',
-		secondary_contact_phone: '',
 		secondary_contact_address: '',
 		secondary_contact_address2: '',
 		secondary_contact_city: '',
@@ -154,25 +223,118 @@
 		// Login / username
 		username_format: '',
 		user_initial_password: '',
-		// Meta (read only in UI, not edited here)
-		org_creation: '',
+		// Meta (read only)
+		org_creation_date: '',
 		first_ride_date: '',
-		last_activity: ''
+		last_activity_in_portal: ''
 	});
+
+	// ---- Required fields logic ----
+	// User said NOT required: "days-off", org_address2, first_ride_date, last_activity_in_portal,
+	// primary_contact_address2, and ALL secondary_contact* fields. Everything else required.
+	const OPTIONAL_KEYS = new Set<string>([
+		'days_off',               // maps to DB "days-off"
+		'org_address2',
+		'first_ride_date',
+		'last_activity_in_portal',
+		'primary_contact_address2',
+		'secondary_contact_name',
+		'secondary_contact_email',
+		'secondary_contact_address',
+		'secondary_contact_address2',
+		'secondary_contact_city',
+		'secondary_contact_state',
+		'secondary_contact_zipcode'
+	]);
+	function isRequired(key: string) { return !OPTIONAL_KEYS.has(key); }
+
+	// Human labels for popup
+	const FIELD_LABELS: Record<string,string> = {
+		name: 'Name',
+		org_status: 'Organization Status',
+		org_email: 'Organization Email',
+		org_phone: 'Organization Phone',
+		org_website: 'Website',
+		org_address: 'Street',
+		org_address2: 'Street 2',
+		org_city: 'City',
+		org_state: 'State',
+		org_zip_code: 'Zip Code',
+		working_hours: 'Working Hours',
+		days_off: 'Days Off',
+		rides_phone_number: 'Rides Phone',
+		client_min_age: 'Client Minimum Age',
+		min_days_in_advance_for_ride_requests: 'Min Days in Advance',
+		primary_contact_name: 'Primary Contact Name',
+		primary_contact_email: 'Primary Contact Email',
+		primary_contact_address: 'Primary Contact Address',
+		primary_contact_address2: 'Primary Contact Address 2',
+		primary_contact_city: 'Primary Contact City',
+		primary_contact_state: 'Primary Contact State',
+		primary_contact_zipcode: 'Primary Contact Zip',
+		secondary_contact_name: 'Secondary Contact Name',
+		secondary_contact_email: 'Secondary Contact Email',
+		secondary_contact_address: 'Secondary Contact Address',
+		secondary_contact_address2: 'Secondary Contact Address 2',
+		secondary_contact_city: 'Secondary Contact City',
+		secondary_contact_state: 'Secondary Contact State',
+		secondary_contact_zipcode: 'Secondary Contact Zip',
+		username_format: 'Username Format',
+		user_initial_password: 'Initial Password'
+	};
+
+	let fieldErrors = $state<Record<string, string>>({});
+
+	function validateRequired(): string[] {
+		fieldErrors = {};
+		const missing: string[] = [];
+		for (const key of Object.keys(form)) {
+			if (!isRequired(key)) continue;
+			// ignore meta fields (they're not edited)
+			if (key === 'org_creation_date' || key === 'first_ride_date' || key === 'last_activity_in_portal') continue;
+
+			const val = (form as any)[key];
+			const empty = val == null || String(val).trim() === '';
+			if (empty) {
+				missing.push(key);
+				fieldErrors[key] = 'Required';
+			}
+		}
+		return missing;
+	}
+
+	function labelWithRequired(label: string, key: string) {
+		return isRequired(key) ? `${label} *` : label;
+	}
 
 	function openEdit() {
 		if (!org) return;
-		// map current org values into form (strings for inputs)
-		for (const k in form) {
-			const v = (org as any)[k];
+
+		for (const k of Object.keys(form)) {
+			let v = (org as any)[k];
+			// special-case: DB uses "days-off"
+			if (k === 'days_off' && (v == null || v === '')) {
+				v = (org as any)['days-off'];
+			}
 			(form as any)[k] = v == null ? '' : String(v);
 		}
+
+		// Ensure status default matches current DB value
+		const rawStatus =
+			((org as any).org_status ??
+			(org as any).org_status_enum ??
+			(org as any).status ??
+			'') as string;
+
+		const s = String(rawStatus).trim().toLowerCase();
+		form.org_status = s === 'active' ? 'Active' : s === 'inactive' ? 'Inactive' : 'Inactive';
+
+		fieldErrors = {};
 		showEditModal = true;
 	}
 
 	function closeEdit() {
 		showEditModal = false;
-		// keep view unchanged
 	}
 
 	function emptyToNull(obj: Record<string, any>) {
@@ -196,16 +358,37 @@
 		e.preventDefault();
 		if (!org || !orgId) return;
 
+		// Client-side required validation
+		const missing = validateRequired();
+		if (missing.length) {
+			const names = missing.map(k => FIELD_LABELS[k] ?? k).join(', ');
+			alert(`Please fill in the required field(s): ${names}.`);
+			return;
+		}
+
 		isSaving = true;
 		try {
-			const payload = emptyToNull({ ...form });
-			// numeric fields
-			coerceNumbers(payload, ['client_min_age', 'min_days_in_advance_for_ride_requests', 'primary_contact_zipcode', 'secondary_contact_zipcode']);
+			const payload: Record<string, any> = emptyToNull({ ...form });
 
-			// do not allow meta to overwrite if your schema manages them
-			delete payload.org_creation;
+			// numeric fields (ZIPs remain strings)
+			coerceNumbers(payload, ['client_min_age', 'min_days_in_advance_for_ride_requests']);
+
+			// map "days_off" (form) to DB column "days-off"
+			if ('days_off' in payload) {
+				payload['days-off'] = payload.days_off;
+				delete payload.days_off;
+			}
+
+			// map org_status (form) to org_status_enum (DB)
+			if ('org_status' in payload) {
+				payload.org_status_enum = payload.org_status; // 'Active' | 'Inactive'
+				delete payload.org_status;
+			}
+
+			// do not allow meta to overwrite
+			delete payload.org_creation_date;
 			delete payload.first_ride_date;
-			delete payload.last_activity;
+			delete payload.last_activity_in_portal;
 
 			const { error } = await supabase
 				.from('organization')
@@ -214,7 +397,6 @@
 
 			if (error) throw error;
 
-			// refresh
 			await loadOrg();
 			showEditModal = false;
 		} catch (e: any) {
@@ -245,7 +427,7 @@
 
 				{#if org}
 					<button
-						onclick={openEdit}
+						on:click={openEdit}
 						class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
 					>
 						<Edit class="w-4 h-4 mr-2" />
@@ -289,17 +471,25 @@
 								<div>
 									<label class="block text-sm font-medium text-gray-700">Organization Status</label>
 									<p class="mt-1 text-gray-900">
-										<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {org.org_status === 'Active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}">
-											{org.org_status ?? '-'}
+										<span class={"inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium " + statusPillClasses}>
+											{statusLabel}
 										</span>
 									</p>
 								</div>
 								<div>
 									<label class="block text-sm font-medium text-gray-700">Website</label>
-									<p class="mt-1 text-gray-900 flex items-center">
-										<LinkIcon class="w-4 h-4 mr-1 text-gray-400" />
-										{org.org_website ?? '-'}
-									</p>
+									{#if org.org_website}
+										<a
+											href={/^https?:\/\//.test(org.org_website) ? org.org_website : `https://${org.org_website}`}
+											class="mt-1 text-blue-600 hover:underline flex items-center"
+											target="_blank" rel="noopener noreferrer"
+										>
+											<LinkIcon class="w-4 h-4 mr-1 text-gray-400" />
+											{org.org_website}
+										</a>
+									{:else}
+										<p class="mt-1 text-gray-900">-</p>
+									{/if}
 								</div>
 								<div>
 									<label class="block text-sm font-medium text-gray-700">Email</label>
@@ -362,7 +552,7 @@
 							<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
 								<div>
 									<label class="block text-sm font-medium text-gray-700">Working Hours</label>
-									{#if formatWorkingHours(org.working_hours).length}
+									{#if workingHoursRows.length}
 										<div class="mt-2 rounded-md border border-gray-200">
 											<table class="w-full text-sm">
 												<thead class="bg-gray-50">
@@ -373,7 +563,7 @@
 													</tr>
 												</thead>
 												<tbody>
-													{#each formatWorkingHours(org.working_hours) as row}
+													{#each workingHoursRows as row}
 														<tr class="odd:bg-white even:bg-gray-50">
 															<td class="px-3 py-2">{row.day}</td>
 															<td class="px-3 py-2">{row.open}</td>
@@ -388,10 +578,22 @@
 									{/if}
 									<p class="mt-2 text-xs text-gray-500">Short form example: <code>Su07-18, Mo08-17</code></p>
 								</div>
+
+								<!-- Days Off rendered as a list of month+ordinal -->
 								<div>
 									<label class="block text-sm font-medium text-gray-700">Days Off</label>
-									<p class="mt-1 text-gray-900">{org.days_off ?? '-'}</p>
+									{#if daysOffList.length}
+										<ul class="mt-1 text-gray-900 list-disc list-inside space-y-0.5">
+											{#each daysOffList as d}
+												<li>{d}</li>
+											{/each}
+										</ul>
+									{:else}
+										<p class="mt-1 text-gray-900">-</p>
+									{/if}
+									<p class="mt-2 text-xs text-gray-500">Format: <code>MM/DD, MM/DD</code></p>
 								</div>
+
 								<div>
 									<label class="block text-sm font-medium text-gray-700">Rides Phone</label>
 									<p class="mt-1 text-gray-900">{org.rides_phone_number ?? '-'}</p>
@@ -408,7 +610,7 @@
 						</div>
 					</div>
 
-					<!-- Primary Contact -->
+					<!-- Primary Contact (no phone) -->
 					<div class="bg-white rounded-lg shadow-sm border border-gray-200">
 						<div class="px-6 py-4 border-b border-gray-200">
 							<div class="flex items-center">
@@ -426,11 +628,7 @@
 									<label class="block text-sm font-medium text-gray-700">Email</label>
 									<p class="mt-1 text-gray-900">{org.primary_contact_email ?? '-'}</p>
 								</div>
-								<div>
-									<label class="block text-sm font-medium text-gray-700">Phone</label>
-									<p class="mt-1 text-gray-900">{org.primary_contact_phone ?? '-'}</p>
-								</div>
-								<div>
+								<div class="md:col-span-2">
 									<label class="block text-sm font-medium text-gray-700">Address</label>
 									<p class="mt-1 text-gray-900">
 										{org.primary_contact_address ?? '-'}{org.primary_contact_address2 ? `, ${org.primary_contact_address2}` : ''}
@@ -443,7 +641,7 @@
 						</div>
 					</div>
 
-					<!-- Secondary Contact -->
+					<!-- Secondary Contact (no phone) -->
 					<div class="bg-white rounded-lg shadow-sm border border-gray-200">
 						<div class="px-6 py-4 border-b border-gray-200">
 							<div class="flex items-center">
@@ -461,11 +659,7 @@
 									<label class="block text-sm font-medium text-gray-700">Email</label>
 									<p class="mt-1 text-gray-900">{org.secondary_contact_email ?? '-'}</p>
 								</div>
-								<div>
-									<label class="block text-sm font-medium text-gray-700">Phone</label>
-									<p class="mt-1 text-gray-900">{org.secondary_contact_phone ?? '-'}</p>
-								</div>
-								<div>
+								<div class="md:col-span-2">
 									<label class="block text-sm font-medium text-gray-700">Address</label>
 									<p class="mt-1 text-gray-900">
 										{org.secondary_contact_address ?? '-'}{org.secondary_contact_address2 ? `, ${org.secondary_contact_address2}` : ''}
@@ -513,7 +707,7 @@
 							<div class="grid grid-cols-1 md:grid-cols-3 gap-6">
 								<div>
 									<label class="block text-sm font-medium text-gray-700">Created</label>
-									<p class="mt-1 text-gray-900">{org.org_creation ?? '-'}</p>
+									<p class="mt-1 text-gray-900">{org.org_creation_date ?? '-'}</p>
 								</div>
 								<div>
 									<label class="block text-sm font-medium text-gray-700">First Ride Date</label>
@@ -521,7 +715,7 @@
 								</div>
 								<div>
 									<label class="block text-sm font-medium text-gray-700">Last Activity</label>
-									<p class="mt-1 text-gray-900">{org.last_activity ?? '-'}</p>
+									<p class="mt-1 text-gray-900">{org.last_activity_in_portal ?? '-'}</p>
 								</div>
 							</div>
 						</div>
@@ -542,41 +736,70 @@
 		<div class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
 			<div class="relative top-12 mx-auto p-5 border w-full max-w-4xl shadow-lg rounded-md bg-white">
 				<div class="mt-1">
-					<div class="flex items-center justify-between mb-6">
+					<div class="flex items-center justify-between mb-2">
 						<h3 class="text-xl font-medium text-gray-900">Edit Organization</h3>
-						<button onclick={closeEdit} class="text-gray-400 hover:text-gray-600">
+						<button on:click={closeEdit} class="text-gray-400 hover:text-gray-600">
 							<X class="w-5 h-5" />
 						</button>
 					</div>
 
-					<form onsubmit={saveOrg} class="space-y-8">
+					<!-- Required hint -->
+					<p class="text-sm text-gray-500 mb-6">
+						<span class="text-red-600">*</span> indicates required fields.
+					</p>
+
+					<form on:submit={saveOrg} class="space-y-8">
 						<!-- Overview -->
 						<div>
 							<h4 class="text-lg font-medium text-gray-900 mb-3">Overview</h4>
 							<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
 								<div>
-									<label class="block text-sm font-medium text-gray-700">Name</label>
-									<input type="text" bind:value={form.name} class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2" />
+									<label class="block text-sm font-medium text-gray-700">
+										{labelWithRequired('Name','name')}
+									</label>
+									<input
+										type="text" bind:value={form.name} required
+										class={"mt-1 block w-full border rounded-md px-3 py-2 " + (fieldErrors.name ? 'border-red-500' : 'border-gray-300')}
+										aria-invalid={!!fieldErrors.name} aria-describedby="err-name" />
+									{#if fieldErrors.name}<p id="err-name" class="text-xs text-red-600 mt-1">{fieldErrors.name}</p>{/if}
 								</div>
 								<div>
-									<label class="block text-sm font-medium text-gray-700">Organization Status</label>
-									<select bind:value={form.org_status} class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2">
+									<label class="block text-sm font-medium text-gray-700">
+										{labelWithRequired('Organization Status','org_status')}
+									</label>
+									<select
+										bind:value={form.org_status} required
+										class={"mt-1 block w-full border rounded-md px-3 py-2 " + (fieldErrors.org_status ? 'border-red-500' : 'border-gray-300')}
+										aria-invalid={!!fieldErrors.org_status} aria-describedby="err-status">
 										<option value="">—</option>
 										<option value="Active">Active</option>
 										<option value="Inactive">Inactive</option>
 									</select>
+									{#if fieldErrors.org_status}<p id="err-status" class="text-xs text-red-600 mt-1">{fieldErrors.org_status}</p>{/if}
 								</div>
 								<div>
-									<label class="block text-sm font-medium text-gray-700">Website</label>
-									<input type="text" bind:value={form.org_website} class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2" />
+									<label class="block text-sm font-medium text-gray-700">
+										{labelWithRequired('Website','org_website')}
+									</label>
+									<input type="text" bind:value={form.org_website} required
+										class={"mt-1 block w-full border rounded-md px-3 py-2 " + (fieldErrors.org_website ? 'border-red-500' : 'border-gray-300')}
+										aria-invalid={!!fieldErrors.org_website} />
 								</div>
 								<div>
-									<label class="block text-sm font-medium text-gray-700">Email</label>
-									<input type="email" bind:value={form.org_email} class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2" />
+									<label class="block text-sm font-medium text-gray-700">
+										{labelWithRequired('Organization Email','org_email')}
+									</label>
+									<input type="email" bind:value={form.org_email} required
+										class={"mt-1 block w-full border rounded-md px-3 py-2 " + (fieldErrors.org_email ? 'border-red-500' : 'border-gray-300')}
+										aria-invalid={!!fieldErrors.org_email} />
 								</div>
 								<div>
-									<label class="block text-sm font-medium text-gray-700">Phone</label>
-									<input type="tel" bind:value={form.org_phone} class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2" />
+									<label class="block text-sm font-medium text-gray-700">
+										{labelWithRequired('Organization Phone','org_phone')}
+									</label>
+									<input type="tel" bind:value={form.org_phone} required
+										class={"mt-1 block w-full border rounded-md px-3 py-2 " + (fieldErrors.org_phone ? 'border-red-500' : 'border-gray-300')}
+										aria-invalid={!!fieldErrors.org_phone} />
 								</div>
 							</div>
 						</div>
@@ -586,24 +809,43 @@
 							<h4 class="text-lg font-medium text-gray-900 mb-3">Address</h4>
 							<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
 								<div>
-									<label class="block text-sm font-medium text-gray-700">Street</label>
-									<input type="text" bind:value={form.org_address} class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2" />
+									<label class="block text-sm font-medium text-gray-700">
+										{labelWithRequired('Street','org_address')}
+									</label>
+									<input type="text" bind:value={form.org_address} required
+										class={"mt-1 block w-full border rounded-md px-3 py-2 " + (fieldErrors.org_address ? 'border-red-500' : 'border-gray-300')}
+										aria-invalid={!!fieldErrors.org_address} />
 								</div>
 								<div>
-									<label class="block text-sm font-medium text-gray-700">Street 2</label>
-									<input type="text" bind:value={form.org_address2} class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2" />
+									<label class="block text-sm font-medium text-gray-700">
+										{labelWithRequired('Street 2','org_address2')}
+									</label>
+									<input type="text" bind:value={form.org_address2}
+										class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2" />
 								</div>
 								<div>
-									<label class="block text-sm font-medium text-gray-700">City</label>
-									<input type="text" bind:value={form.org_city} class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2" />
+									<label class="block text-sm font-medium text-gray-700">
+										{labelWithRequired('City','org_city')}
+									</label>
+									<input type="text" bind:value={form.org_city} required
+										class={"mt-1 block w-full border rounded-md px-3 py-2 " + (fieldErrors.org_city ? 'border-red-500' : 'border-gray-300')}
+										aria-invalid={!!fieldErrors.org_city} />
 								</div>
 								<div>
-									<label class="block text-sm font-medium text-gray-700">State</label>
-									<input type="text" maxlength="2" bind:value={form.org_state} class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2" />
+									<label class="block text-sm font-medium text-gray-700">
+										{labelWithRequired('State','org_state')}
+									</label>
+									<input type="text" maxlength="2" bind:value={form.org_state} required
+										class={"mt-1 block w-full border rounded-md px-3 py-2 " + (fieldErrors.org_state ? 'border-red-500' : 'border-gray-300')}
+										aria-invalid={!!fieldErrors.org_state} />
 								</div>
 								<div>
-                                    <label class="block text-sm font-medium text-gray-700">Zip Code</label>
-									<input type="text" bind:value={form.org_zip_code} class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2" />
+									<label class="block text-sm font-medium text-gray-700">
+										{labelWithRequired('Zip Code','org_zip_code')}
+									</label>
+									<input type="text" bind:value={form.org_zip_code} required
+										class={"mt-1 block w-full border rounded-md px-3 py-2 " + (fieldErrors.org_zip_code ? 'border-red-500' : 'border-gray-300')}
+										aria-invalid={!!fieldErrors.org_zip_code} />
 								</div>
 							</div>
 						</div>
@@ -613,56 +855,121 @@
 							<h4 class="text-lg font-medium text-gray-900 mb-3">Operations</h4>
 							<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
 								<div class="md:col-span-2">
-									<label class="block text-sm font-medium text-gray-700">Working Hours (short form)</label>
-									<textarea rows="3" bind:value={form.working_hours} class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2"></textarea>
+									<label class="block text-sm font-medium text-gray-700">
+										{labelWithRequired('Working Hours (short form)','working_hours')}
+									</label>
+									<textarea rows="3" bind:value={form.working_hours} required
+										class={"mt-1 block w-full border rounded-md px-3 py-2 " + (fieldErrors.working_hours ? 'border-red-500' : 'border-gray-300')}
+										aria-invalid={!!fieldErrors.working_hours}></textarea>
 									<p class="mt-1 text-xs text-gray-500">Example: <code>Su07-18, Mo08-17</code></p>
 								</div>
 								<div>
-									<label class="block text-sm font-medium text-gray-700">Days Off</label>
-									<input type="text" bind:value={form.days_off} class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2" />
+									<label class="block text-sm font-medium text-gray-700">
+										{labelWithRequired('Days Off','days_off')}
+									</label>
+									<input type="text" bind:value={form.days_off} placeholder="MM/DD, MM/DD"
+										class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2" />
 								</div>
 								<div>
-									<label class="block text-sm font-medium text-gray-700">Rides Phone</label>
-									<input type="tel" bind:value={form.rides_phone_number} class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2" />
+									<label class="block text-sm font-medium text-gray-700">
+										{labelWithRequired('Rides Phone','rides_phone_number')}
+									</label>
+									<input type="tel" bind:value={form.rides_phone_number} required
+										class={"mt-1 block w-full border rounded-md px-3 py-2 " + (fieldErrors.rides_phone_number ? 'border-red-500' : 'border-gray-300')}
+										aria-invalid={!!fieldErrors.rides_phone_number} />
 								</div>
 								<div>
-									<label class="block text-sm font-medium text-gray-700">Client Minimum Age</label>
-									<input type="number" bind:value={form.client_min_age} class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2" />
+									<label class="block text-sm font-medium text-gray-700">
+										{labelWithRequired('Client Minimum Age','client_min_age')}
+									</label>
+									<input type="number" bind:value={form.client_min_age} required
+										class={"mt-1 block w-full border rounded-md px-3 py-2 " + (fieldErrors.client_min_age ? 'border-red-500' : 'border-gray-300')}
+										aria-invalid={!!fieldErrors.client_min_age} />
 								</div>
 								<div>
-									<label class="block text-sm font-medium text-gray-700">Min Days in Advance</label>
-									<input type="number" bind:value={form.min_days_in_advance_for_ride_requests} class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2" />
+									<label class="block text-sm font-medium text-gray-700">
+										{labelWithRequired('Min Days in Advance','min_days_in_advance_for_ride_requests')}
+									</label>
+									<input type="number" bind:value={form.min_days_in_advance_for_ride_requests} required
+										class={"mt-1 block w-full border rounded-md px-3 py-2 " + (fieldErrors.min_days_in_advance_for_ride_requests ? 'border-red-500' : 'border-gray-300')}
+										aria-invalid={!!fieldErrors.min_days_in_advance_for_ride_requests} />
 								</div>
 							</div>
 						</div>
 
-						<!-- Primary Contact -->
+						<!-- Primary Contact (no phone) -->
 						<div>
 							<h4 class="text-lg font-medium text-gray-900 mb-3">Primary Contact</h4>
 							<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-								<div><label class="block text-sm font-medium text-gray-700">Name</label><input type="text" bind:value={form.primary_contact_name} class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2" /></div>
-								<div><label class="block text-sm font-medium text-gray-700">Email</label><input type="email" bind:value={form.primary_contact_email} class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2" /></div>
-								<div><label class="block text-sm font-medium text-gray-700">Phone</label><input type="tel" bind:value={form.primary_contact_phone} class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2" /></div>
-								<div><label class="block text-sm font-medium text-gray-700">Address</label><input type="text" bind:value={form.primary_contact_address} class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2" /></div>
-								<div><label class="block text-sm font-medium text-gray-700">Address 2</label><input type="text" bind:value={form.primary_contact_address2} class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2" /></div>
-								<div><label class="block text-sm font-medium text-gray-700">City</label><input type="text" bind:value={form.primary_contact_city} class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2" /></div>
-								<div><label class="block text-sm font-medium text-gray-700">State</label><input type="text" maxlength="2" bind:value={form.primary_contact_state} class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2" /></div>
-								<div><label class="block text-sm font-medium text-gray-700">Zip</label><input type="text" bind:value={form.primary_contact_zipcode} class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2" /></div>
+								<div>
+									<label class="block text-sm font-medium text-gray-700">
+										{labelWithRequired('Name','primary_contact_name')}
+									</label>
+									<input type="text" bind:value={form.primary_contact_name} required
+										class={"mt-1 block w-full border rounded-md px-3 py-2 " + (fieldErrors.primary_contact_name ? 'border-red-500' : 'border-gray-300')}
+										aria-invalid={!!fieldErrors.primary_contact_name} />
+								</div>
+								<div>
+									<label class="block text-sm font-medium text-gray-700">
+										{labelWithRequired('Email','primary_contact_email')}
+									</label>
+									<input type="email" bind:value={form.primary_contact_email} required
+										class={"mt-1 block w-full border rounded-md px-3 py-2 " + (fieldErrors.primary_contact_email ? 'border-red-500' : 'border-gray-300')}
+										aria-invalid={!!fieldErrors.primary_contact_email} />
+								</div>
+								<div class="md:col-span-2">
+									<label class="block text-sm font-medium text-gray-700">
+										{labelWithRequired('Address','primary_contact_address')}
+									</label>
+									<input type="text" bind:value={form.primary_contact_address} required
+										class={"mt-1 block w-full border rounded-md px-3 py-2 " + (fieldErrors.primary_contact_address ? 'border-red-500' : 'border-gray-300')}
+										aria-invalid={!!fieldErrors.primary_contact_address} />
+								</div>
+								<div class="md:col-span-2">
+									<label class="block text-sm font-medium text-gray-700">
+										{labelWithRequired('Address 2','primary_contact_address2')}
+									</label>
+									<input type="text" bind:value={form.primary_contact_address2}
+										class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2" />
+								</div>
+								<div>
+									<label class="block text-sm font-medium text-gray-700">
+										{labelWithRequired('City','primary_contact_city')}
+									</label>
+									<input type="text" bind:value={form.primary_contact_city} required
+										class={"mt-1 block w-full border rounded-md px-3 py-2 " + (fieldErrors.primary_contact_city ? 'border-red-500' : 'border-gray-300')}
+										aria-invalid={!!fieldErrors.primary_contact_city} />
+								</div>
+								<div>
+									<label class="block text-sm font-medium text-gray-700">
+										{labelWithRequired('State','primary_contact_state')}
+									</label>
+									<input type="text" maxlength="2" bind:value={form.primary_contact_state} required
+										class={"mt-1 block w-full border rounded-md px-3 py-2 " + (fieldErrors.primary_contact_state ? 'border-red-500' : 'border-gray-300')}
+										aria-invalid={!!fieldErrors.primary_contact_state} />
+								</div>
+								<div>
+									<label class="block text-sm font-medium text-gray-700">
+										{labelWithRequired('Zip','primary_contact_zipcode')}
+									</label>
+									<input type="text" bind:value={form.primary_contact_zipcode} required
+										class={"mt-1 block w-full border rounded-md px-3 py-2 " + (fieldErrors.primary_contact_zipcode ? 'border-red-500' : 'border-gray-300')}
+										aria-invalid={!!fieldErrors.primary_contact_zipcode} />
+								</div>
 							</div>
 						</div>
 
-						<!-- Secondary Contact -->
+						<!-- Secondary Contact (all optional) -->
 						<div>
 							<h4 class="text-lg font-medium text-gray-900 mb-3">Secondary Contact</h4>
 							<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-								<div><label class="block text-sm font-medium text-gray-700">Name</label><input type="text" bind:value={form.secondary_contact_name} class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2" /></div>
-								<div><label class="block text-sm font-medium text-gray-700">Email</label><input type="email" bind:value={form.secondary_contact_email} class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2" /></div>
-								<div><label class="block text-sm font-medium text-gray-700">Phone</label><input type="tel" bind:value={form.secondary_contact_phone} class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2" /></div>
-								<div><label class="block text-sm font-medium text-gray-700">Address</label><input type="text" bind:value={form.secondary_contact_address} class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2" /></div>
-								<div><label class="block text-sm font-medium text-gray-700">Address 2</label><input type="text" bind:value={form.secondary_contact_address2} class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2" /></div>
-								<div><label class="block text-sm font-medium text-gray-700">City</label><input type="text" bind:value={form.secondary_contact_city} class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2" /></div>
-								<div><label class="block text-sm font-medium text-gray-700">State</label><input type="text" maxlength="2" bind:value={form.secondary_contact_state} class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2" /></div>
-								<div><label class="block text-sm font-medium text-gray-700">Zip</label><input type="text" bind:value={form.secondary_contact_zipcode} class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2" /></div>
+								<div><label class="block text-sm font-medium text-gray-700">{labelWithRequired('Name','secondary_contact_name')}</label><input type="text" bind:value={form.secondary_contact_name} class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2" /></div>
+								<div><label class="block text-sm font-medium text-gray-700">{labelWithRequired('Email','secondary_contact_email')}</label><input type="email" bind:value={form.secondary_contact_email} class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2" /></div>
+								<div class="md:col-span-2"><label class="block text-sm font-medium text-gray-700">{labelWithRequired('Address','secondary_contact_address')}</label><input type="text" bind:value={form.secondary_contact_address} class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2" /></div>
+								<div class="md:col-span-2"><label class="block text-sm font-medium text-gray-700">{labelWithRequired('Address 2','secondary_contact_address2')}</label><input type="text" bind:value={form.secondary_contact_address2} class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2" /></div>
+								<div><label class="block text-sm font-medium text-gray-700">{labelWithRequired('City','secondary_contact_city')}</label><input type="text" bind:value={form.secondary_contact_city} class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2" /></div>
+								<div><label class="block text-sm font-medium text-gray-700">{labelWithRequired('State','secondary_contact_state')}</label><input type="text" maxlength="2" bind:value={form.secondary_contact_state} class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2" /></div>
+								<div><label class="block text-sm font-medium text-gray-700">{labelWithRequired('Zip','secondary_contact_zipcode')}</label><input type="text" bind:value={form.secondary_contact_zipcode} class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2" /></div>
 							</div>
 						</div>
 
@@ -671,19 +978,27 @@
 							<h4 class="text-lg font-medium text-gray-900 mb-3">Login & Username</h4>
 							<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
 								<div>
-									<label class="block text-sm font-medium text-gray-700">Username Format</label>
-									<input type="text" bind:value={form.username_format} class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2" />
+									<label class="block text-sm font-medium text-gray-700">
+										{labelWithRequired('Username Format','username_format')}
+									</label>
+									<input type="text" bind:value={form.username_format} required
+										class={"mt-1 block w-full border rounded-md px-3 py-2 " + (fieldErrors.username_format ? 'border-red-500' : 'border-gray-300')}
+										aria-invalid={!!fieldErrors.username_format} />
 									<p class="mt-1 text-xs text-gray-500">{usernameExample(form.username_format, 'John', 'Doe')}</p>
 								</div>
 								<div>
-									<label class="block text-sm font-medium text-gray-700">Initial Password</label>
-									<input type="text" bind:value={form.user_initial_password} class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2" />
+									<label class="block text-sm font-medium text-gray-700">
+										{labelWithRequired('Initial Password','user_initial_password')}
+									</label>
+									<input type="text" bind:value={form.user_initial_password} required
+										class={"mt-1 block w-full border rounded-md px-3 py-2 " + (fieldErrors.user_initial_password ? 'border-red-500' : 'border-gray-300')}
+										aria-invalid={!!fieldErrors.user_initial_password} />
 								</div>
 							</div>
 						</div>
 
 						<div class="flex justify-end gap-3 pt-2">
-							<button type="button" onclick={closeEdit} class="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50">Cancel</button>
+							<button type="button" on:click={closeEdit} class="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50">Cancel</button>
 							<button type="submit" disabled={isSaving} class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-60 inline-flex items-center gap-2">
 								<Save class="w-4 h-4" />
 								<span>{isSaving ? 'Saving…' : 'Save Changes'}</span>
