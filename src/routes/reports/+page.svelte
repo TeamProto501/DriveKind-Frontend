@@ -185,7 +185,7 @@
       const orgLabelWidth = doc.getTextWidth('Organization: ');
       const orgStartX = (pageWidth - orgTextWidth) / 2;
       doc.setFont('helvetica', 'bold');
-      doc.text('Organization: ', orgStartX, yPosition);
+      doc.text('Organization:   ', orgStartX, yPosition);
       doc.setFont('helvetica', 'normal');
       doc.text(organizationName, orgStartX + orgLabelWidth, yPosition);
       
@@ -197,7 +197,7 @@
       const roleLabelWidth = doc.getTextWidth('Role: ');
       const roleStartX = (pageWidth - roleTextWidth) / 2;
       doc.setFont('helvetica', 'bold');
-      doc.text('Role: ', roleStartX, yPosition);
+      doc.text('Role:  ', roleStartX, yPosition);
       doc.setFont('helvetica', 'normal');
       doc.text(userRole, roleStartX + roleLabelWidth, yPosition);
       
@@ -208,7 +208,7 @@
       const periodLabelWidth = doc.getTextWidth('Report Period: ');
       const periodStartX = (pageWidth - periodTextWidth) / 2;
       doc.setFont('helvetica', 'bold');
-      doc.text('Report Period: ', periodStartX, yPosition);
+      doc.text('Report Period:  ', periodStartX, yPosition);
       doc.setFont('helvetica', 'normal');
       doc.text(`${formatDate(startDate)} - ${formatDate(endDate)}`, periodStartX + periodLabelWidth, yPosition);
       
@@ -441,7 +441,7 @@
               {#if showHoursWarning}
                 <div class="flex items-center gap-1 mt-1 text-xs text-red-600">
                   <AlertTriangle class="w-3 h-3" />
-                  <span>Hours worked is required</span>
+                  <span>Hours worked is required. Can be set to 0.</span>
                 </div>
               {/if}
             </div>
@@ -463,7 +463,7 @@
               {#if showMileageWarning}
                 <div class="flex items-center gap-1 mt-1 text-xs text-red-600">
                   <AlertTriangle class="w-3 h-3" />
-                  <span>Mileage is required</span>
+                  <span>Mileage is required. Can be set to 0.</span>
                 </div>
               {/if}
             </div>
