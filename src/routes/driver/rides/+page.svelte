@@ -8,12 +8,15 @@
   import { enhance } from '$app/forms';
   import { invalidateAll } from '$app/navigation';
   import type { PageData } from './$types';
+  import RideCompletionModal from '$lib/components/RideCompletionModal.svelte';
 
   let { data }: { data: PageData } = $props();
 
   let searchTerm = $state("");
   let activeTab = $state("scheduled"); // scheduled, active, completed
   let isUpdating = $state(false);
+  let showCompletionModal = $state(false);
+  let selectedRideForCompletion = $state(null);
 
   // Filter rides based on tab and search
   let filteredRides = $derived(() => {
@@ -124,6 +127,44 @@
 
   async function cancelRide(rideId: number) {
     await updateRideStatus(rideId, 'Cancelled');
+  }
+
+  function openCompletionModal(ride: any) {
+    selectedRideForCompletion = ride;
+    showCompletionModal = true;
+  }
+
+  async function submitCompletion(formData: any) {
+    if (!selectedRideForCompletion) return;
+
+    isUpdating = true;
+    try {
+      const response = await fetch(`/driver/rides/complete`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          rideId: selectedRideForCompletion.ride_id,
+          ...formData
+        })
+      });
+
+      if (response.ok) {
+        showCompletionModal = false;
+        selectedRideForCompletion = null;
+        await invalidateAll();
+      } else {
+        const error = await response.json();
+        console.error('Failed to report completion:', error);
+        alert(`Failed to report completion: ${error.error || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('Error reporting completion:', error);
+      alert('Error reporting completion. Please try again.');
+    } finally {
+      isUpdating = false;
+    }
   }
 </script>
 
@@ -331,7 +372,7 @@
                 <Button 
                   size="sm" 
                   variant="outline"
-                  onclick={() => reportComplete(ride.ride_id)}
+                  onclick={() => openCompletionModal(ride)}
                   disabled={isUpdating}
                 >
                   <CheckCircle class="w-4 h-4 mr-1" />
@@ -340,7 +381,7 @@
               {:else if ride.status === "In Progress"}
                 <Button 
                   size="sm" 
-                  onclick={() => reportComplete(ride.ride_id)}
+                  onclick={() => openCompletionModal(ride)}
                   disabled={isUpdating}
                 >
                   <CheckCircle class="w-4 h-4 mr-1" />
@@ -387,3 +428,10 @@
     </Card>
   {/if}
 </div>
+<RideCompletionModal 
+  bind:show={showCompletionModal}
+  ride={selectedRideForCompletion}
+  isDriver={true}
+  onSubmit={submitCompletion}
+  isSubmitting={isUpdating}
+/>

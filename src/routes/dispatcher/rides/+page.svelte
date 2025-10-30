@@ -10,6 +10,7 @@
   import { enhance } from '$app/forms';
   import { invalidateAll } from '$app/navigation';
   import type { PageData } from './$types';
+  import RideCompletionModal from '$lib/components/RideCompletionModal.svelte';
 
   let { data }: { data: PageData } = $props();
 
@@ -21,6 +22,7 @@
   let showConfirmModal = $state(false);
   let selectedRide = $state(null);
   let showAssignDriverModal = $state(false);
+  let showConfirmModal = $state(false);
 
   // Confirmation form data
   let confirmForm = $state({
@@ -421,6 +423,53 @@
       isUpdating = false;
     }
   }
+
+  function openConfirmModal(ride: any) {
+    selectedRide = ride;
+    showConfirmModal = true;
+  }
+
+  async function confirmCompletion(formData: any) {
+    if (!selectedRide) return;
+
+    isUpdating = true;
+    try {
+      // Call Express API directly
+      const token = data.session?.access_token;
+      
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/rides/${selectedRide.ride_id}/confirm`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          hours: formData.hours ? parseFloat(formData.hours) : null,
+          miles_driven: formData.miles_driven ? parseFloat(formData.miles_driven) : null,
+          donation_received: formData.donation_received || false,
+          donation_amount: formData.donation_received && formData.donation_amount ? parseFloat(formData.donation_amount) : null,
+          completion_status: formData.completion_status,
+          comments: formData.comments
+        })
+      });
+
+      const result = await response.json();
+
+      if (response.ok && result.success) {
+        showConfirmModal = false;
+        selectedRide = null;
+        await invalidateAll();
+        alert('Ride confirmed as completed!');
+      } else {
+        alert(`Failed to confirm ride: ${result.error || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('Error confirming ride:', error);
+      alert('Error confirming ride. Please try again.');
+    } finally {
+      isUpdating = false;
+    }
+  }
 </script>
 
 <svelte:head>
@@ -619,71 +668,13 @@
   </div>
 </div>
 
-<!-- Confirm Completion Modal -->
-{#if showConfirmModal}
-  <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-    <div class="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-      <div class="mb-4">
-        <h2 class="text-xl font-semibold">Confirm Ride Completion</h2>
-        <p class="text-sm text-gray-600">Review and confirm the ride details.</p>
-      </div>
-      
-      <div class="space-y-4 mb-6">
-        <div>
-          <Label for="miles_driven">Miles Driven</Label>
-          <input 
-            id="miles_driven"
-            type="number"
-            step="0.1"
-            bind:value={confirmForm.miles_driven}
-            placeholder="Enter miles driven"
-            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-          />
-        </div>
-        
-        <div>
-          <Label for="hours">Hours</Label>
-          <input 
-            id="hours"
-            type="number"
-            step="0.1"
-            bind:value={confirmForm.hours}
-            placeholder="Enter hours"
-            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-          />
-        </div>
-        
-        <div>
-          <Label for="donation_amount">Donation Amount (Optional)</Label>
-          <input 
-            id="donation_amount"
-            type="number"
-            step="0.01"
-            bind:value={confirmForm.donation_amount}
-            placeholder="Enter donation amount"
-            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-          />
-        </div>
-      </div>
-      
-      <div class="flex justify-end gap-2">
-        <button 
-          onclick={() => showConfirmModal = false}
-          class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
-        >
-          Cancel
-        </button>
-        <button 
-          onclick={confirmCompletion}
-          disabled={isUpdating}
-          class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors disabled:opacity-50"
-        >
-          {isUpdating ? 'Confirming...' : 'Confirm Completion'}
-        </button>
-      </div>
-    </div>
-  </div>
-{/if}
+<RideCompletionModal 
+  bind:show={showConfirmModal}
+  ride={selectedRide}
+  isDriver={false}
+  onSubmit={confirmCompletion}
+  isSubmitting={isUpdating}
+/>
 
 <!-- Create Ride Modal -->
 {#if showCreateModal}
