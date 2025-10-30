@@ -44,7 +44,7 @@ export const load: PageServerLoad = async (event) => {
 			};
 		}
 
-		// Get rides assigned to this driver using the actual database schema
+		// Get rides assigned to this driver - include Scheduled, Assigned, In Progress, Completed, Cancelled, and Reported
 		const { data: rides, error: ridesError } = await supabase
 			.from('rides')
 			.select(`
@@ -85,6 +85,7 @@ export const load: PageServerLoad = async (event) => {
 				)
 			`)
 			.eq('driver_user_id', user.id)
+			.in('status', ['Scheduled', 'Assigned', 'In Progress', 'Completed', 'Cancelled', 'Reported'])
 			.order('appointment_time', { ascending: true });
 
 		if (ridesError) {
@@ -98,7 +99,10 @@ export const load: PageServerLoad = async (event) => {
 		}
 
 		// Get completed rides data if any rides are completed
-		const completedRideIds = rides?.filter(ride => ride.status === 'Completed').map(ride => ride.ride_id) || [];
+		const completedRideIds = rides?.filter(ride => 
+			ride.status === 'Completed' || ride.status === 'Reported'
+		).map(ride => ride.ride_id) || [];
+		
 		let completedRidesData = {};
 		
 		if (completedRideIds.length > 0) {
