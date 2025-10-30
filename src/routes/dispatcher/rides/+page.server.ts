@@ -7,9 +7,9 @@ export const load: PageServerLoad = async (event) => {
 	
 	try {
 		// Get the current user
-		const { data: { user }, error: userError } = await supabase.auth.getUser();
+		const { data: { session }, error: sessionError } = await supabase.auth.getSession();
 		
-		if (userError || !user) {
+		if (sessionError || !session) {
 			throw redirect(302, '/login');
 		}
 
@@ -17,12 +17,13 @@ export const load: PageServerLoad = async (event) => {
 		const { data: profile, error: profileError } = await supabase
 			.from('staff_profiles')
 			.select('user_id, org_id, first_name, last_name, role')
-			.eq('user_id', user.id)
+			.eq('user_id', session.user.id)
 			.single();
 
 		if (profileError || !profile) {
 			console.error('Profile error:', profileError);
 			return {
+				session,
 				rides: [],
 				drivers: [],
 				clients: [],
@@ -38,6 +39,7 @@ export const load: PageServerLoad = async (event) => {
 
 		if (!hasDispatcherRole) {
 			return {
+				session,
 				rides: [],
 				drivers: [],
 				clients: [],
@@ -120,6 +122,7 @@ export const load: PageServerLoad = async (event) => {
 		}
 
 		return {
+			session, // ← ADDED THIS!
 			rides: rides || [],
 			drivers: drivers || [],
 			clients: clients || [],
@@ -133,6 +136,7 @@ export const load: PageServerLoad = async (event) => {
 			throw error; // Re-throw redirects
 		}
 		return {
+			session: null,
 			rides: [],
 			drivers: [],
 			clients: [],
