@@ -128,7 +128,7 @@
             <option value="Cancelled by Driver">Cancelled by Driver</option>
           </select>
         </div>
-
+        
         <!-- Hours and Miles -->
         <div class="grid grid-cols-2 gap-4">
           <div>
@@ -171,7 +171,7 @@
               bind:checked={formData.donation_received}
               class="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
             />
-            <Label for="donation_received" class="mb-0">Donation Received?</Label>
+            <Label for="donation_received" class="mb-0 cursor-pointer">Donation Received?</Label>
           </div>
 
           {#if formData.donation_received}
