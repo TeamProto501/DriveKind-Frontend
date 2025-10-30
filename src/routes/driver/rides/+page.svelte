@@ -100,6 +100,10 @@
   async function cancelRide(rideId: number) {
     await updateRideStatus(rideId, 'Cancelled');
   }
+
+  async function reportComplete(rideId: number) {
+    await updateRideStatus(rideId, 'Reported');
+  }
 </script>
 
 <svelte:head>
@@ -297,11 +301,11 @@
               {:else if ride.status === "In Progress"}
                 <Button 
                   size="sm" 
-                  onclick={() => completeRide(ride.ride_id)}
+                  onclick={() => reportComplete(ride.ride_id)}
                   disabled={isUpdating}
                 >
                   <CheckCircle class="w-4 h-4 mr-1" />
-                  Complete Ride
+                  Report Complete
                 </Button>
               {/if}
               
