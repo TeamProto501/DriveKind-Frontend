@@ -1,6 +1,5 @@
 <script lang="ts">
   import { Button } from "$lib/components/ui/button";
-  import Label from "$lib/components/ui/label.svelte";
   import Textarea from "$lib/components/ui/textarea.svelte";
   import { X } from "@lucide/svelte";
 
@@ -113,7 +112,9 @@
       <div class="space-y-4">
         <!-- Completion Status -->
         <div>
-          <Label for="completion_status">Completion Status *</Label>
+          <label for="completion_status" class="block text-sm font-medium text-gray-700 mb-2">
+            Completion Status *
+          </label>
           <select 
             id="completion_status"
             bind:value={formData.completion_status}
@@ -128,11 +129,13 @@
             <option value="Cancelled by Driver">Cancelled by Driver</option>
           </select>
         </div>
-        
+
         <!-- Hours and Miles -->
         <div class="grid grid-cols-2 gap-4">
           <div>
-            <Label for="hours">Hours Worked *</Label>
+            <label for="hours" class="block text-sm font-medium text-gray-700 mb-2">
+              Hours Worked *
+            </label>
             <input 
               id="hours"
               type="number"
@@ -147,7 +150,9 @@
           </div>
 
           <div>
-            <Label for="miles_driven">Miles Driven *</Label>
+            <label for="miles_driven" class="block text-sm font-medium text-gray-700 mb-2">
+              Miles Driven *
+            </label>
             <input 
               id="miles_driven"
               type="number"
@@ -171,12 +176,16 @@
               bind:checked={formData.donation_received}
               class="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
             />
-            <Label for="donation_received" class="mb-0 cursor-pointer">Donation Received?</Label>
+            <label for="donation_received" class="text-sm font-medium text-gray-700 cursor-pointer">
+              Donation Received?
+            </label>
           </div>
 
           {#if formData.donation_received}
             <div class="ml-6">
-              <Label for="donation_amount">Donation Amount (Optional)</Label>
+              <label for="donation_amount" class="block text-sm font-medium text-gray-700 mb-2">
+                Donation Amount (Optional)
+              </label>
               <div class="relative">
                 <span class="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">$</span>
                 <input 
@@ -195,7 +204,9 @@
 
         <!-- Comments -->
         <div>
-          <Label for="comments">Comments / Notes (Optional)</Label>
+          <label for="comments" class="block text-sm font-medium text-gray-700 mb-2">
+            Comments / Notes (Optional)
+          </label>
           <Textarea 
             id="comments"
             bind:value={formData.comments}
