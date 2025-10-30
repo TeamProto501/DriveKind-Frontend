@@ -229,16 +229,6 @@
     showAssignDriverModal = true;
   }
 
-  function openConfirmModal(ride: any) {
-    selectedRide = ride;
-    confirmForm = {
-      miles_driven: ride.miles_driven?.toString() || '',
-      hours: ride.hours?.toString() || '',
-      donation_amount: ''
-    };
-    showConfirmModal = true;
-  }
-
   async function createRide() {
     // Validation...
     if (!rideForm.client_id) {
