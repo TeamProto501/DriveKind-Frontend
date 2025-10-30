@@ -353,43 +353,6 @@
     }
   }
 
-  async function confirmCompletion() {
-    isUpdating = true;
-    try {
-      const url = `${import.meta.env.VITE_API_URL}/rides/${selectedRide.ride_id}/confirm`;
-      const token = data.session?.access_token;
-      
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          miles_driven: confirmForm.miles_driven ? parseFloat(confirmForm.miles_driven) : null,
-          hours: confirmForm.hours ? parseFloat(confirmForm.hours) : null,
-          donation_amount: confirmForm.donation_amount ? parseFloat(confirmForm.donation_amount) : null
-        })
-      });
-
-      const result = await response.json();
-
-      if (response.ok && result.success) {
-        showConfirmModal = false;
-        selectedRide = null;
-        await invalidateAll();
-        alert('Ride confirmed as completed!');
-      } else {
-        alert(`Failed to confirm ride: ${result.error || 'Unknown error'}`);
-      }
-    } catch (error) {
-      console.error('Error confirming ride:', error);
-      alert('Error confirming ride. Please try again.');
-    } finally {
-      isUpdating = false;
-    }
-  }
-
   async function updateRideStatus(rideId: number, newStatus: string) {
     isUpdating = true;
     try {
@@ -418,7 +381,7 @@
     showConfirmModal = true;
   }
 
-  async function confirmCompletion(formData: any) {
+  async function confirmRideCompletion(formData: any) {
     if (!selectedRide) return;
 
     isUpdating = true;
@@ -661,7 +624,7 @@
   bind:show={showConfirmModal}
   ride={selectedRide}
   isDriver={false}
-  onSubmit={confirmCompletion}
+  onSubmit={confirmRideCompletion}
   isSubmitting={isUpdating}
 />
 
