@@ -116,6 +116,13 @@
       icon: "Calendar",
     });
 
+    // Reports (available to all)
+    platformItems.push({
+      label: "Reports",
+      href: "/reports",
+      icon: "FileText",
+    });
+
     if (platformItems.length > 0) {
       groups.push({
         label: "Platform",
@@ -161,7 +168,6 @@
         adminItems.push({ label: "User Management", href: "/admin/users" });
         adminItems.push({ label: "Database", href: "/admin/database" });
         adminItems.push({ label: "Configuration", href: "/admin/config" });
-        adminItems.push({ label: "Reports", href: "/admin/reports" });
         adminItems.push({ label: "Audit Logs", href: "/admin/audit" });
       }
 

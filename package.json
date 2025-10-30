@@ -43,6 +43,7 @@
 		"@tailwindcss/postcss": "^4.1.13",
 		"flowbite-svelte": "^1.13.7",
 		"install": "^0.13.0",
+		"jspdf": "^3.0.3",
 		"npm": "^11.5.2"
 	}
 }
