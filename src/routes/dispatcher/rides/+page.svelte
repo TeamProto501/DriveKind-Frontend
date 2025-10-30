@@ -22,7 +22,6 @@
   let showConfirmModal = $state(false);
   let selectedRide = $state(null);
   let showAssignDriverModal = $state(false);
-  let showConfirmModal = $state(false);
 
   // Confirmation form data
   let confirmForm = $state({
