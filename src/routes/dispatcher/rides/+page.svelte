@@ -255,8 +255,11 @@
 
   function openEditModal(ride: any) {
     selectedRide = ride;
+    // Find the client name for search display
+    const client = data.clients.find(c => c.client_id.toString() === ride.client_id?.toString());
     rideForm = {
       client_id: ride.client_id?.toString() || '',
+      client_search: client ? `${client.first_name} ${client.last_name}` : '',
       purpose: ride.purpose || '',
       destination_name: ride.destination_name || '',
       dropoff_address: ride.dropoff_address || '',
@@ -1015,19 +1018,35 @@
         </div>
         
         <div>
-          <Label for="edit_purpose">Purpose</Label>
-          <Select bind:value={rideForm.purpose}>
+          <Label for="edit_status">Ride Status</Label>
+          <Select bind:value={rideForm.status}>
             <SelectTrigger>
-              <span>Select purpose</span>
+              <span>Select status</span>
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="Medical">Medical</SelectItem>
-              <SelectItem value="Shopping">Shopping</SelectItem>
-              <SelectItem value="Social">Social</SelectItem>
-              <SelectItem value="Other">Other</SelectItem>
+              <SelectItem value="Requested">Requested</SelectItem>
+              <SelectItem value="Scheduled">Scheduled</SelectItem>
+              <SelectItem value="In Progress">In Progress</SelectItem>
+              <SelectItem value="Completed">Completed</SelectItem>
+              <SelectItem value="Cancelled">Cancelled</SelectItem>
             </SelectContent>
           </Select>
         </div>
+      </div>
+      
+      <div>
+        <Label for="edit_purpose">Purpose (Ride Type)</Label>
+        <Select bind:value={rideForm.purpose}>
+          <SelectTrigger>
+            <span>Select purpose</span>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="Medical">Medical</SelectItem>
+            <SelectItem value="Shopping">Shopping</SelectItem>
+            <SelectItem value="Social">Social</SelectItem>
+            <SelectItem value="Other">Other</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
       
       <div>
@@ -1109,36 +1128,34 @@
         <Label for="edit_donation">Donation ride</Label>
       </div>
       
-      <!-- Ride Completion Data (for completed rides) -->
-      {#if rideForm.status === 'Completed'}
-        <div class="border-t border-gray-200 pt-4 mt-4">
-          <h3 class="text-lg font-semibold mb-4">Ride Completion Details</h3>
+      <!-- Trip Status Update Fields -->
+      <div class="border-t border-gray-200 pt-4 mt-4">
+        <h3 class="text-lg font-semibold mb-4">Trip Status Information</h3>
+        
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <Label for="edit_miles_driven">Miles Driven</Label>
+            <Input 
+              id="edit_miles_driven" 
+              type="number" 
+              step="0.1" 
+              bind:value={rideForm.miles_driven} 
+              placeholder="0.0"
+            />
+          </div>
           
-          <div class="grid grid-cols-2 gap-4">
-            <div>
-              <Label for="edit_miles_driven">Miles Driven</Label>
-              <Input 
-                id="edit_miles_driven" 
-                type="number" 
-                step="0.1" 
-                bind:value={rideForm.miles_driven} 
-                placeholder="0.0"
-              />
-            </div>
-            
-            <div>
-              <Label for="edit_hours">Hours</Label>
-              <Input 
-                id="edit_hours" 
-                type="number" 
-                step="0.1" 
-                bind:value={rideForm.hours} 
-                placeholder="0.0"
-              />
-            </div>
+          <div>
+            <Label for="edit_hours">Hours</Label>
+            <Input 
+              id="edit_hours" 
+              type="number" 
+              step="0.1" 
+              bind:value={rideForm.hours} 
+              placeholder="0.0"
+            />
           </div>
         </div>
-      {/if}
+      </div>
       
       <div>
         <Label for="edit_notes">Notes</Label>

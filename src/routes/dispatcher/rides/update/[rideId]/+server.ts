@@ -2,16 +2,17 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { createSupabaseServerClient } from '$lib/supabase.server';
 
-export const POST: RequestHandler = async ({ request, cookies }) => {
+export const POST: RequestHandler = async (event) => {
 	try {
-		const { rideId, status } = await request.json();
+		const rideData = await event.request.json();
+		const rideId = parseInt(event.params.rideId || '');
 
-		if (!rideId || !status) {
-			return json({ error: 'Missing required fields' }, { status: 400 });
+		if (!rideId) {
+			return json({ error: 'Missing ride ID' }, { status: 400 });
 		}
 
 		// Create Supabase client
-		const supabase = createSupabaseServerClient({ cookies });
+		const supabase = createSupabaseServerClient(event);
 
 		// Get the current user
 		const { data: { user }, error: userError } = await supabase.auth.getUser();
@@ -20,69 +21,168 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 			return json({ error: 'Unauthorized' }, { status: 401 });
 		}
 
-		// Verify the ride belongs to this driver
-		const { data: ride, error: rideError } = await supabase
-			.from('rides')
-			.select('ride_id, driver_user_id, status')
-			.eq('ride_id', rideId)
-			.eq('driver_user_id', user.id)
+		// Get the user's profile to verify dispatcher role and get org_id
+		const { data: profile, error: profileError } = await supabase
+			.from('staff_profiles')
+			.select('user_id, org_id, role')
+			.eq('user_id', user.id)
 			.single();
 
-		if (rideError || !ride) {
+		if (profileError || !profile) {
+			return json({ error: 'Profile not found' }, { status: 404 });
+		}
+
+		// Check if user has dispatcher or admin role
+		const hasDispatcherRole = profile.role && (
+			Array.isArray(profile.role) 
+				? (profile.role.includes('Dispatcher') || profile.role.includes('Admin'))
+				: (profile.role === 'Dispatcher' || profile.role === 'Admin')
+		);
+
+		if (!hasDispatcherRole) {
+			return json({ error: 'Access denied. Dispatcher or Admin role required.' }, { status: 403 });
+		}
+
+		// Verify the ride belongs to the same organization
+		const { data: existingRide, error: rideError } = await supabase
+			.from('rides')
+			.select('ride_id, org_id')
+			.eq('ride_id', rideId)
+			.eq('org_id', profile.org_id)
+			.single();
+
+		if (rideError || !existingRide) {
 			return json({ error: 'Ride not found or access denied' }, { status: 404 });
 		}
 
-		// Update the ride status
+		// Prepare update data - only include fields that are present and valid
+		const updateData: any = {};
+
+		// Update status if provided
+		if (rideData.status) {
+			updateData.status = rideData.status;
+		}
+
+		// Update purpose (ride type) if provided
+		if (rideData.purpose) {
+			updateData.purpose = rideData.purpose;
+		}
+
+		// Update number of clients (riders) if provided
+		if (rideData.riders !== undefined && rideData.riders !== null) {
+			updateData.riders = parseInt(rideData.riders) || 1;
+		}
+
+		// Update mileage if provided
+		if (rideData.miles_driven !== undefined && rideData.miles_driven !== null && rideData.miles_driven !== '') {
+			updateData.miles_driven = parseFloat(rideData.miles_driven);
+		}
+
+		// Update hours if provided
+		if (rideData.hours !== undefined && rideData.hours !== null && rideData.hours !== '') {
+			updateData.hours = parseFloat(rideData.hours);
+		}
+
+		// Update comments (notes) if provided
+		if (rideData.notes !== undefined) {
+			updateData.notes = rideData.notes || null;
+		}
+
+		// Update other ride fields if provided
+		if (rideData.client_id !== undefined) {
+			updateData.client_id = parseInt(rideData.client_id);
+		}
+
+		if (rideData.destination_name !== undefined) {
+			updateData.destination_name = rideData.destination_name;
+		}
+
+		if (rideData.dropoff_address !== undefined) {
+			updateData.dropoff_address = rideData.dropoff_address;
+		}
+
+		if (rideData.dropoff_address2 !== undefined) {
+			updateData.dropoff_address2 = rideData.dropoff_address2 || null;
+		}
+
+		if (rideData.dropoff_city !== undefined) {
+			updateData.dropoff_city = rideData.dropoff_city;
+		}
+
+		if (rideData.dropoff_state !== undefined) {
+			updateData.dropoff_state = rideData.dropoff_state;
+		}
+
+		if (rideData.dropoff_zipcode !== undefined) {
+			updateData.dropoff_zipcode = rideData.dropoff_zipcode;
+		}
+
+		if (rideData.appointment_time !== undefined) {
+			updateData.appointment_time = rideData.appointment_time;
+		}
+
+		if (rideData.pickup_from_home !== undefined) {
+			updateData.pickup_from_home = rideData.pickup_from_home === true || rideData.pickup_from_home === 'true';
+		}
+
+		if (rideData.alt_pickup_address !== undefined) {
+			updateData.alt_pickup_address = rideData.alt_pickup_address || null;
+		}
+
+		if (rideData.alt_pickup_address2 !== undefined) {
+			updateData.alt_pickup_address2 = rideData.alt_pickup_address2 || null;
+		}
+
+		if (rideData.alt_pickup_city !== undefined) {
+			updateData.alt_pickup_city = rideData.alt_pickup_city || null;
+		}
+
+		if (rideData.alt_pickup_state !== undefined) {
+			updateData.alt_pickup_state = rideData.alt_pickup_state || null;
+		}
+
+		if (rideData.alt_pickup_zipcode !== undefined) {
+			updateData.alt_pickup_zipcode = rideData.alt_pickup_zipcode || null;
+		}
+
+		if (rideData.round_trip !== undefined) {
+			updateData.round_trip = rideData.round_trip === true || rideData.round_trip === 'true';
+		}
+
+		if (rideData.estimated_appointment_length !== undefined) {
+			updateData.estimated_appointment_length = rideData.estimated_appointment_length || null;
+		}
+
+		if (rideData.donation !== undefined) {
+			updateData.donation = rideData.donation === true || rideData.donation === 'true';
+		}
+
+		// Update the ride
 		const { error: updateError } = await supabase
 			.from('rides')
-			.update({ 
-				status
-			})
-			.eq('ride_id', rideId);
+			.update(updateData)
+			.eq('ride_id', rideId)
+			.eq('org_id', profile.org_id);
 
 		if (updateError) {
-			console.error('Error updating ride status:', updateError);
-			return json({ error: 'Failed to update ride status' }, { status: 500 });
+			console.error('Error updating ride:', updateError);
+			return json({ error: `Failed to update ride: ${updateError.message}` }, { status: 500 });
 		}
 
-		// If reporting as complete (pending review), create/update completed ride record
-		if (status === 'Reported') {
-			// Check if completed ride record exists
-			const { data: existingCompleted } = await supabase
-				.from('completedrides')
-				.select('ride_id')
-				.eq('ride_id', rideId)
-				.single();
-
-			if (!existingCompleted) {
-				// Create new completed ride record with end time
-				const { error: completedError } = await supabase
-					.from('completedrides')
-					.insert({
-						ride_id: rideId,
-						actual_end: new Date().toISOString()
-					});
-
-				if (completedError) {
-					console.error('Error creating completed ride record:', completedError);
-				}
-			} else {
-				// Update existing record with end time
-				const { error: updateCompletedError } = await supabase
-					.from('completedrides')
-					.update({
-						actual_end: new Date().toISOString()
-					})
-					.eq('ride_id', rideId);
-
-				if (updateCompletedError) {
-					console.error('Error updating completed ride record:', updateCompletedError);
-				}
+		// If miles_driven or hours are provided, also update completedrides table
+		if ((rideData.miles_driven !== undefined && rideData.miles_driven !== null && rideData.miles_driven !== '') ||
+			(rideData.hours !== undefined && rideData.hours !== null && rideData.hours !== '')) {
+			
+			const completedRideData: any = {};
+			
+			if (rideData.miles_driven !== undefined && rideData.miles_driven !== null && rideData.miles_driven !== '') {
+				completedRideData.miles_driven = parseFloat(rideData.miles_driven);
 			}
-		}
+			
+			if (rideData.hours !== undefined && rideData.hours !== null && rideData.hours !== '') {
+				completedRideData.hours = parseFloat(rideData.hours);
+			}
 
-		// If starting a ride, update the actual_start in completedrides
-		if (status === 'In Progress') {
 			// Check if completed ride record exists
 			const { data: existingCompleted } = await supabase
 				.from('completedrides')
@@ -91,36 +191,37 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
 				.single();
 
 			if (!existingCompleted) {
-				// Create new completed ride record with start time
+				// Create new completed ride record
 				const { error: completedError } = await supabase
 					.from('completedrides')
 					.insert({
 						ride_id: rideId,
-						actual_start: new Date().toISOString()
+						...completedRideData
 					});
 
 				if (completedError) {
 					console.error('Error creating completed ride record:', completedError);
+					// Don't fail the whole request if this fails
 				}
 			} else {
-				// Update existing record with start time
+				// Update existing record
 				const { error: updateCompletedError } = await supabase
 					.from('completedrides')
-					.update({
-						actual_start: new Date().toISOString()
-					})
+					.update(completedRideData)
 					.eq('ride_id', rideId);
 
 				if (updateCompletedError) {
 					console.error('Error updating completed ride record:', updateCompletedError);
+					// Don't fail the whole request if this fails
 				}
 			}
 		}
 
 		return json({ success: true });
 
-	} catch (error) {
-		console.error('Error in ride status update:', error);
-		return json({ error: 'Internal server error' }, { status: 500 });
+	} catch (error: any) {
+		console.error('Error in ride update:', error);
+		return json({ error: `Internal server error: ${error.message}` }, { status: 500 });
 	}
 };
+
