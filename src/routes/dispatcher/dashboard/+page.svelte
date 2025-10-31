@@ -1,6 +1,7 @@
 <script lang="ts">
 	import RoleGuard from '$lib/components/RoleGuard.svelte';
 	import Breadcrumbs from '$lib/components/Breadcrumbs.svelte';
+	import { goto } from '$app/navigation';
 	import { 
 		Car, 
 		Users, 
@@ -11,15 +12,12 @@
 		AlertCircle,
 		Plus,
 		Search,
-		Filter
+		Filter,
+		ArrowRight
 	} from '@lucide/svelte';
 	
-	// Mock data - replace with actual API calls
-	let rideRequests = $state([
-		{ id: 1, client: 'John Smith', pickup: '123 Main St', dropoff: '456 Oak Ave', time: '2:00 PM', status: 'Pending' },
-		{ id: 2, client: 'Jane Doe', pickup: '789 Pine Rd', dropoff: '321 Elm St', time: '3:30 PM', status: 'Assigned' },
-		{ id: 3, client: 'Bob Johnson', pickup: '654 Maple Dr', dropoff: '987 Cedar Ln', time: '4:15 PM', status: 'In Progress' }
-	]);
+	// Empty array - data will come from the rides page
+	let rideRequests = $state([]);
 	
 	let selectedStatus = $state('all');
 	
@@ -120,112 +118,39 @@
 				<!-- Header with Actions -->
 				<div class="px-6 py-4 border-b border-gray-200">
 					<div class="flex items-center justify-between">
-						<h2 class="text-lg font-medium text-gray-900">Ride Requests</h2>
+						<button 
+							onclick={() => goto('/dispatcher/rides')}
+							class="flex items-center gap-2 text-lg font-medium text-gray-900 hover:text-blue-600 transition-colors duration-200 cursor-pointer group"
+						>
+							<span>Ride Requests</span>
+							<ArrowRight class="w-4 h-4 group-hover:translate-x-1 transition-transform duration-200" />
+						</button>
 						
 						<div class="flex items-center space-x-3">
-							<!-- Search -->
-							<div class="relative">
-								<Search class="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-								<input
-									type="text"
-									placeholder="Search requests..."
-									class="pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-								/>
-							</div>
-							
-							<!-- Status Filter -->
-							<select
-								bind:value={selectedStatus}
-								class="px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+							<!-- View All Rides Button -->
+							<button 
+								onclick={() => goto('/dispatcher/rides')}
+								class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors duration-200 flex items-center space-x-2"
 							>
-								<option value="all">All Status</option>
-								<option value="Pending">Pending</option>
-								<option value="Assigned">Assigned</option>
-								<option value="In Progress">In Progress</option>
-								<option value="Completed">Completed</option>
-							</select>
-							
-							<!-- Add New Request -->
-							<button class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors duration-200 flex items-center space-x-2">
-								<Plus class="w-4 h-4" />
-								<span>New Request</span>
+								<Car class="w-4 h-4" />
+								<span>View All Rides</span>
 							</button>
 						</div>
 					</div>
 				</div>
 				
-				<!-- Ride Requests Table -->
-				<div class="overflow-x-auto">
-					<table class="min-w-full divide-y divide-gray-200">
-						<thead class="bg-gray-50">
-							<tr>
-								<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-									Request ID
-								</th>
-								<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-									Client
-								</th>
-								<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-									Pickup
-								</th>
-								<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-									Dropoff
-								</th>
-								<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-									Time
-								</th>
-								<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-									Status
-								</th>
-								<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-									Actions
-								</th>
-							</tr>
-						</thead>
-						<tbody class="bg-white divide-y divide-gray-200">
-							{#each filteredRequests as request}
-								<tr class="hover:bg-gray-50">
-									<td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-										#{request.id}
-									</td>
-									<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-										{request.client}
-									</td>
-									<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-										<div class="flex items-center">
-											<MapPin class="w-4 h-4 text-gray-400 mr-2" />
-											{request.pickup}
-										</div>
-									</td>
-									<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-										<div class="flex items-center">
-											<MapPin class="w-4 h-4 text-gray-400 mr-2" />
-											{request.dropoff}
-										</div>
-									</td>
-									<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-										<div class="flex items-center">
-											<Clock class="w-4 h-4 text-gray-400 mr-2" />
-											{request.time}
-										</div>
-									</td>
-									<td class="px-6 py-4 whitespace-nowrap">
-										<span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full {getStatusColor(request.status)}">
-											{request.status}
-										</span>
-									</td>
-									<td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-										<button class="text-blue-600 hover:text-blue-900 mr-3">
-											Assign Driver
-										</button>
-										<button class="text-gray-600 hover:text-gray-900">
-											View Details
-										</button>
-									</td>
-								</tr>
-							{/each}
-						</tbody>
-					</table>
+				<!-- Empty State with Link to Rides Page -->
+				<div class="px-6 py-12 text-center">
+					<Car class="w-12 h-12 text-gray-400 mx-auto mb-4" />
+					<h3 class="text-lg font-medium text-gray-900 mb-2">No Ride Requests</h3>
+					<p class="text-sm text-gray-500 mb-6">View and manage all ride requests in the rides page.</p>
+					<button 
+						onclick={() => goto('/dispatcher/rides')}
+						class="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors duration-200"
+					>
+						<Car class="w-4 h-4 mr-2" />
+						Go to Rides Page
+					</button>
 				</div>
 			</div>
 			
