@@ -5,22 +5,30 @@
   import { Input } from "$lib/components/ui/input";
   import { Select, SelectContent, SelectItem, SelectTrigger } from "$lib/components/ui/select";
   import Textarea from "$lib/components/ui/textarea.svelte";
-  // Removed Dialog import - using simple modal approach
   import Label from "$lib/components/ui/label.svelte";
-  import { Car, Clock, MapPin, User, Phone, Calendar, Filter, Search, Navigation, Plus, Edit, Trash2, UserCheck } from "@lucide/svelte";
+  import { Car, Clock, MapPin, User, Phone, Calendar, Filter, Search, Navigation, Plus, Edit, Trash2, UserCheck, CheckCircle, AlertCircle } from "@lucide/svelte";
   import { enhance } from '$app/forms';
   import { invalidateAll } from '$app/navigation';
   import type { PageData } from './$types';
+  import RideCompletionModal from '$lib/components/RideCompletionModal.svelte';
 
   let { data }: { data: PageData } = $props();
 
   let searchTerm = $state("");
-  let statusFilter = $state("all");
+  let activeTab = $state("requested"); // requested, active, reported, completed
   let isUpdating = $state(false);
   let showCreateModal = $state(false);
   let showEditModal = $state(false);
+  let showConfirmModal = $state(false);
   let selectedRide = $state(null);
   let showAssignDriverModal = $state(false);
+
+  // Confirmation form data
+  let confirmForm = $state({
+    miles_driven: '',
+    hours: '',
+    donation_amount: ''
+  });
 
   // Form data for creating/editing rides
   let rideForm = $state({
@@ -66,7 +74,7 @@
     );
   });
 
-  // Filter rides based on search and status
+  // Filter rides based on tab and search
   let filteredRides = $derived(() => {
     if (!data.rides) return [];
     
@@ -77,9 +85,33 @@
                            ride.destination_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                            (ride.alt_pickup_address && ride.alt_pickup_address.toLowerCase().includes(searchTerm.toLowerCase())) ||
                            driverName.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesStatus = statusFilter === "all" || ride.status === statusFilter;
-      return matchesSearch && matchesStatus;
+      
+      // Filter by tab
+      let matchesTab = false;
+      if (activeTab === "requested") {
+        matchesTab = ride.status === "Requested";
+      } else if (activeTab === "active") {
+        matchesTab = ride.status === "Scheduled" || ride.status === "Assigned" || ride.status === "In Progress";
+      } else if (activeTab === "reported") {
+        matchesTab = ride.status === "Reported";
+      } else if (activeTab === "completed") {
+        matchesTab = ride.status === "Completed" || ride.status === "Cancelled";
+      }
+      
+      return matchesSearch && matchesTab;
     });
+  });
+
+  // Get ride counts for tabs
+  let rideCounts = $derived(() => {
+    if (!data.rides) return { requested: 0, active: 0, reported: 0, completed: 0 };
+    
+    return {
+      requested: data.rides.filter(r => r.status === "Requested").length,
+      active: data.rides.filter(r => r.status === "Scheduled" || r.status === "Assigned" || r.status === "In Progress").length,
+      reported: data.rides.filter(r => r.status === "Reported").length,
+      completed: data.rides.filter(r => r.status === "Completed" || r.status === "Cancelled").length
+    };
   });
 
   function getStatusColor(status: string) {
@@ -88,6 +120,7 @@
       case "Scheduled": return "bg-blue-100 text-blue-800";
       case "Assigned": return "bg-yellow-100 text-yellow-800";
       case "In Progress": return "bg-orange-100 text-orange-800";
+      case "Reported": return "bg-purple-100 text-purple-800";
       case "Completed": return "bg-green-100 text-green-800";
       case "Cancelled": return "bg-red-100 text-red-800";
       default: return "bg-gray-100 text-gray-800";
@@ -197,7 +230,7 @@
   }
 
   async function createRide() {
-    // Validate required fields
+    // Validation...
     if (!rideForm.client_id) {
       alert('Please select a client');
       return;
@@ -283,49 +316,42 @@
   }
 
   async function assignDriver(driverId: string) {
-  console.log('Assigning driver:', driverId, 'to ride:', selectedRide.ride_id);
-  
-  isUpdating = true;
-  try {
-    // Call your Express API endpoint
-    const url = `${import.meta.env.VITE_API_URL}/rides/${selectedRide.ride_id}/assign`;
-    const payload = { driver_user_id: driverId };
+    console.log('Assigning driver:', driverId, 'to ride:', selectedRide.ride_id);
     
-    console.log('Fetching:', url);
-    console.log('Payload:', payload);
-    
-    // Get the auth token from your session
-    const token = data.session?.access_token;
-    
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      body: JSON.stringify(payload)
-    });
+    isUpdating = true;
+    try {
+      const url = `${import.meta.env.VITE_API_URL}/rides/${selectedRide.ride_id}/assign`;
+      const payload = { driver_user_id: driverId };
+      
+      const token = data.session?.access_token;
+      
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(payload)
+      });
 
-    console.log('Response status:', response.status);
-    const result = await response.json();
-    console.log('Response body:', result);
+      const result = await response.json();
 
-    if (response.ok && result.success) {
-      showAssignDriverModal = false;
-      selectedRide = null;
-      await invalidateAll();
-      alert('Driver assigned successfully!');
-    } else {
-      console.error('Failed to assign driver:', result);
-      alert(`Failed to assign driver: ${result.error || 'Unknown error'}`);
+      if (response.ok && result.success) {
+        showAssignDriverModal = false;
+        selectedRide = null;
+        await invalidateAll();
+        alert('Driver assigned successfully!');
+      } else {
+        console.error('Failed to assign driver:', result);
+        alert(`Failed to assign driver: ${result.error || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('Error assigning driver:', error);
+      alert('Error assigning driver. Check console for details.');
+    } finally {
+      isUpdating = false;
     }
-  } catch (error) {
-    console.error('Error assigning driver:', error);
-    alert('Error assigning driver. Check console for details.');
-  } finally {
-    isUpdating = false;
   }
-}
 
   async function updateRideStatus(rideId: number, newStatus: string) {
     isUpdating = true;
@@ -349,6 +375,53 @@
       isUpdating = false;
     }
   }
+
+  function openConfirmModal(ride: any) {
+    selectedRide = ride;
+    showConfirmModal = true;
+  }
+
+  async function confirmRideCompletion(formData: any) {
+    if (!selectedRide) return;
+
+    isUpdating = true;
+    try {
+      // Call Express API directly
+      const token = data.session?.access_token;
+      
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/rides/${selectedRide.ride_id}/confirm`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          hours: formData.hours ? parseFloat(formData.hours) : null,
+          miles_driven: formData.miles_driven ? parseFloat(formData.miles_driven) : null,
+          donation_received: formData.donation_received || false,
+          donation_amount: formData.donation_received && formData.donation_amount ? parseFloat(formData.donation_amount) : null,
+          completion_status: formData.completion_status,
+          comments: formData.comments
+        })
+      });
+
+      const result = await response.json();
+
+      if (response.ok && result.success) {
+        showConfirmModal = false;
+        selectedRide = null;
+        await invalidateAll();
+        alert('Ride confirmed as completed!');
+      } else {
+        alert(`Failed to confirm ride: ${result.error || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('Error confirming ride:', error);
+      alert('Error confirming ride. Please try again.');
+    } finally {
+      isUpdating = false;
+    }
+  }
 </script>
 
 <svelte:head>
@@ -357,10 +430,10 @@
 
 <div class="min-h-screen bg-gray-50 p-6">
   <div class="max-w-7xl mx-auto space-y-6">
-  <!-- Header -->
+    <!-- Header -->
     <div class="bg-white rounded-lg shadow-sm border p-6">
-  <div class="flex items-center justify-between">
-    <div>
+      <div class="flex items-center justify-between">
+        <div>
           <h1 class="text-2xl font-bold text-gray-900">Ride Management</h1>
           <p class="text-gray-600 mt-1">Manage and track ride requests and assignments</p>
         </div>
@@ -378,204 +451,182 @@
     {#if data.error}
       <div class="bg-red-50 border border-red-200 rounded-lg p-4">
         <p class="text-red-800">{data.error}</p>
-  </div>
+      </div>
     {/if}
 
-  <!-- Filters -->
-    <div class="bg-white rounded-lg shadow-sm border p-6">
-      <div class="flex items-center gap-2 mb-4">
-        <Filter class="w-5 h-5 text-gray-600" />
-        <h2 class="text-lg font-semibold text-gray-900">Filters</h2>
-      </div>
-      <div class="flex gap-4">
-        <div class="flex-1">
-          <div class="relative">
-            <Search class="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-            <input 
-              type="text"
-              placeholder="Search rides..." 
-              bind:value={searchTerm}
-              class="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            />
-          </div>
-        </div>
-        <div class="w-48">
-          <select 
-            bind:value={statusFilter}
-            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+    <!-- Tabs -->
+    <div class="bg-white rounded-lg shadow-sm border">
+      <div class="border-b border-gray-200">
+        <div class="flex space-x-8 px-6">
+          <button
+            onclick={() => activeTab = "requested"}
+            class="py-4 px-1 border-b-2 font-medium text-sm transition-colors {activeTab === 'requested' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}"
           >
-            <option value="all">All Statuses</option>
-            <option value="Requested">Requested</option>
-            <option value="Scheduled">Scheduled</option>
-            <option value="Assigned">Assigned</option>
-            <option value="In Progress">In Progress</option>
-            <option value="Completed">Completed</option>
-            <option value="Cancelled">Cancelled</option>
-          </select>
+            Requested
+            {#if rideCounts().requested > 0}
+              <span class="ml-2 py-0.5 px-2 rounded-full text-xs bg-gray-100 text-gray-600">{rideCounts().requested}</span>
+            {/if}
+          </button>
+          
+          <button
+            onclick={() => activeTab = "active"}
+            class="py-4 px-1 border-b-2 font-medium text-sm transition-colors {activeTab === 'active' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}"
+          >
+            Scheduled/In Progress
+            {#if rideCounts().active > 0}
+              <span class="ml-2 py-0.5 px-2 rounded-full text-xs bg-blue-100 text-blue-600">{rideCounts().active}</span>
+            {/if}
+          </button>
+          
+          <button
+            onclick={() => activeTab = "reported"}
+            class="py-4 px-1 border-b-2 font-medium text-sm transition-colors {activeTab === 'reported' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}"
+          >
+            Reported Rides
+            {#if rideCounts().reported > 0}
+              <span class="ml-2 py-0.5 px-2 rounded-full text-xs bg-purple-100 text-purple-600">{rideCounts().reported}</span>
+            {/if}
+          </button>
+          
+          <button
+            onclick={() => activeTab = "completed"}
+            class="py-4 px-1 border-b-2 font-medium text-sm transition-colors {activeTab === 'completed' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}"
+          >
+            Completed
+            {#if rideCounts().completed > 0}
+              <span class="ml-2 py-0.5 px-2 rounded-full text-xs bg-green-100 text-green-600">{rideCounts().completed}</span>
+            {/if}
+          </button>
         </div>
       </div>
-    </div>
 
-  <!-- Rides List -->
-    <div class="space-y-4">
-    {#each filteredRides() as ride}
-        <div class="bg-white rounded-lg shadow-sm border p-6">
-          <div class="flex items-start justify-between">
-            <div class="space-y-3">
-              <div class="flex items-center gap-3">
-                <h3 class="text-lg font-semibold text-gray-900">{getClientName(ride)}</h3>
-                <span class="px-2 py-1 text-xs font-medium rounded-full {getStatusColor(ride.status)}">
-                  {ride.status.toUpperCase()}
-                </span>
-                <span class="px-2 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-800">
-                  {ride.purpose}
-                </span>
-              </div>
-              
-              <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-600">
-                <div class="flex items-center gap-2">
-                  <Phone class="w-4 h-4 text-gray-400" />
-                  {getClientPhone(ride)}
+      <!-- Search Bar -->
+      <div class="p-6 border-b border-gray-200">
+        <div class="relative">
+          <Search class="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+          <input 
+            type="text"
+            placeholder="Search rides..." 
+            bind:value={searchTerm}
+            class="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          />
+        </div>
+      </div>
+
+      <!-- Rides List -->
+      <div class="divide-y divide-gray-200">
+        {#each filteredRides() as ride}
+          <div class="p-6 hover:bg-gray-50 transition-colors">
+            <div class="flex items-start justify-between">
+              <div class="space-y-3 flex-1">
+                <div class="flex items-center gap-3">
+                  <h3 class="text-lg font-semibold text-gray-900">{getClientName(ride)}</h3>
+                  <span class="px-2 py-1 text-xs font-medium rounded-full {getStatusColor(ride.status)}">
+                    {ride.status.toUpperCase()}
+                  </span>
+                  <span class="px-2 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-800">
+                    {ride.purpose}
+                  </span>
                 </div>
-                <div class="flex items-center gap-2">
-                  <Calendar class="w-4 h-4 text-gray-400" />
-                  {formatDate(ride.appointment_time)} at {formatTime(ride.appointment_time)}
-                </div>
-                <div class="flex items-center gap-2">
-                  <User class="w-4 h-4 text-gray-400" />
-                  Driver: {getDriverName(ride)}
-                </div>
-                <div class="flex items-center gap-2">
-                  <MapPin class="w-4 h-4 text-gray-400" />
-                  <div>
-                    <div class="font-medium text-gray-900">Pickup:</div>
-                    {#if ride.pickup_from_home}
-                      <div class="text-gray-600">Client's Home</div>
-                    {:else if ride.alt_pickup_address}
-                      <div class="text-gray-600">{ride.alt_pickup_address}</div>
-                      {#if ride.alt_pickup_address2}
-                        <div class="text-gray-600">{ride.alt_pickup_address2}</div>
-                      {/if}
-                      <div class="text-gray-600">{ride.alt_pickup_city}, {ride.alt_pickup_state} {ride.alt_pickup_zipcode}</div>
-                    {:else}
-                      <div class="text-gray-600">Client's Home</div>
-                    {/if}
-                  </div>
-                </div>
-                <div class="flex items-center gap-2">
-                  <MapPin class="w-4 h-4 text-gray-400" />
-                  <div>
-                    <div class="font-medium text-gray-900">Dropoff:</div>
-                    <div class="text-gray-600">{ride.destination_name}</div>
-                    <div class="text-gray-600">{ride.dropoff_address}</div>
-                    {#if ride.dropoff_address2}
-                      <div class="text-gray-600">{ride.dropoff_address2}</div>
-                    {/if}
-                    <div class="text-gray-600">{ride.dropoff_city}, {ride.dropoff_state} {ride.dropoff_zipcode}</div>
-                  </div>
-                </div>
-                {#if ride.estimated_appointment_length}
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-600">
                   <div class="flex items-center gap-2">
-                    <Clock class="w-4 h-4" />
-                    Estimated: {ride.estimated_appointment_length}
+                    <Phone class="w-4 h-4 text-gray-400" />
+                    {getClientPhone(ride)}
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <Calendar class="w-4 h-4 text-gray-400" />
+                    {formatDate(ride.appointment_time)} at {formatTime(ride.appointment_time)}
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <User class="w-4 h-4 text-gray-400" />
+                    Driver: {getDriverName(ride)}
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <MapPin class="w-4 h-4 text-gray-400" />
+                    Destination: {ride.destination_name}
+                  </div>
+                </div>
+                
+                {#if ride.notes}
+                  <div class="text-sm">
+                    <span class="font-medium">Notes:</span> {ride.notes}
                   </div>
                 {/if}
-                {#if ride.round_trip}
-                <div class="flex items-center gap-2">
-                  <Car class="w-4 h-4" />
-                    Round trip
+
+                {#if ride.status === "Reported"}
+                  <div class="bg-purple-50 border border-purple-200 rounded-lg p-3 flex items-start gap-2">
+                    <AlertCircle class="w-5 h-5 text-purple-600 flex-shrink-0 mt-0.5" />
+                    <div class="text-sm text-purple-800">
+                      <div class="font-medium">Pending Confirmation</div>
+                      <div class="text-purple-700">Driver has reported this ride as complete. Please review and confirm.</div>
+                    </div>
                   </div>
-                {/if}
-                {#if ride.riders > 0}
-                  <div class="flex items-center gap-2">
-                    <User class="w-4 h-4" />
-                    {ride.riders} passenger{ride.riders > 1 ? 's' : ''}
-                </div>
                 {/if}
               </div>
               
-              {#if ride.notes}
-                <div class="text-sm">
-                  <span class="font-medium">Notes:</span> {ride.notes}
-                </div>
-              {/if}
-            </div>
-            
-            <div class="flex gap-2">
-              {#if ride.status === "Requested" || ride.status === "Scheduled"}
+              <div class="flex gap-2 ml-4">
+                {#if ride.status === "Requested"}
+                  <button 
+                    onclick={() => openAssignDriverModal(ride)}
+                    disabled={isUpdating}
+                    class="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg text-sm flex items-center gap-1 transition-colors disabled:opacity-50"
+                  >
+                    <UserCheck class="w-4 h-4" />
+                    Assign Driver
+                  </button>
+                  <button 
+                    onclick={() => updateRideStatus(ride.ride_id, 'Scheduled')}
+                    disabled={isUpdating}
+                    class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-sm transition-colors disabled:opacity-50"
+                  >
+                    Schedule
+                  </button>
+                {:else if ride.status === "Reported"}
+                  <button 
+                    onclick={() => openConfirmModal(ride)}
+                    disabled={isUpdating}
+                    class="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg text-sm flex items-center gap-1 transition-colors disabled:opacity-50"
+                  >
+                    <CheckCircle class="w-4 h-4" />
+                    Confirm Complete
+                  </button>
+                {/if}
+                
                 <button 
-                  onclick={() => openAssignDriverModal(ride)}
+                  onclick={() => openEditModal(ride)}
                   disabled={isUpdating}
-                  class="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg text-sm flex items-center gap-1 transition-colors disabled:opacity-50"
+                  class="bg-gray-600 hover:bg-gray-700 text-white px-3 py-1.5 rounded-lg text-sm flex items-center gap-1 transition-colors disabled:opacity-50"
                 >
-                  <UserCheck class="w-4 h-4" />
-                  Assign Driver
+                  <Edit class="w-4 h-4" />
+                  Edit
                 </button>
-              {/if}
-              
-              <button 
-                onclick={() => openEditModal(ride)}
-                disabled={isUpdating}
-                class="bg-gray-600 hover:bg-gray-700 text-white px-3 py-1.5 rounded-lg text-sm flex items-center gap-1 transition-colors disabled:opacity-50"
-              >
-                <Edit class="w-4 h-4" />
-                Edit
-              </button>
-              
-              {#if ride.status === "Requested"}
-                <button 
-                  onclick={() => updateRideStatus(ride.ride_id, 'Scheduled')}
-                  disabled={isUpdating}
-                  class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-sm transition-colors disabled:opacity-50"
-                >
-                  Schedule
-                </button>
-              {:else if ride.status === "Scheduled"}
-                <button 
-                  onclick={() => updateRideStatus(ride.ride_id, 'Requested')}
-                  disabled={isUpdating}
-                  class="bg-yellow-600 hover:bg-yellow-700 text-white px-3 py-1.5 rounded-lg text-sm transition-colors disabled:opacity-50"
-                >
-                  Unschedule
-                </button>
-              {:else if ride.status === "Assigned"}
-                <button 
-                  onclick={() => updateRideStatus(ride.ride_id, 'In Progress')}
-                  disabled={isUpdating}
-                  class="bg-orange-600 hover:bg-orange-700 text-white px-3 py-1.5 rounded-lg text-sm transition-colors disabled:opacity-50"
-                >
-                  Start Ride
-                </button>
-              {:else if ride.status === "In Progress"}
-                <button 
-                  onclick={() => updateRideStatus(ride.ride_id, 'Completed')}
-                  disabled={isUpdating}
-                  class="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg text-sm transition-colors disabled:opacity-50"
-                >
-                  Complete
-                </button>
-              {/if}
+              </div>
             </div>
           </div>
-        </div>
-    {/each}
-  </div>
-
-  {#if filteredRides().length === 0}
-      <div class="bg-white rounded-lg shadow-sm border p-12 text-center">
-        <Car class="w-12 h-12 mx-auto text-gray-400 mb-4" />
-        <h3 class="text-lg font-semibold text-gray-900 mb-2">No rides found</h3>
-        <p class="text-gray-600">
-          {#if data.rides && data.rides.length === 0}
-            No rides have been created yet.
-          {:else}
-            No rides match your current filters.
-          {/if}
-        </p>
+        {/each}
       </div>
-  {/if}
+
+      {#if filteredRides().length === 0}
+        <div class="p-12 text-center">
+          <Car class="w-12 h-12 mx-auto text-gray-400 mb-4" />
+          <h3 class="text-lg font-semibold text-gray-900 mb-2">No rides found</h3>
+          <p class="text-gray-600">
+            No rides match your current tab and filters.
+          </p>
+        </div>
+      {/if}
+    </div>
   </div>
 </div>
+
+<RideCompletionModal 
+  bind:show={showConfirmModal}
+  ride={selectedRide}
+  isDriver={false}
+  onSubmit={confirmRideCompletion}
+  isSubmitting={isUpdating}
+/>
 
 <!-- Create Ride Modal -->
 {#if showCreateModal}

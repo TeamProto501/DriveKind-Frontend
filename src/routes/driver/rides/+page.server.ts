@@ -44,7 +44,7 @@ export const load: PageServerLoad = async (event) => {
 			};
 		}
 
-		// Get rides assigned to this driver using the actual database schema
+		// Get ALL rides assigned to this driver (no status filter - let frontend handle it)
 		const { data: rides, error: ridesError } = await supabase
 			.from('rides')
 			.select(`
@@ -89,16 +89,22 @@ export const load: PageServerLoad = async (event) => {
 
 		if (ridesError) {
 			console.error('Error loading rides:', ridesError);
+			console.error('Rides error details:', JSON.stringify(ridesError, null, 2));
 			return {
 				rides: [],
 				completedRidesData: {},
 				profile,
-				error: 'Failed to load rides from database'
+				error: `Failed to load rides: ${ridesError.message}`
 			};
 		}
 
-		// Get completed rides data if any rides are completed
-		const completedRideIds = rides?.filter(ride => ride.status === 'Completed').map(ride => ride.ride_id) || [];
+		console.log(`Loaded ${rides?.length || 0} rides for driver ${user.id}`);
+
+		// Get completed rides data if any rides are completed, reported, or cancelled
+		const completedRideIds = rides?.filter(ride => 
+			ride.status === 'Completed' || ride.status === 'Reported' || ride.status === 'Cancelled'
+		).map(ride => ride.ride_id) || [];
+		
 		let completedRidesData = {};
 		
 		if (completedRideIds.length > 0) {
@@ -106,6 +112,10 @@ export const load: PageServerLoad = async (event) => {
 				.from('completedrides')
 				.select('ride_id, actual_start, actual_end, miles_driven, hours, donation_amount')
 				.in('ride_id', completedRideIds);
+
+			if (completedError) {
+				console.error('Error loading completed rides data:', completedError);
+			}
 
 			if (!completedError && completedRides) {
 				completedRidesData = completedRides.reduce((acc, completed) => {
@@ -131,7 +141,7 @@ export const load: PageServerLoad = async (event) => {
 			rides: [],
 			completedRidesData: {},
 			profile: null,
-			error: 'Failed to load rides data'
+			error: `Failed to load rides data: ${error.message || 'Unknown error'}`
 		};
 	}
 };

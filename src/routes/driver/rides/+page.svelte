@@ -8,14 +8,17 @@
   import { enhance } from '$app/forms';
   import { invalidateAll } from '$app/navigation';
   import type { PageData } from './$types';
+  import RideCompletionModal from '$lib/components/RideCompletionModal.svelte';
 
   let { data }: { data: PageData } = $props();
 
   let searchTerm = $state("");
-  let statusFilter = $state("all");
+  let activeTab = $state("scheduled"); // scheduled, active, completed
   let isUpdating = $state(false);
+  let showCompletionModal = $state(false);
+  let selectedRideForCompletion = $state(null);
 
-  // Filter rides based on search and status
+  // Filter rides based on tab and search
   let filteredRides = $derived(() => {
     if (!data.rides) return [];
     
@@ -24,16 +27,38 @@
       const matchesSearch = clientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
                            ride.dropoff_address.toLowerCase().includes(searchTerm.toLowerCase()) ||
                            (ride.alt_pickup_address && ride.alt_pickup_address.toLowerCase().includes(searchTerm.toLowerCase()));
-      const matchesStatus = statusFilter === "all" || ride.status === statusFilter;
-      return matchesSearch && matchesStatus;
+      
+      // Filter by tab
+      let matchesTab = false;
+      if (activeTab === "scheduled") {
+        matchesTab = ride.status === "Scheduled" || ride.status === "Assigned";
+      } else if (activeTab === "active") {
+        matchesTab = ride.status === "In Progress";
+      } else if (activeTab === "completed") {
+        matchesTab = ride.status === "Completed" || ride.status === "Cancelled" || ride.status === "Reported";
+      }
+      
+      return matchesSearch && matchesTab;
     });
+  });
+
+  // Get ride counts for tabs
+  let rideCounts = $derived(() => {
+    if (!data.rides) return { scheduled: 0, active: 0, completed: 0 };
+    
+    return {
+      scheduled: data.rides.filter(r => r.status === "Scheduled" || r.status === "Assigned").length,
+      active: data.rides.filter(r => r.status === "In Progress").length,
+      completed: data.rides.filter(r => r.status === "Completed" || r.status === "Cancelled" || r.status === "Reported").length
+    };
   });
 
   function getStatusColor(status: string) {
     switch (status) {
-      case "Pending": return "bg-gray-100 text-gray-800";
+      case "Scheduled": return "bg-blue-100 text-blue-800";
       case "Assigned": return "bg-blue-100 text-blue-800";
       case "In Progress": return "bg-yellow-100 text-yellow-800";
+      case "Reported": return "bg-purple-100 text-purple-800";
       case "Completed": return "bg-green-100 text-green-800";
       case "Cancelled": return "bg-red-100 text-red-800";
       default: return "bg-gray-100 text-gray-800";
@@ -80,10 +105,13 @@
       if (response.ok) {
         await invalidateAll();
       } else {
-        console.error('Failed to update ride status');
+        const error = await response.json();
+        console.error('Failed to update ride status:', error);
+        alert(`Failed to update ride status: ${error.error || 'Unknown error'}`);
       }
     } catch (error) {
       console.error('Error updating ride status:', error);
+      alert('Error updating ride status. Please try again.');
     } finally {
       isUpdating = false;
     }
@@ -93,12 +121,50 @@
     await updateRideStatus(rideId, 'In Progress');
   }
 
-  async function completeRide(rideId: number) {
-    await updateRideStatus(rideId, 'Completed');
+  async function reportComplete(rideId: number) {
+    await updateRideStatus(rideId, 'Reported');
   }
 
   async function cancelRide(rideId: number) {
     await updateRideStatus(rideId, 'Cancelled');
+  }
+
+  function openCompletionModal(ride: any) {
+    selectedRideForCompletion = ride;
+    showCompletionModal = true;
+  }
+
+  async function submitCompletion(formData: any) {
+    if (!selectedRideForCompletion) return;
+
+    isUpdating = true;
+    try {
+      const response = await fetch(`/driver/rides/complete`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          rideId: selectedRideForCompletion.ride_id,
+          ...formData
+        })
+      });
+
+      if (response.ok) {
+        showCompletionModal = false;
+        selectedRideForCompletion = null;
+        await invalidateAll();
+      } else {
+        const error = await response.json();
+        console.error('Failed to report completion:', error);
+        alert(`Failed to report completion: ${error.error || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('Error reporting completion:', error);
+      alert('Error reporting completion. Please try again.');
+    } finally {
+      isUpdating = false;
+    }
   }
 </script>
 
@@ -134,39 +200,51 @@
     </Card>
   {/if}
 
-  <!-- Filters -->
+  <!-- Tabs -->
   <Card>
-    <CardHeader>
-      <CardTitle class="flex items-center gap-2">
-        <Filter class="w-5 h-5" />
-        Filters
-      </CardTitle>
-    </CardHeader>
-    <CardContent>
-      <div class="flex gap-4">
-        <div class="flex-1">
-          <div class="relative">
-            <Search class="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
-            <Input 
-              placeholder="Search rides..." 
-              bind:value={searchTerm}
-              class="pl-10"
-            />
-          </div>
-        </div>
-        <Select bind:value={statusFilter}>
-          <SelectTrigger class="w-48">
-            <span class="text-muted-foreground">Filter by status</span>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Statuses</SelectItem>
-            <SelectItem value="Pending">Pending</SelectItem>
-            <SelectItem value="Assigned">Assigned</SelectItem>
-            <SelectItem value="In Progress">In Progress</SelectItem>
-            <SelectItem value="Completed">Completed</SelectItem>
-            <SelectItem value="Cancelled">Cancelled</SelectItem>
-          </SelectContent>
-        </Select>
+    <div class="border-b border-gray-200">
+      <div class="flex space-x-8 px-6">
+        <button
+          onclick={() => activeTab = "scheduled"}
+          class="py-4 px-1 border-b-2 font-medium text-sm transition-colors {activeTab === 'scheduled' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}"
+        >
+          Scheduled
+          {#if rideCounts().scheduled > 0}
+            <span class="ml-2 py-0.5 px-2 rounded-full text-xs bg-blue-100 text-blue-600">{rideCounts().scheduled}</span>
+          {/if}
+        </button>
+        
+        <button
+          onclick={() => activeTab = "active"}
+          class="py-4 px-1 border-b-2 font-medium text-sm transition-colors {activeTab === 'active' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}"
+        >
+          In Progress
+          {#if rideCounts().active > 0}
+            <span class="ml-2 py-0.5 px-2 rounded-full text-xs bg-yellow-100 text-yellow-600">{rideCounts().active}</span>
+          {/if}
+        </button>
+        
+        <button
+          onclick={() => activeTab = "completed"}
+          class="py-4 px-1 border-b-2 font-medium text-sm transition-colors {activeTab === 'completed' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}"
+        >
+          Completed
+          {#if rideCounts().completed > 0}
+            <span class="ml-2 py-0.5 px-2 rounded-full text-xs bg-green-100 text-green-600">{rideCounts().completed}</span>
+          {/if}
+        </button>
+      </div>
+    </div>
+
+    <!-- Search -->
+    <CardContent class="p-6 border-b">
+      <div class="relative">
+        <Search class="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+        <Input 
+          placeholder="Search rides..." 
+          bind:value={searchTerm}
+          class="pl-10"
+        />
       </div>
     </CardContent>
   </Card>
@@ -177,7 +255,7 @@
       <Card>
         <CardContent class="p-6">
           <div class="flex items-start justify-between">
-            <div class="space-y-2">
+            <div class="space-y-2 flex-1">
               <div class="flex items-center gap-2">
                 <h3 class="text-lg font-semibold">{getClientName(ride)}</h3>
                 <Badge class={getStatusColor(ride.status)}>
@@ -251,18 +329,14 @@
                   <span class="font-medium">Notes:</span> {ride.notes}
                 </div>
               {/if}
-              
-              {#if ride.special_requirements}
-                <div class="text-sm">
-                  <span class="font-medium">Special Requirements:</span> {ride.special_requirements}
-                </div>
-              {/if}
 
               <!-- Completed ride details -->
-              {#if ride.status === 'Completed' && data.completedRidesData[ride.ride_id]}
+              {#if (ride.status === 'Completed' || ride.status === 'Reported') && data.completedRidesData[ride.ride_id]}
                 {@const completed = data.completedRidesData[ride.ride_id]}
                 <div class="text-sm bg-green-50 p-3 rounded-md">
-                  <div class="font-medium text-green-800">Completed Details:</div>
+                  <div class="font-medium text-green-800">
+                    {ride.status === 'Reported' ? 'Reported Details (Pending Confirmation):' : 'Completed Details:'}
+                  </div>
                   <div class="text-green-700">
                     {#if completed.actual_start}
                       <div>Started: {new Date(completed.actual_start).toLocaleString()}</div>
@@ -284,8 +358,8 @@
               {/if}
             </div>
             
-            <div class="flex gap-2">
-              {#if ride.status === "Assigned"}
+            <div class="flex gap-2 ml-4">
+              {#if ride.status === "Scheduled" || ride.status === "Assigned"}
                 <Button 
                   size="sm" 
                   onclick={() => startRide(ride.ride_id)}
@@ -294,18 +368,28 @@
                   <Play class="w-4 h-4 mr-1" />
                   Start Ride
                 </Button>
-              {:else if ride.status === "In Progress"}
+                
                 <Button 
                   size="sm" 
-                  onclick={() => completeRide(ride.ride_id)}
+                  variant="outline"
+                  onclick={() => openCompletionModal(ride)}
                   disabled={isUpdating}
                 >
                   <CheckCircle class="w-4 h-4 mr-1" />
-                  Complete Ride
+                  Complete
+                </Button>
+              {:else if ride.status === "In Progress"}
+                <Button 
+                  size="sm" 
+                  onclick={() => openCompletionModal(ride)}
+                  disabled={isUpdating}
+                >
+                  <CheckCircle class="w-4 h-4 mr-1" />
+                  Report Complete
                 </Button>
               {/if}
               
-              {#if ride.status !== "Completed" && ride.status !== "Cancelled"}
+              {#if ride.status !== "Completed" && ride.status !== "Cancelled" && ride.status !== "Reported"}
                 <Button 
                   variant="outline" 
                   size="sm"
@@ -337,10 +421,17 @@
           {#if data.rides && data.rides.length === 0}
             You don't have any assigned rides yet.
           {:else}
-            No rides match your current filters.
+            No rides match your current tab and filters.
           {/if}
         </p>
       </CardContent>
     </Card>
   {/if}
 </div>
+<RideCompletionModal 
+  bind:show={showCompletionModal}
+  ride={selectedRideForCompletion}
+  isDriver={true}
+  onSubmit={submitCompletion}
+  isSubmitting={isUpdating}
+/>
