@@ -9,6 +9,8 @@
   import { Car, Clock, MapPin, User, Phone, Calendar, Filter, Search, Navigation, Plus, Edit, Trash2, UserCheck, CheckCircle, AlertCircle } from "@lucide/svelte";
   import { enhance } from '$app/forms';
   import { invalidateAll } from '$app/navigation';
+  import { page } from '$app/stores';
+  import { onMount } from 'svelte';
   import type { PageData } from './$types';
   import RideCompletionModal from '$lib/components/RideCompletionModal.svelte';
   import DriverMatchModal from '$lib/components/DriverMatchModal.svelte';
@@ -27,7 +29,17 @@
   let { data }: { data: PageData } = $props();
 
   let searchTerm = $state("");
+  
+  // Initialize activeTab from URL parameter or default to "requested"
   let activeTab = $state("requested"); // requested, active, reported, completed
+  
+  // Read tab from URL parameter on mount
+  onMount(() => {
+    const tabParam = $page.url.searchParams.get('tab');
+    if (tabParam && ['requested', 'active', 'reported', 'completed'].includes(tabParam)) {
+      activeTab = tabParam;
+    }
+  });
   let isUpdating = $state(false);
   let showCreateModal = $state(false);
   let showEditModal = $state(false);
@@ -580,10 +592,10 @@
 
 <div class="min-h-screen bg-gray-50 p-6">
   <div class="max-w-7xl mx-auto space-y-6">
-    <!-- Header -->
+  <!-- Header -->
     <div class="bg-white rounded-lg shadow-sm border p-6">
-      <div class="flex items-center justify-between">
-        <div>
+  <div class="flex items-center justify-between">
+    <div>
           <h1 class="text-2xl font-bold text-gray-900">Ride Management</h1>
           <p class="text-gray-600 mt-1">Manage and track ride requests and assignments</p>
         </div>
@@ -648,26 +660,26 @@
             {/if}
           </button>
         </div>
-      </div>
+  </div>
 
       <!-- Search Bar -->
       <div class="p-6 border-b border-gray-200">
-        <div class="relative">
+          <div class="relative">
           <Search class="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
           <input 
             type="text"
-            placeholder="Search rides..." 
-            bind:value={searchTerm}
+              placeholder="Search rides..." 
+              bind:value={searchTerm}
             class="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-          />
+            />
         </div>
       </div>
 
-      <!-- Rides List -->
+  <!-- Rides List -->
       <div class="divide-y divide-gray-200">
-        {#each filteredRides() as ride}
+    {#each filteredRides() as ride}
           <div class="p-6 hover:bg-gray-50 transition-colors">
-            <div class="flex items-start justify-between">
+          <div class="flex items-start justify-between">
               <div class="space-y-3 flex-1">
                 <div class="flex items-center gap-3">
                   <h3 class="text-lg font-semibold text-gray-900">{getClientName(ride)}</h3>
@@ -680,19 +692,19 @@
                 </div>
                 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-600">
-                  <div class="flex items-center gap-2">
+                <div class="flex items-center gap-2">
                     <Phone class="w-4 h-4 text-gray-400" />
                     {getClientPhone(ride)}
-                  </div>
-                  <div class="flex items-center gap-2">
+                </div>
+                <div class="flex items-center gap-2">
                     <Calendar class="w-4 h-4 text-gray-400" />
                     {formatDate(ride.appointment_time)} at {formatTime(ride.appointment_time)}
-                  </div>
-                  <div class="flex items-center gap-2">
+                </div>
+                <div class="flex items-center gap-2">
                     <User class="w-4 h-4 text-gray-400" />
                     Driver: {getDriverName(ride)}
-                  </div>
-                  <div class="flex items-center gap-2">
+                </div>
+                <div class="flex items-center gap-2">
                     <MapPin class="w-4 h-4 text-gray-400" />
                     Destination: {ride.destination_name}
                   </div>
@@ -711,7 +723,7 @@
                       <div class="font-medium">Pending Confirmation</div>
                       <div class="text-purple-700">Driver has reported this ride as complete. Please review and confirm.</div>
                     </div>
-                  </div>
+                </div>
                 {/if}
               </div>
               
@@ -1073,7 +1085,7 @@
             <Input id="edit_alt_pickup_zipcode" bind:value={rideForm.alt_pickup_zipcode} placeholder="e.g., 14620" />
           </div>
         </div>
-      {/if}
+              {/if}
       
       <div class="grid grid-cols-2 gap-4">
         <div>
@@ -1193,9 +1205,9 @@
           <div class="text-center py-4 text-gray-500">
             No drivers found
           </div>
-        {/if}
-      </div>
-      
+  {/if}
+</div>
+
       <div class="flex justify-end">
         <button 
           onclick={() => showAssignDriverModal = false}

@@ -117,7 +117,10 @@
 			
 			<!-- Quick Stats -->
 			<div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-				<div class="bg-white p-6 rounded-lg border border-gray-200 shadow-sm">
+				<button 
+					onclick={() => goto('/dispatcher/rides?tab=requested')}
+					class="bg-white p-6 rounded-lg border border-gray-200 shadow-sm hover:shadow-md hover:border-blue-300 transition-all duration-200 cursor-pointer text-left w-full"
+				>
 					<div class="flex items-center">
 						<div class="p-2 bg-blue-100 rounded-lg">
 							<AlertCircle class="w-6 h-6 text-blue-600" />
@@ -127,9 +130,12 @@
 							<p class="text-2xl font-semibold text-gray-900">{data.rideCounts?.pending || 0}</p>
 						</div>
 					</div>
-				</div>
+				</button>
 				
-				<div class="bg-white p-6 rounded-lg border border-gray-200 shadow-sm">
+				<button 
+					onclick={() => goto('/dispatcher/rides?tab=active')}
+					class="bg-white p-6 rounded-lg border border-gray-200 shadow-sm hover:shadow-md hover:border-green-300 transition-all duration-200 cursor-pointer text-left w-full"
+				>
 					<div class="flex items-center">
 						<div class="p-2 bg-green-100 rounded-lg">
 							<CheckCircle class="w-6 h-6 text-green-600" />
@@ -139,9 +145,12 @@
 							<p class="text-2xl font-semibold text-gray-900">{data.rideCounts?.assigned || 0}</p>
 						</div>
 					</div>
-				</div>
+				</button>
 				
-				<div class="bg-white p-6 rounded-lg border border-gray-200 shadow-sm">
+				<button 
+					onclick={() => goto('/dispatcher/rides?tab=active')}
+					class="bg-white p-6 rounded-lg border border-gray-200 shadow-sm hover:shadow-md hover:border-orange-300 transition-all duration-200 cursor-pointer text-left w-full"
+				>
 					<div class="flex items-center">
 						<div class="p-2 bg-orange-100 rounded-lg">
 							<Clock class="w-6 h-6 text-orange-600" />
@@ -151,9 +160,12 @@
 							<p class="text-2xl font-semibold text-gray-900">{data.rideCounts?.inProgress || 0}</p>
 						</div>
 					</div>
-				</div>
+				</button>
 				
-				<div class="bg-white p-6 rounded-lg border border-gray-200 shadow-sm">
+				<button 
+					onclick={() => goto('/dispatcher/drivers')}
+					class="bg-white p-6 rounded-lg border border-gray-200 shadow-sm hover:shadow-md hover:border-purple-300 transition-all duration-200 cursor-pointer text-left w-full"
+				>
 					<div class="flex items-center">
 						<div class="p-2 bg-purple-100 rounded-lg">
 							<Users class="w-6 h-6 text-purple-600" />
@@ -163,7 +175,7 @@
 							<p class="text-2xl font-semibold text-gray-900">{data.activeDrivers || 0}</p>
 						</div>
 					</div>
-				</div>
+				</button>
 			</div>
 			
 			<!-- Main Content -->
