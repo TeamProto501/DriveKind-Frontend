@@ -13,12 +13,12 @@
   let { data }: { data: PageData } = $props();
 
   let searchTerm = $state("");
-  let activeTab = $state("scheduled"); // scheduled, active, completed
+  let activeTab = $state("requests"); // scheduled, active, completed
   let isUpdating = $state(false);
   let showCompletionModal = $state(false);
   let selectedRideForCompletion = $state(null);
 
-  // Filter rides based on tab and search
+  // Update filtered rides to include Pending status for requests
   let filteredRides = $derived(() => {
     if (!data.rides) return [];
     
@@ -30,7 +30,9 @@
       
       // Filter by tab
       let matchesTab = false;
-      if (activeTab === "scheduled") {
+      if (activeTab === "requests") {
+        matchesTab = ride.status === "Pending";
+      } else if (activeTab === "scheduled") {
         matchesTab = ride.status === "Scheduled" || ride.status === "Assigned";
       } else if (activeTab === "active") {
         matchesTab = ride.status === "In Progress";
@@ -42,11 +44,12 @@
     });
   });
 
-  // Get ride counts for tabs
+  // Update ride counts
   let rideCounts = $derived(() => {
-    if (!data.rides) return { scheduled: 0, active: 0, completed: 0 };
+    if (!data.rides) return { requests: 0, scheduled: 0, active: 0, completed: 0 };
     
     return {
+      requests: data.rides.filter(r => r.status === "Pending").length,
       scheduled: data.rides.filter(r => r.status === "Scheduled" || r.status === "Assigned").length,
       active: data.rides.filter(r => r.status === "In Progress").length,
       completed: data.rides.filter(r => r.status === "Completed" || r.status === "Cancelled" || r.status === "Reported").length
@@ -166,6 +169,78 @@
       isUpdating = false;
     }
   }
+
+  // Add accept/decline functions
+  async function acceptRide(rideId: number) {
+    console.log('Accepting ride:', rideId);
+    console.log('Token available:', !!data.session?.access_token);
+    
+    if (!data.session?.access_token) {
+      alert('Session expired. Please refresh the page and try again.');
+      return;
+    }
+
+    isUpdating = true;
+    try {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/rides/${rideId}/accept`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${data.session.access_token}`
+        }
+      });
+
+      console.log('Accept response status:', response.status);
+
+      if (response.ok) {
+        await invalidateAll();
+        alert('Ride accepted! It now appears in your Scheduled tab.');
+      } else {
+        const error = await response.json();
+        console.error('Accept error:', error);
+        alert(`Failed to accept ride: ${error.error || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('Error accepting ride:', error);
+      alert('Error accepting ride. Please try again.');
+    } finally {
+      isUpdating = false;
+    }
+  }
+
+  async function declineRide(rideId: number) {
+    const reason = prompt('Please provide a reason for declining (optional):');
+    
+    if (!data.session?.access_token) {
+      alert('Session expired. Please refresh the page and try again.');
+      return;
+    }
+    
+    isUpdating = true;
+    try {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/rides/${rideId}/decline`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${data.session.access_token}`
+        },
+        body: JSON.stringify({ reason })
+      });
+
+      if (response.ok) {
+        await invalidateAll();
+        alert('Ride declined. It has been returned to the dispatcher.');
+      } else {
+        const error = await response.json();
+        alert(`Failed to decline ride: ${error.error || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('Error declining ride:', error);
+      alert('Error declining ride. Please try again.');
+    } finally {
+      isUpdating = false;
+    }
+  }
 </script>
 
 <svelte:head>
@@ -204,6 +279,16 @@
   <Card>
     <div class="border-b border-gray-200">
       <div class="flex space-x-8 px-6">
+        <button
+          onclick={() => activeTab = "requests"}
+          class="py-4 px-1 border-b-2 font-medium text-sm transition-colors {activeTab === 'requests' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}"
+        >
+          Requests
+          {#if rideCounts().requests > 0}
+            <span class="ml-2 py-0.5 px-2 rounded-full text-xs bg-purple-100 text-purple-600">{rideCounts().requests}</span>
+          {/if}
+        </button>
+        
         <button
           onclick={() => activeTab = "scheduled"}
           class="py-4 px-1 border-b-2 font-medium text-sm transition-colors {activeTab === 'scheduled' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}"
@@ -359,7 +444,29 @@
             </div>
             
             <div class="flex gap-2 ml-4">
-              {#if ride.status === "Scheduled" || ride.status === "Assigned"}
+              <!-- Update buttons for Pending rides in the rides list: -->
+              {#if ride.status === "Pending"}
+                <div class="flex gap-2">
+                  <Button 
+                    size="sm" 
+                    onclick={() => acceptRide(ride.ride_id)}
+                    disabled={isUpdating}
+                  >
+                    <CheckCircle class="w-4 h-4 mr-1" />
+                    Accept
+                  </Button>
+                  
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onclick={() => declineRide(ride.ride_id)}
+                    disabled={isUpdating}
+                  >
+                    <XCircle class="w-4 h-4 mr-1" />
+                    Decline
+                  </Button>
+                </div>
+              {:else if ride.status === "Scheduled" || ride.status === "Assigned"}
                 <Button 
                   size="sm" 
                   onclick={() => startRide(ride.ride_id)}

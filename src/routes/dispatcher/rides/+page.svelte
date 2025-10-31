@@ -11,6 +11,7 @@
   import { invalidateAll } from '$app/navigation';
   import type { PageData } from './$types';
   import RideCompletionModal from '$lib/components/RideCompletionModal.svelte';
+  import DriverMatchModal from '$lib/components/DriverMatchModal.svelte';
 
   let { data }: { data: PageData } = $props();
 
@@ -22,6 +23,8 @@
   let showConfirmModal = $state(false);
   let selectedRide = $state(null);
   let showAssignDriverModal = $state(false);
+  let showDriverMatchModal = $state(false);
+  let selectedRideForMatch = $state(null);
 
   // Confirmation form data
   let confirmForm = $state({
@@ -422,6 +425,56 @@
       isUpdating = false;
     }
   }
+
+  function openDriverMatchModal(ride: any) {
+    console.log('Opening driver match modal for ride:', ride.ride_id);
+    console.log('Session available:', !!data.session);
+    console.log('Token available:', !!data.session?.access_token);
+    
+    if (!data.session?.access_token) {
+      alert('Session expired. Please refresh the page and try again.');
+      return;
+    }
+    
+    selectedRideForMatch = ride;
+    showDriverMatchModal = true;
+  }
+
+  async function sendRideRequest(driverId: string) {
+    if (!selectedRideForMatch) return;
+
+    isUpdating = true;
+    try {
+      const token = data.session?.access_token;
+      
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/rides/${selectedRideForMatch.ride_id}/send-request`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          driver_user_id: driverId
+        })
+      });
+
+      const result = await response.json();
+
+      if (response.ok && result.success) {
+        showDriverMatchModal = false;
+        selectedRideForMatch = null;
+        await invalidateAll();
+        alert('Ride request sent to driver!');
+      } else {
+        alert(`Failed to send request: ${result.error || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('Error sending ride request:', error);
+      alert('Error sending ride request. Please try again.');
+    } finally {
+      isUpdating = false;
+    }
+  }
 </script>
 
 <svelte:head>
@@ -568,19 +621,12 @@
               <div class="flex gap-2 ml-4">
                 {#if ride.status === "Requested"}
                   <button 
-                    onclick={() => openAssignDriverModal(ride)}
+                    onclick={() => openDriverMatchModal(ride)}
                     disabled={isUpdating}
-                    class="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg text-sm flex items-center gap-1 transition-colors disabled:opacity-50"
+                    class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-sm flex items-center gap-1 transition-colors disabled:opacity-50"
                   >
                     <UserCheck class="w-4 h-4" />
-                    Assign Driver
-                  </button>
-                  <button 
-                    onclick={() => updateRideStatus(ride.ride_id, 'Scheduled')}
-                    disabled={isUpdating}
-                    class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-sm transition-colors disabled:opacity-50"
-                  >
-                    Schedule
+                    Send Request
                   </button>
                 {:else if ride.status === "Reported"}
                   <button 
@@ -1030,3 +1076,10 @@
     </div>
   </div>
 {/if}
+<DriverMatchModal 
+  bind:show={showDriverMatchModal}
+  ride={selectedRideForMatch}
+  token={data.session?.access_token}
+  onSelectDriver={sendRideRequest}
+  isLoading={isUpdating}
+/>
