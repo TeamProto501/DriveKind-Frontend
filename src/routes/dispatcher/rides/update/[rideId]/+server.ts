@@ -58,9 +58,17 @@ export const POST: RequestHandler = async (event) => {
 		// Prepare update data - only include fields that are present and valid
 		const updateData: any = {};
 
-		// Update status if provided
+		// Update status if provided - validate it's a valid enum value
 		if (rideData.status) {
-			updateData.status = rideData.status;
+			const validStatuses = ['Requested', 'Scheduled', 'In Progress', 'Completed', 'Cancelled'];
+			const statusValue = typeof rideData.status === 'string' ? rideData.status.trim() : String(rideData.status || '').trim();
+			
+			if (statusValue && validStatuses.includes(statusValue)) {
+				updateData.status = statusValue;
+			} else {
+				console.error('Invalid status value received:', rideData.status, 'Expected one of:', validStatuses);
+				return json({ error: `Invalid status value: ${statusValue}. Must be one of: ${validStatuses.join(', ')}` }, { status: 400 });
+			}
 		}
 
 		// Update purpose (ride type) if provided

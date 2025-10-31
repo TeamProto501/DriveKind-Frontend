@@ -387,12 +387,29 @@
     isUpdating = true;
     try {
       // Sanitize all text inputs before sending
-      // Ensure status is always a string - handle array case from Select component
-      const statusValue = typeof rideForm.status === 'string' 
-        ? rideForm.status 
-        : Array.isArray(rideForm.status) 
-          ? rideForm.status[0] || ''
-          : String(rideForm.status || '');
+      // Ensure status is always a valid string - handle edge cases from Select component
+      let statusValue = '';
+      if (Array.isArray(rideForm.status)) {
+        // If it's an array, join it or take first valid element
+        statusValue = rideForm.status.length > 0 
+          ? (typeof rideForm.status[0] === 'string' ? rideForm.status[0] : rideForm.status.join(''))
+          : '';
+      } else if (typeof rideForm.status === 'string') {
+        // If it's already a string, use it directly
+        statusValue = rideForm.status;
+      } else {
+        // Convert to string
+        statusValue = String(rideForm.status || '');
+      }
+      
+      // Validate status is one of the valid enum values
+      const validStatuses = ['Requested', 'Scheduled', 'In Progress', 'Completed', 'Cancelled'];
+      if (statusValue && !validStatuses.includes(statusValue)) {
+        console.error('Invalid status value:', statusValue, 'Original:', rideForm.status);
+        // Try to find a valid status that matches
+        const matchedStatus = validStatuses.find(s => s.startsWith(statusValue) || statusValue.includes(s));
+        statusValue = matchedStatus || statusValue;
+      }
       
       const sanitizedForm = {
         ...rideForm,
