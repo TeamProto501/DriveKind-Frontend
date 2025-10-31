@@ -628,7 +628,17 @@
                     <UserCheck class="w-4 h-4" />
                     Send Request
                   </button>
+                {:else if ride.status === "Reported"}
+                  <button 
+                    onclick={() => openConfirmModal(ride)}
+                    disabled={isUpdating}
+                    class="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg text-sm flex items-center gap-1 transition-colors disabled:opacity-50"
+                  >
+                    <CheckCircle class="w-4 h-4" />
+                    Confirm Complete
+                  </button>
                 {/if}
+                
                 <button 
                   onclick={() => openEditModal(ride)}
                   disabled={isUpdating}
