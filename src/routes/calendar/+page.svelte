@@ -1,6 +1,7 @@
 <!-- src/routes/schedule/+page.svelte -->
 <script lang="ts">
   import { Calendar, TimeGrid, DayGrid, Interaction } from '@event-calendar/core';
+  import { page } from '$app/stores'; // ADD THIS IMPORT
   import RoleGuard from '$lib/components/RoleGuard.svelte';
   import Breadcrumbs from '$lib/components/Breadcrumbs.svelte';
   import { Calendar as CalendarIcon, Car, Users, MapPin, Building2, X, Clock, Phone } from '@lucide/svelte';
@@ -8,11 +9,15 @@
   let { data } = $props();
   
   type ViewType = 'unavailability' | 'myRides' | 'allRides' | 'all';
-  let activeView = $state<ViewType>(data.isAdminOrDispatcher ? 'all' : 'myRides');
+  
+  // Check for tab parameter in URL
+  const urlTab = $page.url.searchParams.get('tab');
+  const initialView = urlTab === 'myRides' ? 'myRides' : (data.isAdminOrDispatcher ? 'all' : 'myRides');
+  
+  let activeView = $state<ViewType>(initialView); // CHANGED THIS LINE
   let showSidePanel = $state(false);
   let selectedDayRides = $state<any[]>([]);
   let selectedDate = $state<string>('');
-
   // Create a sorted version of selectedDayRides - FIXED
   let sortedSelectedDayRides = $derived(
     [...selectedDayRides].sort((a, b) => 

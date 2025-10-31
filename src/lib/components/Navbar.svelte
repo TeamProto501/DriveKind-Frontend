@@ -139,7 +139,6 @@
         items: [
           { label: "Dashboard", href: "/dispatcher/dashboard" },
           { label: "Ride Management", href: "/dispatcher/rides" },
-          { label: "Driver Management", href: "/dispatcher/drivers" },
           { label: "Destinations", href: "/dispatcher/destinations" },
         ],
       });
@@ -153,7 +152,7 @@
         collapsible: true,
         items: [
           { label: "My Rides", href: "/driver/rides" },
-          { label: "My Schedule", href: "/driver/schedule" },
+          { label: "My Schedule", href: "/driver/schedule?tab=myRides" },
           { label: "Unavailability", href: "/driver/unavail" },
         ],
       });
