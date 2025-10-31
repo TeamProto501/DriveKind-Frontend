@@ -16,19 +16,13 @@
 		Filter,
 		ArrowRight,
 		Phone,
-		User,
-		Edit,
-		UserCheck
+		User
 	} from '@lucide/svelte';
-	import DriverMatchModal from '$lib/components/DriverMatchModal.svelte';
-	import { invalidateAll } from '$app/navigation';
 	
 	let { data }: { data: PageData } = $props();
 	
 	// Filter to show only requested rides (already filtered by server)
 	const requestedRides = $derived(data.rides || []);
-	
-	let isUpdating = $state(false);
 	
 	// Get status badge color
 	function getStatusColor(status: string) {
@@ -75,19 +69,6 @@
 	
 	function getClientPhone(ride: any) {
 		return ride.clients?.primary_phone || 'No phone';
-	}
-	
-	let showDriverMatchModal = $state(false);
-	let selectedRideForMatch = $state(null);
-	
-	function openDriverMatchModal(ride: any) {
-		selectedRideForMatch = ride;
-		showDriverMatchModal = true;
-	}
-	
-	function openEditModal(ride: any) {
-		// Navigate to rides page with the ride ID to edit
-		goto(`/dispatcher/rides`);
 	}
 </script>
 
@@ -209,67 +190,43 @@
 					<div class="divide-y divide-gray-200">
 						{#each requestedRides as ride}
 							<div class="p-6 hover:bg-gray-50 transition-colors">
-								<div class="flex items-start justify-between">
-									<div class="space-y-3 flex-1">
-										<div class="flex items-center gap-3">
-											<h3 class="text-lg font-semibold text-gray-900">{getClientName(ride)}</h3>
-											<span class="px-2 py-1 text-xs font-medium rounded-full {getStatusColor(ride.status)}">
-												{ride.status.toUpperCase()}
+								<div class="space-y-3">
+									<div class="flex items-center gap-3">
+										<h3 class="text-lg font-semibold text-gray-900">{getClientName(ride)}</h3>
+										<span class="px-2 py-1 text-xs font-medium rounded-full {getStatusColor(ride.status)}">
+											{ride.status.toUpperCase()}
+										</span>
+										{#if ride.purpose}
+											<span class="px-2 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-800">
+												{ride.purpose}
 											</span>
-											{#if ride.purpose}
-												<span class="px-2 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-800">
-													{ride.purpose}
-												</span>
-											{/if}
-										</div>
-										
-										<div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-600">
-											<div class="flex items-center gap-2">
-												<Phone class="w-4 h-4 text-gray-400" />
-												{getClientPhone(ride)}
-											</div>
-											<div class="flex items-center gap-2">
-												<Calendar class="w-4 h-4 text-gray-400" />
-												{formatDate(ride.appointment_time)} at {formatTime(ride.appointment_time)}
-											</div>
-											<div class="flex items-center gap-2">
-												<User class="w-4 h-4 text-gray-400" />
-												Driver: {getDriverName(ride)}
-											</div>
-											<div class="flex items-center gap-2">
-												<MapPin class="w-4 h-4 text-gray-400" />
-												Destination: {ride.destination_name}
-											</div>
-										</div>
-										
-										{#if ride.notes}
-											<div class="text-sm">
-												<span class="font-medium">Notes:</span> {ride.notes}
-											</div>
 										{/if}
 									</div>
 									
-									<div class="flex gap-2 ml-4">
-										{#if ride.status === "Requested"}
-											<button 
-												onclick={() => openDriverMatchModal(ride)}
-												disabled={isUpdating}
-												class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-sm flex items-center gap-1 transition-colors disabled:opacity-50"
-											>
-												<UserCheck class="w-4 h-4" />
-												Send Request
-											</button>
-										{/if}
-										
-										<button 
-											onclick={() => openEditModal(ride)}
-											disabled={isUpdating}
-											class="bg-gray-600 hover:bg-gray-700 text-white px-3 py-1.5 rounded-lg text-sm flex items-center gap-1 transition-colors disabled:opacity-50"
-										>
-											<Edit class="w-4 h-4" />
-											Edit
-										</button>
+									<div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-600">
+										<div class="flex items-center gap-2">
+											<Phone class="w-4 h-4 text-gray-400" />
+											{getClientPhone(ride)}
+										</div>
+										<div class="flex items-center gap-2">
+											<Calendar class="w-4 h-4 text-gray-400" />
+											{formatDate(ride.appointment_time)} at {formatTime(ride.appointment_time)}
+										</div>
+										<div class="flex items-center gap-2">
+											<User class="w-4 h-4 text-gray-400" />
+											Driver: {getDriverName(ride)}
+										</div>
+										<div class="flex items-center gap-2">
+											<MapPin class="w-4 h-4 text-gray-400" />
+											Destination: {ride.destination_name}
+										</div>
 									</div>
+									
+									{#if ride.notes}
+										<div class="text-sm">
+											<span class="font-medium">Notes:</span> {ride.notes}
+										</div>
+									{/if}
 								</div>
 							</div>
 						{/each}
@@ -333,13 +290,3 @@
 		</div>
 	</div>
 </RoleGuard>
-
-<DriverMatchModal 
-	bind:show={showDriverMatchModal}
-	ride={selectedRideForMatch}
-	onClose={() => {
-		showDriverMatchModal = false;
-		selectedRideForMatch = null;
-		invalidateAll();
-	}}
-/>
