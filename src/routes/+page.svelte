@@ -187,26 +187,4 @@
       </div>
     </div>
   </div>
-
-  <!-- Role-specific content -->
-  {#if primaryRole === 'Admin' || primaryRole === 'Super Admin'}
-    <div class="bg-white rounded-lg shadow border border-gray-200 p-6">
-      <h2 class="text-xl font-bold text-gray-900 mb-4">System Overview</h2>
-      <p class="text-gray-600 mb-4">Monitor and manage your DriveKind system.</p>
-      <div class="flex gap-4">
-        <button
-          onclick={() => goto('/admin/users')}
-          class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-        >
-          Manage Users
-        </button>
-        <button
-          onclick={() => goto('/admin/reports')}
-          class="px-6 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
-        >
-          View Reports
-        </button>
-      </div>
-    </div>
-  {/if}
 </div>
