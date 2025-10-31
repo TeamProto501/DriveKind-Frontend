@@ -4,11 +4,13 @@
   import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "$lib/components/ui/card";
   import { Input } from "$lib/components/ui/input";
   import { Select, SelectContent, SelectItem, SelectTrigger } from "$lib/components/ui/select";
-  import { Car, Clock, MapPin, User, Phone, Calendar, Filter, Search, Navigation, Play, CheckCircle, XCircle } from "@lucide/svelte";
+  import { Label } from "$lib/components/ui/label";
+  import { Car, Clock, MapPin, User, Phone, Calendar, Filter, Search, Navigation, Play, CheckCircle, XCircle, X, AlertTriangle, Edit } from "@lucide/svelte";
   import { enhance } from '$app/forms';
   import { invalidateAll } from '$app/navigation';
   import type { PageData } from './$types';
   import RideCompletionModal from '$lib/components/RideCompletionModal.svelte';
+  import { validateRideCompletion, sanitizeInput } from '$lib/utils/validation';
 
   let { data }: { data: PageData } = $props();
 
@@ -17,6 +19,20 @@
   let isUpdating = $state(false);
   let showCompletionModal = $state(false);
   let selectedRideForCompletion = $state(null);
+  
+  // Additional state for enhanced completion (with validation)
+  let selectedRideId: number | null = null;
+  let completionData = $state({
+    miles_driven: '',
+    hours: '',
+    riders: '',
+    donation: false,
+    notes: '',
+    start_time: '',
+    end_time: ''
+  });
+  let reasonabilityWarning = $state(false);
+  let reasonabilityMessage = $state('');
 
   // Update filtered rides to include Pending status for requests
   let filteredRides = $derived(() => {
@@ -140,6 +156,27 @@
   async function submitCompletion(formData: any) {
     if (!selectedRideForCompletion) return;
 
+    // Validate and sanitize input data
+    if (formData.miles_driven || formData.hours) {
+      const validation = validateRideCompletion({
+        miles_driven: formData.miles_driven?.toString() || '0',
+        hours: formData.hours?.toString() || '0',
+        riders: formData.riders?.toString()
+      });
+
+      if (!validation.valid) {
+        alert('Please fix the following errors:\n• ' + validation.errors.join('\n• '));
+        return;
+      }
+    }
+
+    // Sanitize text fields
+    const sanitizedFormData = {
+      ...formData,
+      notes: formData.notes ? sanitizeInput(formData.notes) : null,
+      comments: formData.comments ? sanitizeInput(formData.comments) : null
+    };
+
     isUpdating = true;
     try {
       const response = await fetch(`/driver/rides/complete`, {
@@ -149,7 +186,7 @@
         },
         body: JSON.stringify({
           rideId: selectedRideForCompletion.ride_id,
-          ...formData
+          ...sanitizedFormData
         })
       });
 
@@ -390,14 +427,14 @@
                   </div>
                 </div>
                 {#if ride.estimated_appointment_length}
-                  <div class="flex items-center gap-2">
-                    <Clock class="w-4 h-4" />
+                <div class="flex items-center gap-2">
+                  <Clock class="w-4 h-4" />
                     Estimated: {ride.estimated_appointment_length}
-                  </div>
+                </div>
                 {/if}
                 {#if ride.round_trip}
-                  <div class="flex items-center gap-2">
-                    <Car class="w-4 h-4" />
+                <div class="flex items-center gap-2">
+                  <Car class="w-4 h-4" />
                     Round trip
                   </div>
                 {/if}
@@ -405,7 +442,7 @@
                   <div class="flex items-center gap-2">
                     <User class="w-4 h-4" />
                     {ride.riders} passenger{ride.riders > 1 ? 's' : ''}
-                  </div>
+                </div>
                 {/if}
               </div>
               
@@ -493,6 +530,16 @@
                 >
                   <CheckCircle class="w-4 h-4 mr-1" />
                   Report Complete
+                </Button>
+              {:else if ride.status === "Completed"}
+                <Button 
+                  size="sm" 
+                  onclick={() => completeRide(ride.ride_id)}
+                  disabled={isUpdating}
+                  variant="outline"
+                >
+                  <Edit class="w-4 h-4 mr-1" />
+                  Edit Completion
                 </Button>
               {/if}
               

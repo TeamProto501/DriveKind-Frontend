@@ -4,10 +4,40 @@ import { createSupabaseServerClient } from '$lib/supabase.server';
 
 export const POST: RequestHandler = async (event) => {
 	try {
-		const { rideId, hours, miles_driven, donation_received, donation_amount, completion_status, comments } = await event.request.json();
+		// Support both old and new API formats
+		const body = await event.request.json();
+		const { 
+			rideId, 
+			hours, 
+			miles_driven, 
+			donation_received, 
+			donation_amount, 
+			completion_status, 
+			comments,
+			// New format fields
+			riders,
+			donation,
+			notes,
+			start_time,
+			end_time,
+			status
+		} = body;
 
-		if (!rideId || !hours || !miles_driven || !completion_status) {
+		// Determine which fields to use (prioritize new format)
+		const finalStatus = status || (completion_status === 'Completed' ? 'Completed' : 'Reported');
+		const finalMiles = miles_driven ? parseFloat(miles_driven) : null;
+		const finalHours = hours ? parseFloat(hours) : null;
+		const finalDonation = donation !== undefined ? donation : (donation_received || false);
+		const finalNotes = notes || comments || null;
+		const finalRiders = riders ? parseInt(riders) : null;
+		const finalDonationAmount = donation_amount ? parseFloat(donation_amount) : null;
+
+		if (!rideId || !finalStatus) {
 			return json({ error: 'Missing required fields' }, { status: 400 });
+		}
+
+		if (finalStatus === 'Completed' && (!finalMiles || !finalHours)) {
+			return json({ error: 'Miles driven and hours are required for completion' }, { status: 400 });
 		}
 
 		const supabase = createSupabaseServerClient(event);
@@ -15,7 +45,6 @@ export const POST: RequestHandler = async (event) => {
 		const { data: { user }, error: userError } = await supabase.auth.getUser();
 		
 		if (userError || !user) {
-			console.error('Auth error:', userError);
 			return json({ error: 'Unauthorized' }, { status: 401 });
 		}
 
@@ -28,21 +57,29 @@ export const POST: RequestHandler = async (event) => {
 			.single();
 
 		if (rideError || !ride) {
-			console.error('Ride error:', rideError);
 			return json({ error: 'Ride not found or access denied' }, { status: 404 });
 		}
 
 		// Update the ride with completion data
+		const updateData: any = {
+			status: finalStatus,
+			miles_driven: finalMiles,
+			hours: finalHours,
+			donation: finalDonation,
+			notes: finalNotes
+		};
+
+		if (finalRiders !== null) {
+			updateData.riders = finalRiders;
+		}
+
+		if (finalDonationAmount !== null) {
+			updateData.donation_amount = finalDonationAmount;
+		}
+
 		const { error: updateError } = await supabase
 			.from('rides')
-			.update({ 
-				status: 'Reported',
-				hours: parseFloat(hours),
-				miles_driven: parseFloat(miles_driven),
-				donation: donation_received || false,
-				donation_amount: donation_received && donation_amount ? parseFloat(donation_amount) : null,
-				completion_status: completion_status
-			})
+			.update(updateData)
 			.eq('ride_id', rideId);
 
 		if (updateError) {
@@ -50,20 +87,30 @@ export const POST: RequestHandler = async (event) => {
 			return json({ error: `Failed to update ride: ${updateError.message}` }, { status: 500 });
 		}
 
-		// Create/update completed ride record
+		// Create or update completed ride record
 		const { data: existingCompleted } = await supabase
 			.from('completedrides')
 			.select('ride_id')
 			.eq('ride_id', rideId)
 			.maybeSingle();
 
-		const completedData = {
-			actual_end: new Date().toISOString(),
-			miles_driven: parseFloat(miles_driven),
-			hours: parseFloat(hours),
-			donation_amount: donation_received && donation_amount ? parseFloat(donation_amount) : null,
-			comments: comments || null
+		const completedData: any = {
+			miles_driven: finalMiles,
+			hours: finalHours,
+			donation_amount: finalDonationAmount,
+			comments: finalNotes
 		};
+
+		// Add start and end times if provided (new format)
+		if (start_time) {
+			completedData.actual_start = new Date(start_time).toISOString();
+		}
+		if (end_time) {
+			completedData.actual_end = new Date(end_time).toISOString();
+		} else if (finalStatus === 'Completed' || finalStatus === 'Reported') {
+			// If end time not provided but completing, set it to now
+			completedData.actual_end = new Date().toISOString();
+		}
 
 		if (!existingCompleted) {
 			const { error: completedError } = await supabase
@@ -91,6 +138,6 @@ export const POST: RequestHandler = async (event) => {
 
 	} catch (error: any) {
 		console.error('Error in ride completion:', error);
-		return json({ error: `Internal server error: ${error.message}` }, { status: 500 });
+		return json({ error: `Internal server error: ${error.message || 'Unknown error'}` }, { status: 500 });
 	}
 };

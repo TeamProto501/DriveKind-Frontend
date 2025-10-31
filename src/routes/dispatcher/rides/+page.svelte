@@ -12,6 +12,17 @@
   import type { PageData } from './$types';
   import RideCompletionModal from '$lib/components/RideCompletionModal.svelte';
   import DriverMatchModal from '$lib/components/DriverMatchModal.svelte';
+  import { 
+    validateAddress, 
+    validateCity, 
+    validateState, 
+    validateZipCode, 
+    validateText, 
+    validateRequired,
+    validateDateTime,
+    sanitizeInput,
+    combineValidations
+  } from '$lib/utils/validation';
 
   let { data }: { data: PageData } = $props();
 
@@ -55,7 +66,10 @@
     riders: 1,
     estimated_appointment_length: '',
     notes: '',
-    donation: false
+    donation: false,
+    miles_driven: '',
+    hours: '',
+    status: ''
   });
 
   // Client search functionality
@@ -182,7 +196,10 @@
       riders: 1,
       estimated_appointment_length: '',
       notes: '',
-      donation: false
+      donation: false,
+      miles_driven: '',
+      hours: '',
+      status: ''
     };
     showClientDropdown = false;
     showCreateModal = true;
@@ -191,6 +208,16 @@
   function selectClient(client) {
     rideForm.client_id = client.client_id.toString();
     rideForm.client_search = `${client.first_name} ${client.last_name}`;
+    
+    // Auto-populate pickup address if "pickup from home" is checked
+    if (rideForm.pickup_from_home) {
+      rideForm.alt_pickup_address = client.address || '';
+      rideForm.alt_pickup_address2 = client.address2 || '';
+      rideForm.alt_pickup_city = client.city || '';
+      rideForm.alt_pickup_state = client.state || '';
+      rideForm.alt_pickup_zipcode = client.zipcode || '';
+    }
+    
     showClientDropdown = false;
   }
 
@@ -198,6 +225,20 @@
     rideForm.client_id = '';
     rideForm.client_search = '';
     showClientDropdown = false;
+  }
+  
+  // Auto-populate address when checkbox changes
+  function handlePickupHomeChange() {
+    if (rideForm.pickup_from_home && rideForm.client_id) {
+      const selectedClient = data.clients.find(c => c.client_id.toString() === rideForm.client_id);
+      if (selectedClient) {
+        rideForm.alt_pickup_address = selectedClient.address || '';
+        rideForm.alt_pickup_address2 = selectedClient.address2 || '';
+        rideForm.alt_pickup_city = selectedClient.city || '';
+        rideForm.alt_pickup_state = selectedClient.state || '';
+        rideForm.alt_pickup_zipcode = selectedClient.zipcode || '';
+      }
+    }
   }
 
   function openEditModal(ride: any) {
@@ -222,7 +263,10 @@
       riders: ride.riders || 1,
       estimated_appointment_length: ride.estimated_appointment_length || '',
       notes: ride.notes || '',
-      donation: ride.donation || false
+      donation: ride.donation || false,
+      miles_driven: ride.miles_driven?.toString() || '',
+      hours: ride.hours?.toString() || '',
+      status: ride.status || ''
     };
     showEditModal = true;
   }
@@ -233,48 +277,55 @@
   }
 
   async function createRide() {
-    // Validation...
-    if (!rideForm.client_id) {
-      alert('Please select a client');
-      return;
-    }
-    if (!rideForm.purpose) {
-      alert('Please select a purpose');
-      return;
-    }
-    if (!rideForm.destination_name) {
-      alert('Please enter destination name');
-      return;
-    }
-    if (!rideForm.dropoff_address) {
-      alert('Please enter dropoff address');
-      return;
-    }
-    if (!rideForm.dropoff_city) {
-      alert('Please enter dropoff city');
-      return;
-    }
-    if (!rideForm.dropoff_state) {
-      alert('Please enter dropoff state');
-      return;
-    }
-    if (!rideForm.dropoff_zipcode) {
-      alert('Please enter dropoff zip code');
-      return;
-    }
-    if (!rideForm.appointment_time) {
-      alert('Please select appointment time');
+    // Validate all required fields and formats
+    const validations = combineValidations(
+      validateRequired(rideForm.client_id, 'Client'),
+      validateRequired(rideForm.purpose, 'Purpose'),
+      validateRequired(rideForm.destination_name, 'Destination name'),
+      validateText(rideForm.destination_name, 'Destination name', 200, true),
+      validateAddress(rideForm.dropoff_address, 'Dropoff address'),
+      validateCity(rideForm.dropoff_city),
+      validateState(rideForm.dropoff_state),
+      validateZipCode(rideForm.dropoff_zipcode),
+      validateDateTime(rideForm.appointment_time, 'Appointment time'),
+      // Validate alternative pickup address if provided
+      rideForm.alt_pickup_address ? validateAddress(rideForm.alt_pickup_address, 'Alternative pickup address') : { valid: true, errors: [] },
+      rideForm.alt_pickup_city ? validateCity(rideForm.alt_pickup_city) : { valid: true, errors: [] },
+      rideForm.alt_pickup_state ? validateState(rideForm.alt_pickup_state) : { valid: true, errors: [] },
+      rideForm.alt_pickup_zipcode ? validateZipCode(rideForm.alt_pickup_zipcode) : { valid: true, errors: [] },
+      rideForm.notes ? validateText(rideForm.notes, 'Notes', 500, false) : { valid: true, errors: [] }
+    );
+
+    if (!validations.valid) {
+      alert('Please fix the following errors:\n• ' + validations.errors.join('\n• '));
       return;
     }
 
     isUpdating = true;
     try {
+      // Sanitize all text inputs before sending
+      const sanitizedForm = {
+        ...rideForm,
+        destination_name: sanitizeInput(rideForm.destination_name),
+        dropoff_address: sanitizeInput(rideForm.dropoff_address),
+        dropoff_address2: sanitizeInput(rideForm.dropoff_address2),
+        dropoff_city: sanitizeInput(rideForm.dropoff_city),
+        dropoff_state: sanitizeInput(rideForm.dropoff_state),
+        dropoff_zipcode: sanitizeInput(rideForm.dropoff_zipcode),
+        alt_pickup_address: sanitizeInput(rideForm.alt_pickup_address),
+        alt_pickup_address2: sanitizeInput(rideForm.alt_pickup_address2),
+        alt_pickup_city: sanitizeInput(rideForm.alt_pickup_city),
+        alt_pickup_state: sanitizeInput(rideForm.alt_pickup_state),
+        alt_pickup_zipcode: sanitizeInput(rideForm.alt_pickup_zipcode),
+        notes: sanitizeInput(rideForm.notes)
+      };
+      
       const response = await fetch('/dispatcher/rides/create', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(rideForm)
+        body: JSON.stringify(sanitizedForm)
       });
 
       if (response.ok) {
@@ -294,25 +345,71 @@
   }
 
   async function updateRide() {
+    // Validate all fields using the same validation as create
+    const validations = combineValidations(
+      validateRequired(rideForm.client_id, 'Client'),
+      validateRequired(rideForm.purpose, 'Purpose'),
+      validateRequired(rideForm.destination_name, 'Destination name'),
+      validateText(rideForm.destination_name, 'Destination name', 200, true),
+      validateAddress(rideForm.dropoff_address, 'Dropoff address'),
+      validateCity(rideForm.dropoff_city),
+      validateState(rideForm.dropoff_state),
+      validateZipCode(rideForm.dropoff_zipcode),
+      validateDateTime(rideForm.appointment_time, 'Appointment time'),
+      // Validate alternative pickup address if provided
+      rideForm.alt_pickup_address ? validateAddress(rideForm.alt_pickup_address, 'Alternative pickup address') : { valid: true, errors: [] },
+      rideForm.alt_pickup_city ? validateCity(rideForm.alt_pickup_city) : { valid: true, errors: [] },
+      rideForm.alt_pickup_state ? validateState(rideForm.alt_pickup_state) : { valid: true, errors: [] },
+      rideForm.alt_pickup_zipcode ? validateZipCode(rideForm.alt_pickup_zipcode) : { valid: true, errors: [] },
+      rideForm.notes ? validateText(rideForm.notes, 'Notes', 500, false) : { valid: true, errors: [] }
+    );
+
+    if (!validations.valid) {
+      alert('Please fix the following errors:\n• ' + validations.errors.join('\n• '));
+      return;
+    }
+
     isUpdating = true;
     try {
+      // Sanitize all text inputs before sending
+      const sanitizedForm = {
+        ...rideForm,
+        destination_name: sanitizeInput(rideForm.destination_name),
+        dropoff_address: sanitizeInput(rideForm.dropoff_address),
+        dropoff_address2: sanitizeInput(rideForm.dropoff_address2),
+        dropoff_city: sanitizeInput(rideForm.dropoff_city),
+        dropoff_state: sanitizeInput(rideForm.dropoff_state),
+        dropoff_zipcode: sanitizeInput(rideForm.dropoff_zipcode),
+        alt_pickup_address: sanitizeInput(rideForm.alt_pickup_address),
+        alt_pickup_address2: sanitizeInput(rideForm.alt_pickup_address2),
+        alt_pickup_city: sanitizeInput(rideForm.alt_pickup_city),
+        alt_pickup_state: sanitizeInput(rideForm.alt_pickup_state),
+        alt_pickup_zipcode: sanitizeInput(rideForm.alt_pickup_zipcode),
+        notes: sanitizeInput(rideForm.notes),
+        miles_driven: rideForm.miles_driven ? parseFloat(rideForm.miles_driven) : null,
+        hours: rideForm.hours ? parseFloat(rideForm.hours) : null
+      };
+      
       const response = await fetch(`/dispatcher/rides/update/${selectedRide.ride_id}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(rideForm)
+        body: JSON.stringify(sanitizedForm)
       });
 
       if (response.ok) {
         showEditModal = false;
         selectedRide = null;
         await invalidateAll();
+        alert('Ride updated successfully!');
       } else {
-        console.error('Failed to update ride');
+        const error = await response.json();
+        alert(`Failed to update ride: ${error.error || 'Unknown error'}`);
       }
     } catch (error) {
       console.error('Error updating ride:', error);
+      alert('Error updating ride. Please try again.');
     } finally {
       isUpdating = false;
     }
@@ -768,6 +865,7 @@
             id="dropoff_city" 
             type="text"
             bind:value={rideForm.dropoff_city}
+            placeholder="e.g., Rochester"
             class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
           />
         </div>
@@ -777,6 +875,7 @@
             id="dropoff_state" 
             type="text"
             bind:value={rideForm.dropoff_state}
+            placeholder="e.g., NY"
             class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
           />
         </div>
@@ -786,6 +885,7 @@
             id="dropoff_zipcode" 
             type="text"
             bind:value={rideForm.dropoff_zipcode}
+            placeholder="e.g., 14620"
             class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
           />
         </div>
@@ -802,28 +902,28 @@
       </div>
       
       <div class="flex items-center space-x-2">
-        <input type="checkbox" id="pickup_from_home" bind:checked={rideForm.pickup_from_home} />
+        <input type="checkbox" id="pickup_from_home" bind:checked={rideForm.pickup_from_home} onchange={handlePickupHomeChange} />
         <Label for="pickup_from_home">Pickup from client's home</Label>
       </div>
       
       {#if !rideForm.pickup_from_home}
         <div>
           <Label for="alt_pickup_address">Alternative Pickup Address</Label>
-          <Input id="alt_pickup_address" bind:value={rideForm.alt_pickup_address} />
+          <Input id="alt_pickup_address" bind:value={rideForm.alt_pickup_address} placeholder="Street address" />
         </div>
         
         <div class="grid grid-cols-3 gap-4">
           <div>
             <Label for="alt_pickup_city">City</Label>
-            <Input id="alt_pickup_city" bind:value={rideForm.alt_pickup_city} />
+            <Input id="alt_pickup_city" bind:value={rideForm.alt_pickup_city} placeholder="e.g., Rochester" />
           </div>
           <div>
             <Label for="alt_pickup_state">State</Label>
-            <Input id="alt_pickup_state" bind:value={rideForm.alt_pickup_state} />
+            <Input id="alt_pickup_state" bind:value={rideForm.alt_pickup_state} placeholder="e.g., NY" />
           </div>
           <div>
             <Label for="alt_pickup_zipcode">ZIP Code</Label>
-            <Input id="alt_pickup_zipcode" bind:value={rideForm.alt_pickup_zipcode} />
+            <Input id="alt_pickup_zipcode" bind:value={rideForm.alt_pickup_zipcode} placeholder="e.g., 14620" />
           </div>
         </div>
       {/if}
@@ -831,7 +931,7 @@
       <div class="grid grid-cols-2 gap-4">
         <div>
           <Label for="riders">Number of Passengers</Label>
-          <Input id="riders" type="number" min="1" bind:value={rideForm.riders} />
+          <Input id="riders" type="number" min="1" bind:value={rideForm.riders} placeholder="e.g., 2" />
         </div>
         
         <div>
@@ -920,26 +1020,26 @@
       
       <div>
         <Label for="edit_destination_name">Destination Name</Label>
-        <Input id="edit_destination_name" bind:value={rideForm.destination_name} />
+        <Input id="edit_destination_name" bind:value={rideForm.destination_name} placeholder="e.g., Strong Memorial Hospital" />
       </div>
       
       <div>
         <Label for="edit_dropoff_address">Dropoff Address</Label>
-        <Input id="edit_dropoff_address" bind:value={rideForm.dropoff_address} />
+        <Input id="edit_dropoff_address" bind:value={rideForm.dropoff_address} placeholder="Street address" />
       </div>
       
       <div class="grid grid-cols-3 gap-4">
         <div>
           <Label for="edit_dropoff_city">City</Label>
-          <Input id="edit_dropoff_city" bind:value={rideForm.dropoff_city} />
+          <Input id="edit_dropoff_city" bind:value={rideForm.dropoff_city} placeholder="e.g., Rochester" />
         </div>
         <div>
           <Label for="edit_dropoff_state">State</Label>
-          <Input id="edit_dropoff_state" bind:value={rideForm.dropoff_state} />
+          <Input id="edit_dropoff_state" bind:value={rideForm.dropoff_state} placeholder="e.g., NY" />
         </div>
         <div>
           <Label for="edit_dropoff_zipcode">ZIP Code</Label>
-          <Input id="edit_dropoff_zipcode" bind:value={rideForm.dropoff_zipcode} />
+          <Input id="edit_dropoff_zipcode" bind:value={rideForm.dropoff_zipcode} placeholder="e.g., 14620" />
         </div>
       </div>
       
@@ -956,21 +1056,21 @@
       {#if !rideForm.pickup_from_home}
         <div>
           <Label for="edit_alt_pickup_address">Alternative Pickup Address</Label>
-          <Input id="edit_alt_pickup_address" bind:value={rideForm.alt_pickup_address} />
+          <Input id="edit_alt_pickup_address" bind:value={rideForm.alt_pickup_address} placeholder="Street address" />
         </div>
         
         <div class="grid grid-cols-3 gap-4">
           <div>
             <Label for="edit_alt_pickup_city">City</Label>
-            <Input id="edit_alt_pickup_city" bind:value={rideForm.alt_pickup_city} />
+            <Input id="edit_alt_pickup_city" bind:value={rideForm.alt_pickup_city} placeholder="e.g., Rochester" />
           </div>
           <div>
             <Label for="edit_alt_pickup_state">State</Label>
-            <Input id="edit_alt_pickup_state" bind:value={rideForm.alt_pickup_state} />
+            <Input id="edit_alt_pickup_state" bind:value={rideForm.alt_pickup_state} placeholder="e.g., NY" />
           </div>
           <div>
             <Label for="edit_alt_pickup_zipcode">ZIP Code</Label>
-            <Input id="edit_alt_pickup_zipcode" bind:value={rideForm.alt_pickup_zipcode} />
+            <Input id="edit_alt_pickup_zipcode" bind:value={rideForm.alt_pickup_zipcode} placeholder="e.g., 14620" />
           </div>
         </div>
       {/if}
@@ -978,12 +1078,12 @@
       <div class="grid grid-cols-2 gap-4">
         <div>
           <Label for="edit_riders">Number of Passengers</Label>
-          <Input id="edit_riders" type="number" min="1" bind:value={rideForm.riders} />
+          <Input id="edit_riders" type="number" min="1" bind:value={rideForm.riders} placeholder="e.g., 2" />
         </div>
         
         <div>
           <Label for="edit_estimated_appointment_length">Estimated Duration</Label>
-          <Input id="edit_estimated_appointment_length" bind:value={rideForm.estimated_appointment_length} />
+          <Input id="edit_estimated_appointment_length" bind:value={rideForm.estimated_appointment_length} placeholder="e.g., 2 hours" />
         </div>
       </div>
       
@@ -996,6 +1096,37 @@
         <input type="checkbox" id="edit_donation" bind:checked={rideForm.donation} />
         <Label for="edit_donation">Donation ride</Label>
       </div>
+      
+      <!-- Ride Completion Data (for completed rides) -->
+      {#if rideForm.status === 'Completed'}
+        <div class="border-t border-gray-200 pt-4 mt-4">
+          <h3 class="text-lg font-semibold mb-4">Ride Completion Details</h3>
+          
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <Label for="edit_miles_driven">Miles Driven</Label>
+              <Input 
+                id="edit_miles_driven" 
+                type="number" 
+                step="0.1" 
+                bind:value={rideForm.miles_driven} 
+                placeholder="0.0"
+              />
+            </div>
+            
+            <div>
+              <Label for="edit_hours">Hours</Label>
+              <Input 
+                id="edit_hours" 
+                type="number" 
+                step="0.1" 
+                bind:value={rideForm.hours} 
+                placeholder="0.0"
+              />
+            </div>
+          </div>
+        </div>
+      {/if}
       
       <div>
         <Label for="edit_notes">Notes</Label>
