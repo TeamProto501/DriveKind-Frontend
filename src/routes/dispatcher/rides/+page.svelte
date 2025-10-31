@@ -387,8 +387,17 @@
     isUpdating = true;
     try {
       // Sanitize all text inputs before sending
+      // Ensure status is always a string - handle array case from Select component
+      const statusValue = typeof rideForm.status === 'string' 
+        ? rideForm.status 
+        : Array.isArray(rideForm.status) 
+          ? rideForm.status[0] || ''
+          : String(rideForm.status || '');
+      
       const sanitizedForm = {
         ...rideForm,
+        // Force status to be a valid string value
+        status: statusValue,
         destination_name: sanitizeInput(rideForm.destination_name),
         dropoff_address: sanitizeInput(rideForm.dropoff_address),
         dropoff_address2: sanitizeInput(rideForm.dropoff_address2),
