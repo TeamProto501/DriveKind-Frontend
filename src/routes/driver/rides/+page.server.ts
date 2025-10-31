@@ -6,10 +6,10 @@ export const load: PageServerLoad = async (event) => {
 	const supabase = createSupabaseServerClient(event);
 	
 	try {
-		// Get the current user
-		const { data: { user }, error: userError } = await supabase.auth.getUser();
+		// Get the session
+		const { data: { session }, error: sessionError } = await supabase.auth.getSession();
 		
-		if (userError || !user) {
+		if (sessionError || !session) {
 			throw redirect(302, '/login');
 		}
 
@@ -17,12 +17,13 @@ export const load: PageServerLoad = async (event) => {
 		const { data: profile, error: profileError } = await supabase
 			.from('staff_profiles')
 			.select('user_id, org_id, first_name, last_name, role')
-			.eq('user_id', user.id)
+			.eq('user_id', session.user.id)
 			.single();
 
 		if (profileError || !profile) {
 			console.error('Profile error:', profileError);
 			return {
+				session,
 				rides: [],
 				completedRidesData: {},
 				profile: null,
@@ -37,6 +38,7 @@ export const load: PageServerLoad = async (event) => {
 
 		if (!hasDriverRole) {
 			return {
+				session,
 				rides: [],
 				completedRidesData: {},
 				profile,
@@ -44,7 +46,7 @@ export const load: PageServerLoad = async (event) => {
 			};
 		}
 
-		// Get ALL rides assigned to this driver (no status filter - let frontend handle it)
+		// Get ALL rides assigned to this driver
 		const { data: rides, error: ridesError } = await supabase
 			.from('rides')
 			.select(`
@@ -84,13 +86,14 @@ export const load: PageServerLoad = async (event) => {
 					primary_phone
 				)
 			`)
-			.eq('driver_user_id', user.id)
+			.eq('driver_user_id', session.user.id)
 			.order('appointment_time', { ascending: true });
 
 		if (ridesError) {
 			console.error('Error loading rides:', ridesError);
 			console.error('Rides error details:', JSON.stringify(ridesError, null, 2));
 			return {
+				session,
 				rides: [],
 				completedRidesData: {},
 				profile,
@@ -98,9 +101,9 @@ export const load: PageServerLoad = async (event) => {
 			};
 		}
 
-		console.log(`Loaded ${rides?.length || 0} rides for driver ${user.id}`);
+		console.log(`Loaded ${rides?.length || 0} rides for driver ${session.user.id}`);
 
-		// Get completed rides data if any rides are completed, reported, or cancelled
+		// Get completed rides data
 		const completedRideIds = rides?.filter(ride => 
 			ride.status === 'Completed' || ride.status === 'Reported' || ride.status === 'Cancelled'
 		).map(ride => ride.ride_id) || [];
@@ -126,6 +129,7 @@ export const load: PageServerLoad = async (event) => {
 		}
 
 		return {
+			session, // ← MAKE SURE THIS IS HERE!
 			rides: rides || [],
 			completedRidesData,
 			profile,
@@ -138,6 +142,7 @@ export const load: PageServerLoad = async (event) => {
 			throw error; // Re-throw redirects
 		}
 		return {
+			session: null,
 			rides: [],
 			completedRidesData: {},
 			profile: null,
