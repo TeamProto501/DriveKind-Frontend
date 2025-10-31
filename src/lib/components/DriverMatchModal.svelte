@@ -4,6 +4,7 @@
   let { 
     show = $bindable(false),
     ride,
+    token, // Add token prop
     onSelectDriver,
     isLoading = false
   } = $props();
@@ -60,9 +61,15 @@
   });
 
   async function fetchMatchedDrivers() {
+    if (!token) {
+      console.error('No authentication token available');
+      return;
+    }
+
     isMatching = true;
     try {
-      const token = sessionStorage.getItem('session_token'); // You'll need to store this
+      console.log('Fetching matched drivers for ride:', ride.ride_id);
+      
       const response = await fetch(`${import.meta.env.VITE_API_URL}/rides/${ride.ride_id}/match-drivers`, {
         method: 'POST',
         headers: {
@@ -71,14 +78,20 @@
         }
       });
 
+      console.log('Match drivers response status:', response.status);
+
       if (response.ok) {
         const data = await response.json();
+        console.log('Matched drivers:', data);
         matchedDrivers = data;
       } else {
-        console.error('Failed to fetch matched drivers');
+        const errorText = await response.text();
+        console.error('Failed to fetch matched drivers:', response.status, errorText);
+        alert('Failed to load drivers. Please try again.');
       }
     } catch (error) {
       console.error('Error fetching matched drivers:', error);
+      alert('Error loading drivers. Please check your connection and try again.');
     } finally {
       isMatching = false;
     }

@@ -172,23 +172,32 @@
 
   // Add accept/decline functions
   async function acceptRide(rideId: number) {
+    console.log('Accepting ride:', rideId);
+    console.log('Token available:', !!data.session?.access_token);
+    
+    if (!data.session?.access_token) {
+      alert('Session expired. Please refresh the page and try again.');
+      return;
+    }
+
     isUpdating = true;
     try {
-      const token = data.session?.access_token;
-      
       const response = await fetch(`${import.meta.env.VITE_API_URL}/rides/${rideId}/accept`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          'Authorization': `Bearer ${data.session.access_token}`
         }
       });
+
+      console.log('Accept response status:', response.status);
 
       if (response.ok) {
         await invalidateAll();
         alert('Ride accepted! It now appears in your Scheduled tab.');
       } else {
         const error = await response.json();
+        console.error('Accept error:', error);
         alert(`Failed to accept ride: ${error.error || 'Unknown error'}`);
       }
     } catch (error) {
@@ -202,15 +211,18 @@
   async function declineRide(rideId: number) {
     const reason = prompt('Please provide a reason for declining (optional):');
     
+    if (!data.session?.access_token) {
+      alert('Session expired. Please refresh the page and try again.');
+      return;
+    }
+    
     isUpdating = true;
     try {
-      const token = data.session?.access_token;
-      
       const response = await fetch(`${import.meta.env.VITE_API_URL}/rides/${rideId}/decline`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          'Authorization': `Bearer ${data.session.access_token}`
         },
         body: JSON.stringify({ reason })
       });

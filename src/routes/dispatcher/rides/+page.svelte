@@ -427,6 +427,15 @@
   }
 
   function openDriverMatchModal(ride: any) {
+    console.log('Opening driver match modal for ride:', ride.ride_id);
+    console.log('Session available:', !!data.session);
+    console.log('Token available:', !!data.session?.access_token);
+    
+    if (!data.session?.access_token) {
+      alert('Session expired. Please refresh the page and try again.');
+      return;
+    }
+    
     selectedRideForMatch = ride;
     showDriverMatchModal = true;
   }
@@ -1060,6 +1069,7 @@
 <DriverMatchModal 
   bind:show={showDriverMatchModal}
   ride={selectedRideForMatch}
+  token={data.session?.access_token}
   onSelectDriver={sendRideRequest}
   isLoading={isUpdating}
 />
