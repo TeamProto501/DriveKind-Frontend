@@ -1,16 +1,25 @@
-<!-- src/routes/admin/database/TableViewer.svelte -->
 <script lang="ts">
   import { supabase } from '$lib/supabase';
-  import { Loader2, AlertCircle, Download } from '@lucide/svelte';
+  import { Loader2, AlertCircle, Download, Search, X, Filter, Plus } from '@lucide/svelte';
   import { exportToCSV } from '$lib/utils/csvExport';
   
   let { tableName, orgId }: { tableName: string, orgId: number } = $props();
   
-  let records = $state([]);
+  let allRecords = $state([]); // Store all records
+  let displayedRecords = $state([]); // Records after filtering
   let columns = $state([]);
   let loading = $state(true);
   let error = $state<string | null>(null);
   let exporting = $state(false);
+  
+  // Filter state
+  let filters = $state<Array<{id: number, column: string, value: string}>>([]);
+  let nextFilterId = $state(0);
+  let newFilterColumn = $state('');
+  let newFilterValue = $state('');
+  
+  // Column types for better filtering
+  let columnTypes = $state<Record<string, string>>({});
   
   async function loadTableData() {
     loading = true;
@@ -21,15 +30,23 @@
         .from(tableName)
         .select('*')
         .eq('org_id', orgId)
-        .limit(100);
+        .limit(1000); // Increased limit for better searching
       
       if (fetchError) throw fetchError;
       
       if (data && data.length > 0) {
         columns = Object.keys(data[0]);
-        records = data;
+        allRecords = data;
+        displayedRecords = data;
+        
+        // Detect column types
+        detectColumnTypes(data[0]);
+        
+        // Set default filter column to first non-id column
+        newFilterColumn = columns.find(col => !col.includes('id')) || columns[0];
       } else {
-        records = [];
+        allRecords = [];
+        displayedRecords = [];
         columns = [];
       }
     } catch (err: any) {
@@ -40,20 +57,93 @@
     }
   }
   
+  function detectColumnTypes(sampleRecord: any) {
+    const types: Record<string, string> = {};
+    
+    for (const col in sampleRecord) {
+      const value = sampleRecord[col];
+      
+      if (value === null) {
+        types[col] = 'string';
+      } else if (typeof value === 'boolean') {
+        types[col] = 'boolean';
+      } else if (typeof value === 'number') {
+        types[col] = 'number';
+      } else if (typeof value === 'string') {
+        // Check if it looks like a date
+        if (value.match(/^\d{4}-\d{2}-\d{2}/)) {
+          types[col] = 'date';
+        } else {
+          types[col] = 'string';
+        }
+      } else {
+        types[col] = 'string';
+      }
+    }
+    
+    columnTypes = types;
+  }
+  
+  function addFilter() {
+    if (!newFilterColumn || newFilterValue.trim() === '') return;
+    
+    filters = [...filters, {
+      id: nextFilterId++,
+      column: newFilterColumn,
+      value: newFilterValue.trim()
+    }];
+    
+    newFilterValue = '';
+    applyFilters();
+  }
+  
+  function removeFilter(filterId: number) {
+    filters = filters.filter(f => f.id !== filterId);
+    applyFilters();
+  }
+  
+  function clearAllFilters() {
+    filters = [];
+    newFilterValue = '';
+    displayedRecords = allRecords;
+  }
+  
+  function applyFilters() {
+    if (filters.length === 0) {
+      displayedRecords = allRecords;
+      return;
+    }
+    
+    displayedRecords = allRecords.filter(record => {
+      // Record must match ALL filters (AND logic)
+      return filters.every(filter => {
+        const recordValue = record[filter.column];
+        const filterValue = filter.value.toLowerCase();
+        
+        if (recordValue === null || recordValue === undefined) {
+          return filterValue === 'null' || filterValue === '';
+        }
+        
+        const recordValueStr = String(recordValue).toLowerCase();
+        
+        // Use contains logic for string matching
+        return recordValueStr.includes(filterValue);
+      });
+    });
+  }
+  
   async function handleExport() {
     exporting = true;
     
     try {
-      // Fetch ALL records for export (not just the displayed 100)
-      const { data, error: fetchError } = await supabase
-        .from(tableName)
-        .select('*')
-        .eq('org_id', orgId);
+      // Export the currently displayed (filtered) records
+      const dataToExport = displayedRecords.length > 0 ? displayedRecords : allRecords;
       
-      if (fetchError) throw fetchError;
-      
-      if (data && data.length > 0) {
-        exportToCSV(data, tableName);
+      if (dataToExport.length > 0) {
+        const filename = filters.length > 0 
+          ? `${tableName}_filtered` 
+          : tableName;
+        exportToCSV(dataToExport, filename);
       } else {
         alert('No data to export');
       }
@@ -65,8 +155,30 @@
     }
   }
   
+  function formatCellValue(value: any, columnName: string) {
+    if (value === null || value === undefined) {
+      return { type: 'null', value: null };
+    }
+    
+    const colType = columnTypes[columnName];
+    
+    if (colType === 'boolean') {
+      return { type: 'boolean', value };
+    } else if (colType === 'date' && typeof value === 'string') {
+      return { type: 'date', value };
+    } else {
+      return { type: 'text', value: String(value) };
+    }
+  }
+  
   $effect(() => {
-    if (tableName) loadTableData();
+    if (tableName) {
+      // Reset state when table changes
+      filters = [];
+      nextFilterId = 0;
+      newFilterValue = '';
+      loadTableData();
+    }
   });
 </script>
 
@@ -83,7 +195,7 @@
     <p class="text-red-600 font-medium mb-1">Error loading data</p>
     <p class="text-sm text-gray-600">{error}</p>
   </div>
-{:else if records.length === 0}
+{:else if allRecords.length === 0}
   <div class="text-center py-12">
     <div class="p-3 bg-gray-100 rounded-full inline-block mb-3">
       <AlertCircle class="w-6 h-6 text-gray-400" />
@@ -95,26 +207,105 @@
   </div>
 {:else}
   <div class="space-y-4">
+    <!-- Search & Filter Section -->
+    <div class="bg-gray-50 border border-gray-200 rounded-lg p-4 space-y-4">
+      <div class="flex items-center gap-2 text-sm font-medium text-gray-700">
+        <Filter class="w-4 h-4" />
+        <span>Search & Filter</span>
+      </div>
+      
+      <!-- Add Filter Form -->
+      <div class="flex gap-2">
+        <select
+          bind:value={newFilterColumn}
+          class="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+        >
+          {#each columns as col}
+            <option value={col}>{col}</option>
+          {/each}
+        </select>
+        
+        <div class="flex-1 relative">
+          <Search class="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <input
+            type="text"
+            bind:value={newFilterValue}
+            onkeydown={(e) => e.key === 'Enter' && addFilter()}
+            placeholder="Enter search value..."
+            class="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+          />
+        </div>
+        
+        <button
+          onclick={addFilter}
+          disabled={!newFilterValue.trim()}
+          class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 text-sm font-medium"
+        >
+          <Plus class="w-4 h-4" />
+          Add Filter
+        </button>
+      </div>
+      
+      <!-- Active Filters -->
+      {#if filters.length > 0}
+        <div class="space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-medium text-gray-600 uppercase">Active Filters:</span>
+            <button
+              onclick={clearAllFilters}
+              class="text-xs text-red-600 hover:text-red-700 font-medium"
+            >
+              Clear All
+            </button>
+          </div>
+          
+          <div class="flex flex-wrap gap-2">
+            {#each filters as filter}
+              <div class="inline-flex items-center gap-2 px-3 py-1.5 bg-blue-100 text-blue-800 rounded-full text-sm">
+                <span class="font-medium">{filter.column}:</span>
+                <span>"{filter.value}"</span>
+                <button
+                  onclick={() => removeFilter(filter.id)}
+                  class="hover:bg-blue-200 rounded-full p-0.5 transition-colors"
+                >
+                  <X class="w-3 h-3" />
+                </button>
+              </div>
+            {/each}
+          </div>
+        </div>
+      {/if}
+    </div>
+    
+    <!-- Results Info & Export -->
     <div class="flex items-center justify-between">
-      <p class="text-sm text-gray-600">
-        Showing <span class="font-medium text-gray-900">{records.length}</span> records
-      </p>
+      <div class="text-sm text-gray-600">
+        Showing <span class="font-medium text-gray-900">{displayedRecords.length}</span> 
+        {#if filters.length > 0}
+          of <span class="font-medium text-gray-900">{allRecords.length}</span>
+        {/if}
+        records
+        {#if filters.length > 0}
+          <span class="text-blue-600">(filtered)</span>
+        {/if}
+      </div>
       
       <button
         onclick={handleExport}
         disabled={exporting}
-        class="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        class="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
       >
         {#if exporting}
           <Loader2 class="w-4 h-4 animate-spin" />
           Exporting...
         {:else}
           <Download class="w-4 h-4" />
-          Export to CSV
+          Export {filters.length > 0 ? 'Filtered' : 'All'} to CSV
         {/if}
       </button>
     </div>
     
+    <!-- Table -->
     <div class="overflow-x-auto border border-gray-200 rounded-lg">
       <table class="min-w-full divide-y divide-gray-200">
         <thead class="bg-gray-50">
@@ -127,25 +318,52 @@
           </tr>
         </thead>
         <tbody class="bg-white divide-y divide-gray-200">
-          {#each records as record}
-            <tr class="hover:bg-gray-50 transition-colors">
-              {#each columns as col}
-                <td class="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">
-                  {#if record[col] === null}
-                    <span class="text-gray-400 italic">null</span>
-                  {:else if typeof record[col] === 'boolean'}
-                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium {record[col] ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}">
-                      {record[col] ? 'Yes' : 'No'}
-                    </span>
-                  {:else}
-                    {record[col]}
-                  {/if}
-                </td>
-              {/each}
+          {#if displayedRecords.length === 0}
+            <tr>
+              <td colspan={columns.length} class="px-4 py-8 text-center text-gray-500">
+                <div class="flex flex-col items-center gap-2">
+                  <Search class="w-8 h-8 text-gray-300" />
+                  <p class="font-medium">No records match your filters</p>
+                  <button
+                    onclick={clearAllFilters}
+                    class="text-sm text-blue-600 hover:text-blue-700 font-medium"
+                  >
+                    Clear filters to see all records
+                  </button>
+                </div>
+              </td>
             </tr>
-          {/each}
+          {:else}
+            {#each displayedRecords as record}
+              <tr class="hover:bg-gray-50 transition-colors">
+                {#each columns as col}
+                  {@const cellData = formatCellValue(record[col], col)}
+                  <td class="px-4 py-3 text-sm whitespace-nowrap">
+                    {#if cellData.type === 'null'}
+                      <span class="text-gray-400 italic">null</span>
+                    {:else if cellData.type === 'boolean'}
+                      <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium {cellData.value ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}">
+                        {cellData.value ? 'Yes' : 'No'}
+                      </span>
+                    {:else if cellData.type === 'date'}
+                      <span class="text-gray-900">{new Date(cellData.value).toLocaleDateString()}</span>
+                    {:else}
+                      <span class="text-gray-900">{cellData.value}</span>
+                    {/if}
+                  </td>
+                {/each}
+              </tr>
+            {/each}
+          {/if}
         </tbody>
       </table>
     </div>
+    
+    <!-- Pagination hint -->
+    {#if allRecords.length >= 1000}
+      <div class="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg p-3">
+        ⚠️ Showing first 1,000 records. Use filters to narrow down results for better performance.
+      </div>
+    {/if}
   </div>
 {/if}
