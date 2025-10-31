@@ -2,16 +2,16 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { createSupabaseServerClient } from '$lib/supabase.server';
 
-export const POST: RequestHandler = async ({ request, cookies }) => {
+export const POST: RequestHandler = async (event) => {
 	try {
-		const { rideId, miles_driven, hours, riders, donation, notes, start_time, end_time, status } = await request.json();
+		const { rideId, miles_driven, hours, riders, donation, notes, start_time, end_time, status } = await event.request.json();
 
 		if (!rideId || !status) {
 			return json({ error: 'Missing required fields' }, { status: 400 });
 		}
 
 		// Create Supabase client
-		const supabase = createSupabaseServerClient({ cookies });
+		const supabase = createSupabaseServerClient(event);
 
 		// Get the current user
 		const { data: { user }, error: userError } = await supabase.auth.getUser();
