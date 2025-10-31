@@ -758,7 +758,7 @@
                     <CheckCircle class="w-4 h-4" />
                     Confirm Complete
                   </button>
-                {/if}
+              {/if}
                 
                 <button 
                   onclick={() => openEditModal(ride)}
@@ -768,13 +768,13 @@
                   <Edit class="w-4 h-4" />
                   Edit
                 </button>
-              </div>
+            </div>
             </div>
           </div>
-        {/each}
-      </div>
+    {/each}
+  </div>
 
-      {#if filteredRides().length === 0}
+  {#if filteredRides().length === 0}
         <div class="p-12 text-center">
           <Car class="w-12 h-12 mx-auto text-gray-400 mb-4" />
           <h3 class="text-lg font-semibold text-gray-900 mb-2">No rides found</h3>
@@ -1030,7 +1030,7 @@
           <Label for="edit_status">Ride Status</Label>
           <Select bind:value={rideForm.status}>
             <SelectTrigger>
-              <span>Select status</span>
+              <span>{rideForm.status || 'Select status'}</span>
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="Requested">Requested</SelectItem>
@@ -1047,7 +1047,7 @@
         <Label for="edit_purpose">Purpose (Ride Type)</Label>
         <Select bind:value={rideForm.purpose}>
           <SelectTrigger>
-            <span>Select purpose</span>
+            <span>{rideForm.purpose || 'Select purpose'}</span>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="Medical">Medical</SelectItem>
