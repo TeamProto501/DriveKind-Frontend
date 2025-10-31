@@ -152,7 +152,7 @@
         collapsible: true,
         items: [
           { label: "My Rides", href: "/driver/rides" },
-          { label: "My Schedule", href: "/driver/schedule?tab=myRides" },
+          { label: "My Schedule", href: "/calendar?tab=myRides" },
           { label: "Unavailability", href: "/driver/unavail" },
         ],
       });
