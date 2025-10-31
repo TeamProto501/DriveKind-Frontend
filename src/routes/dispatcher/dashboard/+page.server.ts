@@ -44,7 +44,7 @@ export const load: PageServerLoad = async (event) => {
 			};
 		}
 
-		// Get recent ride requests for the organization (limit to most recent 10, ordered by creation)
+		// Get only "Requested" rides for the organization (matching the Requested tab in ride management)
 		const { data: rides, error: ridesError } = await supabase
 			.from('rides')
 			.select(`
@@ -61,6 +61,7 @@ export const load: PageServerLoad = async (event) => {
 				alt_pickup_state,
 				dropoff_city,
 				dropoff_state,
+				notes,
 				clients:client_id (
 					first_name,
 					last_name,
@@ -72,8 +73,8 @@ export const load: PageServerLoad = async (event) => {
 				)
 			`)
 			.eq('org_id', profile.org_id)
-			.order('appointment_time', { ascending: true })
-			.limit(10);
+			.eq('status', 'Requested')
+			.order('appointment_time', { ascending: true });
 
 		if (ridesError) {
 			console.error('Error loading rides:', ridesError);

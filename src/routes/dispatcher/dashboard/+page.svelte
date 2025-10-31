@@ -16,13 +16,19 @@
 		Filter,
 		ArrowRight,
 		Phone,
-		User
+		User,
+		Edit,
+		UserCheck
 	} from '@lucide/svelte';
+	import DriverMatchModal from '$lib/components/DriverMatchModal.svelte';
+	import { invalidateAll } from '$app/navigation';
 	
 	let { data }: { data: PageData } = $props();
 	
-	// Filter to show only recent rides (most recent 10 already limited by server)
-	const recentRides = $derived((data.rides || []).slice(0, 10));
+	// Filter to show only requested rides (already filtered by server)
+	const requestedRides = $derived(data.rides || []);
+	
+	let isUpdating = $state(false);
 	
 	// Get status badge color
 	function getStatusColor(status: string) {
@@ -65,6 +71,23 @@
 	function formatTime(timestamp: string) {
 		if (!timestamp) return 'N/A';
 		return new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+	}
+	
+	function getClientPhone(ride: any) {
+		return ride.clients?.primary_phone || 'No phone';
+	}
+	
+	let showDriverMatchModal = $state(false);
+	let selectedRideForMatch = $state(null);
+	
+	function openDriverMatchModal(ride: any) {
+		selectedRideForMatch = ride;
+		showDriverMatchModal = true;
+	}
+	
+	function openEditModal(ride: any) {
+		// Navigate to rides page with the ride ID to edit
+		goto(`/dispatcher/rides`);
 	}
 </script>
 
@@ -169,113 +192,84 @@
 					</div>
 				</div>
 				
-				<!-- Ride Requests Table -->
-				{#if recentRides.length > 0}
-					<div class="overflow-x-auto">
-						<table class="min-w-full divide-y divide-gray-200">
-							<thead class="bg-gray-50">
-								<tr>
-									<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-										Client
-									</th>
-									<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-										Pickup
-									</th>
-									<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-										Destination
-									</th>
-									<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-										Appointment Time
-									</th>
-									<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-										Status
-									</th>
-									<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-										Driver
-									</th>
-								</tr>
-							</thead>
-							<tbody class="bg-white divide-y divide-gray-200">
-								{#each recentRides as ride}
-									<tr class="hover:bg-gray-50 cursor-pointer" onclick={() => goto('/dispatcher/rides')}>
-										<td class="px-6 py-4 whitespace-nowrap">
-											<div class="flex items-center">
-												<User class="w-4 h-4 text-gray-400 mr-2" />
-												<div>
-													<div class="text-sm font-medium text-gray-900">{getClientName(ride)}</div>
-													{#if ride.clients?.primary_phone}
-														<div class="text-xs text-gray-500 flex items-center">
-															<Phone class="w-3 h-3 mr-1" />
-															{ride.clients.primary_phone}
-														</div>
-													{/if}
-												</div>
-											</div>
-										</td>
-										<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-											<div class="flex items-center">
-												<MapPin class="w-4 h-4 text-gray-400 mr-2" />
-												<div>
-													<div>{ride.alt_pickup_address || 'N/A'}</div>
-													{#if ride.alt_pickup_city}
-														<div class="text-xs text-gray-400">
-															{ride.alt_pickup_city}{ride.alt_pickup_state ? `, ${ride.alt_pickup_state}` : ''}
-														</div>
-													{/if}
-												</div>
-											</div>
-										</td>
-										<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-											<div class="flex items-center">
-												<MapPin class="w-4 h-4 text-gray-400 mr-2" />
-												<div>
-													<div class="font-medium">{ride.destination_name || 'N/A'}</div>
-													{#if ride.dropoff_address}
-														<div class="text-xs text-gray-400">
-															{ride.dropoff_address}
-															{#if ride.dropoff_city}
-																, {ride.dropoff_city}{ride.dropoff_state ? `, ${ride.dropoff_state}` : ''}
-															{/if}
-														</div>
-													{/if}
-												</div>
-											</div>
-										</td>
-										<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-											<div class="flex items-center">
-												<Clock class="w-4 h-4 text-gray-400 mr-2" />
-												<div>
-													<div>{formatDate(ride.appointment_time)}</div>
-													<div class="text-xs text-gray-400">{formatTime(ride.appointment_time)}</div>
-												</div>
-											</div>
-										</td>
-										<td class="px-6 py-4 whitespace-nowrap">
-											<span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full {getStatusColor(ride.status)}">
-												{ride.status}
+				<!-- Ride Requests List (Same format as Ride Management Requested tab) -->
+				{#if requestedRides.length > 0}
+					<div class="divide-y divide-gray-200">
+						{#each requestedRides as ride}
+							<div class="p-6 hover:bg-gray-50 transition-colors">
+								<div class="flex items-start justify-between">
+									<div class="space-y-3 flex-1">
+										<div class="flex items-center gap-3">
+											<h3 class="text-lg font-semibold text-gray-900">{getClientName(ride)}</h3>
+											<span class="px-2 py-1 text-xs font-medium rounded-full {getStatusColor(ride.status)}">
+												{ride.status.toUpperCase()}
 											</span>
-										</td>
-										<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-											{getDriverName(ride)}
-										</td>
-									</tr>
-								{/each}
-							</tbody>
-						</table>
+											{#if ride.purpose}
+												<span class="px-2 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-800">
+													{ride.purpose}
+												</span>
+											{/if}
+										</div>
+										
+										<div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-600">
+											<div class="flex items-center gap-2">
+												<Phone class="w-4 h-4 text-gray-400" />
+												{getClientPhone(ride)}
+											</div>
+											<div class="flex items-center gap-2">
+												<Calendar class="w-4 h-4 text-gray-400" />
+												{formatDate(ride.appointment_time)} at {formatTime(ride.appointment_time)}
+											</div>
+											<div class="flex items-center gap-2">
+												<User class="w-4 h-4 text-gray-400" />
+												Driver: {getDriverName(ride)}
+											</div>
+											<div class="flex items-center gap-2">
+												<MapPin class="w-4 h-4 text-gray-400" />
+												Destination: {ride.destination_name}
+											</div>
+										</div>
+										
+										{#if ride.notes}
+											<div class="text-sm">
+												<span class="font-medium">Notes:</span> {ride.notes}
+											</div>
+										{/if}
+									</div>
+									
+									<div class="flex gap-2 ml-4">
+										{#if ride.status === "Requested"}
+											<button 
+												onclick={() => openDriverMatchModal(ride)}
+												disabled={isUpdating}
+												class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-sm flex items-center gap-1 transition-colors disabled:opacity-50"
+											>
+												<UserCheck class="w-4 h-4" />
+												Send Request
+											</button>
+										{/if}
+										
+										<button 
+											onclick={() => openEditModal(ride)}
+											disabled={isUpdating}
+											class="bg-gray-600 hover:bg-gray-700 text-white px-3 py-1.5 rounded-lg text-sm flex items-center gap-1 transition-colors disabled:opacity-50"
+										>
+											<Edit class="w-4 h-4" />
+											Edit
+										</button>
+									</div>
+								</div>
+							</div>
+						{/each}
 					</div>
 				{:else}
-					<!-- Empty State with Link to Rides Page -->
-					<div class="px-6 py-12 text-center">
-						<Car class="w-12 h-12 text-gray-400 mx-auto mb-4" />
-						<h3 class="text-lg font-medium text-gray-900 mb-2">No Ride Requests</h3>
-						<p class="text-sm text-gray-500 mb-6">View and manage all ride requests in the rides page.</p>
-						<button 
-							onclick={() => goto('/dispatcher/rides')}
-							class="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors duration-200"
-						>
-							<Car class="w-4 h-4 mr-2" />
-							Go to Rides Page
-						</button>
+					<!-- Empty State -->
+					<div class="p-12 text-center">
+						<Car class="w-12 h-12 mx-auto text-gray-400 mb-4" />
+						<h3 class="text-lg font-semibold text-gray-900 mb-2">No rides found</h3>
+						<p class="text-gray-600">
+							No requested rides at this time.
+						</p>
 					</div>
 				{/if}
 			</div>
@@ -327,3 +321,13 @@
 		</div>
 	</div>
 </RoleGuard>
+
+<DriverMatchModal 
+	bind:show={showDriverMatchModal}
+	ride={selectedRideForMatch}
+	onClose={() => {
+		showDriverMatchModal = false;
+		selectedRideForMatch = null;
+		invalidateAll();
+	}}
+/>
