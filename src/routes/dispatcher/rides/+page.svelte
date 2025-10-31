@@ -1014,7 +1014,17 @@
           <Label for="edit_client_id">Client</Label>
           <Select bind:value={rideForm.client_id}>
             <SelectTrigger>
-              <span>Select client</span>
+              <span>
+                {#if rideForm.client_id}
+                  {#each data.clients as client}
+                    {#if client.client_id.toString() === rideForm.client_id}
+                      {client.first_name} {client.last_name}
+                    {/if}
+                  {/each}
+                {:else}
+                  Select client
+                {/if}
+              </span>
             </SelectTrigger>
             <SelectContent>
               {#each data.clients as client}
