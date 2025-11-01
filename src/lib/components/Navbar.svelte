@@ -154,6 +154,7 @@
           { label: "My Rides", href: "/driver/rides" },
           { label: "My Schedule", href: "/calendar?tab=myRides" },
           { label: "Unavailability", href: "/driver/unavail" },
+          { label: "My Vehicles", href: "/driver/vehicles" }
         ],
       });
     }
