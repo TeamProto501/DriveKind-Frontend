@@ -291,16 +291,6 @@
       <h1 class="text-3xl font-bold tracking-tight">My Rides</h1>
       <p class="text-muted-foreground">View and manage your assigned rides</p>
     </div>
-    <div class="flex gap-2">
-      <Button variant="outline">
-        <Navigation class="w-4 h-4 mr-2" />
-        Navigation
-      </Button>
-      <Button>
-        <Car class="w-4 h-4 mr-2" />
-        Go Online
-      </Button>
-    </div>
   </div>
 
   <!-- Error Message -->
