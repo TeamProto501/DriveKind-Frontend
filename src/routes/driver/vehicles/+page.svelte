@@ -154,10 +154,11 @@
 	let isSaving = $state(false);
 	let isDeleting = $state(false);
 
+	// Keep seats as number | '' (string when input empty), then coerce.
 	let addForm = $state({
 		type_of_vehicle_enum: '' as '' | Vehicle['type_of_vehicle_enum'],
 		vehicle_color: '',
-		nondriver_seats: ''
+		nondriver_seats: '' as number | ''
 	});
 	let addErrors = $state<{ type?: string; color?: string; seats?: string }>({});
 
@@ -165,7 +166,7 @@
 		vehicle_id: 0,
 		type_of_vehicle_enum: '' as '' | Vehicle['type_of_vehicle_enum'],
 		vehicle_color: '',
-		nondriver_seats: ''
+		nondriver_seats: '' as number | ''
 	});
 	let editErrors = $state<{ type?: string; color?: string; seats?: string }>({});
 
@@ -182,7 +183,7 @@
 			vehicle_id: v.vehicle_id,
 			type_of_vehicle_enum: (v.type_of_vehicle_enum ?? '') as any,
 			vehicle_color: v.vehicle_color ?? '',
-			nondriver_seats: v.nondriver_seats == null ? '' : String(v.nondriver_seats)
+			nondriver_seats: v.nondriver_seats == null ? '' : v.nondriver_seats
 		};
 		editErrors = {};
 		showEditModal = true;
@@ -192,9 +193,17 @@
 	function openDelete(v: Vehicle) { toDelete = v; showDeleteModal = true; }
 	function closeDelete() { showDeleteModal = false; toDelete = null; }
 
-	function parseIntOrNull(x: string) {
-		if (x == null || String(x).trim() === '') return null;
-		const n = Number(x);
+	// tolerant seats coercion for number | '' | string
+	function seatsValueToInt(v: unknown): number | null {
+		if (v === null || v === undefined) return null;
+		if (v === '') return null;
+		if (typeof v === 'number') {
+			if (!Number.isFinite(v)) return null;
+			return Math.trunc(v);
+		}
+		const s = String(v).trim();
+		if (s === '') return null;
+		const n = Number(s);
 		return Number.isFinite(n) ? Math.trunc(n) : null;
 	}
 
@@ -207,12 +216,14 @@
 
 		addErrors = {};
 		let hasErr = false;
-		if (!addForm.type_of_vehicle_enum) { addErrors.type = 'Required'; hasErr = true; }
-		if (!addForm.vehicle_color?.trim()) { addErrors.color = 'Required'; hasErr = true; }
-		if (addForm.nondriver_seats.trim() === '') { addErrors.seats = 'Required'; hasErr = true; }
 
-		const seats = parseIntOrNull(addForm.nondriver_seats);
-		if (!hasErr && (seats == null || seats < 0)) { addErrors.seats = 'Must be a non-negative integer'; hasErr = true; }
+		if (!addForm.type_of_vehicle_enum) { addErrors.type = 'Required'; hasErr = true; }
+		if (!addForm.vehicle_color || addForm.vehicle_color.trim() === '') { addErrors.color = 'Required'; hasErr = true; }
+
+		const seats = seatsValueToInt(addForm.nondriver_seats);
+		if (seats === null) { addErrors.seats = 'Required'; hasErr = true; }
+		else if (seats < 0) { addErrors.seats = 'Must be a non-negative integer'; hasErr = true; }
+
 		if (hasErr) return;
 
 		isSaving = true;
@@ -246,12 +257,14 @@
 
 		editErrors = {};
 		let hasErr = false;
-		if (!editForm.type_of_vehicle_enum) { editErrors.type = 'Required'; hasErr = true; }
-		if (!editForm.vehicle_color?.trim()) { editErrors.color = 'Required'; hasErr = true; }
-		if (editForm.nondriver_seats.trim() === '') { editErrors.seats = 'Required'; hasErr = true; }
 
-		const seats = parseIntOrNull(editForm.nondriver_seats);
-		if (!hasErr && (seats == null || seats < 0)) { editErrors.seats = 'Must be a non-negative integer'; hasErr = true; }
+		if (!editForm.type_of_vehicle_enum) { editErrors.type = 'Required'; hasErr = true; }
+		if (!editForm.vehicle_color || editForm.vehicle_color.trim() === '') { editErrors.color = 'Required'; hasErr = true; }
+
+		const seats = seatsValueToInt(editForm.nondriver_seats);
+		if (seats === null) { editErrors.seats = 'Required'; hasErr = true; }
+		else if (seats < 0) { editErrors.seats = 'Must be a non-negative integer'; hasErr = true; }
+
 		if (hasErr) return;
 
 		isSaving = true;
@@ -278,7 +291,7 @@
 	// ---- DELETE ----
 	async function confirmDelete() {
 		if (!toDelete) return;
-		isDeleting = true;
+		isDeleting = true; // <-- fix: do NOT use $state() here
 		try {
 			const { error } = await supabase.from('vehicles').delete().eq('vehicle_id', toDelete.vehicle_id);
 			if (error) throw error;
@@ -396,7 +409,7 @@
 											<span>Delete</span>
 										</button>
 									</div>
-								</div>
+                                </div>
 
 								<div class="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
 									<div>
@@ -416,15 +429,14 @@
 		</div>
 	</div>
 
-	<!-- Add Modal -->
+	<!-- ADD VEHICLE MODAL -->
 	{#if showAddModal}
-		<div class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-			<div class="relative top-12 mx-auto p-5 border w-full max-w-lg shadow-lg rounded-md bg-white">
+		<div class="fixed inset-0 flex items-center justify-center bg-black/50 z-50">
+			<div class="bg-white p-6 rounded-2xl w-full max-w-md shadow-xl">
 				<div class="flex items-center justify-between mb-4">
-					<h3 class="text-lg font-semibold text-gray-900">Add Vehicle</h3>
+					<h2 class="text-xl font-semibold">Add Vehicle</h2>
 					<button class="text-gray-400 hover:text-gray-600" onclick={() => (showAddModal = false)}><X class="w-5 h-5" /></button>
 				</div>
-
 				<form onsubmit={onAddSubmit} class="space-y-4">
 					<div>
 						<label class="block text-sm font-medium text-gray-700">Vehicle Type <span class="text-red-600">*</span></label>
@@ -468,15 +480,14 @@
 		</div>
 	{/if}
 
-	<!-- Edit Modal -->
+	<!-- EDIT VEHICLE MODAL -->
 	{#if showEditModal}
-		<div class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-			<div class="relative top-12 mx-auto p-5 border w-full max-w-lg shadow-lg rounded-md bg-white">
+		<div class="fixed inset-0 flex items-center justify-center bg-black/50 z-50">
+			<div class="bg-white p-6 rounded-2xl w-full max-w-md shadow-xl">
 				<div class="flex items-center justify-between mb-4">
 					<h3 class="text-lg font-semibold text-gray-900">Edit Vehicle #{editForm.vehicle_id}</h3>
 					<button class="text-gray-400 hover:text-gray-600" onclick={closeEdit}><X class="w-5 h-5" /></button>
 				</div>
-
 				<form onsubmit={onEditSubmit} class="space-y-4">
 					<div>
 						<label class="block text-sm font-medium text-gray-700">Vehicle Type <span class="text-red-600">*</span></label>
@@ -520,28 +531,18 @@
 		</div>
 	{/if}
 
-	<!-- Delete Modal -->
+	<!-- DELETE MODAL -->
 	{#if showDeleteModal}
-		<div class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-			<div class="relative top-12 mx-auto p-5 border w-full max-w-md shadow-lg rounded-md bg-white">
+		<div class="fixed inset-0 flex items-center justify-center bg-black/50 z-50">
+			<div class="bg-white p-6 rounded-2xl w-full max-w-sm shadow-xl">
 				<div class="flex items-center justify-between mb-4">
-					<h3 class="text-lg font-semibold text-gray-900">Delete Vehicle</h3>
+					<h2 class="text-lg font-semibold">Confirm Delete</h2>
 					<button class="text-gray-400 hover:text-gray-600" onclick={closeDelete}><X class="w-5 h-5" /></button>
 				</div>
-
-				<div class="p-4 bg-yellow-50 border border-yellow-200 rounded-lg text-sm text-yellow-800 mb-4">
-					Delete vehicle #{toDelete?.vehicle_id} ({toDelete?.type_of_vehicle_enum ?? '—'})? This action cannot be undone.
-				</div>
-
-				<div class="flex justify-end gap-3">
+				<p class="mb-4">Are you sure you want to delete this vehicle?</p>
+				<div class="flex justify-end gap-2">
 					<button type="button" onclick={closeDelete} class="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50">Cancel</button>
-					<button
-						type="button"
-						disabled={isDeleting}
-						onclick={confirmDelete}
-						class="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-60">
-						{isDeleting ? 'Deleting…' : 'Delete'}
-					</button>
+					<button type="button" onclick={confirmDelete} class="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-60">Delete</button>
 				</div>
 			</div>
 		</div>
