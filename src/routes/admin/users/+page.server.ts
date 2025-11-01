@@ -104,6 +104,36 @@ export const actions = {
       return { success: false, error: 'No session found' };
     }
 
+    // Get current user's profile to verify permissions
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return { success: false, error: 'User not authenticated' };
+    }
+
+    const { data: currentUserProfile, error: profileError } = await supabase
+      .from('staff_profiles')
+      .select('user_id, org_id, role')
+      .eq('user_id', user.id)
+      .single();
+
+    if (profileError || !currentUserProfile) {
+      console.error('Failed to fetch current user profile:', profileError);
+      return { success: false, error: 'Failed to verify user permissions' };
+    }
+
+    // Check if current user has Admin or Super Admin role
+    const userRole = currentUserProfile.role;
+    const isAuthorized = Array.isArray(userRole)
+      ? (userRole.includes('Admin') || userRole.includes('Super Admin'))
+      : (userRole === 'Admin' || userRole === 'Super Admin');
+
+    if (!isAuthorized) {
+      console.error('User does not have permission to create users. Role:', userRole);
+      return { success: false, error: 'You do not have permission to create users. Admin or Super Admin role required.' };
+    }
+
+    console.log('Current user authorized. Role:', userRole, 'Org ID:', currentUserProfile.org_id);
+
     const formData = await event.request.formData();
     const email = formData.get('email') as string;
     const password = formData.get('password') as string;
@@ -113,6 +143,7 @@ export const actions = {
 
     try {
       console.log('Creating auth user server-side:', email);
+      console.log('Profile data being sent:', JSON.stringify(profileData, null, 2));
       
       const { data: authData, error: authError } = await supabase.auth.admin.createUser({
         email,
@@ -131,24 +162,61 @@ export const actions = {
 
       console.log('Auth user created with ID:', authData.user.id);
 
+      // Ensure org_id is set from current user's org
+      const requestBody = {
+        ...profileData,
+        user_id: authData.user.id,
+        org_id: currentUserProfile.org_id // Ensure org_id matches current user
+      };
+
+      console.log('Calling API with:', JSON.stringify(requestBody, null, 2));
+      console.log('Using access token:', session.access_token?.substring(0, 20) + '...');
+
       const res = await fetch(`${API_BASE_URL}/staff-profiles`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${session.access_token}`,
         },
-        body: JSON.stringify({
-          ...profileData,
-          user_id: authData.user.id
-        })
+        body: JSON.stringify(requestBody)
       });
+
+      console.log('API response status:', res.status, res.statusText);
+
+      const responseText = await res.text();
+      console.log('API response body:', responseText);
 
       if (!res.ok) {
         console.error('Failed to create staff profile, rolling back auth user');
+        console.error('Response status:', res.status);
+        console.error('Response text:', responseText);
+        
+        // Try to parse error response
+        let errorMessage = `Failed to create staff profile (${res.status})`;
+        try {
+          const errorData = JSON.parse(responseText);
+          if (Array.isArray(errorData) && errorData[2]) {
+            errorMessage = errorData[2]; // Extract error message from array format
+          } else if (errorData.error || errorData.message) {
+            errorMessage = errorData.error || errorData.message;
+          }
+        } catch (e) {
+          errorMessage = responseText || errorMessage;
+        }
+        
         await supabase.auth.admin.deleteUser(authData.user.id);
-        const errorText = await res.text();
-        return { success: false, error: `Failed to create staff profile: ${errorText}` };
+        return { success: false, error: errorMessage };
       }
+
+      // Try to parse success response
+      let responseData;
+      try {
+        responseData = JSON.parse(responseText);
+      } catch (e) {
+        responseData = responseText;
+      }
+      
+      console.log('Parsed API response:', responseData);
 
       console.log('Staff profile created successfully');
       return { success: true, userId: authData.user.id };
