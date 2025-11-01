@@ -165,16 +165,34 @@
           }
         }
         
-        // Handle array response
+        // Handle array response - API returns [object, false, "error message"]
         if (Array.isArray(actionData)) {
+          // Check if there's an error message in the array (usually at index 2)
+          if (actionData.length >= 3 && typeof actionData[2] === 'string') {
+            errorMessage = actionData[2]; // Use the error message directly
+            console.error('User creation failed with error:', actionData[2]);
+            saving = false;
+            return;
+          }
+          // If no error message string, use first element
           actionData = actionData[0] || actionData;
         }
         
         console.log('Parsed action data:', JSON.stringify(actionData, null, 2));
         
-        // Check for success
-        if (!actionData || actionData.success !== true) {
-          const errorMsg = actionData?.error || 'Failed to create user. Please check the console for details.';
+        // Check for success - handle numeric success values (1 = success, 0 = failure)
+        const isSuccess = actionData?.success === true || actionData?.success === 1;
+        
+        if (!actionData || !isSuccess) {
+          // Extract error message - could be in error field or as a string
+          let errorMsg = 'Failed to create user. Please check the console for details.';
+          
+          if (typeof actionData?.error === 'string') {
+            errorMsg = actionData.error;
+          } else if (actionData?.error) {
+            errorMsg = String(actionData.error);
+          }
+          
           console.error('User creation failed. Full response:', JSON.stringify(actionData, null, 2));
           console.error('Success value:', actionData?.success);
           console.error('Error value:', actionData?.error);
