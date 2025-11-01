@@ -468,6 +468,5 @@
         {@render children()}
 	{/if}
 			</div>
-      <div></div>
-  </Sidebar.Inset>
+   </Sidebar.Inset>
 </Sidebar.Provider>
