@@ -29,11 +29,31 @@ export function createSupabaseServerClient(event: RequestEvent) {
  * This bypasses RLS policies and should only be used for admin operations
  */
 export function createSupabaseAdminClient() {
-  if (!SUPABASE_SERVICE_ROLE_KEY) {
-    throw new Error('SUPABASE_SERVICE_ROLE_KEY is not set in environment variables');
+  // Try to get service role key from environment
+  // It might be in $env/static/private or $env/dynamic/private
+  let serviceRoleKey: string | undefined;
+  
+  try {
+    serviceRoleKey = SUPABASE_SERVICE_ROLE_KEY;
+  } catch (e) {
+    // Try dynamic import as fallback
+    try {
+      const env = await import('$env/dynamic/private');
+      serviceRoleKey = env.SUPABASE_SERVICE_ROLE_KEY;
+    } catch (e2) {
+      // Last resort - check process.env
+      serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    }
   }
   
-  return createClient(PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+  if (!serviceRoleKey) {
+    console.warn('⚠️ SUPABASE_SERVICE_ROLE_KEY not found. Admin operations may fail due to RLS.');
+    console.warn('⚠️ Please set SUPABASE_SERVICE_ROLE_KEY in your .env file');
+    // Still try to proceed, but it will likely fail
+    throw new Error('SUPABASE_SERVICE_ROLE_KEY is not set in environment variables. Please add it to your .env file.');
+  }
+  
+  return createClient(PUBLIC_SUPABASE_URL, serviceRoleKey, {
     auth: {
       autoRefreshToken: false,
       persistSession: false
