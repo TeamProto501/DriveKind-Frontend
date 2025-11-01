@@ -4,7 +4,10 @@
   import { Input } from "$lib/components/ui/input";
   import Textarea from "$lib/components/ui/textarea.svelte";
   import Label from "$lib/components/ui/label.svelte";
-  import { Car, Clock, MapPin, User, Phone, Calendar, Search, Plus, Edit, AlertCircle, UserCheck, CheckCircle } from "@lucide/svelte";
+  import {
+    Car, Clock, MapPin, User, Phone, Calendar, Search, Plus, Edit,
+    AlertCircle, UserCheck, CheckCircle
+  } from "@lucide/svelte";
   import { invalidateAll } from '$app/navigation';
   import { onMount } from 'svelte';
   import type { PageData } from './$types';
@@ -31,9 +34,16 @@
   let selectedRide: any = null;
   let selectedRideForMatch: any = null;
 
-  const dispatcherName = $derived(() =>
-    data?.profile ? `${data.profile.first_name} ${data.profile.last_name}` : ''
+  const dispatcherName = $derived(
+    () => (data?.profile ? `${data.profile.first_name} ${data.profile.last_name}` : '')
   );
+
+  const userOrgId: number | null = data?.profile?.org_id ?? null;
+
+  const filteredCalls = $derived(() => {
+    const all = data?.calls ?? [];
+    return userOrgId ? all.filter((c: any) => c.org_id === userOrgId) : all;
+  });
 
   /* ======= enums from DB ======= */
   const STATUS_OPTIONS = [
@@ -48,7 +58,6 @@
   ];
 
   /* ======= derived clients filtered by org ======= */
-  const userOrgId: number | null = data?.profile?.org_id ?? null;
   const filteredClients = $derived(() => {
     const all = data?.clients ?? [];
     return userOrgId ? all.filter((c: any) => c.org_id === userOrgId) : all;
@@ -57,7 +66,7 @@
   /* ======= SEARCH / FILTERS ======= */
   let filteredRides = $derived(() => {
     if (!data.rides) return [];
-    return data.rides.filter(ride => {
+    return data.rides.filter((ride: any) => {
       const clientName = ride.clients ? `${ride.clients.first_name} ${ride.clients.last_name}` : 'Unknown Client';
       const driverName = ride.drivers ? `${ride.drivers.first_name} ${ride.drivers.last_name}` : '';
       const matches = (
@@ -78,10 +87,10 @@
   let rideCounts = $derived(() => {
     if (!data.rides) return { requested: 0, active: 0, reported: 0, completed: 0 };
     return {
-      requested: data.rides.filter(r => r.status === "Requested").length,
-      active: data.rides.filter(r => ["Scheduled","Assigned","In Progress"].includes(r.status)).length,
-      reported: data.rides.filter(r => r.status === "Reported").length,
-      completed: data.rides.filter(r => ["Completed","Cancelled"].includes(r.status)).length
+      requested: data.rides.filter((r: any) => r.status === "Requested").length,
+      active: data.rides.filter((r: any) => ["Scheduled","Assigned","In Progress"].includes(r.status)).length,
+      reported: data.rides.filter((r: any) => r.status === "Reported").length,
+      completed: data.rides.filter((r: any) => ["Completed","Cancelled"].includes(r.status)).length
     };
   });
 
@@ -105,9 +114,9 @@
 
   /* ===================== FORM MODEL (vehicle/driver removed) ===================== */
   type RideForm = {
-    org_id: string;            // from active user
-    client_id: string;         // dropdown
-    dispatcher_user_id: string;// from active user
+    org_id: string;
+    client_id: string;
+    dispatcher_user_id: string;
     alt_pickup_address: string;
     alt_pickup_address2: string;
     alt_pickup_city: string;
@@ -215,7 +224,6 @@
     const client = filteredClients().find((c: any) => c.client_id === cid);
     if (!client) return;
 
-    // client fields: street_address, address2, city, state, zipcode
     rideForm.alt_pickup_address  = client.street_address ?? '';
     rideForm.alt_pickup_address2 = client.address2 ?? '';
     rideForm.alt_pickup_city     = client.city ?? '';
@@ -241,6 +249,19 @@
     showCreateModal = true;
   }
 
+  // helper to format for datetime-local (local timezone)
+  function toLocalDateTimeInput(ts: string | null | undefined) {
+    if (!ts) return '';
+    const d = new Date(ts);
+    const pad = (n: number) => n.toString().padStart(2, '0');
+    const yyyy = d.getFullYear();
+    const mm = pad(d.getMonth() + 1);
+    const dd = pad(d.getDate());
+    const hh = pad(d.getHours());
+    const mi = pad(d.getMinutes());
+    return `${yyyy}-${mm}-${dd}T${hh}:${mi}`;
+  }
+
   function openEditModal(ride: any) {
     selectedRide = ride;
     rideForm = {
@@ -257,8 +278,8 @@
       dropoff_city: ride.dropoff_city ?? '',
       dropoff_state: ride.dropoff_state ?? '',
       dropoff_zipcode: ride.dropoff_zipcode ?? '',
-      appointment_time: ride.appointment_time ? new Date(ride.appointment_time).toISOString().slice(0,16) : '',
-      pickup_time: ride.pickup_time ? new Date(ride.pickup_time).toISOString().slice(0,16) : '',
+      appointment_time: toLocalDateTimeInput(ride.appointment_time),
+      pickup_time: toLocalDateTimeInput(ride.pickup_time),
       status: ride.status ?? 'Requested',
       notes: ride.notes ?? '',
       miles_driven: ride.miles_driven?.toString?.() ?? '',
@@ -274,7 +295,6 @@
       call_id: (ride.call_id ?? '').toString(),
       completion_status: ride.completion_status ?? ''
     };
-    // if pickup_from_home true, ensure addresses mirror the client
     if (rideForm.pickup_from_home && rideForm.client_id) applyClientAddressToPickup();
 
     stepErrors = [];
@@ -300,17 +320,14 @@
     return {
       org_id: form.org_id ? parseInt(form.org_id) : null,
       client_id: form.client_id ? parseInt(form.client_id) : null,
-      // dispatcher_user_id auto from active user
       dispatcher_user_id: form.dispatcher_user_id || null,
 
-      // pickup address (we always send whatever is in the form; when pickup_from_home is true, it's the client's address)
       alt_pickup_address: sanitizeInput(form.alt_pickup_address) || null,
       alt_pickup_address2: sanitizeInput(form.alt_pickup_address2) || null,
       alt_pickup_city: sanitizeInput(form.alt_pickup_city) || null,
       alt_pickup_state: sanitizeInput(form.alt_pickup_state) || null,
       alt_pickup_zipcode: sanitizeInput(form.alt_pickup_zipcode) || null,
 
-      // dropoff
       dropoff_address: sanitizeInput(form.dropoff_address) || null,
       dropoff_address2: sanitizeInput(form.dropoff_address2) || null,
       dropoff_city: sanitizeInput(form.dropoff_city) || null,
@@ -326,7 +343,6 @@
       donation: !!form.donation,
       donation_amount: form.donation_amount ? parseFloat(form.donation_amount) : null,
       riders: form.riders ? parseInt(form.riders) : 1,
-      // NO driver_user_id here by design
       round_trip: !!form.round_trip,
       purpose: sanitizeInput(form.purpose) || null,
       estimated_appointment_length: sanitizeInput(form.estimated_appointment_length) || null,
@@ -359,7 +375,6 @@
         validateState(rideForm.dropoff_state || ''),
         validateZipCode(rideForm.dropoff_zipcode || ''),
 
-        // Only validate custom pickup fields if NOT from home AND something was entered
         !rideForm.pickup_from_home && rideForm.alt_pickup_address ? validateAddress(rideForm.alt_pickup_address, 'Alternative pickup address') : { valid: true, errors: [] },
         !rideForm.pickup_from_home && rideForm.alt_pickup_city ? validateCity(rideForm.alt_pickup_city) : { valid: true, errors: [] },
         !rideForm.pickup_from_home && rideForm.alt_pickup_state ? validateState(rideForm.alt_pickup_state) : { valid: true, errors: [] },
@@ -723,7 +738,7 @@
             >
               <option value="">Select client…</option>
               {#each filteredClients() as c}
-                <option value={c.client_id}>{c.first_name} {c.last_name}</option>
+                <option value={String(c.client_id)}>{c.first_name} {c.last_name}</option>
               {/each}
             </select>
             <p class="text-xs text-gray-500 mt-1">Only clients in your organization are shown.</p>
@@ -732,25 +747,38 @@
           <!-- Dispatcher (read-only full name) -->
           <div>
             <Label for="dispatcher_display">Dispatcher</Label>
-            <Input id="dispatcher_display" value={dispatcherName} disabled class="bg-gray-100" />
+            <Input id="dispatcher_display" value={dispatcherName()} disabled class="bg-gray-100" />
             <p class="text-xs text-gray-500 mt-1">Auto-set to you.</p>
           </div>
 
-          <!-- Call ID spans full width on md -->
+          <!-- Linked Call (dropdown) -->
           <div class="md:col-span-3">
-            <Label for="call_id">Call ID</Label>
-            <Input id="call_id" type="number" bind:value={rideForm.call_id} placeholder="Linked call id (optional)" />
+            <Label for="call_id">Linked Call</Label>
+            <select
+              id="call_id"
+              bind:value={rideForm.call_id}
+              class="w-full px-3 py-2 border border-gray-300 rounded-lg"
+            >
+              <option value="">Select a call (optional)…</option>
+              {#each filteredCalls() as call}
+                <option value={String(call.call_id)}>
+                  {call.call_id} • {new Date(call.call_time).toLocaleString()} • {call.call_type} • {call.caller_first_name} {call.caller_last_name}
+                </option>
+              {/each}
+            </select>
           </div>
         </div>
 
         <div class="grid gap-3 md:grid-cols-2 mt-3">
           <div>
             <Label for="appointment_time">Appointment Time *</Label>
-            <Input id="appointment_time" type="datetime-local" bind:value={rideForm.appointment_time} />
+            <Input id="appointment_time" type="datetime-local" bind:value={rideForm.appointment_time} aria-label="Appointment Time" />
+            <p class="text-xs text-gray-500 mt-1">Date &amp; time of the appointment.</p>
           </div>
           <div>
             <Label for="pickup_time">Pickup Time</Label>
-            <Input id="pickup_time" type="datetime-local" bind:value={rideForm.pickup_time} />
+            <Input id="pickup_time" type="datetime-local" bind:value={rideForm.pickup_time} aria-label="Pickup Time" />
+            <p class="text-xs text-gray-500 mt-1">Optional pickup date &amp; time.</p>
           </div>
         </div>
       </div>
@@ -900,8 +928,19 @@
               <Input id="hours" type="number" step="0.1" bind:value={rideForm.hours} />
             </div>
             <div>
-              <Label for="call_id_2">Call ID</Label>
-              <Input id="call_id_2" type="number" bind:value={rideForm.call_id} />
+              <Label for="call_id_2">Linked Call</Label>
+              <select
+                id="call_id_2"
+                bind:value={rideForm.call_id}
+                class="w-full px-3 py-2 border border-gray-300 rounded-lg"
+              >
+                <option value="">Select a call (optional)…</option>
+                {#each filteredCalls() as call}
+                  <option value={String(call.call_id)}>
+                    {call.call_id} • {new Date(call.call_time).toLocaleString()} • {call.call_type} • {call.caller_first_name} {call.caller_last_name}
+                  </option>
+                {/each}
+              </select>
             </div>
           </div>
         </div>
@@ -974,7 +1013,7 @@
             >
               <option value="">Select client…</option>
               {#each filteredClients() as c}
-                <option value={c.client_id}>{c.first_name} {c.last_name}</option>
+                <option value={String(c.client_id)}>{c.first_name} {c.last_name}</option>
               {/each}
             </select>
           </div>
@@ -982,24 +1021,37 @@
           <!-- Dispatcher (read-only full name) -->
           <div>
             <Label for="e_dispatcher_display">Dispatcher</Label>
-            <Input id="e_dispatcher_display" value={dispatcherName} disabled class="bg-gray-100" />
+            <Input id="e_dispatcher_display" value={dispatcherName()} disabled class="bg-gray-100" />
           </div>
 
-          <!-- Call ID spans full width on md -->
+          <!-- Linked Call (dropdown) -->
           <div class="md:col-span-3">
-            <Label for="e_call_id">Call ID</Label>
-            <Input id="e_call_id" type="number" bind:value={rideForm.call_id} />
+            <Label for="e_call_id">Linked Call</Label>
+            <select
+              id="e_call_id"
+              bind:value={rideForm.call_id}
+              class="w-full px-3 py-2 border border-gray-300 rounded-lg"
+            >
+              <option value="">Select a call (optional)…</option>
+              {#each filteredCalls() as call}
+                <option value={String(call.call_id)}>
+                  {call.call_id} • {new Date(call.call_time).toLocaleString()} • {call.call_type} • {call.caller_first_name} {call.caller_last_name}
+                </option>
+              {/each}
+            </select>
           </div>
         </div>
 
         <div class="grid gap-3 md:grid-cols-2 mt-3">
           <div>
             <Label for="e_appointment_time">Appointment Time *</Label>
-            <Input id="e_appointment_time" type="datetime-local" bind:value={rideForm.appointment_time} />
+            <Input id="e_appointment_time" type="datetime-local" bind:value={rideForm.appointment_time} aria-label="Appointment Time" />
+            <p class="text-xs text-gray-500 mt-1">Date &amp; time of the appointment.</p>
           </div>
           <div>
             <Label for="e_pickup_time">Pickup Time</Label>
-            <Input id="e_pickup_time" type="datetime-local" bind:value={rideForm.pickup_time} />
+            <Input id="e_pickup_time" type="datetime-local" bind:value={rideForm.pickup_time} aria-label="Pickup Time" />
+            <p class="text-xs text-gray-500 mt-1">Optional pickup date &amp; time.</p>
           </div>
         </div>
       </div>
@@ -1078,7 +1130,21 @@
           <div class="grid gap-3 md:grid-cols-3">
             <div><Label for="e_miles">Miles Driven</Label><Input id="e_miles" type="number" step="0.1" bind:value={rideForm.miles_driven} /></div>
             <div><Label for="e_hours">Hours</Label><Input id="e_hours" type="number" step="0.1" bind:value={rideForm.hours} /></div>
-            <div><Label for="e_call_id2">Call ID</Label><Input id="e_call_id2" type="number" bind:value={rideForm.call_id} /></div>
+            <div>
+              <Label for="e_call_id2">Linked Call</Label>
+              <select
+                id="e_call_id2"
+                bind:value={rideForm.call_id}
+                class="w-full px-3 py-2 border border-gray-300 rounded-lg"
+              >
+                <option value="">Select a call (optional)…</option>
+                {#each filteredCalls() as call}
+                  <option value={String(call.call_id)}>
+                    {call.call_id} • {new Date(call.call_time).toLocaleString()} • {call.call_type} • {call.caller_first_name} {call.caller_last_name}
+                  </option>
+                {/each}
+              </select>
+            </div>
           </div>
         </div>
       {/if}
@@ -1107,5 +1173,17 @@
 {/if}
 
 <!-- Existing modals -->
-<RideCompletionModal bind:show={showConfirmModal} ride={selectedRide} isDriver={false} onSubmit={confirmRideCompletion} isSubmitting={isUpdating} />
-<DriverMatchModal bind:show={showDriverMatchModal} ride={selectedRideForMatch} token={data.session?.access_token} onSelectDriver={sendRideRequest} isLoading={isUpdating} />
+<RideCompletionModal
+  bind:show={showConfirmModal}
+  ride={selectedRide}
+  isDriver={false}
+  onSubmit={confirmRideCompletion}
+  isSubmitting={isUpdating}
+/>
+<DriverMatchModal
+  bind:show={showDriverMatchModal}
+  ride={selectedRideForMatch}
+  token={data.session?.access_token}
+  onSelectDriver={sendRideRequest}
+  isLoading={isUpdating}
+/>
