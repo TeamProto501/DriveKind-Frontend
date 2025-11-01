@@ -174,15 +174,32 @@ export const actions = {
       console.log('Creating staff profile directly in Supabase...');
       console.log('Staff profile data:', JSON.stringify(staffProfileData, null, 2));
 
-      // Use admin client (service role) to bypass RLS policies
-      // This allows us to create staff profiles even with RLS enabled
-      const adminSupabase = createSupabaseAdminClient();
+      // Use admin client (service role) to bypass RLS policies if available
+      // Fallback to regular client if service role key not set
+      let staffProfile, profileError;
       
-      const { data: staffProfile, error: profileError } = await adminSupabase
-        .from('staff_profiles')
-        .insert(staffProfileData)
-        .select()
-        .single();
+      try {
+        const adminSupabase = createSupabaseAdminClient();
+        const result = await adminSupabase
+          .from('staff_profiles')
+          .insert(staffProfileData)
+          .select()
+          .single();
+        staffProfile = result.data;
+        profileError = result.error;
+        console.log('✅ Used admin client (service role)');
+      } catch (adminError: any) {
+        // If admin client fails (missing service role key), try with regular client
+        // The RLS policy should allow Admin users to create staff profiles
+        console.warn('⚠️ Admin client unavailable, using regular client:', adminError.message);
+        const result = await supabase
+          .from('staff_profiles')
+          .insert(staffProfileData)
+          .select()
+          .single();
+        staffProfile = result.data;
+        profileError = result.error;
+      }
 
       if (profileError) {
         console.error('Failed to create staff profile in Supabase:', profileError);
