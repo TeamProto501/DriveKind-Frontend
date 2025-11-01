@@ -3,7 +3,7 @@
 	import { getContext, onMount } from 'svelte';
 	import Breadcrumbs from '$lib/components/Breadcrumbs.svelte';
 	import RoleGuard from '$lib/components/RoleGuard.svelte';
-	import { Car, CheckCircle2, AlertTriangle } from '@lucide/svelte';
+	import { Car, CheckCircle2, AlertTriangle, Pencil, Trash2, X, Plus } from '@lucide/svelte';
 
 	const session = getContext<any>('session');
 
@@ -17,7 +17,12 @@
 		active: boolean | null;
 	};
 
+	// If your DB enum spelling differs, match it here exactly.
+	const VEHICLE_TYPES = ['SUV', 'Sedan', 'Van', 'Motorcycle', 'Truck', 'Coupe'] as const;
+
 	let uid: string | null = $state(null);
+	let userOrgId: number | null = $state(null);
+
 	let isLoading = $state(true);
 	let loadError = $state('');
 	let vehicles = $state<Vehicle[]>([]);
@@ -27,7 +32,7 @@
 	function setToast(msg: string, ok = true) {
 		toast = msg;
 		toastOk = ok;
-		setTimeout(() => (toast = ''), 3000);
+		setTimeout(() => (toast = ''), 3500);
 	}
 
 	function labelPill(active: boolean | null | undefined) {
@@ -52,7 +57,7 @@
 			return;
 		}
 
-		const actives = list.filter(v => !!v.active).map(v => v.vehicle_id).sort((a, b) => a - b);
+		const actives = list.filter((v) => !!v.active).map((v) => v.vehicle_id).sort((a, b) => a - b);
 		if (actives.length === 0) {
 			await supabase.from('vehicles').update({ active: true }).eq('vehicle_id', list[0].vehicle_id);
 			return;
@@ -74,12 +79,24 @@
 		if (!uid) throw new Error('No user session');
 	}
 
+	async function loadUserOrg() {
+		if (!uid) return;
+		const { data, error } = await supabase
+			.from('staff_profiles')
+			.select('org_id')
+			.eq('user_id', uid)
+			.single();
+		if (error) { userOrgId = null; return; }
+		userOrgId = (data?.org_id ?? null) as number | null;
+	}
+
 	async function loadVehicles() {
 		try {
 			isLoading = true;
 			loadError = '';
 
 			await loadUser();
+			await loadUserOrg();
 			await normalizeActives();
 
 			const { data, error } = await supabase
@@ -129,6 +146,200 @@
 			setToast(e?.message ?? 'Failed to set active vehicle.', false);
 		}
 	}
+
+	// ---------- Add / Edit / Delete ----------
+	let showAddModal = $state(false);
+	let showEditModal = $state(false);
+	let showDeleteModal = $state(false);
+
+	let isSaving = $state(false);
+	let isDeleting = $state(false);
+
+	let addForm = $state({
+		type_of_vehicle_enum: '' as '' | Vehicle['type_of_vehicle_enum'],
+		vehicle_color: '',
+		nondriver_seats: ''
+	});
+	let addErrors = $state<{ type?: string; color?: string; seats?: string }>({});
+
+	let editForm = $state({
+		vehicle_id: 0,
+		type_of_vehicle_enum: '' as '' | Vehicle['type_of_vehicle_enum'],
+		vehicle_color: '',
+		nondriver_seats: ''
+	});
+	let editErrors = $state<{ type?: string; color?: string; seats?: string }>({});
+
+	let toDelete: Vehicle | null = $state(null);
+
+	function openAdd() {
+		addForm = { type_of_vehicle_enum: '', vehicle_color: '', nondriver_seats: '' };
+		addErrors = {};
+		showAddModal = true;
+	}
+
+	function openEdit(v: Vehicle) {
+		editForm = {
+			vehicle_id: v.vehicle_id,
+			type_of_vehicle_enum: (v.type_of_vehicle_enum ?? '') as any,
+			vehicle_color: v.vehicle_color ?? '',
+			nondriver_seats: v.nondriver_seats == null ? '' : String(v.nondriver_seats)
+		};
+		editErrors = {};
+		showEditModal = true;
+	}
+
+	function closeEdit() { showEditModal = false; }
+	function openDelete(v: Vehicle) { toDelete = v; showDeleteModal = true; }
+	function closeDelete() { showDeleteModal = false; toDelete = null; }
+
+	function parseIntOrNull(x: string) {
+		if (x == null || String(x).trim() === '') return null;
+		const n = Number(x);
+		return Number.isFinite(n) ? Math.trunc(n) : null;
+	}
+
+	function onAddSubmit(e: Event) { e.preventDefault(); void createVehicle(); }
+	function onEditSubmit(e: Event) { e.preventDefault(); void saveEdits(); }
+
+	// ---- CREATE (unchanged from your last version) ----
+	async function createVehicle() {
+		if (!uid) { setToast('No user session.', false); return; }
+
+		addErrors = {};
+		let hasErr = false;
+		if (!addForm.type_of_vehicle_enum) { addErrors.type = 'Required'; hasErr = true; }
+		if (!addForm.vehicle_color?.trim()) { addErrors.color = 'Required'; hasErr = true; }
+		if (addForm.nondriver_seats.trim() === '') { addErrors.seats = 'Required'; hasErr = true; }
+		const seats = parseIntOrNull(addForm.nondriver_seats);
+		if (!hasErr && (seats == null || seats < 0)) { addErrors.seats = 'Must be a non-negative integer'; hasErr = true; }
+		if (hasErr) return;
+
+		isSaving = true;
+		try {
+			const basePayload = {
+				user_id: uid,
+				org_id: userOrgId,
+				type_of_vehicle_enum: addForm.type_of_vehicle_enum,
+				vehicle_color: addForm.vehicle_color.trim(),
+				nondriver_seats: seats,
+				active: false
+			};
+
+			let a = await supabase.from('vehicles').insert(basePayload).select('vehicle_id').maybeSingle();
+			if (!a.error) {
+				setToast('Vehicle added.', true);
+				showAddModal = false;
+				await normalizeActives();
+				await loadVehicles();
+				return;
+			}
+
+			const needManualId = ['23502', '42703', '42804', '42704', 'PGRST204'].includes(String(a.error.code)) || /null value|default|identity/i.test(a.error.message);
+			if (!needManualId) throw a.error;
+
+			const nextId = await getNextVehicleId();
+			let candidate = nextId;
+			for (let i = 0; i < 3; i++) {
+				const payload = { ...basePayload, vehicle_id: candidate };
+				const { error } = await supabase.from('vehicles').insert(payload);
+				if (!error) {
+					setToast('Vehicle added.', true);
+					showAddModal = false;
+					await normalizeActives();
+					await loadVehicles();
+					return;
+				}
+				if (String(error.code).includes('23505') || /duplicate key/i.test(error.message)) {
+					candidate += 1;
+					continue;
+				}
+				throw error;
+			}
+			setToast('Failed to add vehicle after retries.', false);
+		} catch (err: any) {
+			setToast(err?.message ?? 'Failed to add vehicle.', false);
+		} finally {
+			isSaving = false;
+		}
+	}
+
+	async function getNextVehicleId(): Promise<number> {
+		const { data, error } = await supabase
+			.from('vehicles')
+			.select('vehicle_id')
+			.order('vehicle_id', { ascending: false })
+			.limit(1)
+			.single();
+		if (error && error.code !== 'PGRST116') throw error;
+		return ((data?.vehicle_id ?? 0) as number) + 1;
+	}
+
+	// ---- UPDATE (hardened nondriver_seats path) ----
+	async function saveEdits() {
+		if (!editForm.vehicle_id) return;
+
+		editErrors = {};
+		let hasErr = false;
+		if (!editForm.type_of_vehicle_enum) { editErrors.type = 'Required'; hasErr = true; }
+		if (!editForm.vehicle_color?.trim()) { editErrors.color = 'Required'; hasErr = true; }
+		if (editForm.nondriver_seats.trim() === '') { editErrors.seats = 'Required'; hasErr = true; }
+		const seats = parseIntOrNull(editForm.nondriver_seats);
+		if (!hasErr && (seats == null || seats < 0)) { editErrors.seats = 'Must be a non-negative integer'; hasErr = true; }
+		if (hasErr) return;
+
+		isSaving = true;
+		try {
+			const payload = {
+				type_of_vehicle_enum: editForm.type_of_vehicle_enum,
+				vehicle_color: editForm.vehicle_color.trim(),
+				// send as NUMBER (or null) explicitly:
+				nondriver_seats: seats
+			};
+
+			// Force-return the updated row so we can verify the seat actually changed
+			const { data, error } = await supabase
+				.from('vehicles')
+				.update(payload)
+				.eq('vehicle_id', editForm.vehicle_id)
+				.select('vehicle_id,nondriver_seats')
+				.single();
+
+			if (error) throw error;
+
+			// Optional sanity check: if DB echoes a different type/shape
+			// you would see it here in devtools.
+			// console.log('updated row:', data);
+
+			setToast('Vehicle updated.', true);
+			showEditModal = false;
+			await loadVehicles();
+		} catch (err: any) {
+			setToast(err?.message ?? 'Failed to update vehicle.', false);
+		} finally {
+			isSaving = false;
+		}
+	}
+
+	// ---- DELETE ----
+	async function confirmDelete() {
+		if (!toDelete) return;
+		isDeleting = true;
+		try {
+			const { error } = await supabase.from('vehicles').delete().eq('vehicle_id', toDelete.vehicle_id);
+			if (error) throw error;
+
+			setToast('Vehicle deleted.', true);
+			showDeleteModal = false;
+			toDelete = null;
+			await normalizeActives();
+			await loadVehicles();
+		} catch (err: any) {
+			setToast(err?.message ?? 'Failed to delete vehicle.', false);
+		} finally {
+			isDeleting = false;
+		}
+	}
 </script>
 
 <RoleGuard requiredRoles={['Driver', 'Admin', 'Super Admin']}>
@@ -138,14 +349,22 @@
 		<!-- Header -->
 		<div class="bg-white shadow-sm border-b border-gray-200">
 			<div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-				<div class="flex items-center gap-3">
-					<div class="p-2 bg-blue-100 rounded-lg">
-						<Car class="w-6 h-6 text-blue-600" />
+				<div class="flex items-center justify-between">
+					<div class="flex items-center gap-3">
+						<div class="p-2 bg-blue-100 rounded-lg">
+							<Car class="w-6 h-6 text-blue-600" />
+						</div>
+						<div>
+							<h1 class="text-2xl font-bold text-gray-900">My Vehicles</h1>
+							<p class="text-sm text-gray-600">View your vehicles and choose the active one.</p>
+						</div>
 					</div>
-					<div>
-						<h1 class="text-2xl font-bold text-gray-900">My Vehicles</h1>
-						<p class="text-sm text-gray-600">View your vehicles and choose the active one.</p>
-					</div>
+					<button
+						class="inline-flex items-center gap-2 px-3 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50"
+						onclick={openAdd}>
+						<Plus class="w-4 h-4" />
+						<span>Add Vehicle</span>
+					</button>
 				</div>
 			</div>
 		</div>
@@ -153,10 +372,7 @@
 		<!-- Toast -->
 		{#if toast}
 			<div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
-				<div
-					class={toastOk
-						? 'rounded-md p-3 bg-green-50 border border-green-200'
-						: 'rounded-md p-3 bg-red-50 border border-red-200'}>
+				<div class={toastOk ? 'rounded-md p-3 bg-green-50 border border-green-200' : 'rounded-md p-3 bg-red-50 border border-red-200'}>
 					<p class={toastOk ? 'text-sm text-green-800' : 'text-sm text-red-800'}>{toast}</p>
 				</div>
 			</div>
@@ -208,11 +424,23 @@
 										{#if !v.active}
 											<button
 												class="inline-flex items-center gap-1 px-3 py-1.5 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50"
-												on:click={() => setActive(v.vehicle_id)}>
+												onclick={() => setActive(v.vehicle_id)}>
 												<CheckCircle2 class="w-4 h-4" />
 												<span>Set Active</span>
 											</button>
 										{/if}
+										<button
+											class="inline-flex items-center gap-1 px-3 py-1.5 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50"
+											onclick={() => openEdit(v)}>
+											<Pencil class="w-4 h-4" />
+											<span>Edit</span>
+										</button>
+										<button
+											class="inline-flex items-center gap-1 px-3 py-1.5 rounded-md border border-red-300 text-red-700 hover:bg-red-50"
+											onclick={() => openDelete(v)}>
+											<Trash2 class="w-4 h-4" />
+											<span>Delete</span>
+										</button>
 									</div>
 								</div>
 
@@ -233,4 +461,135 @@
 			{/if}
 		</div>
 	</div>
+
+	<!-- Add Modal -->
+	{#if showAddModal}
+		<div class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+			<div class="relative top-12 mx-auto p-5 border w-full max-w-lg shadow-lg rounded-md bg-white">
+				<div class="flex items-center justify-between mb-4">
+					<h3 class="text-lg font-semibold text-gray-900">Add Vehicle</h3>
+					<button class="text-gray-400 hover:text-gray-600" onclick={() => (showAddModal = false)}><X class="w-5 h-5" /></button>
+				</div>
+
+				<form onsubmit={onAddSubmit} class="space-y-4">
+					<div>
+						<label class="block text-sm font-medium text-gray-700">Vehicle Type <span class="text-red-600">*</span></label>
+						<select
+							class={"mt-1 block w-full border rounded-md px-3 py-2 " + (addErrors.type ? 'border-red-300 bg-red-50' : 'border-gray-300')}
+							bind:value={addForm.type_of_vehicle_enum}>
+							<option value="">—</option>
+							{#each VEHICLE_TYPES as t}<option value={t}>{t}</option>{/each}
+						</select>
+						{#if addErrors.type}<p class="text-xs text-red-600 mt-1">{addErrors.type}</p>{/if}
+					</div>
+
+					<div>
+						<label class="block text-sm font-medium text-gray-700">Color <span class="text-red-600">*</span></label>
+						<input
+							type="text"
+							class={"mt-1 block w-full border rounded-md px-3 py-2 " + (addErrors.color ? 'border-red-300 bg-red-50' : 'border-gray-300')}
+							bind:value={addForm.vehicle_color} />
+						{#if addErrors.color}<p class="text-xs text-red-600 mt-1">{addErrors.color}</p>{/if}
+					</div>
+
+					<div>
+						<label class="block text-sm font-medium text-gray-700">Non-driver Seats <span class="text-red-600">*</span></label>
+						<input
+							type="number"
+							min="0"
+							step="1"
+							class={"mt-1 block w-full border rounded-md px-3 py-2 " + (addErrors.seats ? 'border-red-300 bg-red-50' : 'border-gray-300')}
+							bind:value={addForm.nondriver_seats} />
+						{#if addErrors.seats}<p class="text-xs text-red-600 mt-1">{addErrors.seats}</p>{/if}
+					</div>
+
+					<div class="flex justify-end gap-3 pt-2">
+						<button type="button" onclick={() => (showAddModal = false)} class="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50">Cancel</button>
+						<button type="submit" disabled={isSaving} class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-60">
+							{isSaving ? 'Saving…' : 'Add Vehicle'}
+						</button>
+					</div>
+				</form>
+			</div>
+		</div>
+	{/if}
+
+	<!-- Edit Modal -->
+	{#if showEditModal}
+		<div class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+			<div class="relative top-12 mx-auto p-5 border w-full max-w-lg shadow-lg rounded-md bg-white">
+				<div class="flex items-center justify-between mb-4">
+					<h3 class="text-lg font-semibold text-gray-900">Edit Vehicle #{editForm.vehicle_id}</h3>
+					<button class="text-gray-400 hover:text-gray-600" onclick={closeEdit}><X class="w-5 h-5" /></button>
+				</div>
+
+				<form onsubmit={onEditSubmit} class="space-y-4">
+					<div>
+						<label class="block text-sm font-medium text-gray-700">Vehicle Type <span class="text-red-600">*</span></label>
+						<select
+							class={"mt-1 block w-full border rounded-md px-3 py-2 " + (editErrors.type ? 'border-red-300 bg-red-50' : 'border-gray-300')}
+							bind:value={editForm.type_of_vehicle_enum}>
+							<option value="">—</option>
+							{#each VEHICLE_TYPES as t}<option value={t}>{t}</option>{/each}
+						</select>
+						{#if editErrors.type}<p class="text-xs text-red-600 mt-1">{editErrors.type}</p>{/if}
+					</div>
+
+					<div>
+						<label class="block text-sm font-medium text-gray-700">Color <span class="text-red-600">*</span></label>
+						<input
+							type="text"
+							class={"mt-1 block w-full border rounded-md px-3 py-2 " + (editErrors.color ? 'border-red-300 bg-red-50' : 'border-gray-300')}
+							bind:value={editForm.vehicle_color} />
+						{#if editErrors.color}<p class="text-xs text-red-600 mt-1">{editErrors.color}</p>{/if}
+					</div>
+
+					<div>
+						<label class="block text-sm font-medium text-gray-700">Non-driver Seats <span class="text-red-600">*</span></label>
+						<input
+							type="number"
+							min="0"
+							step="1"
+							class={"mt-1 block w-full border rounded-md px-3 py-2 " + (editErrors.seats ? 'border-red-300 bg-red-50' : 'border-gray-300')}
+							bind:value={editForm.nondriver_seats} />
+						{#if editErrors.seats}<p class="text-xs text-red-600 mt-1">{editErrors.seats}</p>{/if}
+					</div>
+
+					<div class="flex justify-end gap-3 pt-2">
+						<button type="button" onclick={closeEdit} class="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50">Cancel</button>
+						<button type="submit" disabled={isSaving} class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-60">
+							{isSaving ? 'Saving…' : 'Save Changes'}
+						</button>
+					</div>
+				</form>
+			</div>
+		</div>
+	{/if}
+
+	<!-- Delete Modal -->
+	{#if showDeleteModal}
+		<div class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+			<div class="relative top-12 mx-auto p-5 border w-full max-w-md shadow-lg rounded-md bg-white">
+				<div class="flex items-center justify-between mb-4">
+					<h3 class="text-lg font-semibold text-gray-900">Delete Vehicle</h3>
+					<button class="text-gray-400 hover:text-gray-600" onclick={closeDelete}><X class="w-5 h-5" /></button>
+				</div>
+
+				<div class="p-4 bg-yellow-50 border border-yellow-200 rounded-lg text-sm text-yellow-800 mb-4">
+					Delete vehicle #{toDelete?.vehicle_id} ({toDelete?.type_of_vehicle_enum ?? '—'})? This action cannot be undone.
+				</div>
+
+				<div class="flex justify-end gap-3">
+					<button type="button" onclick={closeDelete} class="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50">Cancel</button>
+					<button
+						type="button"
+						disabled={isDeleting}
+						onclick={confirmDelete}
+						class="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-60">
+						{isDeleting ? 'Deleting…' : 'Delete'}
+					</button>
+				</div>
+			</div>
+		</div>
+	{/if}
 </RoleGuard>
