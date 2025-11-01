@@ -23,13 +23,12 @@
 	function hasRole(required: string[]): boolean {
 		return required.some((r) => userRoles.includes(r));
 	}
-	// keep roles in sync with incoming data
 	$effect(() => {
 		userRoles = Array.isArray(data?.roles) ? (data!.roles as string[]) : [];
 	});
 	let canManage = $derived(hasRole(['Admin', 'Super Admin']));
 
-	// ---- Table shape (no created_by, no staff_profiles) ----
+	// ---- Table shape ----
 	interface Destination {
 		destination_id: number;
 		created_at: string | null;
@@ -39,23 +38,27 @@
 		state: string | null;
 		zipcode: string | null;
 		location_name: string | null;
+		org_id: number | null; // used only for filtering/guarding
 	}
 
 	let destinations = $state<Destination[]>([]);
 	let isLoading = $state(true);
 	let searchTerm = $state('');
 
+	// viewer identity
+	let viewerUid: string | null = $state(null);
+	let viewerOrgId: number | null = $state(null);
+
 	// toast
 	let toast = $state('');
 	let toastOk = $state(true);
+	let tostOk = $state(true); // tiny helper for initial write
 	function setToast(message: string, ok = true) {
 		toast = message;
-		tostOk = ok; // internal write then mirror to toastOk
+		tostOk = ok;
 		toastOk = ok;
 		setTimeout(() => (toast = ''), 4000);
 	}
-	// tiny helper to avoid TS gripe on first assignment
-	let tostOk = $state(true);
 
 	// CREATE / EDIT modal state (only rendered if canManage)
 	let showUpsertModal = $state(false);
@@ -77,7 +80,19 @@
 	let toDelete = $state<Destination | null>(null);
 
 	onMount(async () => {
-		await loadDestinations();
+		try {
+			await loadViewerOrg();
+			if (!viewerOrgId) {
+				setToast('Your staff profile is not linked to an organization.', false);
+				isLoading = false;
+				return;
+			}
+			await loadDestinations();
+		} catch (e: any) {
+			console.error('Init error:', e?.message ?? e);
+			setToast('Initialization failed.', false);
+			isLoading = false;
+		}
 	});
 
 	// Friendly datetime
@@ -94,10 +109,35 @@
 		}).format(d);
 	}
 
-	// Load (NO joins)
+	// ---- Viewer org lookup ----
+	async function loadViewerOrg() {
+		viewerUid = data?.session?.user?.id ?? null;
+		if (!viewerUid) {
+			const { data: auth, error } = await supabase.auth.getUser();
+			if (error) throw error;
+			viewerUid = auth?.user?.id ?? null;
+		}
+		if (!viewerUid) throw new Error('No user session.');
+
+		const { data: sp, error: spErr } = await supabase
+			.from('staff_profiles')
+			.select('org_id')
+			.eq('user_id', viewerUid)
+			.single();
+
+		if (spErr) throw spErr;
+		viewerOrgId = (sp?.org_id ?? null) as number | null;
+	}
+
+	// Load (filter by org)
 	async function loadDestinations() {
 		try {
 			isLoading = true;
+
+			if (!viewerOrgId) {
+				destinations = [];
+				return;
+			}
 
 			const { data: rows, error } = await supabase
 				.from('destinations')
@@ -109,8 +149,10 @@
 					city,
 					state,
 					zipcode,
-					location_name
+					location_name,
+					org_id
 				`)
+				.eq('org_id', viewerOrgId)
 				.order('destination_id', { ascending: true });
 
 			if (error) {
@@ -170,6 +212,10 @@
 			setToast('You do not have permission to modify destinations.', false);
 			return;
 		}
+		if (!viewerOrgId) {
+			setToast('No organization found for your account.', false);
+			return;
+		}
 
 		if (!form.location_name.trim()) return setToast('Location name is required.', false);
 		if (!form.address.trim() || !form.city.trim() || !form.state.trim())
@@ -184,7 +230,8 @@
 					address2: form.address2?.trim() || null,
 					city: form.city.trim(),
 					state: form.state.trim(),
-					zipcode: form.zipcode?.trim() || null
+					zipcode: form.zipcode?.trim() || null,
+					org_id: viewerOrgId
 				};
 
 				const { error } = await supabase.from('destinations').insert(insertPayload);
@@ -194,6 +241,7 @@
 			} else {
 				if (!form.destination_id) return setToast('Missing destination_id for update.', false);
 
+				// do NOT change org_id on update—keep row scoped to its org
 				const updatePayload = {
 					location_name: form.location_name.trim(),
 					address: form.address.trim(),
@@ -206,7 +254,8 @@
 				const { error } = await supabase
 					.from('destinations')
 					.update(updatePayload)
-					.eq('destination_id', form.destination_id);
+					.eq('destination_id', form.destination_id)
+					.eq('org_id', viewerOrgId);
 
 				if (error) throw error;
 
@@ -240,14 +289,15 @@
 			setToast('You do not have permission to delete destinations.', false);
 			return;
 		}
-		if (!toDelete) return;
+		if (!toDelete || !viewerOrgId) return;
 
 		isDeleting = true;
 		try {
 			const { error } = await supabase
 				.from('destinations')
 				.delete()
-				.eq('destination_id', toDelete.destination_id);
+				.eq('destination_id', toDelete.destination_id)
+				.eq('org_id', viewerOrgId);
 
 			if (error) throw error;
 
@@ -272,12 +322,12 @@
 				: destinations.filter((d) => {
 						const q = searchTerm.toLowerCase();
 						return (
-							(String(d.location_name ?? '').toLowerCase().includes(q)) ||
-							(String(d.city ?? '').toLowerCase().includes(q)) ||
-							(String(d.state ?? '').toLowerCase().includes(q)) ||
-							(String(d.zipcode ?? '').toLowerCase().includes(q)) ||
-							(String(d.address ?? '').toLowerCase().includes(q)) ||
-							(String(d.address2 ?? '').toLowerCase().includes(q))
+							String(d.location_name ?? '').toLowerCase().includes(q) ||
+							String(d.city ?? '').toLowerCase().includes(q) ||
+							String(d.state ?? '').toLowerCase().includes(q) ||
+							String(d.zipcode ?? '').toLowerCase().includes(q) ||
+							String(d.address ?? '').toLowerCase().includes(q) ||
+							String(d.address2 ?? '').toLowerCase().includes(q)
 						);
 				  })
 	);
@@ -294,7 +344,7 @@
 					</div>
 					<div>
 						<h1 class="text-2xl font-bold text-gray-900">Destinations</h1>
-						<p class="text-sm text-gray-600">View {canManage ? 'and manage ' : ''}destinations</p>
+						<p class="text-sm text-gray-600">View {canManage ? 'and manage ' : ''}destinations in your org</p>
 					</div>
 				</div>
 
