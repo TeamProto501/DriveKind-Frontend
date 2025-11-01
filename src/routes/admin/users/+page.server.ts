@@ -173,14 +173,24 @@ export const actions = {
       try {
         const tokenParts = session.access_token.split('.');
         if (tokenParts.length === 3) {
-          const payload = JSON.parse(Buffer.from(tokenParts[1], 'base64').toString());
+          // Decode base64 payload (Node.js compatible)
+          const base64Url = tokenParts[1];
+          const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+          const jsonPayload = decodeURIComponent(
+            atob(base64)
+              .split('')
+              .map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+              .join('')
+          );
+          const payload = JSON.parse(jsonPayload);
           console.log('JWT Token payload (user info in token):', JSON.stringify(payload, null, 2));
           console.log('Token contains user_id:', payload.sub);
           console.log('Token contains email:', payload.email);
           console.log('Token contains metadata:', payload.user_metadata);
+          console.log('Token contains app_metadata:', payload.app_metadata);
         }
       } catch (e) {
-        console.log('Could not decode JWT token (this is okay)');
+        console.log('Could not decode JWT token (this is okay):', e);
       }
 
       console.log('Calling API with:', JSON.stringify(requestBody, null, 2));
