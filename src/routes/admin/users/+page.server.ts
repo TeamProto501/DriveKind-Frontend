@@ -1,7 +1,7 @@
 // src/routes/admin/users/+page.server.ts
 import { API_BASE_URL } from "$lib/api";
 import { error, redirect } from '@sveltejs/kit';
-import { createSupabaseServerClient } from '$lib/supabase.server';
+import { createSupabaseServerClient, createSupabaseAdminClient } from '$lib/supabase.server';
 import type { Actions } from './$types';
 
 export const load = async (event) => {
@@ -174,9 +174,11 @@ export const actions = {
       console.log('Creating staff profile directly in Supabase...');
       console.log('Staff profile data:', JSON.stringify(staffProfileData, null, 2));
 
-      // Create staff profile directly in Supabase instead of via API
-      // This bypasses the API permission issue
-      const { data: staffProfile, error: profileError } = await supabase
+      // Use admin client (service role) to bypass RLS policies
+      // This allows us to create staff profiles even with RLS enabled
+      const adminSupabase = createSupabaseAdminClient();
+      
+      const { data: staffProfile, error: profileError } = await adminSupabase
         .from('staff_profiles')
         .insert(staffProfileData)
         .select()
