@@ -137,13 +137,15 @@
           return;
         }
         
-        console.log('Server action result:', result);
+        console.log('Server action result:', JSON.stringify(result, null, 2));
         
         // Handle SvelteKit form action response structure
         // SvelteKit returns { type: 'success' | 'failure' | 'error', status: number, data?: any }
         if (result.type === 'failure' || result.type === 'error') {
           const errorData = result.data || {};
-          errorMessage = errorData.error || result.error?.message || 'Failed to create user';
+          const errorMsg = errorData.error || result.error?.message || 'Failed to create user';
+          console.error('Action failed with error:', JSON.stringify(errorData, null, 2));
+          errorMessage = errorMsg;
           saving = false;
           return;
         }
@@ -168,12 +170,15 @@
           actionData = actionData[0] || actionData;
         }
         
-        console.log('Parsed action data:', actionData);
+        console.log('Parsed action data:', JSON.stringify(actionData, null, 2));
         
         // Check for success
         if (!actionData || actionData.success !== true) {
-          errorMessage = actionData?.error || 'Failed to create user. Please check the console for details.';
-          console.error('User creation failed:', actionData);
+          const errorMsg = actionData?.error || 'Failed to create user. Please check the console for details.';
+          console.error('User creation failed. Full response:', JSON.stringify(actionData, null, 2));
+          console.error('Success value:', actionData?.success);
+          console.error('Error value:', actionData?.error);
+          errorMessage = errorMsg;
           saving = false;
           return;
         }
