@@ -17,7 +17,6 @@
 		active: boolean | null;
 	};
 
-	// If your DB enum spelling differs, match it here exactly.
 	const VEHICLE_TYPES = ['SUV', 'Sedan', 'Van', 'Motorcycle', 'Truck', 'Coupe'] as const;
 
 	let uid: string | null = $state(null);
@@ -202,7 +201,7 @@
 	function onAddSubmit(e: Event) { e.preventDefault(); void createVehicle(); }
 	function onEditSubmit(e: Event) { e.preventDefault(); void saveEdits(); }
 
-	// ---- CREATE (unchanged from your last version) ----
+	// ---- CREATE ----
 	async function createVehicle() {
 		if (!uid) { setToast('No user session.', false); return; }
 
@@ -211,13 +210,14 @@
 		if (!addForm.type_of_vehicle_enum) { addErrors.type = 'Required'; hasErr = true; }
 		if (!addForm.vehicle_color?.trim()) { addErrors.color = 'Required'; hasErr = true; }
 		if (addForm.nondriver_seats.trim() === '') { addErrors.seats = 'Required'; hasErr = true; }
+
 		const seats = parseIntOrNull(addForm.nondriver_seats);
 		if (!hasErr && (seats == null || seats < 0)) { addErrors.seats = 'Must be a non-negative integer'; hasErr = true; }
 		if (hasErr) return;
 
 		isSaving = true;
 		try {
-			const basePayload = {
+			const payload = {
 				user_id: uid,
 				org_id: userOrgId,
 				type_of_vehicle_enum: addForm.type_of_vehicle_enum,
@@ -226,37 +226,13 @@
 				active: false
 			};
 
-			let a = await supabase.from('vehicles').insert(basePayload).select('vehicle_id').maybeSingle();
-			if (!a.error) {
-				setToast('Vehicle added.', true);
-				showAddModal = false;
-				await normalizeActives();
-				await loadVehicles();
-				return;
-			}
+			const { error } = await supabase.from('vehicles').insert(payload);
+			if (error) throw error;
 
-			const needManualId = ['23502', '42703', '42804', '42704', 'PGRST204'].includes(String(a.error.code)) || /null value|default|identity/i.test(a.error.message);
-			if (!needManualId) throw a.error;
-
-			const nextId = await getNextVehicleId();
-			let candidate = nextId;
-			for (let i = 0; i < 3; i++) {
-				const payload = { ...basePayload, vehicle_id: candidate };
-				const { error } = await supabase.from('vehicles').insert(payload);
-				if (!error) {
-					setToast('Vehicle added.', true);
-					showAddModal = false;
-					await normalizeActives();
-					await loadVehicles();
-					return;
-				}
-				if (String(error.code).includes('23505') || /duplicate key/i.test(error.message)) {
-					candidate += 1;
-					continue;
-				}
-				throw error;
-			}
-			setToast('Failed to add vehicle after retries.', false);
+			setToast('Vehicle added.', true);
+			showAddModal = false;
+			await normalizeActives();
+			await loadVehicles();
 		} catch (err: any) {
 			setToast(err?.message ?? 'Failed to add vehicle.', false);
 		} finally {
@@ -264,18 +240,7 @@
 		}
 	}
 
-	async function getNextVehicleId(): Promise<number> {
-		const { data, error } = await supabase
-			.from('vehicles')
-			.select('vehicle_id')
-			.order('vehicle_id', { ascending: false })
-			.limit(1)
-			.single();
-		if (error && error.code !== 'PGRST116') throw error;
-		return ((data?.vehicle_id ?? 0) as number) + 1;
-	}
-
-	// ---- UPDATE (hardened nondriver_seats path) ----
+	// ---- UPDATE ----
 	async function saveEdits() {
 		if (!editForm.vehicle_id) return;
 
@@ -284,6 +249,7 @@
 		if (!editForm.type_of_vehicle_enum) { editErrors.type = 'Required'; hasErr = true; }
 		if (!editForm.vehicle_color?.trim()) { editErrors.color = 'Required'; hasErr = true; }
 		if (editForm.nondriver_seats.trim() === '') { editErrors.seats = 'Required'; hasErr = true; }
+
 		const seats = parseIntOrNull(editForm.nondriver_seats);
 		if (!hasErr && (seats == null || seats < 0)) { editErrors.seats = 'Must be a non-negative integer'; hasErr = true; }
 		if (hasErr) return;
@@ -293,23 +259,11 @@
 			const payload = {
 				type_of_vehicle_enum: editForm.type_of_vehicle_enum,
 				vehicle_color: editForm.vehicle_color.trim(),
-				// send as NUMBER (or null) explicitly:
 				nondriver_seats: seats
 			};
 
-			// Force-return the updated row so we can verify the seat actually changed
-			const { data, error } = await supabase
-				.from('vehicles')
-				.update(payload)
-				.eq('vehicle_id', editForm.vehicle_id)
-				.select('vehicle_id,nondriver_seats')
-				.single();
-
+			const { error } = await supabase.from('vehicles').update(payload).eq('vehicle_id', editForm.vehicle_id);
 			if (error) throw error;
-
-			// Optional sanity check: if DB echoes a different type/shape
-			// you would see it here in devtools.
-			// console.log('updated row:', data);
 
 			setToast('Vehicle updated.', true);
 			showEditModal = false;
