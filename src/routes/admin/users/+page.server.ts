@@ -129,10 +129,12 @@ export const actions = {
 
     if (!isAuthorized) {
       console.error('User does not have permission to create users. Role:', userRole);
+      console.error('User role type:', typeof userRole, 'Is array:', Array.isArray(userRole));
       return { success: false, error: 'You do not have permission to create users. Admin or Super Admin role required.' };
     }
 
-    console.log('Current user authorized. Role:', userRole, 'Org ID:', currentUserProfile.org_id);
+    console.log('✅ Frontend: Current user authorized. Role:', JSON.stringify(userRole), 'Org ID:', currentUserProfile.org_id);
+    console.log('✅ Frontend: User ID:', user.id, 'Email:', user.email);
 
     const formData = await event.request.formData();
     const email = formData.get('email') as string;
@@ -193,9 +195,17 @@ export const actions = {
         console.log('Could not decode JWT token (this is okay):', e);
       }
 
-      console.log('Calling API with:', JSON.stringify(requestBody, null, 2));
-      console.log('Current user making request - ID:', user.id, 'Role:', userRole, 'Org:', currentUserProfile.org_id);
-      console.log('Using access token:', session.access_token?.substring(0, 20) + '...');
+      console.log('📤 Calling API endpoint:', `${API_BASE_URL}/staff-profiles`);
+      console.log('📤 Request body:', JSON.stringify(requestBody, null, 2));
+      console.log('📤 Current user making request:');
+      console.log('   - User ID:', user.id);
+      console.log('   - User Email:', user.email);
+      console.log('   - User Role:', JSON.stringify(userRole));
+      console.log('   - User Org ID:', currentUserProfile.org_id);
+      console.log('📤 Headers being sent:');
+      console.log('   - Authorization: Bearer', session.access_token?.substring(0, 30) + '...');
+      console.log('   - X-User-ID:', user.id);
+      console.log('   - X-User-Role:', Array.isArray(userRole) ? userRole.join(',') : String(userRole));
 
       const res = await fetch(`${API_BASE_URL}/staff-profiles`, {
         method: 'POST',
@@ -208,6 +218,10 @@ export const actions = {
         },
         body: JSON.stringify(requestBody)
       });
+
+      console.log('📥 API Response received:');
+      console.log('   - Status:', res.status, res.statusText);
+      console.log('   - Headers:', Object.fromEntries(res.headers.entries()));
 
       console.log('API response status:', res.status, res.statusText);
 
