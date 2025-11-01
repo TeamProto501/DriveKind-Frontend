@@ -166,6 +166,7 @@
       if (hasRole(["Admin", "Super Admin"])) {
         adminItems.push({ label: "Dashboard", href: "/admin/dash" });
         adminItems.push({ label: "User Management", href: "/admin/users" });
+        adminItems.push({ label: "Vehicle Management", href: "/admin/vehicle_management" });
         adminItems.push({ label: "Database", href: "/admin/database" });
         adminItems.push({ label: "Configuration", href: "/admin/config" });
         adminItems.push({ label: "Audit Logs", href: "/admin/audit" });
