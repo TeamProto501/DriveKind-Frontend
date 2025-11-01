@@ -97,6 +97,7 @@
     if (errorMessage) return;
 
     saving = true;
+    errorMessage = null;
     
     try {
       if (createMode) {
@@ -117,53 +118,90 @@
           body: formData
         });
 
-        const result = await response.json();
-        
-        console.log('Server action result:', result);
-        
-        // Parse data if it's a string
-        let actionData = result.data;
-        if (typeof actionData === 'string') {
-          try {
-            actionData = JSON.parse(actionData);
-          } catch (e) {
-            console.error('Failed to parse action data:', e);
-            errorMessage = 'Invalid response from server';
-            saving = false;
-            return;
-          }
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error('HTTP error:', response.status, errorText);
+          errorMessage = `Failed to create user: ${errorText || response.statusText}`;
+          saving = false;
+          return;
         }
-        
-        console.log('Parsed action data:', actionData);
-        
-        // Handle error types
-        if (result.type === 'failure' || result.type === 'error') {
-          errorMessage = actionData?.error || result.error?.message || 'Failed to create user';
+
+        let result;
+        try {
+          result = await response.json();
+        } catch (e) {
+          const text = await response.text();
+          console.error('Failed to parse JSON response:', text);
+          errorMessage = 'Invalid response from server';
           saving = false;
           return;
         }
         
-        // Check if data is an array (weird structure in your output)
-        if (Array.isArray(actionData)) {
-          const actualData = actionData[0];
-          if (actualData && actualData.success) {
-            console.log('User created successfully!');
-            // Success - continue to dispatch
-          } else {
-            errorMessage = actualData?.error || 'Failed to create user';
-            saving = false;
-            return;
-          }
-        } else {
-          // Normal object response
-          if (!actionData || actionData.success !== true) {
-            errorMessage = actionData?.error || 'Failed to create user';
+        console.log('Server action result:', JSON.stringify(result, null, 2));
+        
+        // Handle SvelteKit form action response structure
+        // SvelteKit returns { type: 'success' | 'failure' | 'error', status: number, data?: any }
+        if (result.type === 'failure' || result.type === 'error') {
+          const errorData = result.data || {};
+          const errorMsg = errorData.error || result.error?.message || 'Failed to create user';
+          console.error('Action failed with error:', JSON.stringify(errorData, null, 2));
+          errorMessage = errorMsg;
+          saving = false;
+          return;
+        }
+        
+        // Extract action data - could be direct object or nested
+        let actionData = result.data;
+        
+        // Handle string data (JSON stringified)
+        if (typeof actionData === 'string') {
+          try {
+            actionData = JSON.parse(actionData);
+          } catch (e) {
+            console.error('Failed to parse string data:', e);
+            errorMessage = 'Invalid response format from server';
             saving = false;
             return;
           }
         }
+        
+        // Handle array response - API returns [object, false, "error message"]
+        if (Array.isArray(actionData)) {
+          // Check if there's an error message in the array (usually at index 2)
+          if (actionData.length >= 3 && typeof actionData[2] === 'string') {
+            errorMessage = actionData[2]; // Use the error message directly
+            console.error('User creation failed with error:', actionData[2]);
+            saving = false;
+            return;
+          }
+          // If no error message string, use first element
+          actionData = actionData[0] || actionData;
+        }
+        
+        console.log('Parsed action data:', JSON.stringify(actionData, null, 2));
+        
+        // Check for success - handle numeric success values (1 = success, 0 = failure)
+        const isSuccess = actionData?.success === true || actionData?.success === 1;
+        
+        if (!actionData || !isSuccess) {
+          // Extract error message - could be in error field or as a string
+          let errorMsg = 'Failed to create user. Please check the console for details.';
+          
+          if (typeof actionData?.error === 'string') {
+            errorMsg = actionData.error;
+          } else if (actionData?.error) {
+            errorMsg = String(actionData.error);
+          }
+          
+          console.error('User creation failed. Full response:', JSON.stringify(actionData, null, 2));
+          console.error('Success value:', actionData?.success);
+          console.error('Error value:', actionData?.error);
+          errorMessage = errorMsg;
+          saving = false;
+          return;
+        }
 
-        console.log('User created successfully');
+        console.log('User created successfully:', actionData);
         // Don't call updateStaffProfile here - the server action already created everything
         
       } else if (user) {
