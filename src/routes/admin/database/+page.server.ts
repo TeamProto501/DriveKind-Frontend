@@ -10,7 +10,6 @@ export const load = async (event) => {
     throw redirect(302, '/login');
   }
 
-  // Get user's org_id from their staff profile
   const { data: userProfile } = await supabase
     .from('staff_profiles')
     .select('org_id')
@@ -21,13 +20,14 @@ export const load = async (event) => {
     throw error(403, 'User profile not found');
   }
 
-  // Define tables to query
+  // ADD destinations entry here
   const tables = [
     { name: 'staff_profiles', display: 'Staff Profiles', icon: 'users' },
-    { name: 'clients', display: 'Clients', icon: 'user' },
-    { name: 'rides', display: 'Rides', icon: 'car' },
-    { name: 'vehicles', display: 'Vehicles', icon: 'truck' },
-    { name: 'calls', display: 'Calls', icon: 'phone' }
+    { name: 'clients',        display: 'Clients',        icon: 'user'  },
+    { name: 'rides',          display: 'Rides',          icon: 'car'   },
+    { name: 'vehicles',       display: 'Vehicles',       icon: 'truck' },
+    { name: 'calls',          display: 'Calls',          icon: 'phone' },
+    { name: 'destinations',   display: 'Destinations',   icon: 'map'   } // ← NEW
   ];
   
   const tableData = await Promise.all(

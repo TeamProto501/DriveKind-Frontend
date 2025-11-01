@@ -11,7 +11,8 @@
     Truck, 
     Phone,
     X,
-    ChevronRight
+    ChevronRight,
+    MapPin            // ← ADD THIS
   } from '@lucide/svelte';
   
   let { data } = $props();
@@ -35,7 +36,8 @@
       user: User,
       car: Car,
       truck: Truck,
-      phone: Phone
+      phone: Phone,
+      map: MapPin       // ← ADD THIS
     };
     return icons[iconName] || Database;
   }
