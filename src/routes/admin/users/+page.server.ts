@@ -165,103 +165,43 @@ export const actions = {
       console.log('Auth user created with ID:', authData.user.id);
 
       // Ensure org_id is set from current user's org
-      const requestBody = {
+      const staffProfileData = {
         ...profileData,
         user_id: authData.user.id,
         org_id: currentUserProfile.org_id // Ensure org_id matches current user
       };
 
-      // Decode JWT token to see what user info it contains (for debugging)
-      try {
-        const tokenParts = session.access_token.split('.');
-        if (tokenParts.length === 3) {
-          // Decode base64 payload (Node.js compatible)
-          const base64Url = tokenParts[1];
-          const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-          const jsonPayload = decodeURIComponent(
-            atob(base64)
-              .split('')
-              .map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
-              .join('')
-          );
-          const payload = JSON.parse(jsonPayload);
-          console.log('JWT Token payload (user info in token):', JSON.stringify(payload, null, 2));
-          console.log('Token contains user_id:', payload.sub);
-          console.log('Token contains email:', payload.email);
-          console.log('Token contains metadata:', payload.user_metadata);
-          console.log('Token contains app_metadata:', payload.app_metadata);
-        }
-      } catch (e) {
-        console.log('Could not decode JWT token (this is okay):', e);
-      }
+      console.log('Creating staff profile directly in Supabase...');
+      console.log('Staff profile data:', JSON.stringify(staffProfileData, null, 2));
 
-      console.log('📤 Calling API endpoint:', `${API_BASE_URL}/staff-profiles`);
-      console.log('📤 Request body:', JSON.stringify(requestBody, null, 2));
-      console.log('📤 Current user making request:');
-      console.log('   - User ID:', user.id);
-      console.log('   - User Email:', user.email);
-      console.log('   - User Role:', JSON.stringify(userRole));
-      console.log('   - User Org ID:', currentUserProfile.org_id);
-      console.log('📤 Headers being sent:');
-      console.log('   - Authorization: Bearer', session.access_token?.substring(0, 30) + '...');
-      console.log('   - X-User-ID:', user.id);
-      console.log('   - X-User-Role:', Array.isArray(userRole) ? userRole.join(',') : String(userRole));
+      // Create staff profile directly in Supabase instead of via API
+      // This bypasses the API permission issue
+      const { data: staffProfile, error: profileError } = await supabase
+        .from('staff_profiles')
+        .insert(staffProfileData)
+        .select()
+        .single();
 
-      const res = await fetch(`${API_BASE_URL}/staff-profiles`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`,
-          // Add user info in headers as backup (some APIs expect this)
-          'X-User-ID': user.id,
-          'X-User-Role': Array.isArray(userRole) ? userRole.join(',') : String(userRole),
-        },
-        body: JSON.stringify(requestBody)
-      });
-
-      console.log('📥 API Response received:');
-      console.log('   - Status:', res.status, res.statusText);
-      console.log('   - Headers:', Object.fromEntries(res.headers.entries()));
-
-      console.log('API response status:', res.status, res.statusText);
-
-      const responseText = await res.text();
-      console.log('API response body:', responseText);
-
-      if (!res.ok) {
-        console.error('Failed to create staff profile, rolling back auth user');
-        console.error('Response status:', res.status);
-        console.error('Response text:', responseText);
+      if (profileError) {
+        console.error('Failed to create staff profile in Supabase:', profileError);
+        console.error('Error details:', JSON.stringify(profileError, null, 2));
         
-        // Try to parse error response
-        let errorMessage = `Failed to create staff profile (${res.status})`;
-        try {
-          const errorData = JSON.parse(responseText);
-          if (Array.isArray(errorData) && errorData[2]) {
-            errorMessage = errorData[2]; // Extract error message from array format
-          } else if (errorData.error || errorData.message) {
-            errorMessage = errorData.error || errorData.message;
-          }
-        } catch (e) {
-          errorMessage = responseText || errorMessage;
-        }
-        
+        // Roll back auth user creation
         await supabase.auth.admin.deleteUser(authData.user.id);
+        
+        // Try to provide helpful error message
+        let errorMessage = 'Failed to create staff profile';
+        if (profileError.code === '23505') {
+          errorMessage = 'A staff profile with this information already exists';
+        } else if (profileError.message) {
+          errorMessage = profileError.message;
+        }
+        
         return { success: false, error: errorMessage };
       }
 
-      // Try to parse success response
-      let responseData;
-      try {
-        responseData = JSON.parse(responseText);
-      } catch (e) {
-        responseData = responseText;
-      }
-      
-      console.log('Parsed API response:', responseData);
-
-      console.log('Staff profile created successfully');
-      return { success: true, userId: authData.user.id };
+      console.log('✅ Staff profile created successfully:', staffProfile);
+      return { success: true, userId: authData.user.id, staffProfile };
       
     } catch (err: any) {
       console.error('Create user error:', err);
