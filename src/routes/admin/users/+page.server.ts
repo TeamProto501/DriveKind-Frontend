@@ -169,7 +169,22 @@ export const actions = {
         org_id: currentUserProfile.org_id // Ensure org_id matches current user
       };
 
+      // Decode JWT token to see what user info it contains (for debugging)
+      try {
+        const tokenParts = session.access_token.split('.');
+        if (tokenParts.length === 3) {
+          const payload = JSON.parse(Buffer.from(tokenParts[1], 'base64').toString());
+          console.log('JWT Token payload (user info in token):', JSON.stringify(payload, null, 2));
+          console.log('Token contains user_id:', payload.sub);
+          console.log('Token contains email:', payload.email);
+          console.log('Token contains metadata:', payload.user_metadata);
+        }
+      } catch (e) {
+        console.log('Could not decode JWT token (this is okay)');
+      }
+
       console.log('Calling API with:', JSON.stringify(requestBody, null, 2));
+      console.log('Current user making request - ID:', user.id, 'Role:', userRole, 'Org:', currentUserProfile.org_id);
       console.log('Using access token:', session.access_token?.substring(0, 20) + '...');
 
       const res = await fetch(`${API_BASE_URL}/staff-profiles`, {
@@ -177,6 +192,9 @@ export const actions = {
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${session.access_token}`,
+          // Add user info in headers as backup (some APIs expect this)
+          'X-User-ID': user.id,
+          'X-User-Role': Array.isArray(userRole) ? userRole.join(',') : String(userRole),
         },
         body: JSON.stringify(requestBody)
       });
