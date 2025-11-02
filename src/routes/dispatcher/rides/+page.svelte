@@ -14,21 +14,19 @@
   import DriverMatchModal from '$lib/components/DriverMatchModal.svelte';
   import RideCompletionModal from '$lib/components/RideCompletionModal.svelte';
   import {
-    validateAddress, validateCity, validateState, validateZipCode, validateText,
+    validateAddress, validateCity, validateState, validateZipCode,
     validateRequired, validateDateTime, sanitizeInput, combineValidations
   } from '$lib/utils/validation';
 
   let { data }: { data: PageData } = $props();
 
   let searchTerm = $state("");
-  let activeTab = $state("requested"); // requested, active, reported, completed
-  onMount(() => {
-    // Keep tabs local for now to avoid $page error
-  });
+  let activeTab  = $state("requested"); // requested, active, reported, completed
+  onMount(() => {});
 
   let isUpdating = $state(false);
   let showCreateModal = $state(false);
-  let showEditModal = $state(false);
+  let showEditModal   = $state(false);
   let showConfirmModal = $state(false);
   let showDriverMatchModal = $state(false);
   let selectedRide: any = null;
@@ -38,6 +36,9 @@
     () => (data?.profile ? `${data.profile.first_name} ${data.profile.last_name}` : '')
   );
 
+  // Are we editing right now?
+  const isEditing = $derived(() => !!selectedRide && showEditModal);
+
   const userOrgId: number | null = data?.profile?.org_id ?? null;
 
   const filteredCalls = $derived(() => {
@@ -45,7 +46,6 @@
     return userOrgId ? all.filter((c: any) => c.org_id === userOrgId) : all;
   });
 
-  /* ======= enums from DB ======= */
   const STATUS_OPTIONS = [
     "Requested","Scheduled","In Progress","Completed","Cancelled","Reported","Pending"
   ];
@@ -57,13 +57,11 @@
     "Cancelled by Driver"
   ];
 
-  /* ======= derived clients filtered by org ======= */
   const filteredClients = $derived(() => {
     const all = data?.clients ?? [];
     return userOrgId ? all.filter((c: any) => c.org_id === userOrgId) : all;
   });
 
-  /* ======= SEARCH / FILTERS ======= */
   let filteredRides = $derived(() => {
     if (!data.rides) return [];
     return data.rides.filter((ride: any) => {
@@ -77,9 +75,9 @@
       );
       let matchesTab = false;
       if (activeTab === "requested") matchesTab = ride.status === "Requested";
-      else if (activeTab === "active") matchesTab = ["Scheduled","Assigned","In Progress"].includes(ride.status);
+      else if (activeTab === "active")   matchesTab = ["Scheduled","Assigned","In Progress"].includes(ride.status);
       else if (activeTab === "reported") matchesTab = ride.status === "Reported";
-      else if (activeTab === "completed") matchesTab = ["Completed","Cancelled"].includes(ride.status);
+      else if (activeTab === "completed")matchesTab = ["Completed","Cancelled"].includes(ride.status);
       return matches && matchesTab;
     });
   });
@@ -88,8 +86,8 @@
     if (!data.rides) return { requested: 0, active: 0, reported: 0, completed: 0 };
     return {
       requested: data.rides.filter((r: any) => r.status === "Requested").length,
-      active: data.rides.filter((r: any) => ["Scheduled","Assigned","In Progress"].includes(r.status)).length,
-      reported: data.rides.filter((r: any) => r.status === "Reported").length,
+      active:    data.rides.filter((r: any) => ["Scheduled","Assigned","In Progress"].includes(r.status)).length,
+      reported:  data.rides.filter((r: any) => r.status === "Reported").length,
       completed: data.rides.filter((r: any) => ["Completed","Cancelled"].includes(r.status)).length
     };
   });
@@ -98,21 +96,21 @@
     switch (status) {
       case "Requested": return "bg-gray-100 text-gray-800";
       case "Scheduled": return "bg-blue-100 text-blue-800";
-      case "Assigned": return "bg-yellow-100 text-yellow-800";
+      case "Assigned":  return "bg-yellow-100 text-yellow-800";
       case "In Progress": return "bg-orange-100 text-orange-800";
-      case "Reported": return "bg-purple-100 text-purple-800";
+      case "Reported":  return "bg-purple-100 text-purple-800";
       case "Completed": return "bg-green-100 text-green-800";
       case "Cancelled": return "bg-red-100 text-red-800";
-      default: return "bg-gray-100 text-gray-800";
+      default:          return "bg-gray-100 text-gray-800";
     }
   }
   const formatDate = (ts: string) => new Date(ts).toLocaleDateString();
   const formatTime = (ts: string) => new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  const getClientName = (ride: any) => ride.clients ? `${ride.clients.first_name} ${ride.clients.last_name}` : 'Unknown Client';
+  const getClientName  = (ride: any) => ride.clients ? `${ride.clients.first_name} ${ride.clients.last_name}` : 'Unknown Client';
   const getClientPhone = (ride: any) => ride.clients?.primary_phone || 'No phone';
-  const getDriverName = (ride: any) => ride.drivers ? `${ride.drivers.first_name} ${ride.drivers.last_name}` : 'Unassigned';
+  const getDriverName  = (ride: any) => ride.drivers ? `${ride.drivers.first_name} ${ride.drivers.last_name}` : 'Unassigned';
 
-  /* ===================== FORM MODEL (vehicle/driver removed) ===================== */
+  // ---------- Form model ----------
   type RideForm = {
     org_id: string;
     client_id: string;
@@ -135,7 +133,7 @@
     hours: string;
     donation: boolean;
     donation_amount: string;
-    riders: string;
+    riders: string; // number-like but as string for binding
     round_trip: boolean;
     purpose: string;
     estimated_appointment_length: string;
@@ -167,7 +165,7 @@
     hours: '',
     donation: false,
     donation_amount: '',
-    riders: '1',
+    riders: '0', // default excluding client
     round_trip: false,
     purpose: '',
     estimated_appointment_length: '',
@@ -177,9 +175,9 @@
     completion_status: ''
   });
 
-  /* wizard step state */
+  // wizard state
   let createStep = $state(1);
-  let editStep = $state(1);
+  let editStep   = $state(1);
   let stepErrors = $state<string[]>([]);
 
   function resetRideForm() {
@@ -205,7 +203,7 @@
       hours: '',
       donation: false,
       donation_amount: '',
-      riders: '1',
+      riders: '0',
       round_trip: false,
       purpose: '',
       estimated_appointment_length: '',
@@ -217,7 +215,12 @@
     stepErrors = [];
   }
 
-  /* ===== auto-fill pickup address from client when pickup_from_home is true ===== */
+  // Lock donation amount to 0.00 when unchecked
+  $effect(() => {
+    if (!rideForm.donation) rideForm.donation_amount = '0.00';
+  });
+
+  // ------ pickup-from-home autofill ------
   function applyClientAddressToPickup() {
     const cid = parseInt(rideForm.client_id || '0', 10);
     if (!cid) return;
@@ -249,7 +252,7 @@
     showCreateModal = true;
   }
 
-  // helper to format for datetime-local (local timezone)
+  // Format for datetime-local
   function toLocalDateTimeInput(ts: string | null | undefined) {
     if (!ts) return '';
     const d = new Date(ts);
@@ -278,15 +281,15 @@
       dropoff_city: ride.dropoff_city ?? '',
       dropoff_state: ride.dropoff_state ?? '',
       dropoff_zipcode: ride.dropoff_zipcode ?? '',
-      appointment_time: toLocalDateTimeInput(ride.appointment_time),
-      pickup_time: toLocalDateTimeInput(ride.pickup_time),
+      appointment_time: toLocalDateTimeInput(ride.appointment_time) || '',
+      pickup_time: toLocalDateTimeInput(ride.pickup_time) || '',
       status: ride.status ?? 'Requested',
       notes: ride.notes ?? '',
       miles_driven: ride.miles_driven?.toString?.() ?? '',
       hours: ride.hours?.toString?.() ?? '',
       donation: !!ride.donation,
-      donation_amount: ride.donation_amount?.toString?.() ?? '',
-      riders: (ride.riders ?? 1).toString(),
+      donation_amount: ride.donation_amount?.toString?.() ?? (ride.donation ? '0.00' : '0.00'),
+      riders: (ride.riders ?? 0).toString(),
       round_trip: !!ride.round_trip,
       purpose: ride.purpose ?? '',
       estimated_appointment_length: ride.estimated_appointment_length ?? '',
@@ -311,15 +314,32 @@
     showDriverMatchModal = true;
   }
 
-  /* ===================== CREATE / UPDATE helpers ===================== */
-  function toISOorNull(v: string) {
-    return v ? new Date(v).toISOString() : null;
+  // ---------- submit helpers ----------
+  const toISOorNull = (v: string) => (v ? new Date(v).toISOString() : null);
+
+  function numFromStr(s: string, fallback: number | null): number | null {
+    if (s === '' || s === null || s === undefined) return fallback;
+    const n = parseFloat(s as any);
+    return Number.isFinite(n) ? n : fallback;
   }
 
+  // Build payload; when editing, fall back to selectedRide for REQUIRED fields if blank
   function buildPayload(form: RideForm) {
-    return {
-      org_id: form.org_id ? parseInt(form.org_id) : null,
-      client_id: form.client_id ? parseInt(form.client_id) : null,
+    const base = selectedRide ?? {};
+
+    // values, preferring form, falling back to existing for required fields in edit mode
+    const org_id              = form.org_id            || (isEditing() ? String(base.org_id ?? '') : '');
+    const client_id           = form.client_id         || (isEditing() ? String(base.client_id ?? '') : '');
+    const destination_name    = form.destination_name  || (isEditing() ? String(base.destination_name ?? '') : '');
+    const dropoff_address     = form.dropoff_address   || (isEditing() ? String(base.dropoff_address ?? '') : '');
+    const dropoff_city        = form.dropoff_city      || (isEditing() ? String(base.dropoff_city ?? '') : '');
+    const dropoff_state       = form.dropoff_state     || (isEditing() ? String(base.dropoff_state ?? '') : '');
+    const dropoff_zipcode     = form.dropoff_zipcode   || (isEditing() ? String(base.dropoff_zipcode ?? '') : '');
+    const appointment_time_in = form.appointment_time  || (isEditing() ? toLocalDateTimeInput(base.appointment_time) : '');
+
+    const payload = {
+      org_id: org_id ? parseInt(org_id) : null,
+      client_id: client_id ? parseInt(client_id) : null,
       dispatcher_user_id: form.dispatcher_user_id || null,
 
       alt_pickup_address: sanitizeInput(form.alt_pickup_address) || null,
@@ -328,52 +348,72 @@
       alt_pickup_state: sanitizeInput(form.alt_pickup_state) || null,
       alt_pickup_zipcode: sanitizeInput(form.alt_pickup_zipcode) || null,
 
-      dropoff_address: sanitizeInput(form.dropoff_address) || null,
+      dropoff_address: sanitizeInput(dropoff_address) || null,
       dropoff_address2: sanitizeInput(form.dropoff_address2) || null,
-      dropoff_city: sanitizeInput(form.dropoff_city) || null,
-      dropoff_state: sanitizeInput(form.dropoff_state) || null,
-      dropoff_zipcode: sanitizeInput(form.dropoff_zipcode) || null,
+      dropoff_city: sanitizeInput(dropoff_city) || null,
+      dropoff_state: sanitizeInput(dropoff_state) || null,
+      dropoff_zipcode: sanitizeInput(dropoff_zipcode) || null,
 
-      appointment_time: toISOorNull(form.appointment_time),
+      appointment_time: toISOorNull(appointment_time_in),
       pickup_time: toISOorNull(form.pickup_time),
+
       status: form.status,
       notes: form.notes ? sanitizeInput(form.notes) : null,
-      miles_driven: form.miles_driven ? parseFloat(form.miles_driven) : null,
-      hours: form.hours ? parseFloat(form.hours) : null,
+
+      miles_driven: numFromStr(form.miles_driven, null),
+      hours:        numFromStr(form.hours, null),
+
       donation: !!form.donation,
-      donation_amount: form.donation_amount ? parseFloat(form.donation_amount) : null,
-      riders: form.riders ? parseInt(form.riders) : 1,
+      donation_amount: form.donation ? numFromStr(form.donation_amount, 0) : 0,
+
+      // allow zero riders; don't coerce 0 to 1
+      riders: ((): number => {
+        if (form.riders === '' || form.riders === null || form.riders === undefined) {
+          return 0;
+        }
+        const n = parseInt(form.riders, 10);
+        return Number.isFinite(n) ? n : 0;
+      })(),
+
       round_trip: !!form.round_trip,
       purpose: sanitizeInput(form.purpose) || null,
       estimated_appointment_length: sanitizeInput(form.estimated_appointment_length) || null,
-      destination_name: sanitizeInput(form.destination_name) || null,
+      destination_name: sanitizeInput(destination_name) || null,
       pickup_from_home: !!form.pickup_from_home,
       call_id: form.call_id ? parseInt(form.call_id) : null,
       completion_status: form.completion_status || null
     };
+
+    // quick debug log (remove later)
+    console.debug('Update payload →', payload);
+    return payload;
   }
 
-  /* ===== per-step validation (updated for new rules) ===== */
+  // ---------- validation ----------
   function validateStep(step: number): boolean {
     stepErrors = [];
 
     if (step === 1) {
-      const v = combineValidations(
-        validateRequired(rideForm.org_id, 'Organization'),
-        validateRequired(rideForm.client_id, 'Client'),
-        validateDateTime(rideForm.appointment_time, 'Appointment time')
-      );
+      // On create, appointment time required. On edit, we *try* to fall back to existing,
+      // but require it if both are blank for any reason.
+      const needAppt = !isEditing() && true;
+      const validators = [
+        validateRequired(rideForm.org_id || (isEditing() ? String(selectedRide?.org_id ?? '') : ''), 'Organization'),
+        validateRequired(rideForm.client_id || (isEditing() ? String(selectedRide?.client_id ?? '') : ''), 'Client'),
+      ];
+      if (needAppt) validators.push(validateDateTime(rideForm.appointment_time, 'Appointment time'));
+      const v = combineValidations(...validators);
       if (!v.valid) stepErrors = v.errors;
       return v.valid;
     }
 
     if (step === 2) {
       const v = combineValidations(
-        validateRequired(rideForm.destination_name, 'Destination name'),
-        validateRequired(rideForm.dropoff_address, 'Dropoff address'),
-        validateCity(rideForm.dropoff_city || ''),
-        validateState(rideForm.dropoff_state || ''),
-        validateZipCode(rideForm.dropoff_zipcode || ''),
+        validateRequired(rideForm.destination_name || (isEditing() ? String(selectedRide?.destination_name ?? '') : ''), 'Destination name'),
+        validateRequired(rideForm.dropoff_address  || (isEditing() ? String(selectedRide?.dropoff_address  ?? '') : ''), 'Dropoff address'),
+        validateCity(rideForm.dropoff_city    || (isEditing() ? String(selectedRide?.dropoff_city    ?? '') : '')),
+        validateState(rideForm.dropoff_state  || (isEditing() ? String(selectedRide?.dropoff_state  ?? '') : '')),
+        validateZipCode(rideForm.dropoff_zipcode || (isEditing() ? String(selectedRide?.dropoff_zipcode ?? '') : '')),
 
         !rideForm.pickup_from_home && rideForm.alt_pickup_address ? validateAddress(rideForm.alt_pickup_address, 'Alternative pickup address') : { valid: true, errors: [] },
         !rideForm.pickup_from_home && rideForm.alt_pickup_city ? validateCity(rideForm.alt_pickup_city) : { valid: true, errors: [] },
@@ -386,7 +426,7 @@
 
     if (step === 3) {
       const errs: string[] = [];
-      if (rideForm.donation_amount && isNaN(Number(rideForm.donation_amount))) {
+      if (rideForm.donation && rideForm.donation_amount && isNaN(Number(rideForm.donation_amount))) {
         errs.push('Donation amount must be a number like 10 or 10.00');
       }
       stepErrors = errs;
@@ -404,21 +444,12 @@
     return true;
   }
 
-  function nextCreate() {
-    if (validateStep(createStep)) createStep = Math.min(4, createStep + 1);
-  }
-  function prevCreate() {
-    createStep = Math.max(1, createStep - 1);
-    stepErrors = [];
-  }
-  function nextEdit() {
-    if (validateStep(editStep)) editStep = Math.min(4, editStep + 1);
-  }
-  function prevEdit() {
-    editStep = Math.max(1, editStep - 1);
-    stepErrors = [];
-  }
+  function nextCreate() { if (validateStep(createStep)) createStep = Math.min(3, createStep + 1); }
+  function prevCreate() { createStep = Math.max(1, createStep - 1); stepErrors = []; }
+  function nextEdit()   { if (validateStep(editStep))   editStep   = Math.min(4, editStep + 1); }
+  function prevEdit()   { editStep   = Math.max(1, editStep - 1);   stepErrors = []; }
 
+  // ---------- submit ----------
   async function createRide() {
     const validations = combineValidations(
       validateRequired(rideForm.org_id, 'Organization'),
@@ -702,15 +733,15 @@
         <p class="text-sm text-gray-600">Fill in the details below. Items marked * are required.</p>
       </div>
 
-      <!-- Stepper -->
-      <div class="flex items-center justify-center gap-3 mb-4">
-        {#each [1,2,3,4] as s}
-          <div class="flex items-center gap-2">
-            <div class="w-8 h-8 rounded-full flex items-center justify-center text-sm {createStep===s ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700'}">{s}</div>
-            {#if s < 4}<div class="w-8 h-[2px] {createStep> s ? 'bg-blue-600' : 'bg-gray-200'}"></div>{/if}
-          </div>
-        {/each}
-      </div>
+      <!-- CREATE stepper -->
+    <div class="flex items-center justify-center gap-3 mb-4">
+      {#each [1,2,3] as s}
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-full flex items-center justify-center text-sm {createStep===s ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700'}">{s}</div>
+          {#if s < 3}<div class="w-8 h-[2px] {createStep> s ? 'bg-blue-600' : 'bg-gray-200'}"></div>{/if}
+        </div>
+      {/each}
+    </div>
 
       {#if stepErrors.length}
         <div class="mb-4 bg-red-50 border border-red-200 text-red-800 rounded-lg p-3 text-sm">
@@ -785,165 +816,155 @@
     {/if}
 
       {#if createStep === 2}
-        <!-- Pickup & Dropoff -->
-        <div class="border rounded-lg p-4 mb-2">
-          <h3 class="font-semibold mb-3">Pickup &amp; Dropoff</h3>
+      <!-- Pickup & Dropoff -->
+      <div class="border rounded-lg p-4 mb-2">
+        <h3 class="font-semibold mb-3">Pickup &amp; Dropoff</h3>
 
-          <div class="mb-3">
-            <div class="flex items-center gap-2">
-              <input id="pickup_from_home" type="checkbox" bind:checked={rideForm.pickup_from_home} />
-              <Label for="pickup_from_home">Pickup from client's home</Label>
-            </div>
-            <p class="text-xs text-gray-500 mt-1">If checked, pickup address is auto-filled from the client and locked.</p>
+        <!-- Pickup controls -->
+        <div class="mb-3">
+          <div class="flex items-center gap-2">
+            <input id="pickup_from_home" type="checkbox" bind:checked={rideForm.pickup_from_home} />
+            <Label for="pickup_from_home">Pickup from client's home</Label>
           </div>
+          <p class="text-xs text-gray-500 mt-1">If checked, pickup address is auto-filled from the client and locked.</p>
+        </div>
 
-          <div class="grid gap-3">
+        <!-- Pickup fields -->
+        <div class="grid gap-3">
+          <div>
+            <Label for="alt_pickup_address">Pickup Street Address</Label>
+            <Input id="alt_pickup_address" bind:value={rideForm.alt_pickup_address} class={rideForm.pickup_from_home ? 'bg-gray-100' : ''} disabled={rideForm.pickup_from_home} placeholder="561 Timber Glen Trail" />
+          </div>
+          <div class="grid gap-3 md:grid-cols-3">
             <div>
-              <Label for="alt_pickup_address">Pickup Street Address</Label>
-              <Input id="alt_pickup_address" bind:value={rideForm.alt_pickup_address} class={rideForm.pickup_from_home ? 'bg-gray-100' : ''} disabled={rideForm.pickup_from_home} placeholder="123 Main St" />
-            </div>
-            <div class="grid gap-3 md:grid-cols-3">
-              <div>
-                <Label for="alt_pickup_city">Pickup City</Label>
-                <Input id="alt_pickup_city" bind:value={rideForm.alt_pickup_city} class={rideForm.pickup_from_home ? 'bg-gray-100' : ''} disabled={rideForm.pickup_from_home} />
-              </div>
-              <div>
-                <Label for="alt_pickup_state">Pickup State</Label>
-                <Input id="alt_pickup_state" bind:value={rideForm.alt_pickup_state} class={rideForm.pickup_from_home ? 'bg-gray-100' : ''} disabled={rideForm.pickup_from_home} placeholder="NY" />
-              </div>
-              <div>
-                <Label for="alt_pickup_zipcode">Pickup ZIP</Label>
-                <Input id="alt_pickup_zipcode" bind:value={rideForm.alt_pickup_zipcode} class={rideForm.pickup_from_home ? 'bg-gray-100' : ''} disabled={rideForm.pickup_from_home} />
-              </div>
+              <Label for="alt_pickup_city">Pickup City</Label>
+              <Input id="alt_pickup_city" bind:value={rideForm.alt_pickup_city} class={rideForm.pickup_from_home ? 'bg-gray-100' : ''} disabled={rideForm.pickup_from_home} placeholder="Penfield" />
             </div>
             <div>
-              <Label for="alt_pickup_address2">Pickup Address 2</Label>
-              <Input id="alt_pickup_address2" bind:value={rideForm.alt_pickup_address2} class={rideForm.pickup_from_home ? 'bg-gray-100' : ''} disabled={rideForm.pickup_from_home} placeholder="Apt, Suite, etc." />
+              <Label for="alt_pickup_state">Pickup State</Label>
+              <Input id="alt_pickup_state" bind:value={rideForm.alt_pickup_state} class={rideForm.pickup_from_home ? 'bg-gray-100' : ''} disabled={rideForm.pickup_from_home} placeholder="NY" />
+            </div>
+            <div>
+              <Label for="alt_pickup_zipcode">Pickup ZIP</Label>
+              <Input id="alt_pickup_zipcode" bind:value={rideForm.alt_pickup_zipcode} class={rideForm.pickup_from_home ? 'bg-gray-100' : ''} disabled={rideForm.pickup_from_home} placeholder="14625" />
             </div>
           </div>
+          <div>
+            <Label for="alt_pickup_address2">Pickup Address 2</Label>
+            <Input id="alt_pickup_address2" bind:value={rideForm.alt_pickup_address2} class={rideForm.pickup_from_home ? 'bg-gray-100' : ''} disabled={rideForm.pickup_from_home} placeholder="Apt, Suite, etc." />
+          </div>
+        </div>
 
-          <div class="mt-4 grid gap-3">
+        <!-- Dropoff section label -->
+        <div class="mt-6">
+          <Label class="text-sm font-semibold text-gray-700">Dropoff Location</Label>
+          <p class="text-xs text-gray-500">Where the client will be dropped off.</p>
+        </div>
+
+        <!-- Dropoff fields -->
+        <div class="mt-3 grid gap-3">
+          <div>
+            <Label for="destination_name">Destination Name *</Label>
+            <Input id="destination_name" bind:value={rideForm.destination_name} placeholder="e.g., RGH Medical Center" />
+          </div>
+
+          <div class="grid gap-3 md:grid-cols-2">
             <div>
-              <Label for="destination_name">Destination Name *</Label>
-              <Input id="destination_name" bind:value={rideForm.destination_name} placeholder="e.g., RGH medical center" />
+              <Label for="dropoff_address">Dropoff Street Address *</Label>
+              <Input id="dropoff_address" bind:value={rideForm.dropoff_address} placeholder="1000 South Ave" />
             </div>
-
-            <div class="grid gap-3 md:grid-cols-2">
-              <div>
-                <Label for="dropoff_address">Dropoff Street Address *</Label>
-                <Input id="dropoff_address" bind:value={rideForm.dropoff_address} placeholder="Street address" />
-              </div>
-              <div>
-                <Label for="dropoff_address2">Dropoff Address 2</Label>
-                <Input id="dropoff_address2" bind:value={rideForm.dropoff_address2} placeholder="Suite, Floor, etc." />
-              </div>
+            <div>
+              <Label for="dropoff_address2">Dropoff Address 2</Label>
+              <Input id="dropoff_address2" bind:value={rideForm.dropoff_address2} placeholder="Suite, Floor, etc." />
             </div>
+          </div>
 
-            <div class="grid gap-3 md:grid-cols-3">
-              <div>
-                <Label for="dropoff_city">Dropoff City *</Label>
-                <Input id="dropoff_city" bind:value={rideForm.dropoff_city} />
-              </div>
-              <div>
-                <Label for="dropoff_state">Dropoff State *</Label>
-                <Input id="dropoff_state" bind:value={rideForm.dropoff_state} placeholder="e.g., NY" />
-              </div>
-              <div>
-                <Label for="dropoff_zipcode">Dropoff ZIP *</Label>
-                <Input id="dropoff_zipcode" bind:value={rideForm.dropoff_zipcode} />
-              </div>
+          <div class="grid gap-3 md:grid-cols-3">
+            <div>
+              <Label for="dropoff_city">Dropoff City *</Label>
+              <Input id="dropoff_city" bind:value={rideForm.dropoff_city} placeholder="e.g., Rochester" />
+            </div>
+            <div>
+              <Label for="dropoff_state">Dropoff State *</Label>
+              <Input id="dropoff_state" bind:value={rideForm.dropoff_state} placeholder="e.g., NY" />
+            </div>
+            <div>
+              <Label for="dropoff_zipcode">Dropoff ZIP *</Label>
+              <Input id="dropoff_zipcode" bind:value={rideForm.dropoff_zipcode} placeholder="e.g., 14620" />
             </div>
           </div>
         </div>
-      {/if}
+      </div>
+    {/if}
 
       {#if createStep === 3}
-        <!-- Ride Details -->
-        <div class="border rounded-lg p-4 mb-2">
-          <h3 class="font-semibold mb-3">Ride Details</h3>
-          <div class="grid gap-3 md:grid-cols-3">
-            <div>
-              <Label for="purpose">Purpose</Label>
-              <Input id="purpose" bind:value={rideForm.purpose} placeholder="e.g., Medical" />
-            </div>
-            <div>
-              <Label for="estimated_appointment_length">Estimated Appointment Length</Label>
-              <Input id="estimated_appointment_length" bind:value={rideForm.estimated_appointment_length} placeholder="e.g., 30 min" />
-            </div>
-            <div>
-              <Label for="riders"># of Passengers</Label>
-              <Input id="riders" type="number" min="0" bind:value={rideForm.riders} />
-            </div>
-          </div>
+      <!-- Ride Details -->
+      <div class="border rounded-lg p-4 mb-2">
+        <h3 class="font-semibold mb-3">Ride Details</h3>
 
-          <div class="mt-3 grid gap-3 md:grid-cols-3">
-            <div class="flex items-center gap-2">
-              <input id="round_trip" type="checkbox" bind:checked={rideForm.round_trip} />
-              <Label for="round_trip">Round trip</Label>
-            </div>
-            <div class="flex items-center gap-2">
-              <input id="donation" type="checkbox" bind:checked={rideForm.donation} />
-              <Label for="donation">Donation ride</Label>
-            </div>
-            <div>
-              <Label for="donation_amount">Donation Amount</Label>
-              <Input id="donation_amount" type="number" step="0.01" bind:value={rideForm.donation_amount} placeholder="0.00" />
-            </div>
+        <div class="grid gap-3 md:grid-cols-3">
+          <div>
+            <label for="purpose" class="block text-sm font-medium text-gray-700">Purpose</label>
+            <Input id="purpose" bind:value={rideForm.purpose} placeholder="e.g., Medical" />
           </div>
-
-          <div class="mt-3 grid gap-3 md:grid-cols-2">
-            <div>
-              <Label for="status">Status</Label>
-              <select id="status" bind:value={rideForm.status} class="w-full px-3 py-2 border border-gray-300 rounded-lg">
-                {#each STATUS_OPTIONS as s}<option value={s}>{s}</option>{/each}
-              </select>
-            </div>
-            <div>
-              <Label for="completion_status">Completion Status</Label>
-              <select id="completion_status" bind:value={rideForm.completion_status} class="w-full px-3 py-2 border border-gray-300 rounded-lg">
-                <option value="">—</option>
-                {#each COMPLETION_STATUS_OPTIONS as s}<option value={s}>{s}</option>{/each}
-              </select>
-            </div>
+          <div>
+            <label for="estimated_appointment_length" class="block text-sm font-medium text-gray-700">Estimated appointment length</label>
+            <Input id="estimated_appointment_length" bind:value={rideForm.estimated_appointment_length} placeholder="e.g., 30 min" />
           </div>
-
-          <div class="mt-3">
-            <Label for="notes">Notes</Label>
-            <Textarea id="notes" bind:value={rideForm.notes} placeholder="Anything special the driver should know" />
+          <div>
+           <label for="riders" class="block text-sm font-medium text-gray-700"># of additional passengers (excluding client)</label>
+            <Input id="riders" type="number" min="0" bind:value={rideForm.riders} />
           </div>
         </div>
-      {/if}
 
-      {#if createStep === 4}
-        <!-- Completion / Metrics -->
-        <div class="border rounded-lg p-4 mb-2">
-          <h3 class="font-semibold mb-3">Completion / Metrics (Optional)</h3>
-          <div class="grid gap-3 md:grid-cols-3">
-            <div>
-              <Label for="miles_driven">Miles Driven</Label>
-              <Input id="miles_driven" type="number" step="0.1" bind:value={rideForm.miles_driven} />
-            </div>
-            <div>
-              <Label for="hours">Hours</Label>
-              <Input id="hours" type="number" step="0.1" bind:value={rideForm.hours} />
-            </div>
-            <div>
-              <Label for="call_id_2">Linked Call</Label>
-              <select
-                id="call_id_2"
-                bind:value={rideForm.call_id}
-                class="w-full px-3 py-2 border border-gray-300 rounded-lg"
-              >
-                <option value="">Select a call (optional)…</option>
-                {#each filteredCalls() as call}
-                  <option value={String(call.call_id)}>
-                    {call.call_id} • {new Date(call.call_time).toLocaleString()} • {call.call_type} • {call.caller_first_name} {call.caller_last_name}
-                  </option>
-                {/each}
-              </select>
-            </div>
+        <div class="mt-3 grid gap-3 md:grid-cols-3">
+          <!-- Round trip -->
+          <label for="round_trip" class="inline-flex items-center gap-2 cursor-pointer select-none">
+            <input id="round_trip" type="checkbox"
+                  class="h-4 w-4 text-blue-600 border-gray-300 rounded"
+                  bind:checked={rideForm.round_trip} />
+            <span class="text-sm font-medium text-gray-700">Round trip</span>
+          </label>
+
+          <!-- Donation? -->
+          <label for="donation" class="inline-flex items-center gap-2 cursor-pointer select-none">
+            <input id="donation" type="checkbox"
+                  class="h-4 w-4 text-blue-600 border-gray-300 rounded"
+                  bind:checked={rideForm.donation} />
+            <span class="text-sm font-medium text-gray-700">Donation?</span>
+          </label>
+
+          <!-- Donation amount (locked unless donation=true) -->
+          <div>
+            <label for="donation_amount" class="block text-sm font-medium text-gray-700">Donation amount (USD)</label>
+            <Input
+              id="donation_amount"
+              type="number"
+              step="0.01"
+              bind:value={rideForm.donation_amount}
+              placeholder="0.00"
+              disabled={!rideForm.donation}
+              class={!rideForm.donation ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''}
+            />
           </div>
         </div>
+
+        <div class="mt-3 grid gap-3 md:grid-cols-2">
+          <div>
+            <label for="status" class="block text-sm font-medium text-gray-700">Status</label>
+            <select id="status" bind:value={rideForm.status} class="w-full px-3 py-2 border border-gray-300 rounded-lg">
+              {#each STATUS_OPTIONS as s}<option value={s}>{s}</option>{/each}
+            </select>
+          </div>
+
+          <!-- NOTE: Completion Status intentionally omitted for CREATE -->
+        </div>
+
+        <div class="mt-3">
+          <label for="notes" class="block text-sm font-medium text-gray-700">Notes for driver</label>
+          <Textarea id="notes" bindvalue={rideForm.notes} placeholder="Anything special the driver should know" />
+        </div>
+      </div>
       {/if}
 
       <div class="flex items-center justify-between mt-6">
@@ -954,7 +975,7 @@
         </div>
         <div class="flex gap-2">
           <button onclick={() => (showCreateModal = false)} class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors">Cancel</button>
-          {#if createStep < 4}
+          {#if createStep < 3}
             <button onclick={nextCreate} class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors">
               Next
             </button>
@@ -1058,95 +1079,139 @@
     {/if}
 
       {#if editStep === 2}
-        <div class="border rounded-lg p-4 mb-2">
-          <h3 class="font-semibold mb-3">Pickup &amp; Dropoff</h3>
-          <div class="mb-3">
-            <div class="flex items-center gap-2">
-              <input id="e_pickup_from_home" type="checkbox" bind:checked={rideForm.pickup_from_home} />
-              <Label for="e_pickup_from_home">Pickup from client's home</Label>
-            </div>
-          </div>
+      <div class="border rounded-lg p-4 mb-2">
+        <h3 class="font-semibold mb-3">Pickup &amp; Dropoff</h3>
 
-          <div class="grid gap-3">
-            <div><Label for="e_alt_pickup_address">Pickup Street Address</Label><Input id="e_alt_pickup_address" bind:value={rideForm.alt_pickup_address} class={rideForm.pickup_from_home ? 'bg-gray-100' : ''} disabled={rideForm.pickup_from_home} /></div>
-            <div class="grid gap-3 md:grid-cols-3">
-              <div><Label for="e_alt_pickup_city">Pickup City</Label><Input id="e_alt_pickup_city" bind:value={rideForm.alt_pickup_city} class={rideForm.pickup_from_home ? 'bg-gray-100' : ''} disabled={rideForm.pickup_from_home} /></div>
-              <div><Label for="e_alt_pickup_state">Pickup State</Label><Input id="e_alt_pickup_state" bind:value={rideForm.alt_pickup_state} class={rideForm.pickup_from_home ? 'bg-gray-100' : ''} disabled={rideForm.pickup_from_home} /></div>
-              <div><Label for="e_alt_pickup_zipcode">Pickup ZIP</Label><Input id="e_alt_pickup_zipcode" bind:value={rideForm.alt_pickup_zipcode} class={rideForm.pickup_from_home ? 'bg-gray-100' : ''} disabled={rideForm.pickup_from_home} /></div>
-            </div>
-            <div><Label for="e_alt_pickup_address2">Pickup Address 2</Label><Input id="e_alt_pickup_address2" bind:value={rideForm.alt_pickup_address2} class={rideForm.pickup_from_home ? 'bg-gray-100' : ''} disabled={rideForm.pickup_from_home} /></div>
-          </div>
-
-          <div class="mt-4 grid gap-3">
-            <div><Label for="e_destination_name">Destination Name *</Label><Input id="e_destination_name" bind:value={rideForm.destination_name} /></div>
-            <div class="grid gap-3 md:grid-cols-2">
-              <div><Label for="e_dropoff_address">Dropoff Street Address *</Label><Input id="e_dropoff_address" bind:value={rideForm.dropoff_address} /></div>
-              <div><Label for="e_dropoff_address2">Dropoff Address 2</Label><Input id="e_dropoff_address2" bind:value={rideForm.dropoff_address2} /></div>
-            </div>
-            <div class="grid gap-3 md:grid-cols-3">
-              <div><Label for="e_dropoff_city">Dropoff City *</Label><Input id="e_dropoff_city" bind:value={rideForm.dropoff_city} /></div>
-              <div><Label for="e_dropoff_state">Dropoff State *</Label><Input id="e_dropoff_state" bind:value={rideForm.dropoff_state} /></div>
-              <div><Label for="e_dropoff_zipcode">Dropoff ZIP *</Label><Input id="e_dropoff_zipcode" bind:value={rideForm.dropoff_zipcode} /></div>
-            </div>
+        <!-- Pickup controls -->
+        <div class="mb-3">
+          <div class="flex items-center gap-2">
+            <input id="e_pickup_from_home" type="checkbox" bind:checked={rideForm.pickup_from_home} />
+            <Label for="e_pickup_from_home">Pickup from client's home</Label>
           </div>
         </div>
-      {/if}
+
+        <!-- Pickup fields -->
+        <div class="grid gap-3">
+          <div><Label for="e_alt_pickup_address">Pickup Street Address</Label><Input id="e_alt_pickup_address" bind:value={rideForm.alt_pickup_address} class={rideForm.pickup_from_home ? 'bg-gray-100' : ''} disabled={rideForm.pickup_from_home} placeholder="561 Timber Glen Trail" /></div>
+          <div class="grid gap-3 md:grid-cols-3">
+            <div><Label for="e_alt_pickup_city">Pickup City</Label><Input id="e_alt_pickup_city" bind:value={rideForm.alt_pickup_city} class={rideForm.pickup_from_home ? 'bg-gray-100' : ''} disabled={rideForm.pickup_from_home} placeholder="Penfield" /></div>
+            <div><Label for="e_alt_pickup_state">Pickup State</Label><Input id="e_alt_pickup_state" bind:value={rideForm.alt_pickup_state} class={rideForm.pickup_from_home ? 'bg-gray-100' : ''} disabled={rideForm.pickup_from_home} placeholder="NY" /></div>
+            <div><Label for="e_alt_pickup_zipcode">Pickup ZIP</Label><Input id="e_alt_pickup_zipcode" bind:value={rideForm.alt_pickup_zipcode} class={rideForm.pickup_from_home ? 'bg-gray-100' : ''} disabled={rideForm.pickup_from_home} placeholder="14625" /></div>
+          </div>
+          <div><Label for="e_alt_pickup_address2">Pickup Address 2</Label><Input id="e_alt_pickup_address2" bind:value={rideForm.alt_pickup_address2} class={rideForm.pickup_from_home ? 'bg-gray-100' : ''} disabled={rideForm.pickup_from_home} placeholder="Apt, Suite, etc." /></div>
+        </div>
+
+        <!-- Dropoff section label -->
+        <div class="mt-6">
+          <Label class="text-sm font-semibold text-gray-700">Dropoff Location</Label>
+          <p class="text-xs text-gray-500">Where the client will be dropped off.</p>
+        </div>
+
+        <!-- Dropoff fields -->
+        <div class="mt-3 grid gap-3">
+          <div><Label for="e_destination_name">Destination Name *</Label><Input id="e_destination_name" bind:value={rideForm.destination_name} placeholder="e.g., RGH Medical Center" /></div>
+          <div class="grid gap-3 md:grid-cols-2">
+            <div><Label for="e_dropoff_address">Dropoff Street Address *</Label><Input id="e_dropoff_address" bind:value={rideForm.dropoff_address} placeholder="1000 South Ave" /></div>
+            <div><Label for="e_dropoff_address2">Dropoff Address 2</Label><Input id="e_dropoff_address2" bind:value={rideForm.dropoff_address2} placeholder="Suite, Floor, etc." /></div>
+          </div>
+          <div class="grid gap-3 md:grid-cols-3">
+            <div><Label for="e_dropoff_city">Dropoff City *</Label><Input id="e_dropoff_city" bind:value={rideForm.dropoff_city} placeholder="e.g., Rochester" /></div>
+            <div><Label for="e_dropoff_state">Dropoff State *</Label><Input id="e_dropoff_state" bind:value={rideForm.dropoff_state} placeholder="e.g., NY" /></div>
+            <div><Label for="e_dropoff_zipcode">Dropoff ZIP *</Label><Input id="e_dropoff_zipcode" bind:value={rideForm.dropoff_zipcode} placeholder="e.g., 14620" /></div>
+          </div>
+        </div>
+      </div>
+    {/if}
 
       {#if editStep === 3}
-        <div class="border rounded-lg p-4 mb-2">
-          <h3 class="font-semibold mb-3">Ride Details</h3>
-          <div class="grid gap-3 md:grid-cols-3">
-            <div><Label for="e_purpose">Purpose</Label><Input id="e_purpose" bind:value={rideForm.purpose} /></div>
-            <div><Label for="e_est_len">Estimated Appointment Length</Label><Input id="e_est_len" bind:value={rideForm.estimated_appointment_length} /></div>
-            <div><Label for="e_riders"># of Passengers</Label><Input id="e_riders" type="number" min="0" bind:value={rideForm.riders} /></div>
+      <div class="border rounded-lg p-4 mb-2">
+        <h3 class="font-semibold mb-3">Ride Details</h3>
+
+        <div class="grid gap-3 md:grid-cols-3">
+          <div>
+            <label for="e_purpose" class="block text-sm font-medium text-gray-700">Purpose</label>
+            <Input id="e_purpose" bind:value={rideForm.purpose} placeholder="e.g., Medical" />
           </div>
-          <div class="mt-3 grid gap-3 md:grid-cols-3">
-            <div class="flex items-center gap-2"><input id="e_round_trip" type="checkbox" bind:checked={rideForm.round_trip} /><Label for="e_round_trip">Round trip</Label></div>
-            <div class="flex items-center gap-2"><input id="e_donation" type="checkbox" bind:checked={rideForm.donation} /><Label for="e_donation">Donation ride</Label></div>
-            <div><Label for="e_donation_amount">Donation Amount</Label><Input id="e_donation_amount" type="number" step="0.01" bind:value={rideForm.donation_amount} /></div>
+          <div>
+            <label for="e_est_len" class="block text-sm font-medium text-gray-700">Estimated appointment length</label>
+            <Input id="e_est_len" bind:value={rideForm.estimated_appointment_length} placeholder="e.g., 30 min" />
           </div>
-          <div class="mt-3 grid gap-3 md:grid-cols-2">
-            <div>
-              <Label for="e_status">Status</Label>
-              <select id="e_status" bind:value={rideForm.status} class="w-full px-3 py-2 border border-gray-300 rounded-lg">
-                {#each STATUS_OPTIONS as s}<option value={s}>{s}</option>{/each}
-              </select>
-            </div>
-            <div>
-              <Label for="e_completion_status">Completion Status</Label>
-              <select id="e_completion_status" bind:value={rideForm.completion_status} class="w-full px-3 py-2 border border-gray-300 rounded-lg">
-                <option value="">—</option>
-                {#each COMPLETION_STATUS_OPTIONS as s}<option value={s}>{s}</option>{/each}
-              </select>
-            </div>
+          <div>
+            <label for="e_riders" class="block text-sm font-medium text-gray-700"># of additional passengers (excluding client)</label>
+            <Input id="e_riders" type="number" min="0" bind:value={rideForm.riders} />
           </div>
-          <div class="mt-3"><Label for="e_notes">Notes</Label><Textarea id="e_notes" bind:value={rideForm.notes} /></div>
         </div>
+
+        <div class="mt-3 grid gap-3 md:grid-cols-3">
+          <label for="e_round_trip" class="inline-flex items-center gap-2 cursor-pointer select-none">
+            <input id="e_round_trip" type="checkbox"
+                  class="h-4 w-4 text-blue-600 border-gray-300 rounded"
+                  bind:checked={rideForm.round_trip} />
+            <span class="text-sm font-medium text-gray-700">Round trip</span>
+          </label>
+
+          <label for="e_donation" class="inline-flex items-center gap-2 cursor-pointer select-none">
+            <input id="e_donation" type="checkbox"
+                  class="h-4 w-4 text-blue-600 border-gray-300 rounded"
+                  bind:checked={rideForm.donation} />
+            <span class="text-sm font-medium text-gray-700">Donation?</span>
+          </label>
+
+          <div>
+            <label for="e_donation_amount" class="block text-sm font-medium text-gray-700">Donation amount (USD)</label>
+            <Input
+              id="e_donation_amount"
+              type="number"
+              step="0.01"
+              bind:value={rideForm.donation_amount}
+              placeholder="0.00"
+              disabled={!rideForm.donation}
+              class={!rideForm.donation ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''}
+            />
+          </div>
+        </div>
+
+        <div class="mt-3 grid gap-3 md:grid-cols-2">
+          <div>
+            <label for="e_status" class="block text-sm font-medium text-gray-700">Status</label>
+            <select id="e_status" bind:value={rideForm.status} class="w-full px-3 py-2 border border-gray-300 rounded-lg">
+              {#each STATUS_OPTIONS as s}<option value={s}>{s}</option>{/each}
+            </select>
+          </div>
+          <div>
+            <label for="e_completion_status" class="block text-sm font-medium text-gray-700">Completion status</label>
+            <select id="e_completion_status" bind:value={rideForm.completion_status} class="w-full px-3 py-2 border border-gray-300 rounded-lg">
+              <option value="">—</option>
+              {#each COMPLETION_STATUS_OPTIONS as s}<option value={s}>{s}</option>{/each}
+            </select>
+          </div>
+        </div>
+
+        <div class="mt-3">
+          <label for="e_notes" class="block text-sm font-medium text-gray-700">Notes for driver</label>
+          <Textarea id="e_notes" bindvalue={rideForm.notes} placeholder="Anything special the driver should know" />
+        </div>
+      </div>
       {/if}
 
       {#if editStep === 4}
-        <div class="border rounded-lg p-4 mb-2">
-          <h3 class="font-semibold mb-3">Completion / Metrics (Optional)</h3>
-          <div class="grid gap-3 md:grid-cols-3">
-            <div><Label for="e_miles">Miles Driven</Label><Input id="e_miles" type="number" step="0.1" bind:value={rideForm.miles_driven} /></div>
-            <div><Label for="e_hours">Hours</Label><Input id="e_hours" type="number" step="0.1" bind:value={rideForm.hours} /></div>
-            <div>
-              <Label for="e_call_id2">Linked Call</Label>
-              <select
-                id="e_call_id2"
-                bind:value={rideForm.call_id}
-                class="w-full px-3 py-2 border border-gray-300 rounded-lg"
-              >
-                <option value="">Select a call (optional)…</option>
-                {#each filteredCalls() as call}
-                  <option value={String(call.call_id)}>
-                    {call.call_id} • {new Date(call.call_time).toLocaleString()} • {call.call_type} • {call.caller_first_name} {call.caller_last_name}
-                  </option>
-                {/each}
-              </select>
-            </div>
+      <div class="border rounded-lg p-4 mb-2">
+        <h3 class="font-semibold mb-3">Completion / Metrics (Optional)</h3>
+
+        <div class="grid gap-4 md:grid-cols-2">
+          <div>
+            <label for="e_miles" class="block text-sm font-medium text-gray-700">Miles driven</label>
+            <Input id="e_miles" type="number" step="0.1" bind:value={rideForm.miles_driven} placeholder="e.g., 12.5" />
+            <p class="text-xs text-gray-500 mt-1">Total miles for this ride.</p>
+          </div>
+
+          <div>
+            <label for="e_hours" class="block text-sm font-medium text-gray-700">Hours worked</label>
+            <Input id="e_hours" type="number" step="0.1" bind:value={rideForm.hours} placeholder="e.g., 1.5" />
+            <p class="text-xs text-gray-500 mt-1">Driving and waiting time combined.</p>
           </div>
         </div>
+      </div>
       {/if}
 
       <div class="flex items-center justify-between mt-6">
