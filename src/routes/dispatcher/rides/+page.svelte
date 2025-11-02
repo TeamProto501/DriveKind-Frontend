@@ -21,7 +21,7 @@
   let { data }: { data: PageData } = $props();
 
   let searchTerm = $state("");
-  let activeTab  = $state("requested"); // requested, active, reported, completed
+  let activeTab  = $state("requested");
   onMount(() => {});
 
   let isUpdating = $state(false);
@@ -36,9 +36,7 @@
     () => (data?.profile ? `${data.profile.first_name} ${data.profile.last_name}` : '')
   );
 
-  // Are we editing right now?
   const isEditing = $derived(() => !!selectedRide && showEditModal);
-
   const userOrgId: number | null = data?.profile?.org_id ?? null;
 
   const filteredCalls = $derived(() => {
@@ -46,15 +44,9 @@
     return userOrgId ? all.filter((c: any) => c.org_id === userOrgId) : all;
   });
 
-  const STATUS_OPTIONS = [
-    "Requested","Scheduled","In Progress","Completed","Cancelled","Reported","Pending"
-  ];
+  const STATUS_OPTIONS = ["Requested","Scheduled","In Progress","Completed","Cancelled","Reported","Pending"];
   const COMPLETION_STATUS_OPTIONS = [
-    "Completed Round Trip",
-    "Completed One Way To",
-    "Completed One Way From",
-    "Cancelled by Client",
-    "Cancelled by Driver"
+    "Completed Round Trip","Completed One Way To","Completed One Way From","Cancelled by Client","Cancelled by Driver"
   ];
 
   const filteredClients = $derived(() => {
@@ -110,7 +102,7 @@
   const getClientPhone = (ride: any) => ride.clients?.primary_phone || 'No phone';
   const getDriverName  = (ride: any) => ride.drivers ? `${ride.drivers.first_name} ${ride.drivers.last_name}` : 'Unassigned';
 
-  // ---------- Form model ----------
+  /* ---------------- Form model ---------------- */
   type RideForm = {
     org_id: string;
     client_id: string;
@@ -133,7 +125,7 @@
     hours: string;
     donation: boolean;
     donation_amount: string;
-    riders: string; // number-like but as string for binding
+    riders: string;
     round_trip: boolean;
     purpose: string;
     estimated_appointment_length: string;
@@ -165,7 +157,7 @@
     hours: '',
     donation: false,
     donation_amount: '',
-    riders: '0', // default excluding client
+    riders: '0',
     round_trip: false,
     purpose: '',
     estimated_appointment_length: '',
@@ -175,7 +167,6 @@
     completion_status: ''
   });
 
-  // wizard state
   let createStep = $state(1);
   let editStep   = $state(1);
   let stepErrors = $state<string[]>([]);
@@ -215,30 +206,22 @@
     stepErrors = [];
   }
 
-  // Lock donation amount to 0.00 when unchecked
-  $effect(() => {
-    if (!rideForm.donation) rideForm.donation_amount = '0.00';
-  });
+  /* donation amount lock */
+  $effect(() => { if (!rideForm.donation) rideForm.donation_amount = '0.00'; });
 
-  // ------ pickup-from-home autofill ------
+  /* pickup-from-home autofill */
   function applyClientAddressToPickup() {
     const cid = parseInt(rideForm.client_id || '0', 10);
     if (!cid) return;
     const client = filteredClients().find((c: any) => c.client_id === cid);
     if (!client) return;
-
     rideForm.alt_pickup_address  = client.street_address ?? '';
     rideForm.alt_pickup_address2 = client.address2 ?? '';
     rideForm.alt_pickup_city     = client.city ?? '';
     rideForm.alt_pickup_state    = client.state ?? '';
     rideForm.alt_pickup_zipcode  = client.zip_code ?? '';
   }
-
-  $effect(() => {
-    if (rideForm.pickup_from_home && rideForm.client_id) {
-      applyClientAddressToPickup();
-    }
-  });
+  $effect(() => { if (rideForm.pickup_from_home && rideForm.client_id) applyClientAddressToPickup(); });
 
   function onClientChange(e: Event) {
     const val = (e.target as HTMLSelectElement).value;
@@ -246,24 +229,15 @@
     if (rideForm.pickup_from_home) applyClientAddressToPickup();
   }
 
-  function openCreateModal() {
-    resetRideForm();
-    createStep = 1;
-    showCreateModal = true;
-  }
+  function openCreateModal() { resetRideForm(); createStep = 1; showCreateModal = true; }
 
-  // Format for datetime-local
   function toLocalDateTimeInput(ts: string | null | undefined) {
     if (!ts) return '';
     const d = new Date(ts);
     const pad = (n: number) => n.toString().padStart(2, '0');
-    const yyyy = d.getFullYear();
-    const mm = pad(d.getMonth() + 1);
-    const dd = pad(d.getDate());
-    const hh = pad(d.getHours());
-    const mi = pad(d.getMinutes());
-    return `${yyyy}-${mm}-${dd}T${hh}:${mi}`;
+    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
   }
+  const toISOorNull = (v: string) => (v ? new Date(v).toISOString() : null);
 
   function openEditModal(ride: any) {
     selectedRide = ride;
@@ -299,104 +273,118 @@
       completion_status: ride.completion_status ?? ''
     };
     if (rideForm.pickup_from_home && rideForm.client_id) applyClientAddressToPickup();
-
     stepErrors = [];
     editStep = 1;
     showEditModal = true;
   }
 
   function openDriverMatchModal(ride: any) {
-    if (!data.session?.access_token) {
-      alert('Session expired. Please refresh and try again.');
-      return;
-    }
+    if (!data.session?.access_token) { alert('Session expired. Please refresh and try again.'); return; }
     selectedRideForMatch = ride;
     showDriverMatchModal = true;
   }
 
-  // ---------- submit helpers ----------
-  const toISOorNull = (v: string) => (v ? new Date(v).toISOString() : null);
-
+  /* ---------------- diagnostics + payload helpers ---------------- */
+  const DEBUG = true;
+  function isBlank(v: any) {
+    if (v === 0 || v === '0') return false;
+    if (v === null || v === undefined) return true;
+    if (typeof v === 'number') return Number.isNaN(v);
+    return String(v).trim() === '';
+  }
+  function has(v: any) { return !isBlank(v); }
   function numFromStr(s: string, fallback: number | null): number | null {
-    if (s === '' || s === null || s === undefined) return fallback;
+    if (!has(s)) return fallback;
     const n = parseFloat(s as any);
     return Number.isFinite(n) ? n : fallback;
   }
 
-  // Build payload; when editing, fall back to selectedRide for REQUIRED fields if blank
   function buildPayload(form: RideForm) {
     const base = selectedRide ?? {};
-
-    // values, preferring form, falling back to existing for required fields in edit mode
-    const org_id              = form.org_id            || (isEditing() ? String(base.org_id ?? '') : '');
-    const client_id           = form.client_id         || (isEditing() ? String(base.client_id ?? '') : '');
-    const destination_name    = form.destination_name  || (isEditing() ? String(base.destination_name ?? '') : '');
-    const dropoff_address     = form.dropoff_address   || (isEditing() ? String(base.dropoff_address ?? '') : '');
-    const dropoff_city        = form.dropoff_city      || (isEditing() ? String(base.dropoff_city ?? '') : '');
-    const dropoff_state       = form.dropoff_state     || (isEditing() ? String(base.dropoff_state ?? '') : '');
-    const dropoff_zipcode     = form.dropoff_zipcode   || (isEditing() ? String(base.dropoff_zipcode ?? '') : '');
-    const appointment_time_in = form.appointment_time  || (isEditing() ? toLocalDateTimeInput(base.appointment_time) : '');
+    const _org   = has(form.org_id)           ? String(form.org_id)          : String(base.org_id ?? '');
+    const _client= has(form.client_id)        ? String(form.client_id)       : String(base.client_id ?? '');
+    const _dest  = has(form.destination_name) ? form.destination_name        : String(base.destination_name ?? '');
+    const _addr  = has(form.dropoff_address)  ? form.dropoff_address         : String(base.dropoff_address ?? '');
+    const _city  = has(form.dropoff_city)     ? form.dropoff_city            : String(base.dropoff_city ?? '');
+    const _state = has(form.dropoff_state)    ? form.dropoff_state           : String(base.dropoff_state ?? '');
+    const _zip   = has(form.dropoff_zipcode)  ? form.dropoff_zipcode         : String(base.dropoff_zipcode ?? '');
+    const apptLocal = has(form.appointment_time)
+      ? form.appointment_time
+      : (base.appointment_time ? toLocalDateTimeInput(base.appointment_time) : '');
 
     const payload = {
-      org_id: org_id ? parseInt(org_id) : null,
-      client_id: client_id ? parseInt(client_id) : null,
-      dispatcher_user_id: form.dispatcher_user_id || null,
+      org_id: parseInt(_org, 10),
+      client_id: parseInt(_client, 10),
+      dispatcher_user_id: has(form.dispatcher_user_id) ? form.dispatcher_user_id : (base.dispatcher_user_id ?? null),
 
-      alt_pickup_address: sanitizeInput(form.alt_pickup_address) || null,
-      alt_pickup_address2: sanitizeInput(form.alt_pickup_address2) || null,
-      alt_pickup_city: sanitizeInput(form.alt_pickup_city) || null,
-      alt_pickup_state: sanitizeInput(form.alt_pickup_state) || null,
-      alt_pickup_zipcode: sanitizeInput(form.alt_pickup_zipcode) || null,
+      alt_pickup_address:   has(form.alt_pickup_address)  ? sanitizeInput(form.alt_pickup_address)  : (base.alt_pickup_address  ?? null),
+      alt_pickup_address2:  has(form.alt_pickup_address2) ? sanitizeInput(form.alt_pickup_address2) : (base.alt_pickup_address2 ?? null),
+      alt_pickup_city:      has(form.alt_pickup_city)     ? sanitizeInput(form.alt_pickup_city)     : (base.alt_pickup_city     ?? null),
+      alt_pickup_state:     has(form.alt_pickup_state)    ? sanitizeInput(form.alt_pickup_state)    : (base.alt_pickup_state    ?? null),
+      alt_pickup_zipcode:   has(form.alt_pickup_zipcode)  ? sanitizeInput(form.alt_pickup_zipcode)  : (base.alt_pickup_zipcode  ?? null),
 
-      dropoff_address: sanitizeInput(dropoff_address) || null,
-      dropoff_address2: sanitizeInput(form.dropoff_address2) || null,
-      dropoff_city: sanitizeInput(dropoff_city) || null,
-      dropoff_state: sanitizeInput(dropoff_state) || null,
-      dropoff_zipcode: sanitizeInput(dropoff_zipcode) || null,
+      dropoff_address:  sanitizeInput(_addr),
+      dropoff_address2: has(form.dropoff_address2) ? sanitizeInput(form.dropoff_address2) : (base.dropoff_address2 ?? null),
+      dropoff_city:     sanitizeInput(_city),
+      dropoff_state:    sanitizeInput(_state),
+      dropoff_zipcode:  sanitizeInput(_zip),
 
-      appointment_time: toISOorNull(appointment_time_in),
-      pickup_time: toISOorNull(form.pickup_time),
+      appointment_time: toISOorNull(apptLocal),
+      pickup_time:      toISOorNull(form.pickup_time),
 
-      status: form.status,
-      notes: form.notes ? sanitizeInput(form.notes) : null,
+      status: has(form.status) ? form.status : (base.status ?? 'Requested'),
+      notes:  has(form.notes)  ? sanitizeInput(form.notes)  : (base.notes ?? null),
 
-      miles_driven: numFromStr(form.miles_driven, null),
-      hours:        numFromStr(form.hours, null),
+      miles_driven: numFromStr(form.miles_driven, base.miles_driven ?? null),
+      hours:        numFromStr(form.hours,        base.hours ?? null),
 
       donation: !!form.donation,
-      donation_amount: form.donation ? numFromStr(form.donation_amount, 0) : 0,
+      donation_amount: form.donation
+        ? (has(form.donation_amount) ? parseFloat(form.donation_amount) : Number(base.donation_amount ?? 0))
+        : 0,
 
-      // allow zero riders; don't coerce 0 to 1
-      riders: ((): number => {
-        if (form.riders === '' || form.riders === null || form.riders === undefined) {
-          return 0;
+      riders: (() => {
+        if (has(form.riders)) {
+          const n = parseInt(form.riders, 10);
+          return Number.isFinite(n) ? n : 0;
         }
-        const n = parseInt(form.riders, 10);
-        return Number.isFinite(n) ? n : 0;
+        return Number(base.riders ?? 0);
       })(),
 
       round_trip: !!form.round_trip,
-      purpose: sanitizeInput(form.purpose) || null,
-      estimated_appointment_length: sanitizeInput(form.estimated_appointment_length) || null,
-      destination_name: sanitizeInput(destination_name) || null,
-      pickup_from_home: !!form.pickup_from_home,
-      call_id: form.call_id ? parseInt(form.call_id) : null,
-      completion_status: form.completion_status || null
+      purpose: has(form.purpose) ? sanitizeInput(form.purpose) : (base.purpose ?? null),
+      estimated_appointment_length: has(form.estimated_appointment_length)
+        ? sanitizeInput(form.estimated_appointment_length)
+        : (base.estimated_appointment_length ?? null),
+
+      destination_name: sanitizeInput(_dest),
+      pickup_from_home: has(form.pickup_from_home) ? !!form.pickup_from_home : !!base.pickup_from_home,
+      call_id: has(form.call_id) ? parseInt(form.call_id, 10) : (base.call_id ?? null),
+      completion_status: has(form.completion_status) ? form.completion_status : (base.completion_status ?? null),
     };
 
-    // quick debug log (remove later)
-    console.debug('Update payload →', payload);
+    if (DEBUG) console.debug('🧾 Payload:', payload);
     return payload;
   }
 
-  // ---------- validation ----------
+  function listMissingRequiredFields(payload: any, requireAppt: boolean) {
+    const miss: string[] = [];
+    if (isBlank(payload.org_id)) miss.push('Organization');
+    if (isBlank(payload.client_id)) miss.push('Client');
+    if (isBlank(payload.destination_name)) miss.push('Destination name');
+    if (isBlank(payload.dropoff_address)) miss.push('Dropoff address');
+    if (isBlank(payload.dropoff_city)) miss.push('Dropoff city');
+    if (isBlank(payload.dropoff_state)) miss.push('Dropoff state');
+    if (isBlank(payload.dropoff_zipcode)) miss.push('Dropoff ZIP');
+    if (requireAppt && isBlank(payload.appointment_time)) miss.push('Appointment time');
+    return miss;
+  }
+
+  /* ---------------- validation (per-step) ---------------- */
   function validateStep(step: number): boolean {
     stepErrors = [];
-
     if (step === 1) {
-      // On create, appointment time required. On edit, we *try* to fall back to existing,
-      // but require it if both are blank for any reason.
-      const needAppt = !isEditing() && true;
+      const needAppt = !isEditing();
       const validators = [
         validateRequired(rideForm.org_id || (isEditing() ? String(selectedRide?.org_id ?? '') : ''), 'Organization'),
         validateRequired(rideForm.client_id || (isEditing() ? String(selectedRide?.client_id ?? '') : ''), 'Client'),
@@ -406,7 +394,6 @@
       if (!v.valid) stepErrors = v.errors;
       return v.valid;
     }
-
     if (step === 2) {
       const v = combineValidations(
         validateRequired(rideForm.destination_name || (isEditing() ? String(selectedRide?.destination_name ?? '') : ''), 'Destination name'),
@@ -414,7 +401,6 @@
         validateCity(rideForm.dropoff_city    || (isEditing() ? String(selectedRide?.dropoff_city    ?? '') : '')),
         validateState(rideForm.dropoff_state  || (isEditing() ? String(selectedRide?.dropoff_state  ?? '') : '')),
         validateZipCode(rideForm.dropoff_zipcode || (isEditing() ? String(selectedRide?.dropoff_zipcode ?? '') : '')),
-
         !rideForm.pickup_from_home && rideForm.alt_pickup_address ? validateAddress(rideForm.alt_pickup_address, 'Alternative pickup address') : { valid: true, errors: [] },
         !rideForm.pickup_from_home && rideForm.alt_pickup_city ? validateCity(rideForm.alt_pickup_city) : { valid: true, errors: [] },
         !rideForm.pickup_from_home && rideForm.alt_pickup_state ? validateState(rideForm.alt_pickup_state) : { valid: true, errors: [] },
@@ -423,24 +409,19 @@
       if (!v.valid) stepErrors = v.errors;
       return v.valid;
     }
-
     if (step === 3) {
       const errs: string[] = [];
       if (rideForm.donation && rideForm.donation_amount && isNaN(Number(rideForm.donation_amount))) {
         errs.push('Donation amount must be a number like 10 or 10.00');
       }
-      stepErrors = errs;
-      return errs.length === 0;
+      stepErrors = errs; return errs.length === 0;
     }
-
     if (step === 4) {
       const errs: string[] = [];
       if (rideForm.miles_driven && isNaN(Number(rideForm.miles_driven))) errs.push('Miles driven must be a number.');
       if (rideForm.hours && isNaN(Number(rideForm.hours))) errs.push('Hours must be a number.');
-      stepErrors = errs;
-      return errs.length === 0;
+      stepErrors = errs; return errs.length === 0;
     }
-
     return true;
   }
 
@@ -449,81 +430,76 @@
   function nextEdit()   { if (validateStep(editStep))   editStep   = Math.min(4, editStep + 1); }
   function prevEdit()   { editStep   = Math.max(1, editStep - 1);   stepErrors = []; }
 
-  // ---------- submit ----------
+  /* ---------------- submit ---------------- */
   async function createRide() {
-    const validations = combineValidations(
-      validateRequired(rideForm.org_id, 'Organization'),
-      validateRequired(rideForm.client_id, 'Client'),
-      validateRequired(rideForm.dropoff_address, 'Dropoff address'),
-      validateCity(rideForm.dropoff_city || ''),
-      validateState(rideForm.dropoff_state || ''),
-      validateZipCode(rideForm.dropoff_zipcode || ''),
-      validateRequired(rideForm.destination_name, 'Destination name'),
-      validateDateTime(rideForm.appointment_time, 'Appointment time'),
-      !rideForm.pickup_from_home && rideForm.alt_pickup_address ? validateAddress(rideForm.alt_pickup_address, 'Alternative pickup address') : { valid: true, errors: [] },
-      !rideForm.pickup_from_home && rideForm.alt_pickup_city ? validateCity(rideForm.alt_pickup_city) : { valid: true, errors: [] },
-      !rideForm.pickup_from_home && rideForm.alt_pickup_state ? validateState(rideForm.alt_pickup_state) : { valid: true, errors: [] },
-      !rideForm.pickup_from_home && rideForm.alt_pickup_zipcode ? validateZipCode(rideForm.alt_pickup_zipcode) : { valid: true, errors: [] },
-    );
-    if (!validations.valid) {
-      stepErrors = validations.errors;
-      createStep = 1;
+    const payload = buildPayload(rideForm);
+    const missing = listMissingRequiredFields(payload, true);
+    if (missing.length) {
+      alert(`Cannot create ride:\n• ${missing.join('\n• ')}`);
       return;
     }
 
     isUpdating = true;
     try {
-      const response = await fetch('/dispatcher/rides/create', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(buildPayload(rideForm))
+      const r = await fetch('/dispatcher/rides/create', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
       });
-      if (response.ok) {
+      if (r.ok) {
         showCreateModal = false;
         await invalidateAll();
         alert('Ride created successfully!');
       } else {
-        const err = await response.json();
-        alert(`Failed to create ride: ${err.error || 'Unknown error'}`);
+        let err: any = {};
+        try { err = await r.json(); } catch {}
+        if ((err.error || '').toLowerCase().includes('missing')) {
+          alert(`Failed to create ride:\n• ${listMissingRequiredFields(payload, true).join('\n• ') || 'Unknown fields'}`);
+        } else {
+          alert(`Failed to create ride: ${err.error || 'Unknown error'}`);
+        }
       }
     } catch (e) {
-      console.error(e);
-      alert('Error creating ride.');
-    } finally {
-      isUpdating = false;
-    }
+      console.error(e); alert('Error creating ride.');
+    } finally { isUpdating = false; }
   }
 
   async function updateRide() {
     if (!selectedRide) return;
+
+    const payload = buildPayload(rideForm);
+    const missing = listMissingRequiredFields(payload, false);
+    if (missing.length) {
+      alert(`Cannot update ride:\n• ${missing.join('\n• ')}`);
+      return;
+    }
+
     isUpdating = true;
     try {
-      const response = await fetch(`/dispatcher/rides/update/${selectedRide.ride_id}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(buildPayload(rideForm))
+      const r = await fetch(`/dispatcher/rides/update/${selectedRide.ride_id}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
       });
-      if (response.ok) {
+      if (r.ok) {
         showEditModal = false;
         selectedRide = null;
         await invalidateAll();
         alert('Ride updated successfully!');
       } else {
-        const err = await response.json();
-        alert(`Failed to update ride: ${err.error || 'Unknown error'}`);
+        let err: any = {};
+        try { err = await r.json(); } catch {}
+        const msg = (err.error || '').toLowerCase();
+        if (msg.includes('missing')) {
+          alert(`Failed to update ride:\n• ${listMissingRequiredFields(payload, false).join('\n• ') || 'Unknown fields'}`);
+        } else {
+          alert(`Failed to update ride: ${err.error || 'Unknown error'}`);
+        }
       }
     } catch (e) {
-      console.error(e);
-      alert('Error updating ride.');
-    } finally {
-      isUpdating = false;
-    }
+      console.error(e); alert('Error updating ride.');
+    } finally { isUpdating = false; }
   }
 
-  function openConfirmModal(ride: any) {
-    selectedRide = ride;
-    showConfirmModal = true;
-  }
+  function openConfirmModal(ride: any) { selectedRide = ride; showConfirmModal = true; }
 
   async function confirmRideCompletion(formData: any) {
     if (!selectedRide) return;
@@ -532,10 +508,7 @@
       const token = data.session?.access_token;
       const response = await fetch(`${import.meta.env.VITE_API_URL}/rides/${selectedRide.ride_id}/confirm`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
+        headers: { 'Content-Type': 'application/json','Authorization': `Bearer ${token}` },
         body: JSON.stringify({
           hours: formData.hours ? parseFloat(formData.hours) : null,
           miles_driven: formData.miles_driven ? parseFloat(formData.miles_driven) : null,
@@ -555,11 +528,8 @@
         alert(`Failed to confirm ride: ${result.error || 'Unknown error'}`);
       }
     } catch (e) {
-      console.error(e);
-      alert('Error confirming ride.');
-    } finally {
-      isUpdating = false;
-    }
+      console.error(e); alert('Error confirming ride.');
+    } finally { isUpdating = false; }
   }
 
   async function sendRideRequest(driverId: string) {
@@ -582,11 +552,8 @@
         alert(`Failed to send request: ${result.error || 'Unknown error'}`);
       }
     } catch (e) {
-      console.error(e);
-      alert('Error sending ride request.');
-    } finally {
-      isUpdating = false;
-    }
+      console.error(e); alert('Error sending ride request.');
+    } finally { isUpdating = false; }
   }
 </script>
 
