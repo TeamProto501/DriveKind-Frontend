@@ -121,36 +121,42 @@
     if (createMode){
       console.log('Creating user with email:', form.email);
       
-      // create via server action
-      const fd = new FormData();
-      fd.append('email', form.email || '');
-      fd.append('password', tempPassword);
-      fd.append('first_name', form.first_name);
-      fd.append('last_name', form.last_name);
-      fd.append('profileData', JSON.stringify({ 
-        ...form, 
-        role: form.role, 
-        org_id: orgId  // USE THE PASSED orgId INSTEAD OF HARDCODED 1
-      }));
+      const payload = {
+        email: form.email || '',
+        password: tempPassword,
+        first_name: form.first_name,
+        last_name: form.last_name,
+        profileData: { 
+          ...form, 
+          role: form.role,
+          // orgId will be set server-side from admin's profile
+        }
+      };
       
-      const res = await fetch('?/createUser', { method:'POST', body: fd });
+      console.log('Creating user with payload:', payload);
+      
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/admin/create-auth-user`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify(payload)
+      });
       
       console.log('Create user response status:', res.status);
       
       if (!res.ok) {
-        const errorText = await res.text();
-        console.error('Create user failed:', errorText);
-        throw new Error(errorText || 'Failed to create user');
+        const errorData = await res.json().catch(() => ({ error: 'Failed to create user' }));
+        console.error('Create user failed:', errorData);
+        throw new Error(errorData.error || 'Failed to create user');
       }
       
-      const data = await res.json().catch(async()=>({ 
-        error: await res.text() 
-      }));
-      
+      const data = await res.json();
       console.log('Create user response data:', data);
       
-      if (data?.success === false || data?.error) {
-        throw new Error(data?.error || 'Failed to create user');
+      if (!data.success) {
+        throw new Error(data.error || 'Failed to create user');
       }
       
       toastStore.success('User created successfully');
