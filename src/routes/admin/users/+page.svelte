@@ -59,8 +59,8 @@
   let activeTab: 'users' | 'clients' = data.tab === 'clients' ? 'clients' : 'users';
 
   // Enforce org filter at source
-  let staffProfiles: StaffRow[] = (data.staffProfiles as StaffRow[]).filter(u => u.org_id === orgId);
-  let clients: ClientRow[] = (data.clients as ClientRow[]).filter(c => c.org_id === orgId);
+  let staffProfiles: StaffRow[] = ((data.staffProfiles as StaffRow[]) || []).filter(u => u.org_id === orgId);
+  let clients: ClientRow[] = ((data.clients as ClientRow[]) || []).filter(c => c.org_id === orgId);
 
   let filteredProfiles: StaffRow[] = [...staffProfiles];
   let filteredClients: ClientRow[] = [...clients];
@@ -433,6 +433,14 @@
     <Breadcrumbs />
 
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <!-- Add error display -->
+      {#if data.error}
+        <div class="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
+          <p class="text-red-800 font-medium">Error loading data</p>
+          <p class="text-red-600 text-sm mt-1">{data.error}</p>
+        </div>
+      {/if}
+      
       <div class="mb-8 flex items-center justify-between">
         <div>
           <h1 class="text-3xl font-bold text-gray-900">User Management</h1>

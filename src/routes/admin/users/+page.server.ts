@@ -1,97 +1,99 @@
-export const actions = {
-  createUser: async (event) => {
-    console.log('=== CREATE USER ACTION STARTED ===');
-    
+export const load = async (event) => {
+  const tab = event.url.searchParams.get("tab") ?? "users";
+
+  try {
     const supabase = createSupabaseServerClient(event);
     const { data: { session } } = await supabase.auth.getSession();
-    
-    if (!session) {
-      console.error('No session found');
-      return { success: false, error: 'No session found' };
-    }
+    if (!session) throw redirect(302, '/login');
 
-    const formData = await event.request.formData();
-    const email = formData.get('email') as string;
-    const password = formData.get('password') as string;
-    const firstName = formData.get('first_name') as string;
-    const lastName = formData.get('last_name') as string;
-    const profileDataStr = formData.get('profileData') as string;
-    
-    console.log('Form data received:', { email, firstName, lastName });
-    
-    let profileData;
-    try {
-      profileData = JSON.parse(profileDataStr);
-      console.log('Profile data parsed:', profileData);
-    } catch (parseError) {
-      console.error('Failed to parse profileData:', parseError);
-      return { success: false, error: 'Invalid profile data format' };
-    }
+    // Get org for filtering
+    const { data: { user } } = await supabase.auth.getUser();
+    const { data: userProfile } = await supabase
+      .from('staff_profiles')
+      .select('org_id')
+      .eq('user_id', user.id)
+      .single();
 
-    try {
-      // Create auth user
-      console.log('Creating auth user...');
-      const { data: authData, error: authError } = await supabase.auth.admin.createUser({
-        email, 
-        password, 
-        email_confirm: true, 
-        user_metadata: { first_name: firstName, last_name: lastName }
-      });
-      
-      if (authError) {
-        console.error('Auth error:', authError);
-        return { success: false, error: authError.message };
-      }
-      
-      if (!authData.user) {
-        console.error('No user returned from auth.admin.createUser');
-        return { success: false, error: 'Failed to create user - no user data returned' };
-      }
-      
-      console.log('Auth user created:', authData.user.id);
-
-      // Create staff profile
-      console.log('Creating staff profile...');
-      const profilePayload = { 
-        ...profileData, 
-        user_id: authData.user.id,
-        user_name: email.split('@')[0],  // Add username
-        start_date: new Date().toISOString().split('T')[0]  // Add start date
+    if (!userProfile) {
+      console.error('No user profile found for:', user.id);
+      return { 
+        tab, 
+        staffProfiles: [], 
+        clients: [], 
+        userProfile: null, 
+        session,
+        error: 'User profile not found'
       };
-      
-      console.log('Profile payload:', profilePayload);
-      
+    }
+
+    // Staff profiles from API (bearer token)
+    let staffData: any[] = [];
+    try {
       const res = await fetch(`${API_BASE_URL}/staff-profiles`, {
-        method: 'POST',
         headers: { 
           'Content-Type': 'application/json', 
           'Authorization': `Bearer ${session.access_token}` 
-        },
-        body: JSON.stringify(profilePayload)
+        }
       });
       
-      console.log('Staff profile API response status:', res.status);
-      
       if (!res.ok) {
-        const errorText = await res.text();
-        console.error('Staff profile creation failed:', errorText);
+        console.error('Failed to fetch staff profiles:', res.status, res.statusText);
+        if (res.status === 401 || res.status === 403) throw redirect(302, '/login');
+      } else {
+        const text = await res.text();
+        staffData = JSON.parse(text);
         
-        // Cleanup: delete the auth user
-        console.log('Rolling back - deleting auth user...');
-        await supabase.auth.admin.deleteUser(authData.user.id);
-        
-        return { success: false, error: `Failed to create staff profile: ${errorText}` };
+        if (!Array.isArray(staffData)) {
+          console.error('API returned non-array for staff profiles:', staffData);
+          staffData = [];
+        }
       }
-      
-      const profileResult = await res.json();
-      console.log('Staff profile created successfully:', profileResult);
-      console.log('=== CREATE USER ACTION COMPLETED ===');
-      
-      return { success: true, userId: authData.user.id };
-      
-    } catch (err:any) {
-      console.error('Unexpected error in createUser action:', err);
-      return { success: false, error: err.message || 'Unknown error occurred' };
+    } catch (err) {
+      console.error('Error fetching staff profiles:', err);
+      staffData = [];
     }
+
+    // Clients by org (direct from Supabase)
+    let clientsData: any[] = [];
+    try {
+      const { data: clients, error: clientsError } = await supabase
+        .from('clients')
+        .select('*')
+        .eq('org_id', userProfile.org_id)
+        .order('last_name', { ascending: true });
+
+      if (clientsError) {
+        console.error('Error fetching clients:', clientsError);
+      } else {
+        clientsData = clients || [];
+      }
+    } catch (err) {
+      console.error('Error fetching clients:', err);
+      clientsData = [];
+    }
+
+    return { 
+      tab, 
+      staffProfiles: staffData, 
+      clients: clientsData, 
+      userProfile, 
+      session 
+    };
+    
+  } catch (err: any) {
+    console.error('Error in users page load:', err);
+    
+    if (err.status === 302) throw err;
+    if (err.status) throw err;
+    
+    // Return safe defaults instead of throwing
+    return {
+      tab: 'users',
+      staffProfiles: [],
+      clients: [],
+      userProfile: null,
+      session: null,
+      error: err.message || 'Failed to load data'
+    };
   }
-} satisfies Actions;
+};
