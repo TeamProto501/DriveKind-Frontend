@@ -26,6 +26,8 @@ export const load: PageServerLoad = async (event) => {
         rides: [],
         drivers: [],
         clients: [],
+        calls: [],
+        destinations: [],
         profile: null,
         error: 'Profile not found. Please contact your administrator.'
       };
@@ -43,12 +45,14 @@ export const load: PageServerLoad = async (event) => {
         rides: [],
         drivers: [],
         clients: [],
+        calls: [],
+        destinations: [],
         profile,
         error: 'Access denied. Dispatcher role required.'
       };
     }
 
-    // Rides for this org (NO vehicle_id anywhere)
+    // Rides for this org
     const { data: rides, error: ridesError } = await supabase
       .from('rides')
       .select(`
@@ -116,48 +120,60 @@ export const load: PageServerLoad = async (event) => {
       console.error('Error loading drivers:', driversError);
     }
 
-	// Clients (note zip_code, not zipcode)
-	const { data: clients, error: clientsError } = await supabase
-	.from('clients')
-	.select(`
-		client_id,
-		org_id,
-		first_name,
-		last_name,
-		primary_phone,
-		street_address,
-		address2,
-		city,
-		state,
-		zip_code
-	`)
-	.eq('org_id', profile.org_id)
-	.order('first_name', { ascending: true });
+    // Clients
+    const { data: clients, error: clientsError } = await supabase
+      .from('clients')
+      .select(`
+        client_id,
+        org_id,
+        first_name,
+        last_name,
+        primary_phone,
+        street_address,
+        address2,
+        city,
+        state,
+        zip_code
+      `)
+      .eq('org_id', profile.org_id)
+      .order('first_name', { ascending: true });
 
-	if (clientsError) {
-	console.error('Error loading clients:', clientsError);
-	}
+    if (clientsError) {
+      console.error('Error loading clients:', clientsError);
+    }
 
-	// Calls for "Linked call" dropdown
-	const { data: calls, error: callsError } = await supabase
-	.from('calls')
-	.select('call_id, org_id, call_time, call_type, caller_first_name, caller_last_name')
-	.eq('org_id', profile.org_id)
-	.order('call_time', { ascending: false });
+    // Calls for "Linked call" dropdown
+    const { data: calls, error: callsError } = await supabase
+      .from('calls')
+      .select('call_id, org_id, call_time, call_type, caller_first_name, caller_last_name')
+      .eq('org_id', profile.org_id)
+      .order('call_time', { ascending: false });
 
-	if (callsError) {
-	console.error('Error loading calls:', callsError);
-	}
+    if (callsError) {
+      console.error('Error loading calls:', callsError);
+    }
 
-	return {
-	session,
-	rides: rides || [],
-	drivers: drivers || [],
-	clients: clients || [],
-	calls: calls || [],       // ⬅️ return calls
-	profile,
-	error: null
-	};
+    // 🔹 Destinations (saved locations) for this org
+    const { data: destinations, error: destinationsError } = await supabase
+      .from('destinations')
+      .select('destination_id, org_id, location_name, address, address2, city, state, zipcode')
+      .eq('org_id', profile.org_id)
+      .order('location_name', { ascending: true });
+
+    if (destinationsError) {
+      console.error('Error loading destinations:', destinationsError);
+    }
+
+    return {
+      session,
+      rides: rides || [],
+      drivers: drivers || [],
+      clients: clients || [],
+      calls: calls || [],
+      destinations: destinations || [],   // 👈 added
+      profile,
+      error: null
+    };
   } catch (error) {
     console.error('Error in dispatcher rides page load:', error);
     if (error instanceof Response) throw error;
@@ -166,6 +182,8 @@ export const load: PageServerLoad = async (event) => {
       rides: [],
       drivers: [],
       clients: [],
+      calls: [],
+      destinations: [],
       profile: null,
       error: 'Failed to load rides data'
     };

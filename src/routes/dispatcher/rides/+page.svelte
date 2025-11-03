@@ -167,6 +167,44 @@
     completion_status: ''
   });
 
+  /* ---------- Destinations (saved locations) ---------- */
+  type Destination = {
+    destination_id: number;
+    org_id: number;
+    location_name: string | null;
+    address: string | null;
+    address2: string | null;
+    city: string | null;
+    state: string | null;
+    zipcode: string | null;
+  };
+
+  // Replace the Destination block’s derived with this:
+  const filteredDestinations = $derived(() => {
+    const all = (data as any)?.destinations ?? [];
+    return userOrgId ? all.filter((d: any) => d.org_id === userOrgId) : all;
+  });
+
+  // One selection state (only one modal is open at a time)
+  let selectedDestinationId = $state<string>("");
+
+  function applyDestinationToDropoff(destIdStr: string) {
+    selectedDestinationId = destIdStr;
+    const id = parseInt(destIdStr || '0', 10);
+    if (!id) return;
+
+    const dest = filteredDestinations().find(d => d.destination_id === id);
+    if (!dest) return;
+
+    rideForm.destination_name = dest.location_name ?? '';
+    rideForm.dropoff_address  = dest.address ?? '';
+    rideForm.dropoff_address2 = dest.address2 ?? '';
+    rideForm.dropoff_city     = dest.city ?? '';
+    rideForm.dropoff_state    = dest.state ?? '';
+    rideForm.dropoff_zipcode  = dest.zipcode ?? '';
+  }
+  function resetDestinationSelection() { selectedDestinationId = ""; }
+
   let createStep = $state(1);
   let editStep   = $state(1);
   let stepErrors = $state<string[]>([]);
@@ -229,7 +267,7 @@
     if (rideForm.pickup_from_home) applyClientAddressToPickup();
   }
 
-  function openCreateModal() { resetRideForm(); createStep = 1; showCreateModal = true; }
+  function openCreateModal() { resetRideForm(); resetDestinationSelection(); createStep = 1; showCreateModal = true; }
 
   function toLocalDateTimeInput(ts: string | null | undefined) {
     if (!ts) return '';
@@ -241,6 +279,7 @@
 
   function openEditModal(ride: any) {
     selectedRide = ride;
+    resetDestinationSelection();
     rideForm = {
       org_id: userOrgId ? String(userOrgId) : (ride.org_id ?? '').toString(),
       client_id: (ride.client_id ?? '').toString(),
@@ -691,7 +730,7 @@
   </div>
 </div>
 
-<!-- ======= CREATE MODAL: Multi-step (with client dropdown & auto pickup) ======= -->
+<!-- ======= CREATE MODAL ======= -->
 {#if showCreateModal}
   <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
     <div class="bg-white rounded-lg p-6 max-w-3xl max-h-[90vh] overflow-y-auto w-full mx-4">
@@ -700,15 +739,15 @@
         <p class="text-sm text-gray-600">Fill in the details below. Items marked * are required.</p>
       </div>
 
-      <!-- CREATE stepper -->
-    <div class="flex items-center justify-center gap-3 mb-4">
-      {#each [1,2,3] as s}
-        <div class="flex items-center gap-2">
-          <div class="w-8 h-8 rounded-full flex items-center justify-center text-sm {createStep===s ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700'}">{s}</div>
-          {#if s < 3}<div class="w-8 h-[2px] {createStep> s ? 'bg-blue-600' : 'bg-gray-200'}"></div>{/if}
-        </div>
-      {/each}
-    </div>
+      <!-- Stepper -->
+      <div class="flex items-center justify-center gap-3 mb-4">
+        {#each [1,2,3] as s}
+          <div class="flex items-center gap-2">
+            <div class="w-8 h-8 rounded-full flex items-center justify-center text-sm {createStep===s ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700'}">{s}</div>
+            {#if s < 3}<div class="w-8 h-[2px] {createStep> s ? 'bg-blue-600' : 'bg-gray-200'}"></div>{/if}
+          </div>
+        {/each}
+      </div>
 
       {#if stepErrors.length}
         <div class="mb-4 bg-red-50 border border-red-200 text-red-800 rounded-lg p-3 text-sm">
@@ -725,7 +764,6 @@
         <h3 class="font-semibold mb-3">Who &amp; When</h3>
 
         <div class="grid gap-3 md:grid-cols-3">
-          <!-- Client (full width on md: span 2) -->
           <div class="md:col-span-2">
             <Label for="client_id">Client *</Label>
             <select
@@ -742,14 +780,12 @@
             <p class="text-xs text-gray-500 mt-1">Only clients in your organization are shown.</p>
           </div>
 
-          <!-- Dispatcher (read-only full name) -->
           <div>
             <Label for="dispatcher_display">Dispatcher</Label>
             <Input id="dispatcher_display" value={dispatcherName()} disabled class="bg-gray-100" />
             <p class="text-xs text-gray-500 mt-1">Auto-set to you.</p>
           </div>
 
-          <!-- Linked Call (dropdown) -->
           <div class="md:col-span-3">
             <Label for="call_id">Linked Call</Label>
             <select
@@ -780,10 +816,10 @@
           </div>
         </div>
       </div>
-    {/if}
+      {/if}
 
       {#if createStep === 2}
-      <!-- Pickup & Dropoff -->
+      <!-- ===== CREATE • Step 2: Pickup & Dropoff ===== -->
       <div class="border rounded-lg p-4 mb-2">
         <h3 class="font-semibold mb-3">Pickup &amp; Dropoff</h3>
 
@@ -793,42 +829,95 @@
             <input id="pickup_from_home" type="checkbox" bind:checked={rideForm.pickup_from_home} />
             <Label for="pickup_from_home">Pickup from client's home</Label>
           </div>
-          <p class="text-xs text-gray-500 mt-1">If checked, pickup address is auto-filled from the client and locked.</p>
+          <p class="text-xs text-gray-500 mt-1">
+            If checked, pickup address is auto-filled from the client and locked.
+          </p>
         </div>
 
-        <!-- Pickup fields -->
+        <!-- PICKUP (disabled when from home) -->
         <div class="grid gap-3">
           <div>
             <Label for="alt_pickup_address">Pickup Street Address</Label>
-            <Input id="alt_pickup_address" bind:value={rideForm.alt_pickup_address} class={rideForm.pickup_from_home ? 'bg-gray-100' : ''} disabled={rideForm.pickup_from_home} placeholder="561 Timber Glen Trail" />
+            <Input
+              id="alt_pickup_address"
+              bind:value={rideForm.alt_pickup_address}
+              class={rideForm.pickup_from_home ? 'bg-gray-100' : ''}
+              disabled={rideForm.pickup_from_home}
+              placeholder="561 Timber Glen Trail"
+            />
           </div>
+
           <div class="grid gap-3 md:grid-cols-3">
             <div>
               <Label for="alt_pickup_city">Pickup City</Label>
-              <Input id="alt_pickup_city" bind:value={rideForm.alt_pickup_city} class={rideForm.pickup_from_home ? 'bg-gray-100' : ''} disabled={rideForm.pickup_from_home} placeholder="Penfield" />
+              <Input
+                id="alt_pickup_city"
+                bind:value={rideForm.alt_pickup_city}
+                class={rideForm.pickup_from_home ? 'bg-gray-100' : ''}
+                disabled={rideForm.pickup_from_home}
+                placeholder="Penfield"
+              />
             </div>
             <div>
               <Label for="alt_pickup_state">Pickup State</Label>
-              <Input id="alt_pickup_state" bind:value={rideForm.alt_pickup_state} class={rideForm.pickup_from_home ? 'bg-gray-100' : ''} disabled={rideForm.pickup_from_home} placeholder="NY" />
+              <Input
+                id="alt_pickup_state"
+                bind:value={rideForm.alt_pickup_state}
+                class={rideForm.pickup_from_home ? 'bg-gray-100' : ''}
+                disabled={rideForm.pickup_from_home}
+                placeholder="NY"
+              />
             </div>
             <div>
               <Label for="alt_pickup_zipcode">Pickup ZIP</Label>
-              <Input id="alt_pickup_zipcode" bind:value={rideForm.alt_pickup_zipcode} class={rideForm.pickup_from_home ? 'bg-gray-100' : ''} disabled={rideForm.pickup_from_home} placeholder="14625" />
+              <Input
+                id="alt_pickup_zipcode"
+                bind:value={rideForm.alt_pickup_zipcode}
+                class={rideForm.pickup_from_home ? 'bg-gray-100' : ''}
+                disabled={rideForm.pickup_from_home}
+                placeholder="14625"
+              />
             </div>
           </div>
+
           <div>
             <Label for="alt_pickup_address2">Pickup Address 2</Label>
-            <Input id="alt_pickup_address2" bind:value={rideForm.alt_pickup_address2} class={rideForm.pickup_from_home ? 'bg-gray-100' : ''} disabled={rideForm.pickup_from_home} placeholder="Apt, Suite, etc." />
+            <Input
+              id="alt_pickup_address2"
+              bind:value={rideForm.alt_pickup_address2}
+              class={rideForm.pickup_from_home ? 'bg-gray-100' : ''}
+              disabled={rideForm.pickup_from_home}
+              placeholder="Apt, Suite, etc."
+            />
           </div>
         </div>
 
-        <!-- Dropoff section label -->
+        <!-- Saved destination (fills DROPOFF) -->
+        <div class="mt-6">
+          <Label for="saved_destination_create">Use a saved destination</Label>
+          <select
+            id="saved_destination_create"
+            bind:value={selectedDestinationId}
+            onchange={(e) => applyDestinationToDropoff((e.target as HTMLSelectElement).value)}
+            class="w-full px-3 py-2 border border-gray-300 rounded-lg"
+          >
+            <option value="">— Select saved destination (optional) —</option>
+            {#each filteredDestinations() as d}
+              <option value={String(d.destination_id)}>
+                {d.location_name || '(No name)'} • {d.address}
+                {d.city ? `, ${d.city}` : ''}{d.state ? `, ${d.state}` : ''}{d.zipcode ? ` ${d.zipcode}` : ''}
+              </option>
+            {/each}
+          </select>
+          <p class="text-xs text-gray-500 mt-1">Choosing one fills the dropoff fields below.</p>
+        </div>
+
+        <!-- DROPOFF -->
         <div class="mt-6">
           <Label class="text-sm font-semibold text-gray-700">Dropoff Location</Label>
           <p class="text-xs text-gray-500">Where the client will be dropped off.</p>
         </div>
 
-        <!-- Dropoff fields -->
         <div class="mt-3 grid gap-3">
           <div>
             <Label for="destination_name">Destination Name *</Label>
@@ -847,22 +936,13 @@
           </div>
 
           <div class="grid gap-3 md:grid-cols-3">
-            <div>
-              <Label for="dropoff_city">Dropoff City *</Label>
-              <Input id="dropoff_city" bind:value={rideForm.dropoff_city} placeholder="e.g., Rochester" />
-            </div>
-            <div>
-              <Label for="dropoff_state">Dropoff State *</Label>
-              <Input id="dropoff_state" bind:value={rideForm.dropoff_state} placeholder="e.g., NY" />
-            </div>
-            <div>
-              <Label for="dropoff_zipcode">Dropoff ZIP *</Label>
-              <Input id="dropoff_zipcode" bind:value={rideForm.dropoff_zipcode} placeholder="e.g., 14620" />
-            </div>
+            <div><Label for="dropoff_city">Dropoff City *</Label><Input id="dropoff_city" bind:value={rideForm.dropoff_city} placeholder="e.g., Rochester" /></div>
+            <div><Label for="dropoff_state">Dropoff State *</Label><Input id="dropoff_state" bind:value={rideForm.dropoff_state} placeholder="e.g., NY" /></div>
+            <div><Label for="dropoff_zipcode">Dropoff ZIP *</Label><Input id="dropoff_zipcode" bind:value={rideForm.dropoff_zipcode} placeholder="e.g., 14620" /></div>
           </div>
         </div>
       </div>
-    {/if}
+      {/if}
 
       {#if createStep === 3}
       <!-- Ride Details -->
@@ -879,40 +959,25 @@
             <Input id="estimated_appointment_length" bind:value={rideForm.estimated_appointment_length} placeholder="e.g., 30 min" />
           </div>
           <div>
-           <label for="riders" class="block text-sm font-medium text-gray-700"># of additional passengers (excluding client)</label>
+            <label for="riders" class="block text-sm font-medium text-gray-700"># of additional passengers (excluding client)</label>
             <Input id="riders" type="number" min="0" bind:value={rideForm.riders} />
           </div>
         </div>
 
         <div class="mt-3 grid gap-3 md:grid-cols-3">
-          <!-- Round trip -->
           <label for="round_trip" class="inline-flex items-center gap-2 cursor-pointer select-none">
-            <input id="round_trip" type="checkbox"
-                  class="h-4 w-4 text-blue-600 border-gray-300 rounded"
-                  bind:checked={rideForm.round_trip} />
+            <input id="round_trip" type="checkbox" class="h-4 w-4 text-blue-600 border-gray-300 rounded" bind:checked={rideForm.round_trip} />
             <span class="text-sm font-medium text-gray-700">Round trip</span>
           </label>
 
-          <!-- Donation? -->
           <label for="donation" class="inline-flex items-center gap-2 cursor-pointer select-none">
-            <input id="donation" type="checkbox"
-                  class="h-4 w-4 text-blue-600 border-gray-300 rounded"
-                  bind:checked={rideForm.donation} />
+            <input id="donation" type="checkbox" class="h-4 w-4 text-blue-600 border-gray-300 rounded" bind:checked={rideForm.donation} />
             <span class="text-sm font-medium text-gray-700">Donation?</span>
           </label>
 
-          <!-- Donation amount (locked unless donation=true) -->
           <div>
             <label for="donation_amount" class="block text-sm font-medium text-gray-700">Donation amount (USD)</label>
-            <Input
-              id="donation_amount"
-              type="number"
-              step="0.01"
-              bind:value={rideForm.donation_amount}
-              placeholder="0.00"
-              disabled={!rideForm.donation}
-              class={!rideForm.donation ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''}
-            />
+            <Input id="donation_amount" type="number" step="0.01" bind:value={rideForm.donation_amount} placeholder="0.00" disabled={!rideForm.donation} class={!rideForm.donation ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''} />
           </div>
         </div>
 
@@ -923,8 +988,6 @@
               {#each STATUS_OPTIONS as s}<option value={s}>{s}</option>{/each}
             </select>
           </div>
-
-          <!-- NOTE: Completion Status intentionally omitted for CREATE -->
         </div>
 
         <div class="mt-3">
@@ -957,7 +1020,7 @@
   </div>
 {/if}
 
-<!-- ======= EDIT MODAL: Multi-step (same rules) ======= -->
+<!-- ======= EDIT MODAL ======= -->
 {#if showEditModal}
   <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
     <div class="bg-white rounded-lg p-6 max-w-3xl max-h-[90vh] overflow-y-auto w-full mx-4">
@@ -990,7 +1053,6 @@
         <h3 class="font-semibold mb-3">Who &amp; When</h3>
 
         <div class="grid gap-3 md:grid-cols-3">
-          <!-- Client (full width on md: span 2) -->
           <div class="md:col-span-2">
             <Label for="e_client_id">Client *</Label>
             <select
@@ -1006,13 +1068,11 @@
             </select>
           </div>
 
-          <!-- Dispatcher (read-only full name) -->
           <div>
             <Label for="e_dispatcher_display">Dispatcher</Label>
             <Input id="e_dispatcher_display" value={dispatcherName()} disabled class="bg-gray-100" />
           </div>
 
-          <!-- Linked Call (dropdown) -->
           <div class="md:col-span-3">
             <Label for="e_call_id">Linked Call</Label>
             <select
@@ -1043,52 +1103,119 @@
           </div>
         </div>
       </div>
-    {/if}
+      {/if}
 
       {#if editStep === 2}
-      <div class="border rounded-lg p-4 mb-2">
-        <h3 class="font-semibold mb-3">Pickup &amp; Dropoff</h3>
+        <!-- ===== EDIT • Step 2: Pickup & Dropoff ===== -->
+        <div class="border rounded-lg p-4 mb-2">
+          <h3 class="font-semibold mb-3">Pickup &amp; Dropoff</h3>
 
-        <!-- Pickup controls -->
-        <div class="mb-3">
-          <div class="flex items-center gap-2">
-            <input id="e_pickup_from_home" type="checkbox" bind:checked={rideForm.pickup_from_home} />
-            <Label for="e_pickup_from_home">Pickup from client's home</Label>
+          <!-- Pickup controls -->
+          <div class="mb-3">
+            <div class="flex items-center gap-2">
+              <input id="e_pickup_from_home" type="checkbox" bind:checked={rideForm.pickup_from_home} />
+              <Label for="e_pickup_from_home">Pickup from client's home</Label>
+            </div>
+          </div>
+
+          <!-- PICKUP (disabled when from home) -->
+          <div class="grid gap-3">
+            <div>
+              <Label for="e_alt_pickup_address">Pickup Street Address</Label>
+              <Input
+                id="e_alt_pickup_address"
+                bind:value={rideForm.alt_pickup_address}
+                class={rideForm.pickup_from_home ? 'bg-gray-100' : ''}
+                disabled={rideForm.pickup_from_home}
+                placeholder="561 Timber Glen Trail"
+              />
+            </div>
+
+            <div class="grid gap-3 md:grid-cols-3">
+              <div>
+                <Label for="e_alt_pickup_city">Pickup City</Label>
+                <Input
+                  id="e_alt_pickup_city"
+                  bind:value={rideForm.alt_pickup_city}
+                  class={rideForm.pickup_from_home ? 'bg-gray-100' : ''}
+                  disabled={rideForm.pickup_from_home}
+                  placeholder="Penfield"
+                />
+              </div>
+              <div>
+                <Label for="e_alt_pickup_state">Pickup State</Label>
+                <Input
+                  id="e_alt_pickup_state"
+                  bind:value={rideForm.alt_pickup_state}
+                  class={rideForm.pickup_from_home ? 'bg-gray-100' : ''}
+                  disabled={rideForm.pickup_from_home}
+                  placeholder="NY"
+                />
+              </div>
+              <div>
+                <Label for="e_alt_pickup_zipcode">Pickup ZIP</Label>
+                <Input
+                  id="e_alt_pickup_zipcode"
+                  bind:value={rideForm.alt_pickup_zipcode}
+                  class={rideForm.pickup_from_home ? 'bg-gray-100' : ''}
+                  disabled={rideForm.pickup_from_home}
+                  placeholder="14625"
+                />
+              </div>
+            </div>
+
+            <div>
+              <Label for="e_alt_pickup_address2">Pickup Address 2</Label>
+              <Input
+                id="e_alt_pickup_address2"
+                bind:value={rideForm.alt_pickup_address2}
+                class={rideForm.pickup_from_home ? 'bg-gray-100' : ''}
+                disabled={rideForm.pickup_from_home}
+                placeholder="Apt, Suite, etc."
+              />
+            </div>
+          </div>
+
+          <!-- Saved destination (fills DROPOFF) -->
+          <div class="mt-6">
+            <Label for="saved_destination_edit">Use a saved destination</Label>
+            <select
+              id="saved_destination_edit"
+              bind:value={selectedDestinationId}
+              onchange={(e) => applyDestinationToDropoff((e.target as HTMLSelectElement).value)}
+              class="w-full px-3 py-2 border border-gray-300 rounded-lg"
+            >
+              <option value="">— Select saved destination (optional) —</option>
+              {#each filteredDestinations() as d}
+                <option value={String(d.destination_id)}>
+                  {d.location_name || '(No name)'} • {d.address}
+                  {d.city ? `, ${d.city}` : ''}{d.state ? `, ${d.state}` : ''}{d.zipcode ? ` ${d.zipcode}` : ''}
+                </option>
+              {/each}
+            </select>
+            <p class="text-xs text-gray-500 mt-1">Choosing one fills the dropoff fields below.</p>
+          </div>
+
+          <!-- DROPOFF -->
+          <div class="mt-6">
+            <Label class="text-sm font-semibold text-gray-700">Dropoff Location</Label>
+            <p class="text-xs text-gray-500">Where the client will be dropped off.</p>
+          </div>
+
+          <div class="mt-3 grid gap-3">
+            <div><Label for="e_destination_name">Destination Name *</Label><Input id="e_destination_name" bind:value={rideForm.destination_name} placeholder="e.g., RGH Medical Center" /></div>
+            <div class="grid gap-3 md:grid-cols-2">
+              <div><Label for="e_dropoff_address">Dropoff Street Address *</Label><Input id="e_dropoff_address" bind:value={rideForm.dropoff_address} placeholder="1000 South Ave" /></div>
+              <div><Label for="e_dropoff_address2">Dropoff Address 2</Label><Input id="e_dropoff_address2" bind:value={rideForm.dropoff_address2} placeholder="Suite, Floor, etc." /></div>
+            </div>
+            <div class="grid gap-3 md:grid-cols-3">
+              <div><Label for="e_dropoff_city">Dropoff City *</Label><Input id="e_dropoff_city" bind:value={rideForm.dropoff_city} placeholder="e.g., Rochester" /></div>
+              <div><Label for="e_dropoff_state">Dropoff State *</Label><Input id="e_dropoff_state" bind:value={rideForm.dropoff_state} placeholder="e.g., NY" /></div>
+              <div><Label for="e_dropoff_zipcode">Dropoff ZIP *</Label><Input id="e_dropoff_zipcode" bind:value={rideForm.dropoff_zipcode} placeholder="e.g., 14620" /></div>
+            </div>
           </div>
         </div>
-
-        <!-- Pickup fields -->
-        <div class="grid gap-3">
-          <div><Label for="e_alt_pickup_address">Pickup Street Address</Label><Input id="e_alt_pickup_address" bind:value={rideForm.alt_pickup_address} class={rideForm.pickup_from_home ? 'bg-gray-100' : ''} disabled={rideForm.pickup_from_home} placeholder="561 Timber Glen Trail" /></div>
-          <div class="grid gap-3 md:grid-cols-3">
-            <div><Label for="e_alt_pickup_city">Pickup City</Label><Input id="e_alt_pickup_city" bind:value={rideForm.alt_pickup_city} class={rideForm.pickup_from_home ? 'bg-gray-100' : ''} disabled={rideForm.pickup_from_home} placeholder="Penfield" /></div>
-            <div><Label for="e_alt_pickup_state">Pickup State</Label><Input id="e_alt_pickup_state" bind:value={rideForm.alt_pickup_state} class={rideForm.pickup_from_home ? 'bg-gray-100' : ''} disabled={rideForm.pickup_from_home} placeholder="NY" /></div>
-            <div><Label for="e_alt_pickup_zipcode">Pickup ZIP</Label><Input id="e_alt_pickup_zipcode" bind:value={rideForm.alt_pickup_zipcode} class={rideForm.pickup_from_home ? 'bg-gray-100' : ''} disabled={rideForm.pickup_from_home} placeholder="14625" /></div>
-          </div>
-          <div><Label for="e_alt_pickup_address2">Pickup Address 2</Label><Input id="e_alt_pickup_address2" bind:value={rideForm.alt_pickup_address2} class={rideForm.pickup_from_home ? 'bg-gray-100' : ''} disabled={rideForm.pickup_from_home} placeholder="Apt, Suite, etc." /></div>
-        </div>
-
-        <!-- Dropoff section label -->
-        <div class="mt-6">
-          <Label class="text-sm font-semibold text-gray-700">Dropoff Location</Label>
-          <p class="text-xs text-gray-500">Where the client will be dropped off.</p>
-        </div>
-
-        <!-- Dropoff fields -->
-        <div class="mt-3 grid gap-3">
-          <div><Label for="e_destination_name">Destination Name *</Label><Input id="e_destination_name" bind:value={rideForm.destination_name} placeholder="e.g., RGH Medical Center" /></div>
-          <div class="grid gap-3 md:grid-cols-2">
-            <div><Label for="e_dropoff_address">Dropoff Street Address *</Label><Input id="e_dropoff_address" bind:value={rideForm.dropoff_address} placeholder="1000 South Ave" /></div>
-            <div><Label for="e_dropoff_address2">Dropoff Address 2</Label><Input id="e_dropoff_address2" bind:value={rideForm.dropoff_address2} placeholder="Suite, Floor, etc." /></div>
-          </div>
-          <div class="grid gap-3 md:grid-cols-3">
-            <div><Label for="e_dropoff_city">Dropoff City *</Label><Input id="e_dropoff_city" bind:value={rideForm.dropoff_city} placeholder="e.g., Rochester" /></div>
-            <div><Label for="e_dropoff_state">Dropoff State *</Label><Input id="e_dropoff_state" bind:value={rideForm.dropoff_state} placeholder="e.g., NY" /></div>
-            <div><Label for="e_dropoff_zipcode">Dropoff ZIP *</Label><Input id="e_dropoff_zipcode" bind:value={rideForm.dropoff_zipcode} placeholder="e.g., 14620" /></div>
-          </div>
-        </div>
-      </div>
-    {/if}
+      {/if}
 
       {#if editStep === 3}
       <div class="border rounded-lg p-4 mb-2">
