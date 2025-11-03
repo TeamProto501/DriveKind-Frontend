@@ -1,67 +1,92 @@
 <script lang="ts">
   import RoleGuard from '$lib/components/RoleGuard.svelte';
   import Breadcrumbs from '$lib/components/Breadcrumbs.svelte';
-  import { Users, Plus, Search, Filter, Trash2, ChevronUp, ChevronDown, ChevronsUpDown, X, UserX } from '@lucide/svelte';
+  import { Users, Plus, Search, Filter, Trash2, ChevronUp, ChevronDown, ChevronsUpDown, X } from '@lucide/svelte';
   import UserSidebar from './UserSidebar.svelte';
   import ClientSidebar from './ClientSidebar.svelte';
-  import { getAllStaffProfiles, API_BASE_URL } from '$lib/api';
+  import { API_BASE_URL } from '$lib/api';
   import { toastStore } from '$lib/toast';
   import { goto } from '$app/navigation';
   import type { PageData } from './$types';
 
   export let data: PageData;
 
-  type StaffProfile = {
+  // ---------- Local types ----------
+  type StaffRow = {
     user_id: string;
+    org_id?: number | null;
     first_name: string;
     last_name: string;
-    email?: string;
-    primary_phone?: string;
-    role: string[] | string;
-    city?: string;
-    state?: string;
+    email?: string | null;
+    primary_phone?: string | null;
+    role?: string[] | string | null;
+    dob?: string | null;
+    city?: string | null;
+    state?: string | null;
+    training_completed?: boolean | null;
+    mileage_reimbursement?: boolean | null;
   };
 
-  type Client = {
+  type ClientRow = {
     client_id: number;
+    org_id?: number | null;
     first_name: string;
     last_name: string;
-    email?: string;
+    email?: string | null;
     primary_phone: string;
-    secondary_phone?: string;
-    date_of_birth: string;
+    secondary_phone?: string | null;
+    contact_pref?: string | null;
+    date_of_birth?: string | null;
+    gender?: string | null;
+    street_address?: string | null;
+    address2?: string | null;
     city: string;
     state: string;
+    zip_code?: string | null;
+    primaryPhone_is_cell?: boolean | null;
+    primaryPhone_can_text?: boolean | null;
+    secondaryPhone_is_cell?: boolean | null;
+    secondaryPhone_can_text?: boolean | null;
     client_status_enum: string;
-    mobility_assistance_enum?: string;
+    mobility_assistance_enum?: string | null;
+    residence_enum?: string | null;
     date_enrolled: string;
   };
 
+  // ---------- State ----------
+  const orgId = data.userProfile?.org_id as number;
+
   let activeTab: 'users' | 'clients' = data.tab === 'clients' ? 'clients' : 'users';
-  let staffProfiles: StaffProfile[] = data.staffProfiles;
-  let clients: Client[] = data.clients;
-  let filteredProfiles: StaffProfile[] = [...staffProfiles];
-  let filteredClients: Client[] = [...clients];
+
+  // Enforce org filter at source
+  let staffProfiles: StaffRow[] = (data.staffProfiles as StaffRow[]).filter(u => u.org_id === orgId);
+  let clients: ClientRow[] = (data.clients as ClientRow[]).filter(c => c.org_id === orgId);
+
+  let filteredProfiles: StaffRow[] = [...staffProfiles];
+  let filteredClients: ClientRow[] = [...clients];
   let isRefreshing = false;
 
   let searchQuery = '';
   let roleFilter: string = 'All';
   const roles = ['All', 'Admin', 'Dispatcher', 'Driver', 'Volunteer'];
 
-  let selectedUser: StaffProfile | null = null;
+  let selectedUser: StaffRow | null = null;
   let isCreateMode = false;
   let showSidebar = false;
+
   let showDeleteModal = false;
   let showDeleteSearch = false;
-  let showDeactivateModal = false;
   let deleteSearchQuery = '';
-  let deleteSearchResults: (StaffProfile | Client)[] = [];
-  let userToDelete: (StaffProfile | Client) | null = null;
-  let clientToDeactivate: Client | null = null;
+  let deleteSearchResults: StaffRow[] = [];
+  let userToDelete: StaffRow | null = null;
   let deleteConfirmEmail = '';
   let isDeleting = false;
+
+  let showDeactivateModal = false;
+  let clientToDeactivate: ClientRow | null = null;
   let isDeactivating = false;
-  let selectedClient: Client | null = null;
+
+  let selectedClient: ClientRow | null = null;
   let isClientCreateMode = false;
   let showClientSidebar = false;
 
@@ -74,22 +99,21 @@
   // Pagination
   let currentPage = 1;
   let pageSize = 20;
-  $: totalPages = Math.max(Math.ceil((activeTab === 'users' ? filteredProfiles : filteredClients).length / pageSize), 1);
-  $: paginatedData = (activeTab === 'users' ? filteredProfiles : filteredClients).slice(
-    (currentPage - 1) * pageSize,
-    currentPage * pageSize
-  );
 
+  $: totalPages = Math.max(
+    Math.ceil((activeTab === 'users' ? filteredProfiles.length : filteredClients.length) / pageSize),
+    1
+  );
+  $: paginatedProfiles = filteredProfiles.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  $: paginatedClients = filteredClients.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
+  // ---------- Helpers ----------
   function getStatusColor(status: string): string {
     switch (status) {
-      case 'Active':
-        return 'bg-green-100 text-green-800';
-      case 'Inactive':
-        return 'bg-red-100 text-red-800';
-      case 'Temporary Thru':
-        return 'bg-blue-100 text-blue-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
+      case 'Active': return 'bg-green-100 text-green-800';
+      case 'Inactive': return 'bg-red-100 text-red-800';
+      case 'Temporary Thru': return 'bg-blue-100 text-blue-800';
+      default: return 'bg-gray-100 text-gray-800';
     }
   }
 
@@ -119,8 +143,8 @@
       }
 
       if (roleFilter !== 'All') {
-        results = results.filter(
-          u => Array.isArray(u.role) ? u.role.includes(roleFilter) : u.role === roleFilter
+        results = results.filter(u =>
+          Array.isArray(u.role) ? u.role.includes(roleFilter) : u.role === roleFilter
         );
       }
 
@@ -141,7 +165,7 @@
 
       filteredClients = results;
     }
-    
+
     applySorting();
     currentPage = 1;
   }
@@ -231,7 +255,6 @@
 
   async function refreshData() {
     if (isRefreshing) return;
-    
     try {
       isRefreshing = true;
       window.location.reload();
@@ -243,24 +266,22 @@
     }
   }
 
-  function openSidebar(user: StaffProfile | null = null) {
+  // Sidebars open/close
+  function openSidebar(user: StaffRow | null = null) {
     selectedUser = user;
     isCreateMode = !user;
     showSidebar = true;
   }
-
   function closeSidebar() {
     selectedUser = null;
     isCreateMode = false;
     showSidebar = false;
   }
-
-  function openClientSidebar(client: Client | null = null) {
+  function openClientSidebar(client: ClientRow | null = null) {
     selectedClient = client;
     isClientCreateMode = !client;
     showClientSidebar = true;
   }
-
   function closeClientSidebar() {
     selectedClient = null;
     isClientCreateMode = false;
@@ -271,64 +292,59 @@
     await refreshData();
     closeClientSidebar();
   }
-
   async function handleUserUpdated() {
     await refreshData();
     closeSidebar();
   }
 
+  // Delete search (users only)
   function openDeleteSearch() {
     showDeleteSearch = true;
     deleteSearchQuery = '';
     deleteSearchResults = [];
   }
-
   function closeDeleteSearch() {
     showDeleteSearch = false;
     deleteSearchQuery = '';
     deleteSearchResults = [];
   }
-
   function searchUsersForDelete() {
     if (!deleteSearchQuery.trim()) {
       deleteSearchResults = [];
       return;
     }
-
     const q = deleteSearchQuery.toLowerCase();
-    const allUsers = staffProfiles;
-
-    deleteSearchResults = allUsers.filter((u: any) =>
-      `${u.first_name} ${u.last_name}`.toLowerCase().includes(q) ||
-      (u.email && u.email.toLowerCase().includes(q)) ||
-      (u.primary_phone && u.primary_phone.includes(q))
-    ).slice(0, 10);
+    deleteSearchResults = staffProfiles
+      .filter(
+        (u) =>
+          `${u.first_name} ${u.last_name}`.toLowerCase().includes(q) ||
+          (u.email && u.email.toLowerCase().includes(q)) ||
+          (u.primary_phone && u.primary_phone.includes(q))
+      )
+      .slice(0, 10);
   }
 
-  function selectUserForDeletion(user: StaffProfile) {
+  function selectUserForDeletion(user: StaffRow) {
     userToDelete = user;
     deleteConfirmEmail = '';
     showDeleteModal = true;
     closeDeleteSearch();
   }
-
-  function openDeleteModal(user: StaffProfile) {
+  function openDeleteModal(user: StaffRow) {
     userToDelete = user;
     deleteConfirmEmail = '';
     showDeleteModal = true;
   }
-
   function closeDeleteModal() {
     showDeleteModal = false;
     userToDelete = null;
     deleteConfirmEmail = '';
   }
 
-  function openDeactivateModal(client: Client) {
+  function openDeactivateModal(client: ClientRow) {
     clientToDeactivate = client;
     showDeactivateModal = true;
   }
-
   function closeDeactivateModal() {
     showDeactivateModal = false;
     clientToDeactivate = null;
@@ -346,9 +362,7 @@
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${data.session.access_token}`
         },
-        body: JSON.stringify({
-          client_status_enum: 'Inactive'
-        })
+        body: JSON.stringify({ client_status_enum: 'Inactive' })
       });
 
       if (!response.ok) {
@@ -359,7 +373,7 @@
       toastStore.success('Client deactivated successfully');
       closeDeactivateModal();
       await refreshData();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Deactivate error:', error);
       toastStore.error(`Failed to deactivate client: ${error.message}`);
     } finally {
@@ -370,8 +384,8 @@
   async function confirmDelete() {
     if (!userToDelete) return;
 
-    const userEmail = 'email' in userToDelete ? userToDelete.email : '';
-    
+    const userEmail = userToDelete.email || '';
+
     if (deleteConfirmEmail !== userEmail) {
       toastStore.error('Email does not match');
       return;
@@ -380,8 +394,7 @@
     try {
       isDeleting = true;
 
-      const userId = (userToDelete as StaffProfile).user_id;
-      const response = await fetch(`${API_BASE_URL}/staff-profiles/${userId}`, {
+      const response = await fetch(`${API_BASE_URL}/staff-profiles/${userToDelete.user_id}`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
@@ -397,7 +410,7 @@
       toastStore.success('User deleted successfully');
       closeDeleteModal();
       await refreshData();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Delete error:', error);
       toastStore.error(`Failed to delete user: ${error.message}`);
     } finally {
@@ -543,23 +556,19 @@
                   </tr>
                 </thead>
                 <tbody>
-                  {#each paginatedData as user}
-                    <tr class="border-b hover:bg-gray-50 text-sm">
+                  {#each paginatedProfiles as user}
+                    <tr class="border-b hover:bg-gray-50 text-sm cursor-pointer"
+                        on:click={() => openSidebar(user)}>
                       <td class="px-4 py-2 font-medium">{user.first_name} {user.last_name}</td>
                       <td class="px-4 py-2 text-gray-600">{user.email || user.primary_phone || '-'}</td>
                       <td class="px-4 py-2">
                         <span class="inline-flex items-center px-2 py-1 rounded-full text-xs bg-blue-100 text-blue-800">
-                          {Array.isArray(user.role) ? user.role.join(', ') : user.role || '-'}
+                          {Array.isArray(user.role) ? user.role.join(', ') : (user.role || '-')}
                         </span>
                       </td>
-                      <td class="px-4 py-2">
+                      <td class="px-4 py-2" on:click|stopPropagation>
                         <div class="flex items-center gap-2">
-                          <button
-                            class="text-blue-600 hover:underline text-sm font-medium"
-                            on:click={() => openSidebar(user)}
-                          >
-                            Edit
-                          </button>
+                          <!-- Edit removed (row click opens) -->
                           <button
                             class="text-red-600 hover:underline text-sm font-medium"
                             on:click={() => openDeleteModal(user)}
@@ -617,8 +626,9 @@
                   </tr>
                 </thead>
                 <tbody>
-                  {#each paginatedData as client}
-                    <tr class="border-b hover:bg-gray-50 text-sm">
+                  {#each paginatedClients as client}
+                    <tr class="border-b hover:bg-gray-50 text-sm cursor-pointer"
+                        on:click={() => openClientSidebar(client)}>
                       <td class="px-4 py-2 font-medium">{client.first_name} {client.last_name}</td>
                       <td class="px-4 py-2 text-gray-600">{client.primary_phone}</td>
                       <td class="px-4 py-2 text-gray-600">{client.city}, {client.state}</td>
@@ -628,14 +638,9 @@
                         </span>
                       </td>
                       <td class="px-4 py-2 text-gray-600">{new Date(client.date_enrolled).toLocaleDateString()}</td>
-                      <td class="px-4 py-2">
+                      <td class="px-4 py-2" on:click|stopPropagation>
                         <div class="flex items-center gap-2">
-                          <button
-                            class="text-blue-600 hover:underline text-sm font-medium"
-                            on:click={() => openClientSidebar(client)}
-                          >
-                            Edit
-                          </button>
+                          <!-- Edit removed (row click opens) -->
                           {#if client.client_status_enum !== 'Inactive'}
                             <button
                               class="text-orange-600 hover:underline text-sm font-medium"
@@ -660,7 +665,7 @@
                 <span>Show</span>
                 <select
                   bind:value={pageSize}
-                  on:change={(e) => changePageSize(parseInt(e.currentTarget.value))}
+                  on:change={(e) => changePageSize(parseInt((e.currentTarget as HTMLSelectElement).value))}
                   class="border rounded px-2 py-1 text-sm"
                 >
                   <option value="10">10</option>
@@ -670,7 +675,7 @@
                 </select>
                 <span>entries</span>
                 <span class="ml-2 text-gray-500">
-                  ({(activeTab === 'users' ? filteredProfiles : filteredClients).length} total)
+                  ({(activeTab === 'users' ? filteredProfiles.length : filteredClients.length)} total)
                 </span>
               </div>
 
@@ -704,7 +709,7 @@
     <!-- User Sidebar -->
     {#if showSidebar}
       <UserSidebar
-        user={selectedUser}
+        user={selectedUser as any}
         createMode={isCreateMode}
         session={data.session}
         on:close={closeSidebar}
@@ -715,10 +720,10 @@
     <!-- Client Sidebar -->
     {#if showClientSidebar}
       <ClientSidebar
-        client={selectedClient}
+        client={selectedClient as any}
         createMode={isClientCreateMode}
         session={data.session}
-        orgId={data.userProfile?.org_id || 1}
+        orgId={orgId}
         on:close={closeClientSidebar}
         on:updated={handleClientUpdated}
       />
@@ -737,7 +742,7 @@
 
           <div class="p-6">
             <p class="text-sm text-gray-600 mb-4">Search for a user to delete:</p>
-            
+
             <div class="flex items-center gap-2 mb-4">
               <Search class="w-4 h-4 text-gray-400" />
               <input
@@ -807,13 +812,11 @@
             </div>
 
             <div class="mb-4">
-              <p class="text-sm text-red-600 font-medium mb-2">
-                ⚠️ This action cannot be undone!
-              </p>
+              <p class="text-sm text-red-600 font-medium mb-2">⚠️ This action cannot be undone!</p>
               <p class="text-sm text-gray-600 mb-4">
                 To confirm, please type the email address below:
               </p>
-              
+
               <div class="mb-2">
                 <code class="text-xs bg-gray-100 px-2 py-1 rounded">
                   {userToDelete.email || ''}
