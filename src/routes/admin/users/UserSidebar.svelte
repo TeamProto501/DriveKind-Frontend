@@ -4,10 +4,13 @@
   import type { AuthInfo } from '$lib/types';
   import { browser } from '$app/environment';
   import { supabase } from '$lib/supabase';
+  import { X } from '@lucide/svelte';  // Add this import
+  import { toastStore } from '$lib/toast';  // Add this import
 
   export let user: StaffProfile | null = null;
   export let createMode: boolean = false;
   export let session: any = undefined;
+  export let orgId: number;  // ADD THIS LINE
 
   const dispatch = createEventDispatcher();
 
@@ -16,6 +19,8 @@
     last_name: string;
     email?: string;
     primary_phone?: string;
+    primary_is_cell: boolean
+    primary_can_text: boolean;
     secondary_phone?: string;
     role: string[];
     dob?: string;
@@ -57,7 +62,8 @@
         role: [], dob: '', address: '', address2: '', city: '', state: '', zipcode: '',
         contact_pref_enum: 'Phone', emergency_contact: '', emergency_reln: '', emergency_phone: '',
         training_completed: false, mileage_reimbursement: false, can_accept_service_animals: true,
-        destination_limitation: '', town_preference: '', allergens: '', driver_other_limitations: ''
+        destination_limitation: '', town_preference: '', allergens: '', driver_other_limitations: '',
+        primary_is_cell: true, primary_can_text: true,
       };
     }
     const r = Array.isArray(user.role) ? user.role : (user.role ? [user.role] : []);
@@ -74,7 +80,9 @@
       destination_limitation: user.destination_limitation||'',
       town_preference: user.town_preference||'',
       allergens: user.allergens||'',
-      driver_other_limitations: user.driver_other_limitations||''
+      driver_other_limitations: user.driver_other_limitations||'',
+      primary_is_cell: user.primary_is_cell, 
+      primary_can_text: user.primary_can_text
     };
   }
   $: form = initForm(); // keep in sync when prop changes
@@ -99,36 +107,94 @@
   function back(){ step=Math.max(1, step-1); errorMessage=null; }
 
   async function saveUser(){
-    const allErrs=[...validateStep(1),...validateStep(2)]; if(allErrs.length){ errorMessage=allErrs.join(' '); return; }
-    saving=true; errorMessage=null;
-    try{
-      if (createMode){
-        // create via server action (same endpoint you already have)
-        const fd = new FormData();
-        fd.append('email', form.email || '');
-        fd.append('password', tempPassword);
-        fd.append('first_name', form.first_name);
-        fd.append('last_name', form.last_name);
-        fd.append('profileData', JSON.stringify({ ...form, role: form.role, org_id: 1 })); // org set server-side as needed
-        const res = await fetch('?/createUser', { method:'POST', body: fd });
-        const data = await res.json().catch(async()=>({ error: await res.text() }));
-        if (!res.ok || data?.success===false) throw new Error(data?.error || 'Failed to create user');
-      } else if (user){
-        // update
-        let auth: AuthInfo;
-        if (session) {
-          auth = { token: session.access_token, access_token: session.access_token, refresh_token: session.refresh_token, user: session.user, userId: session.user?.id };
-        } else if (browser) {
-          const { data: { session: s } } = await supabase.auth.getSession();
-          if(!s) throw new Error('No session');
-          auth = { token: s.access_token, access_token: s.access_token, refresh_token: s.refresh_token, user: s.user, userId: s.user?.id };
-        } else { throw new Error('No session'); }
-        await updateStaffProfile(user.user_id, { ...form, role: form.role }, auth);
-      }
-      dispatch('updated'); dispatch('close');
-    }catch(e:any){ errorMessage = e.message || 'Failed to save user'; }
-    finally{ saving=false; }
+  const allErrs=[...validateStep(1),...validateStep(2)]; 
+  if(allErrs.length){ 
+    errorMessage=allErrs.join(' '); 
+    toastStore.error(errorMessage);
+    return; 
   }
+  
+  saving=true; 
+  errorMessage=null;
+  
+  try{
+    if (createMode){
+      console.log('Creating user with email:', form.email);
+      
+      // create via server action
+      const fd = new FormData();
+      fd.append('email', form.email || '');
+      fd.append('password', tempPassword);
+      fd.append('first_name', form.first_name);
+      fd.append('last_name', form.last_name);
+      fd.append('profileData', JSON.stringify({ 
+        ...form, 
+        role: form.role, 
+        org_id: orgId  // USE THE PASSED orgId INSTEAD OF HARDCODED 1
+      }));
+      
+      const res = await fetch('?/createUser', { method:'POST', body: fd });
+      
+      console.log('Create user response status:', res.status);
+      
+      if (!res.ok) {
+        const errorText = await res.text();
+        console.error('Create user failed:', errorText);
+        throw new Error(errorText || 'Failed to create user');
+      }
+      
+      const data = await res.json().catch(async()=>({ 
+        error: await res.text() 
+      }));
+      
+      console.log('Create user response data:', data);
+      
+      if (data?.success === false || data?.error) {
+        throw new Error(data?.error || 'Failed to create user');
+      }
+      
+      toastStore.success('User created successfully');
+      dispatch('updated'); 
+      dispatch('close');
+      
+    } else if (user){
+      // update existing user
+      let auth: AuthInfo;
+      if (session) {
+        auth = { 
+          token: session.access_token, 
+          access_token: session.access_token, 
+          refresh_token: session.refresh_token, 
+          user: session.user, 
+          userId: session.user?.id 
+        };
+      } else if (browser) {
+        const { data: { session: s } } = await supabase.auth.getSession();
+        if(!s) throw new Error('No session');
+        auth = { 
+          token: s.access_token, 
+          access_token: s.access_token, 
+          refresh_token: s.refresh_token, 
+          user: s.user, 
+          userId: s.user?.id 
+        };
+      } else { 
+        throw new Error('No session'); 
+      }
+      
+      await updateStaffProfile(user.user_id, { ...form, role: form.role }, auth);
+      toastStore.success('User updated successfully');
+      dispatch('updated'); 
+      dispatch('close');
+    }
+  } catch(e:any){ 
+    console.error('Save user error:', e);
+    errorMessage = e.message || 'Failed to save user';
+    toastStore.error(errorMessage);
+  } finally{ 
+    saving=false; 
+  }
+}
 </script>
 
 <div class="fixed top-0 right-0 w-[28rem] max-w-[92vw] h-full bg-white shadow-xl border-l border-gray-200 flex flex-col z-50">

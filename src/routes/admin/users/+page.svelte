@@ -712,6 +712,7 @@
         user={selectedUser as any}
         createMode={isCreateMode}
         session={data.session}
+        orgId={orgId}
         on:close={closeSidebar}
         on:updated={handleUserUpdated}
       />
