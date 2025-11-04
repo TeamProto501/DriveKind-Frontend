@@ -28,12 +28,26 @@ export const load: PageServerLoad = async (event) => {
     };
   }
 
-  // Get all vehicles in org (bypasses RLS)
+  // Get all vehicles in org
   const { data: vehicles } = await supabase
     .from('vehicles')
     .select('*')
     .eq('org_id', profile.org_id)
     .order('vehicle_id', { ascending: true });
+
+  // Get driver names separately
+  const userIds = [...new Set((vehicles || []).map(v => v.user_id).filter(Boolean))];
+  const { data: staffProfiles } = await supabase
+    .from('staff_profiles')
+    .select('user_id, first_name, last_name')
+    .in('user_id', userIds);
+
+  // Merge staff profiles into vehicles
+  const profileMap = new Map(staffProfiles?.map(p => [p.user_id, p]) || []);
+  const vehiclesWithProfiles = (vehicles || []).map(v => ({
+    ...v,
+    staff_profile: v.user_id ? profileMap.get(v.user_id) : null
+  }));
 
   // Get all drivers in org for dropdown
   const { data: drivers } = await supabase
@@ -42,13 +56,13 @@ export const load: PageServerLoad = async (event) => {
     .eq('org_id', profile.org_id)
     .contains('role', ['Driver']);
 
-  console.log('Server-side vehicles for org', profile.org_id, ':', vehicles);
+  console.log('Server-side vehicles for org', profile.org_id, ':', vehiclesWithProfiles);
 
   return {
     session,
     profile,
     roles: Array.isArray(profile.role) ? profile.role : [],
-    vehicles: vehicles || [],
+    vehicles: vehiclesWithProfiles,
     driverOptions: drivers || []
   };
 };
