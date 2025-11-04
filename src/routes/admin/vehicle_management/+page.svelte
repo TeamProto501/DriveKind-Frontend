@@ -26,7 +26,6 @@
 		profile?: any | null;
 		roles?: string[] | null;
 	}
-	let { data }: { data?: PageData } = $props();
 
 	// ---- Role handling (runes) ----
 	let userRoles = $state<string[]>([]);
