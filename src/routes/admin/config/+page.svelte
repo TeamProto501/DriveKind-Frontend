@@ -7,17 +7,20 @@
 	} from '@lucide/svelte';
 	import { getContext, onMount } from 'svelte';
 	import { supabase } from '$lib/supabase';
+	import type { PageData } from './$types';
+	
+	let { data } = $props();
 
-	/** Session is provided from layout via setContext("session", ...) like your other pages */
-	const session = getContext<any>('session');
+	// Use data.session instead of getContext
+	const session = data.session;
 
 	type OrgRow = Record<string, any> & { org_id: number };
 
 	let isLoading = $state(true);
 	let loadError = $state('');
-	let org: OrgRow | null = $state(null);
-	let originalOrg: OrgRow | null = $state(null);
-	let orgId: number | null = $state(null);
+	let org = $state(data.organization);
+	let originalOrg = $state(data.organization ? JSON.parse(JSON.stringify(data.organization)) : null);
+	let orgId = $state(data.organization?.org_id ?? null);
 
 	// Edit modal (now wizard)
 	let showEditModal = $state(false);
@@ -91,43 +94,6 @@
 		}
 		return '';
 	}
-
-	// ---- Load data ----
-	async function loadOrg() {
-		try {
-			isLoading = true;
-			loadError = '';
-
-			// TEST: Check Supabase auth
-			const { data: { session: testSession }, error: sessionErr } = await supabase.auth.getSession();
-			console.log('🔍 Session check:', { 
-				hasSession: !!testSession, 
-				userId: testSession?.user?.id,
-				accessToken: testSession?.access_token ? 'exists' : 'missing',
-				error: sessionErr 
-			});
-
-			// TEST: Check if queries are authenticated
-			const { data: rawTest, error: rawErr } = await supabase
-				.from('organization')
-				.select('org_id, name')
-				.eq('org_id', 1);
-			
-			console.log('🔍 Raw org query:', { 
-				data: rawTest, 
-				error: rawErr,
-				count: rawTest?.length 
-			});
-
-			// ... rest of function
-		} catch (e: any) {
-			console.error('Load error:', e?.message ?? e);
-			loadError = 'Failed to load organization: ' + (e?.message ?? 'Unknown error');
-		} finally {
-			isLoading = false;
-		}
-	}
-	onMount(() => { void loadOrg(); });
 
 	// ---- Derived via effect ----
 	type HoursRow = { day: string; open: string; close: string };
