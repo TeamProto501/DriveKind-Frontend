@@ -24,6 +24,7 @@
     secondary_phone?: string;
     role: string[];
     dob?: string;
+    gender?: 'Male' | 'Female' | 'Other';
     address?: string;
     address2?: string;
     city?: string;
@@ -59,7 +60,7 @@
     if (!user || createMode) {
       return {
         first_name: '', last_name: '', email: '', primary_phone: '', secondary_phone: '',
-        role: [], dob: '', address: '', address2: '', city: '', state: '', zipcode: '',
+        role: [], dob: '', gender: undefined, address: '', address2: '', city: '', state: '', zipcode: '',
         contact_pref_enum: 'Phone', emergency_contact: '', emergency_reln: '', emergency_phone: '',
         training_completed: false, mileage_reimbursement: false, can_accept_service_animals: true,
         destination_limitation: '', town_preference: '', allergens: '', driver_other_limitations: '',
@@ -70,7 +71,7 @@
     return {
       first_name: user.first_name||'', last_name: user.last_name||'',
       email: user.email||'', primary_phone: user.primary_phone||'', secondary_phone: user.secondary_phone||'',
-      role: r, dob: user.dob||'', address: user.address||'', address2: user.address2||'',
+      role: r, dob: user.dob||'', gender: (user as any).gender, address: user.address||'', address2: user.address2||'',
       city: user.city||'', state: user.state||'', zipcode: user.zipcode||'',
       contact_pref_enum: (user as any).contact_pref_enum || 'Phone',
       emergency_contact: user.emergency_contact||'', emergency_reln: user.emergency_reln||'', emergency_phone: user.emergency_phone||'',
@@ -234,6 +235,7 @@
           </div>
           <div class="grid grid-cols-2 gap-3">
             <div><div class="text-xs text-gray-500">DOB</div><div class="font-medium">{user.dob || '—'}</div></div>
+            <div><div class="text-xs text-gray-500">Gender</div><div class="font-medium">{(user as any).gender || '—'}</div></div>
             <div><div class="text-xs text-gray-500">Contact Preference</div><div class="font-medium">{(user as any).contact_pref_enum || '—'}</div></div>
           </div>
           <div><div class="text-xs text-gray-500">Address</div>
@@ -311,6 +313,15 @@
       {#if step===2}
         <div class="space-y-3">
           <div><label class="block text-base font-medium">DOB</label><input class="mt-1 w-full border rounded px-3 py-2 text-base" type="date" bind:value={form.dob} /></div>
+          <div>
+            <label class="block text-base font-medium">Gender</label>
+            <select class="mt-1 w-full border rounded px-3 py-2 text-base" bind:value={form.gender}>
+              <option value={undefined}>Select...</option>
+              <option value="Male">Male</option>
+              <option value="Female">Female</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
           <div><label class="block text-base font-medium">Contact Preference</label>
             <select class="mt-1 w-full border rounded px-3 py-2 text-base" bind:value={form.contact_pref_enum}>
               {#each contactPrefs as p}<option value={p}>{p}</option>{/each}
