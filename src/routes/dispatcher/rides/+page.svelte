@@ -827,7 +827,7 @@
         <div class="mb-3">
           <div class="flex items-center gap-2">
             <input id="pickup_from_home" type="checkbox" bind:checked={rideForm.pickup_from_home} />
-            <Label for="pickup_from_home">Pickup from client's home</Label>
+            <label for="pickup_from_home">Pickup from client's home</label>
           </div>
           <p class="text-xs text-gray-500 mt-1">
             If checked, pickup address is auto-filled from the client and locked.
@@ -1114,7 +1114,7 @@
           <div class="mb-3">
             <div class="flex items-center gap-2">
               <input id="e_pickup_from_home" type="checkbox" bind:checked={rideForm.pickup_from_home} />
-              <Label for="e_pickup_from_home">Pickup from client's home</Label>
+              <label for="e_pickup_from_home">Pickup from client's home</label>
             </div>
             <p class="text-xs text-gray-500 mt-1">
               If checked, pickup address is auto-filled from the client and locked.
