@@ -1,11 +1,24 @@
 <script lang="ts">
 	import { Car, Search, Trash2, Pencil, Plus } from '@lucide/svelte';
-	import { onMount } from 'svelte';
+	import { invalidateAll } from '$app/navigation';
 	import { supabase } from '$lib/supabase';
 
 	// shadcn/ui
 	import * as Dialog from '$lib/components/ui/dialog/index.js';
 	import { Button } from '$lib/components/ui/button/index.js';
+
+	let { data }: { data?: PageData } = $props();
+
+	// Use server-loaded data instead of client queries
+	let vehicles = $state<VehicleRow[]>(data?.vehicles || []);
+	let driverOptions = $state<StaffLite[]>(data?.driverOptions || []);
+	let viewerUid = $state(data?.session?.user?.id || null);
+	let viewerOrgId = $state(data?.profile?.org_id || null);
+
+	let isLoading = $state(false);
+	let loadError = $state(data?.error || '');
+	let driversLoading = $state(false);
+	let driversError = $state('');
 
 	// ---- Page data from load() (roles, etc.) ----
 	interface PageData {
@@ -115,21 +128,6 @@
 	let isDeleting = $state(false);
 	let toDelete = $state<VehicleRow | null>(null);
 
-	onMount(async () => {
-		try {
-			await loadViewerIdentity();
-			if (!viewerOrgId) {
-				loadError = 'Your staff profile is not linked to an organization.';
-				isLoading = false;
-				return;
-			}
-			await Promise.all([loadVehicles(), loadDriverOptions()]);
-		} catch (e: any) {
-			loadError = e?.message ?? 'Failed to initialize.';
-			isLoading = false;
-		}
-	});
-
 	// ---- Viewer org lookup ----
 	async function loadViewerIdentity() {
 		viewerUid = data?.session?.user?.id ?? null;
@@ -150,77 +148,8 @@
 		viewerOrgId = (sp?.org_id ?? null) as number | null;
 	}
 
-	// ---- Load vehicles for viewer's org ONLY + include owner name ----
 	async function loadVehicles() {
-		if (!viewerOrgId) return;
-		try {
-			isLoading = true;
-			loadError = '';
-
-			console.log('Loading vehicles for org:', viewerOrgId);
-
-			const { data: rows, error } = await supabase
-			.from('vehicles')
-			.select('vehicle_id, user_id, type_of_vehicle_enum, vehicle_color, nondriver_seats, active, org_id')
-			.eq('org_id', viewerOrgId)
-			.order('vehicle_id', { ascending: true });
-
-			console.log('Vehicles loaded:', rows, 'Error:', error);
-
-			if (error) throw error;
-
-			// Manually fetch driver names separately
-			if (rows && rows.length > 0) {
-			const userIds = [...new Set(rows.map((v: any) => v.user_id).filter(Boolean))];
-			const { data: profiles } = await supabase
-				.from('staff_profiles')
-				.select('user_id, first_name, last_name')
-				.in('user_id', userIds);
-			
-			const profileMap = new Map(profiles?.map(p => [p.user_id, p]) || []);
-			
-			rows.forEach((v: any) => {
-				v.staff_profile = v.user_id ? profileMap.get(v.user_id) : null;
-			});
-			}
-
-			vehicles = (rows ?? []) as VehicleRow[];
-		} catch (e: any) {
-			console.error('Load error:', e?.message ?? e);
-			loadError = e?.message ?? 'Failed to load vehicles.';
-			vehicles = [];
-		} finally {
-			isLoading = false;
-		}
-	}
-
-	// ---- Load driver options (same org, role contains "Driver") ----
-	async function loadDriverOptions() {
-		if (!viewerOrgId) return;
-		try {
-			driversLoading = true;
-			driversError = '';
-
-			const { data, error } = await supabase
-				.from('staff_profiles')
-				.select('user_id, first_name, last_name, role, org_id')
-				.eq('org_id', viewerOrgId)
-				.contains('role', ['Driver']);
-
-			if (error) throw error;
-
-			driverOptions = (data ?? []).map((r) => ({
-				user_id: r.user_id,
-				first_name: r.first_name ?? null,
-				last_name: r.last_name ?? null
-			}));
-		} catch (e: any) {
-			console.error('Drivers load error:', e?.message ?? e);
-			driversError = e?.message ?? 'Failed to load drivers.';
-			driverOptions = [];
-		} finally {
-			driversLoading = false;
-		}
+		await invalidateAll();
 	}
 
 	// ------- Delete -------

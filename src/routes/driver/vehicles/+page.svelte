@@ -1,9 +1,19 @@
 <script lang="ts">
 	import { supabase } from '$lib/supabase';
-	import { getContext, onMount } from 'svelte';
-	import Breadcrumbs from '$lib/components/Breadcrumbs.svelte';
+	import { invalidateAll } from '$app/navigation';
 	import RoleGuard from '$lib/components/RoleGuard.svelte';
+	import Breadcrumbs from '$lib/components/Breadcrumbs.svelte';
 	import { Car, CheckCircle2, AlertTriangle, Pencil, Trash2, X, Plus } from '@lucide/svelte';
+
+	let { data } = $props();
+
+	// Use server-loaded data
+	let vehicles = $state(data.vehicles || []);
+	let uid = $state(data.session?.user?.id || null);
+	let userOrgId = $state(data.userOrgId);
+	let loadError = $state(data.error || '');
+	let isLoading = $state(false);
+
 
 	const session = getContext<any>('session');
 
@@ -90,42 +100,8 @@
 	}
 
 	async function loadVehicles() {
-		try {
-			isLoading = true;
-			loadError = '';
-
-			await loadUser();
-			await loadUserOrg();
-			await normalizeActives();
-
-			console.log('Loading vehicles for user:', uid);
-
-			const { data, error } = await supabase
-			.from('vehicles')
-			.select('*')
-			.eq('user_id', uid)
-			.order('vehicle_id', { ascending: true });
-
-			console.log('Vehicles result:', data, 'Error:', error);
-
-			if (error) throw error;
-
-			// Active vehicles first
-			vehicles = (data ?? []).sort((a, b) => {
-				if (a.active && !b.active) return -1;
-				if (!a.active && b.active) return 1;
-				return a.vehicle_id - b.vehicle_id;
-			});
-		} catch (e: any) {
-			loadError = e?.message ?? 'Failed to load vehicles';
-		} finally {
-			isLoading = false;
-		}
+		await invalidateAll();
 	}
-
-	onMount(() => {
-		void loadVehicles();
-	});
 
 	async function setActive(vehicle_id: number) {
 		if (!uid) return;
