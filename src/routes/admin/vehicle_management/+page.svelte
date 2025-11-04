@@ -20,6 +20,8 @@
 	let driversLoading = $state(false);
 	let driversError = $state('');
 
+	let searchTerm = $state('');
+
 	// ---- Page data from load() (roles, etc.) ----
 	interface PageData {
 		session?: { user: any } | null;
