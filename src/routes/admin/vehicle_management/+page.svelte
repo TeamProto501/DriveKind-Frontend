@@ -58,19 +58,6 @@
 		staff_profile?: { first_name: string | null; last_name: string | null } | null;
 	}
 
-	let viewerUid: string | null = $state(null);
-	let viewerOrgId: number | null = $state(null);
-
-	let vehicles = $state<VehicleRow[]>([]);
-	let isLoading = $state(true);
-	let loadError = $state('');
-	let searchTerm = $state('');
-
-	// Drivers for dropdown (same org, role contains "Driver")
-	let driverOptions = $state<StaffLite[]>([]);
-	let driversLoading = $state(false);
-	let driversError = $state('');
-
 	// toast
 	let toast = $state('');
 	let toastOk = $state(true);
