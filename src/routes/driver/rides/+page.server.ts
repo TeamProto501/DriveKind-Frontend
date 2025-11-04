@@ -53,7 +53,6 @@ export const load: PageServerLoad = async (event) => {
 				ride_id,
 				org_id,
 				client_id,
-				vehicle_id,
 				dispatcher_user_id,
 				alt_pickup_address,
 				dropoff_address,
@@ -129,7 +128,7 @@ export const load: PageServerLoad = async (event) => {
 		}
 
 		return {
-			session, // ← MAKE SURE THIS IS HERE!
+			session,
 			rides: rides || [],
 			completedRidesData,
 			profile,
@@ -139,7 +138,7 @@ export const load: PageServerLoad = async (event) => {
 	} catch (error) {
 		console.error('Error in driver rides page load:', error);
 		if (error instanceof Response) {
-			throw error; // Re-throw redirects
+			throw error;
 		}
 		return {
 			session: null,
