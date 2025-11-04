@@ -481,22 +481,6 @@
             <span>Profile</span>
           </button>
 
-          <!-- Settings Link (only show if user has admin access) -->
-          {#if hasRole(["Admin", "Super Admin"])}
-            <button
-              onclick={() => {
-                navigateTo("/admin/config");
-                document
-                  .getElementById("profile-dropdown")
-                  ?.classList.add("hidden");
-              }}
-              class="w-full flex items-center gap-2 px-2 py-2 text-sm text-slate-700 hover:bg-slate-100 rounded-md transition-colors"
-            >
-              <Settings class="w-4 h-4" />
-              <span>Settings</span>
-            </button>
-          {/if}
-
           <div class="h-px bg-slate-200 my-1"></div>
 
           <!-- Logout Button -->
