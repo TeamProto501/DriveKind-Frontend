@@ -98,68 +98,28 @@
 			isLoading = true;
 			loadError = '';
 
-			let uid: string | null = session?.user?.id ?? null;
-			if (!uid) {
-				const { data, error } = await supabase.auth.getUser();
-				if (error) throw error;
-				uid = data?.user?.id ?? null;
-			}
-			if (!uid) { 
-				loadError = 'No user session found.'; 
-				console.error('No uid found');
-				return; 
-			}
+			// TEST: Check Supabase auth
+			const { data: { session: testSession }, error: sessionErr } = await supabase.auth.getSession();
+			console.log('🔍 Session check:', { 
+				hasSession: !!testSession, 
+				userId: testSession?.user?.id,
+				accessToken: testSession?.access_token ? 'exists' : 'missing',
+				error: sessionErr 
+			});
 
-			console.log('Loading org for user:', uid);
-
-			// Test: Can we query staff_profiles?
-			const { data: testProfile, error: testErr } = await supabase
-				.from('staff_profiles')
-				.select('user_id, org_id, role')
-				.eq('user_id', uid)
-				.maybeSingle();
-			
-			console.log('Test staff profile query:', testProfile, testErr);
-
-			// Test: Can we query organization WITHOUT filter?
-			const { data: allOrgs, error: allOrgsErr } = await supabase
-				.from('organization')
-				.select('org_id, name')
-				.limit(5);
-			
-			console.log('Test all orgs query (no filter):', allOrgs, allOrgsErr);
-
-			// Test: Can we query org 1 specifically?
-			const { data: org1Test, error: org1Err } = await supabase
+			// TEST: Check if queries are authenticated
+			const { data: rawTest, error: rawErr } = await supabase
 				.from('organization')
 				.select('org_id, name')
 				.eq('org_id', 1);
 			
-			console.log('Test org 1 query:', org1Test, org1Err);
+			console.log('🔍 Raw org query:', { 
+				data: rawTest, 
+				error: rawErr,
+				count: rawTest?.length 
+			});
 
-			// If we get here and org1Test is empty, RLS is definitely blocking
-			if (!org1Test || org1Test.length === 0) {
-				loadError = 'RLS is blocking Super Admin access. Policies may not be set correctly.';
-				return;
-			}
-
-			// Continue with normal flow...
-			const { data: sp, error: spErr } = await supabase
-				.from('staff_profiles')
-				.select('org_id, role, first_name, last_name')
-				.eq('user_id', uid)
-				.maybeSingle();
-			
-			if (spErr) throw spErr;
-			if (!sp?.org_id) { 
-				loadError = `Your staff profile is not linked to an organization.`; 
-				return; 
-			}
-			orgId = sp.org_id as number;
-
-			org = org1Test[0] as OrgRow;
-			originalOrg = JSON.parse(JSON.stringify(org1Test[0]));
-			
+			// ... rest of function
 		} catch (e: any) {
 			console.error('Load error:', e?.message ?? e);
 			loadError = 'Failed to load organization: ' + (e?.message ?? 'Unknown error');
