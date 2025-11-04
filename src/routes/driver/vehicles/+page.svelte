@@ -98,11 +98,15 @@
 			await loadUserOrg();
 			await normalizeActives();
 
+			console.log('Loading vehicles for user:', uid);
+
 			const { data, error } = await supabase
-				.from('vehicles')
-				.select('*')
-				.eq('user_id', uid)
-				.order('vehicle_id', { ascending: true });
+			.from('vehicles')
+			.select('*')
+			.eq('user_id', uid)
+			.order('vehicle_id', { ascending: true });
+
+			console.log('Vehicles result:', data, 'Error:', error);
 
 			if (error) throw error;
 

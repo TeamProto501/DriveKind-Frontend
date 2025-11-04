@@ -157,27 +157,34 @@
 			isLoading = true;
 			loadError = '';
 
+			console.log('Loading vehicles for org:', viewerOrgId);
+
 			const { data: rows, error } = await supabase
-				.from('vehicles')
-				.select(`
-					vehicle_id,
-					user_id,
-					type_of_vehicle_enum,
-					vehicle_color,
-					nondriver_seats,
-					active,
-					org_id,
-					staff_profile:user_id (
-						first_name,
-						last_name
-					)
-				`)
-				.eq('org_id', viewerOrgId)
-				.order('vehicle_id', { ascending: true });
+			.from('vehicles')
+			.select('vehicle_id, user_id, type_of_vehicle_enum, vehicle_color, nondriver_seats, active, org_id')
+			.eq('org_id', viewerOrgId)
+			.order('vehicle_id', { ascending: true });
+
+			console.log('Vehicles loaded:', rows, 'Error:', error);
 
 			if (error) throw error;
 
-			vehicles = (rows ?? []) as unknown as VehicleRow[];
+			// Manually fetch driver names separately
+			if (rows && rows.length > 0) {
+			const userIds = [...new Set(rows.map((v: any) => v.user_id).filter(Boolean))];
+			const { data: profiles } = await supabase
+				.from('staff_profiles')
+				.select('user_id, first_name, last_name')
+				.in('user_id', userIds);
+			
+			const profileMap = new Map(profiles?.map(p => [p.user_id, p]) || []);
+			
+			rows.forEach((v: any) => {
+				v.staff_profile = v.user_id ? profileMap.get(v.user_id) : null;
+			});
+			}
+
+			vehicles = (rows ?? []) as VehicleRow[];
 		} catch (e: any) {
 			console.error('Load error:', e?.message ?? e);
 			loadError = e?.message ?? 'Failed to load vehicles.';
