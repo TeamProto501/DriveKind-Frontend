@@ -98,7 +98,6 @@
 			isLoading = true;
 			loadError = '';
 
-			// get user id (context or auth)
 			let uid: string | null = session?.user?.id ?? null;
 			if (!uid) {
 				const { data, error } = await supabase.auth.getUser();
@@ -113,74 +112,53 @@
 
 			console.log('Loading org for user:', uid);
 
-			// find org_id from staff_profiles - DIRECT QUERY, bypass helper
+			// Test: Can we query staff_profiles?
+			const { data: testProfile, error: testErr } = await supabase
+				.from('staff_profiles')
+				.select('user_id, org_id, role')
+				.eq('user_id', uid)
+				.maybeSingle();
+			
+			console.log('Test staff profile query:', testProfile, testErr);
+
+			// Test: Can we query organization WITHOUT filter?
+			const { data: allOrgs, error: allOrgsErr } = await supabase
+				.from('organization')
+				.select('org_id, name')
+				.limit(5);
+			
+			console.log('Test all orgs query (no filter):', allOrgs, allOrgsErr);
+
+			// Test: Can we query org 1 specifically?
+			const { data: org1Test, error: org1Err } = await supabase
+				.from('organization')
+				.select('org_id, name')
+				.eq('org_id', 1);
+			
+			console.log('Test org 1 query:', org1Test, org1Err);
+
+			// If we get here and org1Test is empty, RLS is definitely blocking
+			if (!org1Test || org1Test.length === 0) {
+				loadError = 'RLS is blocking Super Admin access. Policies may not be set correctly.';
+				return;
+			}
+
+			// Continue with normal flow...
 			const { data: sp, error: spErr } = await supabase
 				.from('staff_profiles')
 				.select('org_id, role, first_name, last_name')
 				.eq('user_id', uid)
 				.maybeSingle();
 			
-			console.log('Staff profile query result:', sp, 'Error:', spErr);
-			
 			if (spErr) throw spErr;
 			if (!sp?.org_id) { 
-				loadError = `Your staff profile is not linked to an organization. User: ${uid}`; 
-				console.error('No org_id in staff profile:', sp);
+				loadError = `Your staff profile is not linked to an organization.`; 
 				return; 
 			}
 			orgId = sp.org_id as number;
 
-			console.log('Found org_id:', orgId);
-
-			// Check if user is Super Admin
-			const isSuperAdmin = sp.role && (
-				Array.isArray(sp.role) 
-					? sp.role.includes('Super Admin')
-					: sp.role === 'Super Admin'
-			);
-
-			console.log('Is Super Admin:', isSuperAdmin, 'Role:', sp.role);
-
-			// load organization row - different approach for Super Admin
-			if (isSuperAdmin) {
-				// Super Admins can see all orgs, just get the one they belong to
-				const { data: rows, error: orgErr } = await supabase
-					.from('organization')
-					.select('*')
-					.eq('org_id', orgId);
-				
-				console.log('Org query (Super Admin) result:', rows, 'Error:', orgErr);
-				
-				if (orgErr) throw orgErr;
-				
-				if (!rows || rows.length === 0) {
-					loadError = `Organization ${orgId} not found in database.`;
-					return;
-				}
-
-				org = rows[0] as OrgRow;
-				originalOrg = JSON.parse(JSON.stringify(rows[0]));
-			} else {
-				// Regular admins use RLS
-				const { data: rows, error: orgErr } = await supabase
-					.from('organization')
-					.select('*')
-					.eq('org_id', orgId);
-				
-				console.log('Org query (Admin) result:', rows, 'Error:', orgErr);
-				
-				if (orgErr) throw orgErr;
-				
-				if (!rows || rows.length === 0) {
-					loadError = `Organization ${orgId} not found. Check RLS policies.`;
-					return;
-				}
-
-				org = rows[0] as OrgRow;
-				originalOrg = JSON.parse(JSON.stringify(rows[0]));
-			}
-
-			console.log('Successfully loaded org:', org?.name);
+			org = org1Test[0] as OrgRow;
+			originalOrg = JSON.parse(JSON.stringify(org1Test[0]));
 			
 		} catch (e: any) {
 			console.error('Load error:', e?.message ?? e);
