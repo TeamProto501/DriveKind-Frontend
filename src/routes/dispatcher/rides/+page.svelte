@@ -1116,6 +1116,9 @@
               <input id="e_pickup_from_home" type="checkbox" bind:checked={rideForm.pickup_from_home} />
               <Label for="e_pickup_from_home">Pickup from client's home</Label>
             </div>
+            <p class="text-xs text-gray-500 mt-1">
+              If checked, pickup address is auto-filled from the client and locked.
+            </p>
           </div>
 
           <!-- PICKUP (disabled when from home) -->
