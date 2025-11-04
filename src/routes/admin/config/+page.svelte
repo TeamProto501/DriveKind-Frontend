@@ -112,21 +112,29 @@
 				.from('staff_profiles')
 				.select('org_id')
 				.eq('user_id', uid)
-				.single();
+				.maybeSingle();  // Changed from .single()
+			
 			if (spErr) throw spErr;
 			if (!sp?.org_id) { loadError = 'Your staff profile is not linked to an organization.'; return; }
 			orgId = sp.org_id as number;
 
-			// load organization row
-			const { data: row, error: orgErr } = await supabase
+			// load organization row - use array approach to avoid RLS policy conflicts
+			const { data: rows, error: orgErr } = await supabase
 				.from('organization')
 				.select('*')
-				.eq('org_id', orgId)
-				.single();
+				.eq('org_id', orgId);  // Removed .single()
+			
 			if (orgErr) throw orgErr;
+			
+			if (!rows || rows.length === 0) {
+				loadError = 'Organization not found.';
+				return;
+			}
 
-			org = row as OrgRow;
-			originalOrg = JSON.parse(JSON.stringify(row));
+			// Take first row (should only be one since org_id is primary key)
+			org = rows[0] as OrgRow;
+			originalOrg = JSON.parse(JSON.stringify(rows[0]));
+			
 		} catch (e: any) {
 			console.error('Load error:', e?.message ?? e);
 			loadError = 'Failed to load organization: ' + (e?.message ?? 'Unknown error');
