@@ -509,10 +509,6 @@
     >
       <Sidebar.Trigger class="-ml-1" />
       <Separator orientation="vertical" class="mr-2 h-4" />
-      <div class="flex items-center gap-2">
-        <Bell class="h-4 w-4 text-slate-600" />
-        <span class="text-sm text-slate-600">Notifications</span>
-      </div>
     </header>
 
     <!-- Page Content -->
