@@ -14,9 +14,6 @@
 	let loadError = $state(data.error || '');
 	let isLoading = $state(false);
 
-
-	const session = getContext<any>('session');
-
 	type Vehicle = {
 		vehicle_id: number;
 		user_id: string;
@@ -28,13 +25,7 @@
 	};
 
 	const VEHICLE_TYPES = ['SUV', 'Sedan', 'Van', 'Motorcycle', 'Truck', 'Coupe'] as const;
-
-	let uid: string | null = $state(null);
-	let userOrgId: number | null = $state(null);
-
-	let isLoading = $state(true);
-	let loadError = $state('');
-	let vehicles = $state<Vehicle[]>([]);
+	
 	let toast = $state('');
 	let toastOk = $state(true);
 
@@ -76,27 +67,6 @@
 			await supabase.from('vehicles').update({ active: false }).eq('user_id', uid).neq('vehicle_id', keep);
 			await supabase.from('vehicles').update({ active: true }).eq('vehicle_id', keep);
 		}
-	}
-
-	async function loadUser() {
-		uid = session?.user?.id ?? null;
-		if (!uid) {
-			const { data, error } = await supabase.auth.getUser();
-			if (error) throw error;
-			uid = data?.user?.id ?? null;
-		}
-		if (!uid) throw new Error('No user session');
-	}
-
-	async function loadUserOrg() {
-		if (!uid) return;
-		const { data, error } = await supabase
-			.from('staff_profiles')
-			.select('org_id')
-			.eq('user_id', uid)
-			.single();
-		if (error) { userOrgId = null; return; }
-		userOrgId = (data?.org_id ?? null) as number | null;
 	}
 
 	async function loadVehicles() {
