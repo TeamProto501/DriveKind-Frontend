@@ -3,7 +3,7 @@
   import { Card } from "$lib/components/ui/card";
   import { Input } from "$lib/components/ui/input";
   import Textarea from "$lib/components/ui/textarea.svelte";
-  import Label from "$lib/components/ui/label.svelte";
+  // import Label from "$lib/components/ui/label.svelte"; // removed
   import {
     Car, Clock, MapPin, User, Phone, Calendar, Search, Plus, Edit,
     AlertCircle, UserCheck, CheckCircle
@@ -765,7 +765,7 @@
 
         <div class="grid gap-3 md:grid-cols-3">
           <div class="md:col-span-2">
-            <Label for="client_id">Client *</Label>
+            <label for="client_id">Client *</label>
             <select
               id="client_id"
               bind:value={rideForm.client_id}
@@ -781,13 +781,13 @@
           </div>
 
           <div>
-            <Label for="dispatcher_display">Dispatcher</Label>
+            <label for="dispatcher_display">Dispatcher</label>
             <Input id="dispatcher_display" value={dispatcherName()} disabled class="bg-gray-100" />
             <p class="text-xs text-gray-500 mt-1">Auto-set to you.</p>
           </div>
 
           <div class="md:col-span-3">
-            <Label for="call_id">Linked Call</Label>
+            <label for="call_id">Linked Call</label>
             <select
               id="call_id"
               bind:value={rideForm.call_id}
@@ -805,12 +805,12 @@
 
         <div class="grid gap-3 md:grid-cols-2 mt-3">
           <div>
-            <Label for="appointment_time">Appointment Time *</Label>
+            <label for="appointment_time">Appointment Time *</label>
             <Input id="appointment_time" type="datetime-local" bind:value={rideForm.appointment_time} aria-label="Appointment Time" />
             <p class="text-xs text-gray-500 mt-1">Date &amp; time of the appointment.</p>
           </div>
           <div>
-            <Label for="pickup_time">Pickup Time</Label>
+            <label for="pickup_time">Pickup Time</label>
             <Input id="pickup_time" type="datetime-local" bind:value={rideForm.pickup_time} aria-label="Pickup Time" />
             <p class="text-xs text-gray-500 mt-1">Optional pickup date &amp; time.</p>
           </div>
@@ -837,7 +837,7 @@
         <!-- PICKUP (disabled when from home) -->
         <div class="grid gap-3">
           <div>
-            <Label for="alt_pickup_address">Pickup Street Address</Label>
+            <label for="alt_pickup_address">Pickup Street Address</label>
             <Input
               id="alt_pickup_address"
               bind:value={rideForm.alt_pickup_address}
@@ -849,7 +849,7 @@
 
           <div class="grid gap-3 md:grid-cols-3">
             <div>
-              <Label for="alt_pickup_city">Pickup City</Label>
+              <label for="alt_pickup_city">Pickup City</label>
               <Input
                 id="alt_pickup_city"
                 bind:value={rideForm.alt_pickup_city}
@@ -859,7 +859,7 @@
               />
             </div>
             <div>
-              <Label for="alt_pickup_state">Pickup State</Label>
+              <label for="alt_pickup_state">Pickup State</label>
               <Input
                 id="alt_pickup_state"
                 bind:value={rideForm.alt_pickup_state}
@@ -869,7 +869,7 @@
               />
             </div>
             <div>
-              <Label for="alt_pickup_zipcode">Pickup ZIP</Label>
+              <label for="alt_pickup_zipcode">Pickup ZIP</label>
               <Input
                 id="alt_pickup_zipcode"
                 bind:value={rideForm.alt_pickup_zipcode}
@@ -881,7 +881,7 @@
           </div>
 
           <div>
-            <Label for="alt_pickup_address2">Pickup Address 2</Label>
+            <label for="alt_pickup_address2">Pickup Address 2</label>
             <Input
               id="alt_pickup_address2"
               bind:value={rideForm.alt_pickup_address2}
@@ -894,7 +894,7 @@
 
         <!-- Saved destination (fills DROPOFF) -->
         <div class="mt-6">
-          <Label for="saved_destination_create">Use a saved destination</Label>
+          <label for="saved_destination_create">Use a saved destination</label>
           <select
             id="saved_destination_create"
             bind:value={selectedDestinationId}
@@ -914,31 +914,31 @@
 
         <!-- DROPOFF -->
         <div class="mt-6">
-          <Label class="text-sm font-semibold text-gray-700">Dropoff Location</Label>
+          <label class="text-sm font-semibold text-gray-700">Dropoff Location</label>
           <p class="text-xs text-gray-500">Where the client will be dropped off.</p>
         </div>
 
         <div class="mt-3 grid gap-3">
           <div>
-            <Label for="destination_name">Destination Name *</Label>
+            <label for="destination_name">Destination Name *</label>
             <Input id="destination_name" bind:value={rideForm.destination_name} placeholder="e.g., RGH Medical Center" />
           </div>
 
           <div class="grid gap-3 md:grid-cols-2">
             <div>
-              <Label for="dropoff_address">Dropoff Street Address *</Label>
+              <label for="dropoff_address">Dropoff Street Address *</label>
               <Input id="dropoff_address" bind:value={rideForm.dropoff_address} placeholder="1000 South Ave" />
             </div>
             <div>
-              <Label for="dropoff_address2">Dropoff Address 2</Label>
+              <label for="dropoff_address2">Dropoff Address 2</label>
               <Input id="dropoff_address2" bind:value={rideForm.dropoff_address2} placeholder="Suite, Floor, etc." />
             </div>
           </div>
 
           <div class="grid gap-3 md:grid-cols-3">
-            <div><Label for="dropoff_city">Dropoff City *</Label><Input id="dropoff_city" bind:value={rideForm.dropoff_city} placeholder="e.g., Rochester" /></div>
-            <div><Label for="dropoff_state">Dropoff State *</Label><Input id="dropoff_state" bind:value={rideForm.dropoff_state} placeholder="e.g., NY" /></div>
-            <div><Label for="dropoff_zipcode">Dropoff ZIP *</Label><Input id="dropoff_zipcode" bind:value={rideForm.dropoff_zipcode} placeholder="e.g., 14620" /></div>
+            <div><label for="dropoff_city">Dropoff City *</label><Input id="dropoff_city" bind:value={rideForm.dropoff_city} placeholder="e.g., Rochester" /></div>
+            <div><label for="dropoff_state">Dropoff State *</label><Input id="dropoff_state" bind:value={rideForm.dropoff_state} placeholder="e.g., NY" /></div>
+            <div><label for="dropoff_zipcode">Dropoff ZIP *</label><Input id="dropoff_zipcode" bind:value={rideForm.dropoff_zipcode} placeholder="e.g., 14620" /></div>
           </div>
         </div>
       </div>
@@ -1054,7 +1054,7 @@
 
         <div class="grid gap-3 md:grid-cols-3">
           <div class="md:col-span-2">
-            <Label for="e_client_id">Client *</Label>
+            <label for="e_client_id">Client *</label>
             <select
               id="e_client_id"
               bind:value={rideForm.client_id}
@@ -1069,12 +1069,12 @@
           </div>
 
           <div>
-            <Label for="e_dispatcher_display">Dispatcher</Label>
+            <label for="e_dispatcher_display">Dispatcher</label>
             <Input id="e_dispatcher_display" value={dispatcherName()} disabled class="bg-gray-100" />
           </div>
 
           <div class="md:col-span-3">
-            <Label for="e_call_id">Linked Call</Label>
+            <label for="e_call_id">Linked Call</label>
             <select
               id="e_call_id"
               bind:value={rideForm.call_id}
@@ -1092,12 +1092,12 @@
 
         <div class="grid gap-3 md:grid-cols-2 mt-3">
           <div>
-            <Label for="e_appointment_time">Appointment Time *</Label>
+            <label for="e_appointment_time">Appointment Time *</label>
             <Input id="e_appointment_time" type="datetime-local" bind:value={rideForm.appointment_time} aria-label="Appointment Time" />
             <p class="text-xs text-gray-500 mt-1">Date &amp; time of the appointment.</p>
           </div>
           <div>
-            <Label for="e_pickup_time">Pickup Time</Label>
+            <label for="e_pickup_time">Pickup Time</label>
             <Input id="e_pickup_time" type="datetime-local" bind:value={rideForm.pickup_time} aria-label="Pickup Time" />
             <p class="text-xs text-gray-500 mt-1">Optional pickup date &amp; time.</p>
           </div>
@@ -1124,7 +1124,7 @@
           <!-- PICKUP (disabled when from home) -->
           <div class="grid gap-3">
             <div>
-              <Label for="e_alt_pickup_address">Pickup Street Address</Label>
+              <label for="e_alt_pickup_address">Pickup Street Address</label>
               <Input
                 id="e_alt_pickup_address"
                 bind:value={rideForm.alt_pickup_address}
@@ -1136,7 +1136,7 @@
 
             <div class="grid gap-3 md:grid-cols-3">
               <div>
-                <Label for="e_alt_pickup_city">Pickup City</Label>
+                <label for="e_alt_pickup_city">Pickup City</label>
                 <Input
                   id="e_alt_pickup_city"
                   bind:value={rideForm.alt_pickup_city}
@@ -1146,7 +1146,7 @@
                 />
               </div>
               <div>
-                <Label for="e_alt_pickup_state">Pickup State</Label>
+                <label for="e_alt_pickup_state">Pickup State</label>
                 <Input
                   id="e_alt_pickup_state"
                   bind:value={rideForm.alt_pickup_state}
@@ -1156,7 +1156,7 @@
                 />
               </div>
               <div>
-                <Label for="e_alt_pickup_zipcode">Pickup ZIP</Label>
+                <label for="e_alt_pickup_zipcode">Pickup ZIP</label>
                 <Input
                   id="e_alt_pickup_zipcode"
                   bind:value={rideForm.alt_pickup_zipcode}
@@ -1168,7 +1168,7 @@
             </div>
 
             <div>
-              <Label for="e_alt_pickup_address2">Pickup Address 2</Label>
+              <label for="e_alt_pickup_address2">Pickup Address 2</label>
               <Input
                 id="e_alt_pickup_address2"
                 bind:value={rideForm.alt_pickup_address2}
@@ -1181,7 +1181,7 @@
 
           <!-- Saved destination (fills DROPOFF) -->
           <div class="mt-6">
-            <Label for="saved_destination_edit">Use a saved destination</Label>
+            <label for="saved_destination_edit">Use a saved destination</label>
             <select
               id="saved_destination_edit"
               bind:value={selectedDestinationId}
@@ -1201,20 +1201,20 @@
 
           <!-- DROPOFF -->
           <div class="mt-6">
-            <Label class="text-sm font-semibold text-gray-700">Dropoff Location</Label>
+            <label class="text-sm font-semibold text-gray-700">Dropoff Location</label>
             <p class="text-xs text-gray-500">Where the client will be dropped off.</p>
           </div>
 
           <div class="mt-3 grid gap-3">
-            <div><Label for="e_destination_name">Destination Name *</Label><Input id="e_destination_name" bind:value={rideForm.destination_name} placeholder="e.g., RGH Medical Center" /></div>
+            <div><label for="e_destination_name">Destination Name *</label><Input id="e_destination_name" bind:value={rideForm.destination_name} placeholder="e.g., RGH Medical Center" /></div>
             <div class="grid gap-3 md:grid-cols-2">
-              <div><Label for="e_dropoff_address">Dropoff Street Address *</Label><Input id="e_dropoff_address" bind:value={rideForm.dropoff_address} placeholder="1000 South Ave" /></div>
-              <div><Label for="e_dropoff_address2">Dropoff Address 2</Label><Input id="e_dropoff_address2" bind:value={rideForm.dropoff_address2} placeholder="Suite, Floor, etc." /></div>
+              <div><label for="e_dropoff_address">Dropoff Street Address *</label><Input id="e_dropoff_address" bind:value={rideForm.dropoff_address} placeholder="1000 South Ave" /></div>
+              <div><label for="e_dropoff_address2">Dropoff Address 2</label><Input id="e_dropoff_address2" bind:value={rideForm.dropoff_address2} placeholder="Suite, Floor, etc." /></div>
             </div>
             <div class="grid gap-3 md:grid-cols-3">
-              <div><Label for="e_dropoff_city">Dropoff City *</Label><Input id="e_dropoff_city" bind:value={rideForm.dropoff_city} placeholder="e.g., Rochester" /></div>
-              <div><Label for="e_dropoff_state">Dropoff State *</Label><Input id="e_dropoff_state" bind:value={rideForm.dropoff_state} placeholder="e.g., NY" /></div>
-              <div><Label for="e_dropoff_zipcode">Dropoff ZIP *</Label><Input id="e_dropoff_zipcode" bind:value={rideForm.dropoff_zipcode} placeholder="e.g., 14620" /></div>
+              <div><label for="e_dropoff_city">Dropoff City *</label><Input id="e_dropoff_city" bind:value={rideForm.dropoff_city} placeholder="e.g., Rochester" /></div>
+              <div><label for="e_dropoff_state">Dropoff State *</label><Input id="e_dropoff_state" bind:value={rideForm.dropoff_state} placeholder="e.g., NY" /></div>
+              <div><label for="e_dropoff_zipcode">Dropoff ZIP *</label><Input id="e_dropoff_zipcode" bind:value={rideForm.dropoff_zipcode} placeholder="e.g., 14620" /></div>
             </div>
           </div>
         </div>
