@@ -89,13 +89,7 @@
     
     <div class="text-center space-y-2">
       <p class="text-sm text-gray-600">
-        Don't have an account?
-        <button
-          onclick={() => goto('/register')}
-          class="text-blue-600 hover:text-blue-700 font-medium"
-        >
-          Register
-        </button>
+        Forgot your Password?
       </p>
     </div>
   </div>
