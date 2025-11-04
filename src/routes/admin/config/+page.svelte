@@ -5,9 +5,7 @@
 		Building2, Globe, Mail, Phone, MapPin,
 		Clock, Link as LinkIcon, User, Users, Edit, Save, X, AlertTriangle
 	} from '@lucide/svelte';
-	import { getContext, onMount } from 'svelte';
 	import { supabase } from '$lib/supabase';
-	import type { PageData } from './$types';
 	
 	let { data } = $props();
 
@@ -16,7 +14,7 @@
 
 	type OrgRow = Record<string, any> & { org_id: number };
 
-	let isLoading = $state(true);
+	let isLoading = $state(false);
 	let loadError = $state('');
 	let org = $state(data.organization);
 	let originalOrg = $state(data.organization ? JSON.parse(JSON.stringify(data.organization)) : null);
