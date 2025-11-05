@@ -51,46 +51,125 @@
   }
   
   // Transform unavailability events
-  function transformUnavailabilityEvents(unavailData: any[]) {
-    return unavailData
+  function groupUnavailabilityByDate(unavailData: any[]) {
+    const grouped = new Map<string, any[]>();
+    unavailData
       .filter((item: any) => item.unavailable_date)
-      .map((item: any) => {
-        const driverName = `${item.staff_profiles?.first_name || ''} ${item.staff_profiles?.last_name || ''}`.trim();
-        
-        if (item.all_day) {
+      .forEach(item => {
+        const date = item.unavailable_date;
+        if (!grouped.has(date)) {
+          grouped.set(date, []);
+        }
+        grouped.get(date)!.push(item);
+      });
+    return grouped;
+  }
+
+  function transformUnavailabilityEvents(unavailData: any[], isDayView = false) {
+    if (isDayView) {
+      // Day view: show individual unavailability at actual times
+      return unavailData
+        .filter((item: any) => item.unavailable_date)
+        .map((item: any) => {
+          const driverName = `${item.staff_profiles?.first_name || ''} ${item.staff_profiles?.last_name || ''}`.trim();
+          
+          if (item.all_day) {
+            return {
+              id: `unavail-${item.id}`,
+              title: `🚫 ${driverName}`,
+              start: item.unavailable_date,
+              allDay: true,
+              backgroundColor: '#ef4444',
+              borderColor: '#dc2626',
+              extendedProps: {
+                type: 'unavailability',
+                reason: item.reason,
+                driverId: item.user_id,
+                unavailData: item
+              }
+            };
+          }
+          
           return {
             id: `unavail-${item.id}`,
-            title: `🚫 ${driverName} - Unavailable`,
-            start: item.unavailable_date,
-            allDay: true,
+            title: `🚫 ${driverName}`,
+            start: `${item.unavailable_date}T${item.start_time}`,
+            end: `${item.unavailable_date}T${item.end_time}`,
             backgroundColor: '#ef4444',
             borderColor: '#dc2626',
             extendedProps: {
               type: 'unavailability',
               reason: item.reason,
-              driverId: item.user_id
+              driverId: item.user_id,
+              unavailData: item
             }
           };
-        }
-        
-        return {
-          id: `unavail-${item.id}`,
-          title: `🚫 ${driverName} - Unavailable`,
-          start: `${item.unavailable_date}T${item.start_time}`,
-          end: `${item.unavailable_date}T${item.end_time}`,
-          backgroundColor: '#ef4444',
-          borderColor: '#dc2626',
-          extendedProps: {
-            type: 'unavailability',
-            reason: item.reason,
-            driverId: item.user_id
+        });
+    } else {
+      // Month/Week view: create daily summaries
+      const groupedByDate = groupUnavailabilityByDate(unavailData);
+      const summaryEvents: any[] = [];
+      
+      groupedByDate.forEach((dayUnavail, dateStr) => {
+        if (dayUnavail.length === 1) {
+          const item = dayUnavail[0];
+          const driverName = `${item.staff_profiles?.first_name || ''} ${item.staff_profiles?.last_name || ''}`.trim();
+          
+          if (item.all_day) {
+            summaryEvents.push({
+              id: `unavail-${item.id}`,
+              title: `🚫 ${driverName}`,
+              start: item.unavailable_date,
+              allDay: true,
+              backgroundColor: '#ef4444',
+              borderColor: '#dc2626',
+              extendedProps: {
+                type: 'unavailability',
+                reason: item.reason,
+                unavailData: item
+              }
+            });
+          } else {
+            summaryEvents.push({
+              id: `unavail-${item.id}`,
+              title: `🚫 ${driverName}`,
+              start: `${item.unavailable_date}T${item.start_time}`,
+              end: `${item.unavailable_date}T${item.end_time}`,
+              backgroundColor: '#ef4444',
+              borderColor: '#dc2626',
+              extendedProps: {
+                type: 'unavailability',
+                reason: item.reason,
+                unavailData: item
+              }
+            });
           }
-        };
+        } else {
+          // Multiple unavailability on same day - create summary
+          summaryEvents.push({
+            id: `unavail-summary-${dateStr}`,
+            title: `🚫 ${dayUnavail.length} Unavailable`,
+            start: dateStr,
+            allDay: true,
+            backgroundColor: '#ef4444',
+            borderColor: '#dc2626',
+            extendedProps: {
+              type: 'unavailability-group',
+              date: dateStr,
+              unavailabilities: dayUnavail,
+              count: dayUnavail.length
+            }
+          });
+        }
       });
+      
+      return summaryEvents;
+    }
   }
-  
-  const myUnavailabilityEvents = transformUnavailabilityEvents(data.myUnavailability);
-  const allUnavailabilityEvents = transformUnavailabilityEvents(data.allUnavailability);
+
+  // Update the calls to include isDayView parameter
+  let myUnavailabilityEvents = $derived(transformUnavailabilityEvents(data.myUnavailability, currentCalendarView === 'timeGridDay'));
+  let allUnavailabilityEvents = $derived(transformUnavailabilityEvents(data.allUnavailability, currentCalendarView === 'timeGridDay'));
   
   function transformRidesToEvents(rides: any[], isDayView = false) {
     if (isDayView) {
@@ -240,9 +319,24 @@
         selectedDate = props.date || new Date(info.event.start).toISOString().split('T')[0];
         selectedDayRides = props.rides;
         showSidePanel = true;
+      } else if (props.type === 'unavailability-group') {
+        // Show list of unavailable drivers
+        const unavailList = props.unavailabilities
+          .map((u: any) => {
+            const name = `${u.staff_profiles?.first_name || ''} ${u.staff_profiles?.last_name || ''}`.trim();
+            const reason = u.reason || 'No reason provided';
+            const time = u.all_day ? 'All day' : `${u.start_time} - ${u.end_time}`;
+            return `• ${name} (${time})\n  Reason: ${reason}`;
+          })
+          .join('\n\n');
+        
+        alert(`Driver Unavailability - ${formatDate(props.date)}\n\n${unavailList}`);
       } else if (props.type === 'unavailability') {
+        const name = props.unavailData ? 
+          `${props.unavailData.staff_profiles?.first_name || ''} ${props.unavailData.staff_profiles?.last_name || ''}`.trim() : 
+          'Driver';
         const reason = props.reason || 'No reason provided';
-        alert(`Driver Unavailability\n\nReason: ${reason}`);
+        alert(`${name} - Unavailable\n\nReason: ${reason}`);
       } else if (props.type === 'ride') {
         selectedDate = new Date(props.rideData.appointment_time).toISOString().split('T')[0];
         selectedDayRides = [props.rideData];
