@@ -373,16 +373,16 @@
       appointment_time: toISOorNull(apptLocal),
       pickup_time:      toISOorNull(form.pickup_time),
 
-      status: has(form.status) ? form.status : (base.status ?? 'Requested'),
+      status: isEditing() 
+      ? (has(form.status) ? form.status : (base.status ?? 'Requested'))
+      : 'Requested',
       notes:  has(form.notes)  ? sanitizeInput(form.notes)  : (base.notes ?? null),
 
       miles_driven: numFromStr(form.miles_driven, base.miles_driven ?? null),
       hours:        numFromStr(form.hours,        base.hours ?? null),
 
-      donation: !!form.donation,
-      donation_amount: form.donation
-        ? (has(form.donation_amount) ? parseFloat(form.donation_amount) : Number(base.donation_amount ?? 0))
-        : 0,
+      donation: base.donation ?? false,
+      donation_amount: base.donation_amount ?? 0,
 
       riders: (() => {
         if (has(form.riders)) {
@@ -392,7 +392,7 @@
         return Number(base.riders ?? 0);
       })(),
 
-      round_trip: !!form.round_trip,
+      round_trip: base.round_trip ?? false,
       purpose: has(form.purpose) ? sanitizeInput(form.purpose) : (base.purpose ?? null),
       estimated_appointment_length: has(form.estimated_appointment_length)
         ? sanitizeInput(form.estimated_appointment_length)
@@ -984,31 +984,7 @@
           </div>
         </div>
 
-        <div class="mt-3 grid gap-3 md:grid-cols-3">
-          <label for="round_trip" class="inline-flex items-center gap-2 cursor-pointer select-none">
-            <input id="round_trip" type="checkbox" class="h-4 w-4 text-blue-600 border-gray-300 rounded" bind:checked={rideForm.round_trip} />
-            <span class="text-sm font-medium text-gray-700">Round trip</span>
-          </label>
-
-          <label for="donation" class="inline-flex items-center gap-2 cursor-pointer select-none">
-            <input id="donation" type="checkbox" class="h-4 w-4 text-blue-600 border-gray-300 rounded" bind:checked={rideForm.donation} />
-            <span class="text-sm font-medium text-gray-700">Donation?</span>
-          </label>
-
-          <div>
-            <label for="donation_amount" class="block text-sm font-medium text-gray-700">Donation amount (USD)</label>
-            <Input id="donation_amount" type="number" step="0.01" bind:value={rideForm.donation_amount} placeholder="0.00" disabled={!rideForm.donation} class={!rideForm.donation ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''} />
-          </div>
-        </div>
-
-        <div class="mt-3 grid gap-3 md:grid-cols-2">
-          <div>
-            <label for="status" class="block text-sm font-medium text-gray-700">Status</label>
-            <select id="status" bind:value={rideForm.status} class="w-full px-3 py-2 border border-gray-300 rounded-lg">
-              {#each STATUS_OPTIONS as s}<option value={s}>{s}</option>{/each}
-            </select>
-          </div>
-        </div>
+        <!-- REMOVED: round_trip, donation, donation_amount, status -->
 
         <div class="mt-3">
           <label for="notes" class="block text-sm font-medium text-gray-700">Notes for driver</label>
@@ -1259,34 +1235,8 @@
           </div>
         </div>
 
-        <div class="mt-3 grid gap-3 md:grid-cols-3">
-          <label for="e_round_trip" class="inline-flex items-center gap-2 cursor-pointer select-none">
-            <input id="e_round_trip" type="checkbox"
-                  class="h-4 w-4 text-blue-600 border-gray-300 rounded"
-                  bind:checked={rideForm.round_trip} />
-            <span class="text-sm font-medium text-gray-700">Round trip</span>
-          </label>
-
-          <label for="e_donation" class="inline-flex items-center gap-2 cursor-pointer select-none">
-            <input id="e_donation" type="checkbox"
-                  class="h-4 w-4 text-blue-600 border-gray-300 rounded"
-                  bind:checked={rideForm.donation} />
-            <span class="text-sm font-medium text-gray-700">Donation?</span>
-          </label>
-
-          <div>
-            <label for="e_donation_amount" class="block text-sm font-medium text-gray-700">Donation amount (USD)</label>
-            <Input
-              id="e_donation_amount"
-              type="number"
-              step="0.01"
-              bind:value={rideForm.donation_amount}
-              placeholder="0.00"
-              disabled={!rideForm.donation}
-              class={!rideForm.donation ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''}
-            />
-          </div>
-        </div>
+        <!-- REMOVED: round_trip, donation, donation_amount -->
+        <!-- KEPT: status (for editing existing rides), completion_status -->
 
         <div class="mt-3 grid gap-3 md:grid-cols-2">
           <div>
@@ -1294,6 +1244,7 @@
             <select id="e_status" bind:value={rideForm.status} class="w-full px-3 py-2 border border-gray-300 rounded-lg">
               {#each STATUS_OPTIONS as s}<option value={s}>{s}</option>{/each}
             </select>
+            <p class="text-xs text-gray-500 mt-1">Status is automatically managed but can be manually adjusted if needed.</p>
           </div>
           <div>
             <label for="e_completion_status" class="block text-sm font-medium text-gray-700">Completion status</label>
