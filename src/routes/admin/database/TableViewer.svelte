@@ -366,14 +366,14 @@
       </button>
     </div>
     
-    <!-- Table -->
-    <div class="overflow-x-auto border border-gray-200 rounded-lg">
+   <!-- Table -->
+    <div class="overflow-x-auto border border-gray-200 rounded-lg max-h-[600px] overflow-y-auto">
       <table class="min-w-full divide-y divide-gray-200">
-        <thead class="bg-gray-50">
+        <thead class="bg-gray-50 sticky top-0 z-10">
           <tr>
             {#each columns as col}
               {@const Icon = getSortIcon(col)}
-              <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
+              <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap bg-gray-50">
                 <button 
                   class="flex items-center gap-1 hover:text-gray-900 transition-colors"
                   onclick={() => toggleSort(col)}
