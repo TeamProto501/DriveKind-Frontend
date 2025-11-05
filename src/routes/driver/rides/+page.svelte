@@ -350,13 +350,13 @@
 
     <!-- Search -->
     <CardContent class="p-6 border-b">
-      <div class="relative">
-        <Search class="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
-        <Input 
-          placeholder="Search rides..." 
-          bind:value={searchTerm}
-          class="pl-10"
-        />
+          <div class="relative">
+            <Search class="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+            <Input 
+              placeholder="Search rides..." 
+              bind:value={searchTerm}
+              class="pl-10"
+            />
       </div>
     </CardContent>
   </Card>
@@ -473,7 +473,7 @@
             <div class="flex gap-2 ml-4">
               <!-- Update buttons for Pending rides in the rides list: -->
               {#if ride.status === "Pending"}
-                <div class="flex gap-2">
+            <div class="flex gap-2">
                   <Button 
                     size="sm" 
                     onclick={() => acceptRide(ride.ride_id)}

@@ -52,20 +52,47 @@
 		const list = data as { vehicle_id: number; active: boolean | null }[];
 
 		if (list.length === 1) {
-			if (!list[0].active)
-				await supabase.from('vehicles').update({ active: true }).eq('vehicle_id', list[0].vehicle_id);
+			if (!list[0].active) {
+				// Use server endpoint to set active
+				try {
+					await fetch('/driver/vehicles/set-active', {
+						method: 'POST',
+						headers: { 'Content-Type': 'application/json' },
+						body: JSON.stringify({ vehicle_id: list[0].vehicle_id })
+					});
+				} catch (e) {
+					console.error('Failed to normalize active vehicle:', e);
+				}
+			}
 			return;
 		}
 
 		const actives = list.filter((v) => !!v.active).map((v) => v.vehicle_id).sort((a, b) => a - b);
 		if (actives.length === 0) {
-			await supabase.from('vehicles').update({ active: true }).eq('vehicle_id', list[0].vehicle_id);
+			// Use server endpoint to set active
+			try {
+				await fetch('/driver/vehicles/set-active', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ vehicle_id: list[0].vehicle_id })
+				});
+			} catch (e) {
+				console.error('Failed to normalize active vehicle:', e);
+			}
 			return;
 		}
 		if (actives.length > 1) {
 			const keep = actives[0];
-			await supabase.from('vehicles').update({ active: false }).eq('user_id', uid).neq('vehicle_id', keep);
-			await supabase.from('vehicles').update({ active: true }).eq('vehicle_id', keep);
+			// Use server endpoint to set active (this will deactivate others)
+			try {
+				await fetch('/driver/vehicles/set-active', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ vehicle_id: keep })
+				});
+			} catch (e) {
+				console.error('Failed to normalize active vehicle:', e);
+			}
 		}
 	}
 
@@ -76,18 +103,16 @@
 	async function setActive(vehicle_id: number) {
 		if (!uid) return;
 		try {
-			const off = await supabase
-				.from('vehicles')
-				.update({ active: false })
-				.eq('user_id', uid)
-				.neq('vehicle_id', vehicle_id);
-			if (off.error) throw off.error;
+			const res = await fetch('/driver/vehicles/set-active', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ vehicle_id })
+			});
 
-			const on = await supabase
-				.from('vehicles')
-				.update({ active: true })
-				.eq('vehicle_id', vehicle_id);
-			if (on.error) throw on.error;
+			const result = await res.json();
+			if (!res.ok) {
+				throw new Error(result.error || 'Failed to set active vehicle');
+			}
 
 			setToast('Active vehicle updated.', true);
 			await loadVehicles();
@@ -179,16 +204,22 @@
 		isSaving = true;
 		try {
 			const payload = {
-				user_id: uid,
-				org_id: userOrgId,
 				type_of_vehicle_enum: addForm.type_of_vehicle_enum,
 				vehicle_color: addForm.vehicle_color.trim(),
 				nondriver_seats: seats,
-				active: false
+				org_id: userOrgId
 			};
 
-			const { error } = await supabase.from('vehicles').insert(payload);
-			if (error) throw error;
+			const res = await fetch('/driver/vehicles/create', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(payload)
+			});
+
+			const result = await res.json();
+			if (!res.ok) {
+				throw new Error(result.error || 'Failed to add vehicle');
+			}
 
 			setToast('Vehicle added.', true);
 			showAddModal = false;
@@ -225,8 +256,16 @@
 				nondriver_seats: seats
 			};
 
-			const { error } = await supabase.from('vehicles').update(payload).eq('vehicle_id', editForm.vehicle_id);
-			if (error) throw error;
+			const res = await fetch(`/driver/vehicles/update/${editForm.vehicle_id}`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(payload)
+			});
+
+			const result = await res.json();
+			if (!res.ok) {
+				throw new Error(result.error || 'Failed to update vehicle');
+			}
 
 			setToast('Vehicle updated.', true);
 			showEditModal = false;
@@ -243,8 +282,15 @@
 		if (!toDelete) return;
 		isDeleting = true; // <-- fix: do NOT use $state() here
 		try {
-			const { error } = await supabase.from('vehicles').delete().eq('vehicle_id', toDelete.vehicle_id);
-			if (error) throw error;
+			const res = await fetch(`/driver/vehicles/delete/${toDelete.vehicle_id}`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' }
+			});
+
+			const result = await res.json();
+			if (!res.ok) {
+				throw new Error(result.error || 'Failed to delete vehicle');
+			}
 
 			setToast('Vehicle deleted.', true);
 			showDeleteModal = false;
