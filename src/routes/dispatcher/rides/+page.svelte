@@ -17,6 +17,7 @@
     validateAddress, validateCity, validateState, validateZipCode,
     validateRequired, validateDateTime, sanitizeInput, combineValidations
   } from '$lib/utils/validation';
+  import { page } from '$app/stores';
 
   let { data }: { data: PageData } = $props();
 
@@ -31,6 +32,7 @@
   let showDriverMatchModal = $state(false);
   let selectedRide: any = null;
   let selectedRideForMatch: any = null;
+  let editRideIdFromUrl = $state<number | null>(null);
 
   const dispatcherName = $derived(
     () => (data?.profile ? `${data.profile.first_name} ${data.profile.last_name}` : '')
@@ -594,6 +596,27 @@
       console.error(e); alert('Error sending ride request.');
     } finally { isUpdating = false; }
   }
+
+  $effect(() => {
+    const editParam = $page.url.searchParams.get('edit');
+    if (editParam) {
+      const rideId = parseInt(editParam);
+      if (!isNaN(rideId)) {
+        editRideIdFromUrl = rideId;
+        
+        // Find and open the ride for editing
+        const rideToEdit = data.rides?.find(r => r.ride_id === rideId);
+        if (rideToEdit) {
+          openEditModal(rideToEdit);
+          
+          // Clear the URL parameter after opening
+          const url = new URL(window.location.href);
+          url.searchParams.delete('edit');
+          window.history.replaceState({}, '', url);
+        }
+      }
+    }
+  });
 </script>
 
 <svelte:head>
