@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Car, Search, Trash2, Pencil, Plus } from '@lucide/svelte';
-	import { invalidateAll } from '$app/navigation';
+	import { invalidateAll, invalidate } from '$app/navigation';
 	import { supabase } from '$lib/supabase';
 
 	// shadcn/ui
@@ -259,16 +259,6 @@
 
 		isSaving = true;
 		try {
-			// If creating as Active, first deactivate all other vehicles for this user in this org
-			if (addForm.active) {
-				const { error: offErr } = await supabase
-					.from('vehicles')
-					.update({ active: false })
-					.eq('org_id', viewerOrgId)
-					.eq('user_id', addForm.user_id as string);
-				if (offErr) throw offErr;
-			}
-
 			const payload = {
 				org_id: viewerOrgId,
 				user_id: addForm.user_id as string,
@@ -278,12 +268,21 @@
 				active: !!addForm.active
 			};
 
-			const { error } = await supabase.from('vehicles').insert(payload);
-			if (error) throw error;
+			const res = await fetch('/admin/vehicle_management/create', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(payload)
+			});
+
+			const result = await res.json();
+			if (!res.ok) {
+				throw new Error(result.error || 'Failed to add vehicle');
+			}
 
 			setToast('Vehicle created.', true);
 			showAddModal = false;
-			await loadVehicles();
+			await invalidate('/admin/vehicle_management');
+			await invalidateAll();
 		} catch (err: any) {
 			console.error('Create error:', err?.message ?? err);
 			setToast(err?.message ?? 'Failed to add vehicle.', false);
@@ -315,35 +314,30 @@
 
 		isSaving = true;
 		try {
-			// If setting this vehicle to Active, first deactivate other vehicles for same user in this org
-			if (editForm.active && editOwnerUserId) {
-				const { error: offErr } = await supabase
-					.from('vehicles')
-					.update({ active: false })
-					.eq('org_id', viewerOrgId)
-					.eq('user_id', editOwnerUserId)
-					.neq('vehicle_id', editForm.vehicle_id);
-				if (offErr) throw offErr;
-			}
-
 			const payload = {
 				type_of_vehicle_enum: editForm.type_of_vehicle_enum as VehicleType,
 				vehicle_color: editForm.vehicle_color.trim(),
 				nondriver_seats: seats,
-				active: !!editForm.active
+				active: editForm.active !== undefined ? !!editForm.active : undefined,
+				user_id: editOwnerUserId,
+				org_id: viewerOrgId
 			};
 
-			const { error } = await supabase
-				.from('vehicles')
-				.update(payload)
-				.eq('vehicle_id', editForm.vehicle_id)
-				.eq('org_id', viewerOrgId);
+			const res = await fetch(`/admin/vehicle_management/update/${editForm.vehicle_id}`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(payload)
+			});
 
-			if (error) throw error;
+			const result = await res.json();
+			if (!res.ok) {
+				throw new Error(result.error || 'Failed to update vehicle');
+			}
 
 			setToast('Vehicle updated.', true);
 			showEditModal = false;
-			await loadVehicles();
+			await invalidate('/admin/vehicle_management');
+			await invalidateAll();
 		} catch (err: any) {
 			console.error('Update error:', err?.message ?? err);
 			setToast(err?.message ?? 'Failed to update vehicle.', false);
