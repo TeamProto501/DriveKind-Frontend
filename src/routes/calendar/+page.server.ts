@@ -10,9 +10,6 @@ export const load = async (event) => {
     throw redirect(302, '/login');
   }
 
-  console.log('===== SCHEDULE PAGE SERVER =====');
-  console.log('Current user:', session.user.id);
-
   const { data: userProfile, error: profileError } = await supabase
     .from('staff_profiles')
     .select('org_id, role')
@@ -20,125 +17,125 @@ export const load = async (event) => {
     .single();
 
   if (profileError || !userProfile) {
-    console.error('Profile error:', profileError);
     throw error(403, 'User profile not found');
   }
 
-  console.log('User profile:', userProfile);
-
   const isAdminOrDispatcher = userProfile.role && (
     Array.isArray(userProfile.role)
-      ? (userProfile.role.includes('Admin') || userProfile.role.includes('Dispatcher'))
-      : (userProfile.role === 'Admin' || userProfile.role === 'Dispatcher')
+      ? (userProfile.role.includes('Admin') || userProfile.role.includes('Dispatcher') || userProfile.role.includes('Super Admin'))
+      : (userProfile.role === 'Admin' || userProfile.role === 'Dispatcher' || userProfile.role === 'Super Admin')
   );
 
-  console.log('Is admin/dispatcher:', isAdminOrDispatcher);
-
-  // Fetch driver unavailability
-  const { data: unavailabilityData, error: fetchError } = await supabase
+  // Fetch MY unavailability (for all users)
+  const { data: myUnavailabilityData } = await supabase
     .from('driver_unavailability')
     .select(`
       *,
       staff_profiles!fk_staff_profile (
         first_name,
-        last_name,
-        org_id
+        last_name
       )
     `)
-    .eq('staff_profiles.org_id', userProfile.org_id)
+    .eq('user_id', session.user.id)
     .order('unavailable_date', { ascending: true });
 
-  if (fetchError) {
-    console.error('Error fetching unavailability:', fetchError);
+  // Fetch ALL driver unavailability (admin/dispatcher only)
+  let allUnavailabilityData = [];
+  if (isAdminOrDispatcher) {
+    const { data: unavailData } = await supabase
+      .from('driver_unavailability')
+      .select(`
+        *,
+        staff_profiles!fk_staff_profile (
+          first_name,
+          last_name,
+          org_id
+        )
+      `)
+      .eq('staff_profiles.org_id', userProfile.org_id)
+      .order('unavailable_date', { ascending: true });
+    
+    allUnavailabilityData = unavailData || [];
   }
 
-  // Fetch rides - NO STATUS FILTER
-  console.log('=== FETCHING MY RIDES (NO STATUS FILTER) ===');
-  const { data: myRidesData, error: myRidesError } = await supabase
+  // Fetch my rides
+  const { data: myRidesData } = await supabase
     .from('rides')
     .select('*')
     .eq('driver_user_id', session.user.id)
     .order('appointment_time', { ascending: true });
 
-  console.log('My rides error:', myRidesError);
-  console.log('My rides count:', myRidesData?.length || 0);
-  if (myRidesData && myRidesData.length > 0) {
-    console.log('Sample my ride:', JSON.stringify(myRidesData[0], null, 2));
-  }
-
-  // Fetch clients for my rides
-  let myRidesWithClients = [];
+  // Fetch clients and staff for my rides
+  let myRidesWithDetails = [];
   if (myRidesData && myRidesData.length > 0) {
     const clientIds = [...new Set(myRidesData.map(r => r.client_id).filter(Boolean))];
-    if (clientIds.length > 0) {
-      const { data: clientsData } = await supabase
-        .from('clients')
-        .select('client_id, first_name, last_name, primary_phone')
-        .in('client_id', clientIds);
-      
-      const clientsMap = new Map();
-      if (clientsData) {
-        clientsData.forEach(client => {
-          clientsMap.set(client.client_id, client);
-        });
-      }
-      
-      myRidesWithClients = myRidesData.map(ride => ({
-        ...ride,
-        clients: clientsMap.get(ride.client_id) || null
-      }));
-    }
+    const driverIds = [...new Set(myRidesData.map(r => r.driver_user_id).filter(Boolean))];
+    const dispatcherIds = [...new Set(myRidesData.map(r => r.dispatcher_user_id).filter(Boolean))];
+    const allUserIds = [...new Set([...driverIds, ...dispatcherIds])];
+    
+    const { data: clientsData } = await supabase
+      .from('clients')
+      .select('client_id, first_name, last_name, primary_phone')
+      .in('client_id', clientIds);
+    
+    const { data: staffData } = await supabase
+      .from('staff_profiles')
+      .select('user_id, first_name, last_name')
+      .in('user_id', allUserIds);
+    
+    const clientsMap = new Map(clientsData?.map(c => [c.client_id, c]) || []);
+    const staffMap = new Map(staffData?.map(s => [s.user_id, s]) || []);
+    
+    myRidesWithDetails = myRidesData.map(ride => ({
+      ...ride,
+      clients: clientsMap.get(ride.client_id) || null,
+      driver: staffMap.get(ride.driver_user_id) || null,
+      dispatcher: staffMap.get(ride.dispatcher_user_id) || null
+    }));
   }
 
-  // Fetch ALL rides for organization - NO STATUS FILTER
-  let allRidesWithClients = [];
+  // Fetch ALL rides for organization (admin/dispatcher only)
+  let allRidesWithDetails = [];
   if (isAdminOrDispatcher) {
-    console.log('=== FETCHING ALL ORG RIDES (NO STATUS FILTER) ===');
-    const { data: allRidesData, error: allRidesError } = await supabase
+    const { data: allRidesData } = await supabase
       .from('rides')
       .select('*')
       .eq('org_id', userProfile.org_id)
       .order('appointment_time', { ascending: true });
-
-    console.log('All rides error:', allRidesError);
-    console.log('All rides count:', allRidesData?.length || 0);
-    if (allRidesData && allRidesData.length > 0) {
-      console.log('Sample org ride:', JSON.stringify(allRidesData[0], null, 2));
-      console.log('Status values found:', [...new Set(allRidesData.map(r => r.status))]);
-    }
     
-    // Fetch clients for all rides
     if (allRidesData && allRidesData.length > 0) {
       const allClientIds = [...new Set(allRidesData.map(r => r.client_id).filter(Boolean))];
-      if (allClientIds.length > 0) {
-        const { data: allClientsData } = await supabase
-          .from('clients')
-          .select('client_id, first_name, last_name, primary_phone')
-          .in('client_id', allClientIds);
-        
-        const allClientsMap = new Map();
-        if (allClientsData) {
-          allClientsData.forEach(client => {
-            allClientsMap.set(client.client_id, client);
-          });
-        }
-        
-        allRidesWithClients = allRidesData.map(ride => ({
-          ...ride,
-          clients: allClientsMap.get(ride.client_id) || null
-        }));
-      }
+      const allDriverIds = [...new Set(allRidesData.map(r => r.driver_user_id).filter(Boolean))];
+      const allDispatcherIds = [...new Set(allRidesData.map(r => r.dispatcher_user_id).filter(Boolean))];
+      const allStaffIds = [...new Set([...allDriverIds, ...allDispatcherIds])];
+      
+      const { data: allClientsData } = await supabase
+        .from('clients')
+        .select('client_id, first_name, last_name, primary_phone')
+        .in('client_id', allClientIds);
+      
+      const { data: allStaffData } = await supabase
+        .from('staff_profiles')
+        .select('user_id, first_name, last_name')
+        .in('user_id', allStaffIds);
+      
+      const allClientsMap = new Map(allClientsData?.map(c => [c.client_id, c]) || []);
+      const allStaffMap = new Map(allStaffData?.map(s => [s.user_id, s]) || []);
+      
+      allRidesWithDetails = allRidesData.map(ride => ({
+        ...ride,
+        clients: allClientsMap.get(ride.client_id) || null,
+        driver: allStaffMap.get(ride.driver_user_id) || null,
+        dispatcher: allStaffMap.get(ride.dispatcher_user_id) || null
+      }));
     }
   }
 
-  console.log('Final my rides with clients:', myRidesWithClients.length);
-  console.log('Final all rides with clients:', allRidesWithClients.length);
-  console.log('================================');
-
   return {
-    unavailability: unavailabilityData || [],
-    myRides: myRidesWithClients,
-    allRides: allRidesWithClients,
+    myUnavailability: myUnavailabilityData || [],
+    allUnavailability: allUnavailabilityData,
+    myRides: myRidesWithDetails,
+    allRides: allRidesWithDetails,
     userOrgId: userProfile.org_id,
     isAdminOrDispatcher,
     session

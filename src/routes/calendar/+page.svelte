@@ -1,58 +1,83 @@
-<!-- src/routes/schedule/+page.svelte -->
 <script lang="ts">
   import { Calendar, TimeGrid, DayGrid, Interaction } from '@event-calendar/core';
-  import { page } from '$app/stores'; // ADD THIS IMPORT
+  import { page } from '$app/stores';
+  import { goto } from '$app/navigation';
   import RoleGuard from '$lib/components/RoleGuard.svelte';
   import Breadcrumbs from '$lib/components/Breadcrumbs.svelte';
-  import { Calendar as CalendarIcon, Car, Users, MapPin, Building2, X, Clock, Phone } from '@lucide/svelte';
+  import { Calendar as CalendarIcon, Car, Users, MapPin, Building2, X, Clock, Phone, Edit } from '@lucide/svelte';
   
   let { data } = $props();
   
-  type ViewType = 'unavailability' | 'myRides' | 'allRides' | 'all';
+  type ViewType = 'myUnavailability' | 'allUnavailability' | 'myRides' | 'allRides' | 'all';
   
-  // Check for tab parameter in URL
   const urlTab = $page.url.searchParams.get('tab');
   const initialView = urlTab === 'myRides' ? 'myRides' : (data.isAdminOrDispatcher ? 'all' : 'myRides');
   
-  let activeView = $state<ViewType>(initialView); // CHANGED THIS LINE
+  let activeView = $state<ViewType>(initialView);
+  let currentCalendarView = $state('timeGridWeek');
   let showSidePanel = $state(false);
   let selectedDayRides = $state<any[]>([]);
   let selectedDate = $state<string>('');
-  // Create a sorted version of selectedDayRides - FIXED
+  
   let sortedSelectedDayRides = $derived(
     [...selectedDayRides].sort((a, b) => 
       new Date(a.appointment_time).getTime() - new Date(b.appointment_time).getTime()
     )
   );
   
-  // Group rides by date
   function groupRidesByDate(rides: any[]) {
     const grouped = new Map<string, any[]>();
-    
     rides.forEach(ride => {
-      // Get just the date part in YYYY-MM-DD format
       const date = new Date(ride.appointment_time).toISOString().split('T')[0];
       if (!grouped.has(date)) {
         grouped.set(date, []);
       }
       grouped.get(date)!.push(ride);
     });
-    
+    return grouped;
+  }
+
+  function groupRidesByTimeSlot(rides: any[]) {
+    const grouped = new Map<string, any[]>();
+    rides.forEach(ride => {
+      const datetime = new Date(ride.appointment_time);
+      const timeKey = datetime.toISOString();
+      if (!grouped.has(timeKey)) {
+        grouped.set(timeKey, []);
+      }
+      grouped.get(timeKey)!.push(ride);
+    });
     return grouped;
   }
   
   // Transform unavailability events
-  const unavailabilityEvents = data.unavailability
-    .filter((item: any) => item.unavailable_date)
-    .map((item: any) => {
-      const driverName = `${item.staff_profiles.first_name} ${item.staff_profiles.last_name}`;
-      
-      if (item.all_day) {
+  function transformUnavailabilityEvents(unavailData: any[]) {
+    return unavailData
+      .filter((item: any) => item.unavailable_date)
+      .map((item: any) => {
+        const driverName = `${item.staff_profiles?.first_name || ''} ${item.staff_profiles?.last_name || ''}`.trim();
+        
+        if (item.all_day) {
+          return {
+            id: `unavail-${item.id}`,
+            title: `🚫 ${driverName} - Unavailable`,
+            start: item.unavailable_date,
+            allDay: true,
+            backgroundColor: '#ef4444',
+            borderColor: '#dc2626',
+            extendedProps: {
+              type: 'unavailability',
+              reason: item.reason,
+              driverId: item.user_id
+            }
+          };
+        }
+        
         return {
           id: `unavail-${item.id}`,
           title: `🚫 ${driverName} - Unavailable`,
-          start: item.unavailable_date,
-          allDay: true,
+          start: `${item.unavailable_date}T${item.start_time}`,
+          end: `${item.unavailable_date}T${item.end_time}`,
           backgroundColor: '#ef4444',
           borderColor: '#dc2626',
           extendedProps: {
@@ -61,78 +86,113 @@
             driverId: item.user_id
           }
         };
-      }
-      
-      return {
-        id: `unavail-${item.id}`,
-        title: `🚫 ${driverName} - Unavailable`,
-        start: `${item.unavailable_date}T${item.start_time}`,
-        end: `${item.unavailable_date}T${item.end_time}`,
-        backgroundColor: '#ef4444',
-        borderColor: '#dc2626',
-        extendedProps: {
-          type: 'unavailability',
-          reason: item.reason,
-          driverId: item.user_id
-        }
-      };
-    });
-  
-  // Transform ride events - individual rides
-  function transformRidesToEvents(rides: any[]) {
-    return rides.map((ride: any) => {
-      const clientName = ride.clients 
-        ? `${ride.clients.first_name} ${ride.clients.last_name}`
-        : 'Unknown Client';
-      
-      let backgroundColor = '#3b82f6';
-      let borderColor = '#2563eb';
-      
-      if (ride.status === 'Requested') {
-        backgroundColor = '#6b7280';
-        borderColor = '#4b5563';
-      } else if (ride.status === 'Assigned') {
-        backgroundColor = '#f59e0b';
-        borderColor = '#d97706';
-      } else if (ride.status === 'In Progress') {
-        backgroundColor = '#8b5cf6';
-        borderColor = '#7c3aed';
-      }
-      
-      return {
-        id: `ride-${ride.ride_id}`,
-        title: `🚗 ${clientName} → ${ride.destination_name}`,
-        start: ride.appointment_time,
-        backgroundColor,
-        borderColor,
-        extendedProps: {
-          type: 'ride',
-          rideId: ride.ride_id,
-          clientName,
-          destination: ride.destination_name,
-          dropoffAddress: ride.dropoff_address,
-          status: ride.status,
-          roundTrip: ride.round_trip,
-          purpose: ride.purpose,
-          rideData: ride
-        }
-      };
-    });
+      });
   }
   
-  // Create summary events for all rides (one per day) - FIXED
+  const myUnavailabilityEvents = transformUnavailabilityEvents(data.myUnavailability);
+  const allUnavailabilityEvents = transformUnavailabilityEvents(data.allUnavailability);
+  
+  function transformRidesToEvents(rides: any[], isDayView = false) {
+    if (isDayView) {
+      // For day view, show rides at their actual time
+      const groupedByTime = groupRidesByTimeSlot(rides);
+      const events: any[] = [];
+      
+      groupedByTime.forEach((timeRides, timeKey) => {
+        const firstRide = timeRides[0];
+        const clientName = firstRide.clients 
+          ? `${firstRide.clients.first_name} ${firstRide.clients.last_name}`
+          : 'Unknown Client';
+        
+        let backgroundColor = '#3b82f6';
+        let borderColor = '#2563eb';
+        
+        if (firstRide.status === 'Requested') {
+          backgroundColor = '#6b7280';
+          borderColor = '#4b5563';
+        } else if (firstRide.status === 'Assigned') {
+          backgroundColor = '#f59e0b';
+          borderColor = '#d97706';
+        } else if (firstRide.status === 'In Progress') {
+          backgroundColor = '#8b5cf6';
+          borderColor = '#7c3aed';
+        }
+        
+        if (timeRides.length === 1) {
+          events.push({
+            id: `ride-${firstRide.ride_id}`,
+            title: `🚗 ${clientName} → ${firstRide.destination_name}`,
+            start: firstRide.appointment_time,
+            backgroundColor,
+            borderColor,
+            extendedProps: {
+              type: 'ride',
+              rideData: firstRide
+            }
+          });
+        } else {
+          events.push({
+            id: `ride-group-${timeKey}`,
+            title: `🚗 ${timeRides.length} Rides`,
+            start: firstRide.appointment_time,
+            backgroundColor,
+            borderColor,
+            extendedProps: {
+              type: 'ride-group',
+              rides: timeRides,
+              count: timeRides.length
+            }
+          });
+        }
+      });
+      
+      return events;
+    } else {
+      // For month/week view, continue using daily summaries
+      return rides.map((ride: any) => {
+        const clientName = ride.clients 
+          ? `${ride.clients.first_name} ${ride.clients.last_name}`
+          : 'Unknown Client';
+        
+        let backgroundColor = '#3b82f6';
+        let borderColor = '#2563eb';
+        
+        if (ride.status === 'Requested') {
+          backgroundColor = '#6b7280';
+          borderColor = '#4b5563';
+        } else if (ride.status === 'Assigned') {
+          backgroundColor = '#f59e0b';
+          borderColor = '#d97706';
+        } else if (ride.status === 'In Progress') {
+          backgroundColor = '#8b5cf6';
+          borderColor = '#7c3aed';
+        }
+        
+        return {
+          id: `ride-${ride.ride_id}`,
+          title: `🚗 ${clientName} → ${ride.destination_name}`,
+          start: ride.appointment_time,
+          backgroundColor,
+          borderColor,
+          extendedProps: {
+            type: 'ride',
+            rideData: ride
+          }
+        };
+      });
+    }
+  }
+  
   function createDailySummaryEvents(rides: any[]) {
     const groupedByDate = groupRidesByDate(rides);
     const summaryEvents: any[] = [];
     
     groupedByDate.forEach((dayRides, dateStr) => {
-      // Use the exact date string in YYYY-MM-DD format
-      // This ensures it appears on the correct day
       summaryEvents.push({
         id: `summary-${dateStr}`,
         title: `📅 ${dayRides.length} Ride${dayRides.length > 1 ? 's' : ''}`,
-        start: dateStr, // Just the date, no time
-        end: dateStr,   // Same day
+        start: dateStr,
+        end: dateStr,
         allDay: true,
         backgroundColor: '#3b82f6',
         borderColor: '#2563eb',
@@ -148,20 +208,22 @@
     return summaryEvents;
   }
   
-  const myRideEvents = transformRidesToEvents(data.myRides);
-  const allRidesSummaryEvents = createDailySummaryEvents(data.allRides || []);
-  const allRidesDetailEvents = transformRidesToEvents(data.allRides || []);
+  let myRideEvents = $derived(transformRidesToEvents(data.myRides, currentCalendarView === 'timeGridDay'));
+  let allRidesSummaryEvents = $derived(createDailySummaryEvents(data.allRides || []));
+  let allRidesDetailEvents = $derived(transformRidesToEvents(data.allRides || [], currentCalendarView === 'timeGridDay'));
   
-  // Combine events based on active view
   let displayEvents = $derived.by(() => {
-    if (activeView === 'unavailability') return unavailabilityEvents;
+    if (activeView === 'myUnavailability') return myUnavailabilityEvents;
+    if (activeView === 'allUnavailability') return allUnavailabilityEvents;
     if (activeView === 'myRides') return myRideEvents;
-    if (activeView === 'allRides') return allRidesSummaryEvents;
-    // 'all' view - show daily summaries + unavailability
-    return [...allRidesSummaryEvents, ...unavailabilityEvents];
+    if (activeView === 'allRides') {
+      return currentCalendarView === 'timeGridDay' ? allRidesDetailEvents : allRidesSummaryEvents;
+    }
+    return currentCalendarView === 'timeGridDay' 
+      ? [...allRidesDetailEvents, ...allUnavailabilityEvents]
+      : [...allRidesSummaryEvents, ...allUnavailabilityEvents];
   });
   
-  // Calendar options
   let options = $state({
     view: 'timeGridWeek',
     headerToolbar: {
@@ -174,40 +236,30 @@
     eventClick: (info: any) => {
       const props = info.event.extendedProps;
       
-      if (props.type === 'summary') {
-        // Open side panel with all rides for that day
-        selectedDate = props.date;
+      if (props.type === 'summary' || props.type === 'ride-group') {
+        selectedDate = props.date || new Date(info.event.start).toISOString().split('T')[0];
         selectedDayRides = props.rides;
         showSidePanel = true;
       } else if (props.type === 'unavailability') {
         const reason = props.reason || 'No reason provided';
         alert(`Driver Unavailability\n\nReason: ${reason}`);
       } else if (props.type === 'ride') {
-        const details = `
-Ride Details
-
-Client: ${props.clientName}
-Destination: ${props.destination}
-Address: ${props.dropoffAddress}
-Status: ${props.status}
-Purpose: ${props.purpose}
-Round Trip: ${props.roundTrip ? 'Yes' : 'No'}
-        `.trim();
-        alert(details);
+        selectedDate = new Date(props.rideData.appointment_time).toISOString().split('T')[0];
+        selectedDayRides = [props.rideData];
+        showSidePanel = true;
       }
+    },
+    viewDidMount: (view: any) => {
+      currentCalendarView = view.type;
     },
     slotMinTime: '06:00:00',
     slotMaxTime: '22:00:00',
     allDaySlot: true,
     nowIndicator: true,
     selectable: true,
-    select: (info: any) => {
-      console.log('Selected:', info);
-    },
-    eventOrder: 'start,-duration,allDay,title' // Ensure proper ordering
+    eventOrder: 'start,-duration,allDay,title'
   });
   
-  // Update calendar events when view changes
   $effect(() => {
     options.events = displayEvents;
   });
@@ -216,6 +268,10 @@ Round Trip: ${props.roundTrip ? 'Yes' : 'No'}
     showSidePanel = false;
     selectedDayRides = [];
     selectedDate = '';
+  }
+  
+  function editRide(rideId: number) {
+    goto(`/dispatcher/rides?edit=${rideId}`);
   }
   
   function formatTime(timestamp: string) {
@@ -302,14 +358,26 @@ Round Trip: ${props.roundTrip ? 'Yes' : 'No'}
             </button>
             
             <button
-              onclick={() => { activeView = 'unavailability'; showSidePanel = false; }}
-              class="px-6 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap {activeView === 'unavailability' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}"
+              onclick={() => { activeView = 'myUnavailability'; showSidePanel = false; }}
+              class="px-6 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap {activeView === 'myUnavailability' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}"
             >
               <div class="flex items-center gap-2">
                 <Users class="w-4 h-4" />
-                Driver Unavailability ({data.unavailability.length})
+                My Unavailability ({data.myUnavailability.length})
               </div>
             </button>
+            
+            {#if data.isAdminOrDispatcher}
+              <button
+                onclick={() => { activeView = 'allUnavailability'; showSidePanel = false; }}
+                class="px-6 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap {activeView === 'allUnavailability' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}"
+              >
+                <div class="flex items-center gap-2">
+                  <Users class="w-4 h-4" />
+                  Driver Unavailability ({data.allUnavailability.length})
+                </div>
+              </button>
+            {/if}
           </nav>
         </div>
       </div>
@@ -321,10 +389,9 @@ Round Trip: ${props.roundTrip ? 'Yes' : 'No'}
           <Calendar plugins={[TimeGrid, DayGrid, Interaction]} {options} />
         </div>
 
-        <!-- Side Panel for Daily Rides -->
+        <!-- Side Panel for Rides -->
         {#if showSidePanel}
           <div class="w-96 bg-white rounded-lg shadow-lg border border-gray-200 flex flex-col max-h-[700px]">
-            <!-- Header -->
             <div class="px-6 py-4 border-b flex items-center justify-between">
               <div>
                 <h3 class="text-lg font-semibold text-gray-900">Rides for {formatDate(selectedDate)}</h3>
@@ -335,7 +402,6 @@ Round Trip: ${props.roundTrip ? 'Yes' : 'No'}
               </button>
             </div>
 
-            <!-- Rides List - FIXED: Use sortedSelectedDayRides instead -->
             <div class="flex-1 overflow-y-auto p-4 space-y-3">
               {#each sortedSelectedDayRides as ride}
                 <div class="border border-gray-200 rounded-lg p-4 hover:border-blue-300 transition-colors">
@@ -370,6 +436,18 @@ Round Trip: ${props.roundTrip ? 'Yes' : 'No'}
                       </div>
                     </div>
 
+                    {#if ride.driver}
+                      <div class="text-xs text-gray-600">
+                        <span class="font-medium">Driver:</span> {ride.driver.first_name} {ride.driver.last_name}
+                      </div>
+                    {/if}
+
+                    {#if ride.dispatcher}
+                      <div class="text-xs text-gray-600">
+                        <span class="font-medium">Dispatcher:</span> {ride.dispatcher.first_name} {ride.dispatcher.last_name}
+                      </div>
+                    {/if}
+
                     {#if ride.purpose}
                       <div class="text-xs text-gray-500">
                         Purpose: {ride.purpose}
@@ -383,6 +461,16 @@ Round Trip: ${props.roundTrip ? 'Yes' : 'No'}
                       </div>
                     {/if}
                   </div>
+
+                  {#if data.isAdminOrDispatcher}
+                    <button
+                      onclick={() => editRide(ride.ride_id)}
+                      class="mt-3 w-full flex items-center justify-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+                    >
+                      <Edit class="w-4 h-4" />
+                      Edit Ride
+                    </button>
+                  {/if}
                 </div>
               {/each}
             </div>
@@ -396,20 +484,20 @@ Round Trip: ${props.roundTrip ? 'Yes' : 'No'}
         
         {#if activeView === 'allRides'}
           <div>
-            <p class="text-sm text-gray-600 mb-2">Click on any day's ride summary to see all rides scheduled for that day.</p>
+            <p class="text-sm text-gray-600 mb-2">Click on any ride to see details.</p>
             <div class="flex items-center gap-2">
               <div class="w-4 h-4 bg-blue-500 rounded"></div>
-              <span class="text-sm text-gray-700">Daily Ride Summary</span>
+              <span class="text-sm text-gray-700">Scheduled Rides</span>
             </div>
           </div>
         {:else if activeView === 'all'}
           <div class="space-y-3">
             <div>
               <h4 class="text-xs font-medium text-gray-700 mb-2">Rides</h4>
-              <p class="text-xs text-gray-600 mb-2">Click on the daily summary at the top of each day to see all rides.</p>
+              <p class="text-xs text-gray-600 mb-2">Click on any ride to see details.</p>
               <div class="flex items-center gap-2">
                 <div class="w-4 h-4 bg-blue-500 rounded"></div>
-                <span class="text-sm text-gray-700">Daily Ride Summary</span>
+                <span class="text-sm text-gray-700">Scheduled Rides</span>
               </div>
             </div>
             <div>
@@ -442,12 +530,12 @@ Round Trip: ${props.roundTrip ? 'Yes' : 'No'}
               </div>
             </div>
           </div>
-        {:else if activeView === 'unavailability'}
+        {:else}
           <div>
             <h4 class="text-xs font-medium text-gray-700 mb-2">Availability</h4>
             <div class="flex items-center gap-2">
               <div class="w-4 h-4 bg-red-500 rounded"></div>
-              <span class="text-sm text-gray-700">Driver Unavailable</span>
+              <span class="text-sm text-gray-700">Unavailable</span>
             </div>
           </div>
         {/if}
@@ -501,8 +589,8 @@ Round Trip: ${props.roundTrip ? 'Yes' : 'No'}
               <CalendarIcon class="w-5 h-5 text-red-600" />
             </div>
             <div>
-              <p class="text-sm text-gray-600">Unavailabilities</p>
-              <p class="text-2xl font-bold text-gray-900">{data.unavailability.length}</p>
+              <p class="text-sm text-gray-600">My Unavailability</p>
+              <p class="text-2xl font-bold text-gray-900">{data.myUnavailability.length}</p>
             </div>
           </div>
         </div>
