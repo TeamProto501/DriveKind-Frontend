@@ -25,6 +25,65 @@
   let newFilterValue = $state('');
   
   let columnTypes = $state<Record<string, string>>({});
+
+  async function loadTableData() {
+    loading = true;
+    error = null;
+    
+    try {
+      const response = await fetch(`/admin/database/${tableName}?orgId=${orgId}`);
+      const result = await response.json();
+      
+      if (result.error) throw new Error(result.error);
+      
+      const data = result.data;
+      
+      if (data && data.length > 0) {
+        columns = Object.keys(data[0]);
+        allRecords = data;
+        displayedRecords = data;
+        
+        detectColumnTypes(data[0]);
+        newFilterColumn = columns.find(col => !col.includes('id')) || columns[0];
+      } else {
+        allRecords = [];
+        displayedRecords = [];
+        columns = [];
+      }
+    } catch (err: any) {
+      error = err.message || 'Failed to load data';
+      console.error('Error loading table data:', err);
+    } finally {
+      loading = false;
+    }
+  }
+
+  function detectColumnTypes(sampleRecord: any) {
+    const types: Record<string, string> = {};
+    
+    for (const col in sampleRecord) {
+      const value = sampleRecord[col];
+      
+      if (value === null) {
+        types[col] = 'string';
+      } else if (typeof value === 'boolean') {
+        types[col] = 'boolean';
+      } else if (typeof value === 'number') {
+        types[col] = 'number';
+      } else if (typeof value === 'string') {
+        // Check if it looks like a date
+        if (value.match(/^\d{4}-\d{2}-\d{2}/)) {
+          types[col] = 'date';
+        } else {
+          types[col] = 'string';
+        }
+      } else {
+        types[col] = 'string';
+      }
+    }
+    
+    columnTypes = types;
+  }
   
   function toggleSort(field: string) {
     if (sortField === field) {
