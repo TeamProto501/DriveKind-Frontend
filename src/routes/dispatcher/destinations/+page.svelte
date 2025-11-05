@@ -2,6 +2,8 @@
 	import { Building2, Search, MapPin, Plus, Pencil, Trash2 } from '@lucide/svelte';
 	import { onMount } from 'svelte';
 	import { supabase } from '$lib/supabase';
+	import { invalidate } from '$app/navigation';
+	import { invalidateAll } from '$app/navigation';
 
 	// shadcn/ui
 	import * as Dialog from '$lib/components/ui/dialog/index.js';
@@ -41,13 +43,26 @@
 		org_id: number | null; // used only for filtering/guarding
 	}
 
-	let destinations = $state<Destination[]>([]);
-	let isLoading = $state(true);
+	let destinations = $state<Destination[]>(data?.destinations || []);
+	let isLoading = $state(false);
 	let searchTerm = $state('');
 
+	// Reactively update destinations when data changes
+	$effect(() => {
+		if (data?.destinations) {
+			destinations = data.destinations;
+		}
+		if (data?.session?.user?.id) {
+			viewerUid = data.session.user.id;
+		}
+		if (data?.profile?.org_id !== undefined) {
+			viewerOrgId = data.profile.org_id;
+		}
+	});
+
 	// viewer identity
-	let viewerUid: string | null = $state(null);
-	let viewerOrgId: number | null = $state(null);
+	let viewerUid: string | null = $state(data?.session?.user?.id || null);
+	let viewerOrgId: number | null = $state(data?.profile?.org_id || null);
 
 	// toast
 	let toast = $state('');
@@ -81,11 +96,29 @@
 
 	onMount(async () => {
 		try {
-			await loadViewerOrg();
-			if (!viewerOrgId) {
-				setToast('Your staff profile is not linked to an organization.', false);
+			// Use server-loaded data
+			if (data?.session?.user?.id) {
+				viewerUid = data.session.user.id;
+			}
+			if (data?.profile?.org_id) {
+				viewerOrgId = data.profile.org_id;
+			}
+			
+			// If server data is available, use it
+			if (data?.destinations) {
+				destinations = data.destinations;
 				isLoading = false;
 				return;
+			}
+
+			// Fallback: load org if not in server data
+			if (!viewerOrgId) {
+				await loadViewerOrg();
+				if (!viewerOrgId) {
+					setToast('Your staff profile is not linked to an organization.', false);
+					isLoading = false;
+					return;
+				}
 			}
 			await loadDestinations();
 		} catch (e: any) {
@@ -129,40 +162,21 @@
 		viewerOrgId = (sp?.org_id ?? null) as number | null;
 	}
 
-	// Load (filter by org)
+	// Load (filter by org) - now uses server data, but can refresh if needed
 	async function loadDestinations() {
 		try {
 			isLoading = true;
 
 			if (!viewerOrgId) {
 				destinations = [];
+				isLoading = false;
 				return;
 			}
 
-			const { data: rows, error } = await supabase
-				.from('destinations')
-				.select(`
-					destination_id,
-					created_at,
-					address,
-					address2,
-					city,
-					state,
-					zipcode,
-					location_name,
-					org_id
-				`)
-				.eq('org_id', viewerOrgId)
-				.order('destination_id', { ascending: true });
-
-			if (error) {
-				console.error('Load error:', error.message);
-				setToast('Failed to load destinations.', false);
-				destinations = [];
-				return;
-			}
-
-			destinations = (rows ?? []) as Destination[];
+			// Invalidate the page to reload data from server
+			await invalidate('/dispatcher/destinations');
+			// Also invalidate all to ensure everything refreshes
+			await invalidateAll();
 		} catch (e: any) {
 			console.error('Load error:', e?.message ?? e);
 			setToast('Error loading destinations.', false);
@@ -224,7 +238,7 @@
 		isSaving = true;
 		try {
 			if (upsertMode === 'create') {
-				const insertPayload = {
+				const payload = {
 					location_name: form.location_name.trim(),
 					address: form.address.trim(),
 					address2: form.address2?.trim() || null,
@@ -234,15 +248,22 @@
 					org_id: viewerOrgId
 				};
 
-				const { error } = await supabase.from('destinations').insert(insertPayload);
-				if (error) throw error;
+				const res = await fetch('/dispatcher/destinations/create', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify(payload)
+				});
+
+				const result = await res.json();
+				if (!res.ok) {
+					throw new Error(result.error || 'Failed to create destination');
+				}
 
 				setToast('Destination created.', true);
 			} else {
 				if (!form.destination_id) return setToast('Missing destination_id for update.', false);
 
-				// do NOT change org_id on update—keep row scoped to its org
-				const updatePayload = {
+				const payload = {
 					location_name: form.location_name.trim(),
 					address: form.address.trim(),
 					address2: form.address2?.trim() || null,
@@ -251,13 +272,16 @@
 					zipcode: form.zipcode?.trim() || null
 				};
 
-				const { error } = await supabase
-					.from('destinations')
-					.update(updatePayload)
-					.eq('destination_id', form.destination_id)
-					.eq('org_id', viewerOrgId);
+				const res = await fetch(`/dispatcher/destinations/update/${form.destination_id}`, {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify(payload)
+				});
 
-				if (error) throw error;
+				const result = await res.json();
+				if (!res.ok) {
+					throw new Error(result.error || 'Failed to update destination');
+				}
 
 				setToast('Destination updated.', true);
 			}
@@ -293,13 +317,15 @@
 
 		isDeleting = true;
 		try {
-			const { error } = await supabase
-				.from('destinations')
-				.delete()
-				.eq('destination_id', toDelete.destination_id)
-				.eq('org_id', viewerOrgId);
+			const res = await fetch(`/dispatcher/destinations/delete/${toDelete.destination_id}`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' }
+			});
 
-			if (error) throw error;
+			const result = await res.json();
+			if (!res.ok) {
+				throw new Error(result.error || 'Failed to delete destination');
+			}
 
 			setToast('Destination deleted.', true);
 			showDeleteModal = false;
