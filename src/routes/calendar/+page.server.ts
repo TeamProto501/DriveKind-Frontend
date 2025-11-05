@@ -26,36 +26,65 @@ export const load = async (event) => {
       : (userProfile.role === 'Admin' || userProfile.role === 'Dispatcher' || userProfile.role === 'Super Admin')
   );
 
-  // Fetch MY unavailability (for all users)
-  const { data: myUnavailabilityData } = await supabase
+  // Fetch MY unavailability
+  const { data: myUnavailabilityRaw } = await supabase
     .from('driver_unavailability')
-    .select(`
-      *,
-      staff_profiles!fk_staff_profile (
-        first_name,
-        last_name
-      )
-    `)
+    .select('*')
     .eq('user_id', session.user.id)
     .order('unavailable_date', { ascending: true });
+
+  console.log('My unavailability raw:', myUnavailabilityRaw);
+
+  // Fetch staff profile for current user
+  const { data: myStaffProfile } = await supabase
+    .from('staff_profiles')
+    .select('user_id, first_name, last_name')
+    .eq('user_id', session.user.id)
+    .single();
+
+  const myUnavailabilityData = (myUnavailabilityRaw || []).map(item => ({
+    ...item,
+    staff_profiles: myStaffProfile
+  }));
+
+  console.log('My unavailability with profile:', myUnavailabilityData);
 
   // Fetch ALL driver unavailability (admin/dispatcher only)
   let allUnavailabilityData = [];
   if (isAdminOrDispatcher) {
-    const { data: unavailData } = await supabase
+    // First get all unavailability for org
+    const { data: allUnavailRaw } = await supabase
       .from('driver_unavailability')
-      .select(`
-        *,
-        staff_profiles!fk_staff_profile (
-          first_name,
-          last_name,
-          org_id
-        )
-      `)
-      .eq('staff_profiles.org_id', userProfile.org_id)
+      .select('*')
       .order('unavailable_date', { ascending: true });
-    
-    allUnavailabilityData = unavailData || [];
+
+    console.log('All unavail raw:', allUnavailRaw?.length || 0);
+
+    if (allUnavailRaw && allUnavailRaw.length > 0) {
+      // Get unique user_ids
+      const userIds = [...new Set(allUnavailRaw.map(u => u.user_id).filter(Boolean))];
+      
+      // Fetch staff profiles for these users in the org
+      const { data: staffProfiles } = await supabase
+        .from('staff_profiles')
+        .select('user_id, first_name, last_name, org_id')
+        .in('user_id', userIds)
+        .eq('org_id', userProfile.org_id);
+
+      console.log('Staff profiles fetched:', staffProfiles?.length || 0);
+
+      const staffMap = new Map(staffProfiles?.map(s => [s.user_id, s]) || []);
+
+      // Only include unavailability for users in this org
+      allUnavailabilityData = allUnavailRaw
+        .filter(item => staffMap.has(item.user_id))
+        .map(item => ({
+          ...item,
+          staff_profiles: staffMap.get(item.user_id)
+        }));
+
+      console.log('All unavail with profiles:', allUnavailabilityData.length);
+    }
   }
 
   // Fetch my rides
@@ -101,7 +130,7 @@ export const load = async (event) => {
       .from('rides')
       .select('*')
       .eq('org_id', userProfile.org_id)
-      .order('appointment_time', { ascending: true });
+      .order('appointment_time', { ascending: true});
     
     if (allRidesData && allRidesData.length > 0) {
       const allClientIds = [...new Set(allRidesData.map(r => r.client_id).filter(Boolean))];
@@ -131,8 +160,15 @@ export const load = async (event) => {
     }
   }
 
+  console.log('Returning data:', {
+    myUnavail: myUnavailabilityData.length,
+    allUnavail: allUnavailabilityData.length,
+    myRides: myRidesWithDetails.length,
+    allRides: allRidesWithDetails.length
+  });
+
   return {
-    myUnavailability: myUnavailabilityData || [],
+    myUnavailability: myUnavailabilityData,
     allUnavailability: allUnavailabilityData,
     myRides: myRidesWithDetails,
     allRides: allRidesWithDetails,
