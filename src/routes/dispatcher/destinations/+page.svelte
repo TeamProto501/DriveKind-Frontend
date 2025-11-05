@@ -2,6 +2,7 @@
 	import { Building2, Search, MapPin, Plus, Pencil, Trash2 } from '@lucide/svelte';
 	import { onMount } from 'svelte';
 	import { supabase } from '$lib/supabase';
+	import { invalidate } from '$app/navigation';
 
 	// shadcn/ui
 	import * as Dialog from '$lib/components/ui/dialog/index.js';
@@ -139,6 +140,9 @@
 				return;
 			}
 
+			// Invalidate the page to reload data from server
+			await invalidate('/dispatcher/destinations');
+
 			const { data: rows, error } = await supabase
 				.from('destinations')
 				.select(`
@@ -224,7 +228,7 @@
 		isSaving = true;
 		try {
 			if (upsertMode === 'create') {
-				const insertPayload = {
+				const payload = {
 					location_name: form.location_name.trim(),
 					address: form.address.trim(),
 					address2: form.address2?.trim() || null,
@@ -234,15 +238,22 @@
 					org_id: viewerOrgId
 				};
 
-				const { error } = await supabase.from('destinations').insert(insertPayload);
-				if (error) throw error;
+				const res = await fetch('/dispatcher/destinations/create', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify(payload)
+				});
+
+				const result = await res.json();
+				if (!res.ok) {
+					throw new Error(result.error || 'Failed to create destination');
+				}
 
 				setToast('Destination created.', true);
 			} else {
 				if (!form.destination_id) return setToast('Missing destination_id for update.', false);
 
-				// do NOT change org_id on update—keep row scoped to its org
-				const updatePayload = {
+				const payload = {
 					location_name: form.location_name.trim(),
 					address: form.address.trim(),
 					address2: form.address2?.trim() || null,
@@ -251,13 +262,16 @@
 					zipcode: form.zipcode?.trim() || null
 				};
 
-				const { error } = await supabase
-					.from('destinations')
-					.update(updatePayload)
-					.eq('destination_id', form.destination_id)
-					.eq('org_id', viewerOrgId);
+				const res = await fetch(`/dispatcher/destinations/update/${form.destination_id}`, {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify(payload)
+				});
 
-				if (error) throw error;
+				const result = await res.json();
+				if (!res.ok) {
+					throw new Error(result.error || 'Failed to update destination');
+				}
 
 				setToast('Destination updated.', true);
 			}
@@ -293,13 +307,15 @@
 
 		isDeleting = true;
 		try {
-			const { error } = await supabase
-				.from('destinations')
-				.delete()
-				.eq('destination_id', toDelete.destination_id)
-				.eq('org_id', viewerOrgId);
+			const res = await fetch(`/dispatcher/destinations/delete/${toDelete.destination_id}`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' }
+			});
 
-			if (error) throw error;
+			const result = await res.json();
+			if (!res.ok) {
+				throw new Error(result.error || 'Failed to delete destination');
+			}
 
 			setToast('Destination deleted.', true);
 			showDeleteModal = false;
