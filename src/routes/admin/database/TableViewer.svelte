@@ -12,6 +12,10 @@
   let error = $state<string | null>(null);
   let exporting = $state(false);
   
+  // Pagination
+  let currentPage = $state(1);
+  let pageSize = $state(20);
+  
   // Sorting
   type SortField = string | null;
   type SortDirection = 'asc' | 'desc' | null;
@@ -25,65 +29,10 @@
   let newFilterValue = $state('');
   
   let columnTypes = $state<Record<string, string>>({});
-
-  async function loadTableData() {
-    loading = true;
-    error = null;
-    
-    try {
-      const response = await fetch(`/admin/database/${tableName}?orgId=${orgId}`);
-      const result = await response.json();
-      
-      if (result.error) throw new Error(result.error);
-      
-      const data = result.data;
-      
-      if (data && data.length > 0) {
-        columns = Object.keys(data[0]);
-        allRecords = data;
-        displayedRecords = data;
-        
-        detectColumnTypes(data[0]);
-        newFilterColumn = columns.find(col => !col.includes('id')) || columns[0];
-      } else {
-        allRecords = [];
-        displayedRecords = [];
-        columns = [];
-      }
-    } catch (err: any) {
-      error = err.message || 'Failed to load data';
-      console.error('Error loading table data:', err);
-    } finally {
-      loading = false;
-    }
-  }
-
-  function detectColumnTypes(sampleRecord: any) {
-    const types: Record<string, string> = {};
-    
-    for (const col in sampleRecord) {
-      const value = sampleRecord[col];
-      
-      if (value === null) {
-        types[col] = 'string';
-      } else if (typeof value === 'boolean') {
-        types[col] = 'boolean';
-      } else if (typeof value === 'number') {
-        types[col] = 'number';
-      } else if (typeof value === 'string') {
-        // Check if it looks like a date
-        if (value.match(/^\d{4}-\d{2}-\d{2}/)) {
-          types[col] = 'date';
-        } else {
-          types[col] = 'string';
-        }
-      } else {
-        types[col] = 'string';
-      }
-    }
-    
-    columnTypes = types;
-  }
+  
+  // Derived pagination values
+  let totalPages = $derived(Math.max(Math.ceil(displayedRecords.length / pageSize), 1));
+  let paginatedRecords = $derived(displayedRecords.slice((currentPage - 1) * pageSize, currentPage * pageSize));
   
   function toggleSort(field: string) {
     if (sortField === field) {
@@ -130,11 +79,9 @@
         let aVal = a[sortField];
         let bVal = b[sortField];
 
-        // Handle nulls
         if (aVal === null || aVal === undefined) return sortDirection === 'asc' ? 1 : -1;
         if (bVal === null || bVal === undefined) return sortDirection === 'asc' ? -1 : 1;
 
-        // Compare
         if (typeof aVal === 'string') {
           aVal = aVal.toLowerCase();
           bVal = bVal.toLowerCase();
@@ -147,9 +94,9 @@
     }
 
     displayedRecords = results;
+    currentPage = 1; // Reset to page 1 after filtering/sorting
   }
   
-  // Update other functions
   function addFilter() {
     if (!newFilterColumn || newFilterValue.trim() === '') return;
     
@@ -174,37 +121,78 @@
     sortField = null;
     sortDirection = null;
     displayedRecords = allRecords;
+    currentPage = 1;
   }
   
-  function applyFilters() {
-    if (filters.length === 0) {
-      displayedRecords = allRecords;
-      return;
+  async function loadTableData() {
+    loading = true;
+    error = null;
+    
+    try {
+      const response = await fetch(`/admin/database/${tableName}?orgId=${orgId}`);
+      const result = await response.json();
+      
+      if (result.error) throw new Error(result.error);
+      
+      const data = result.data;
+      
+      if (data && data.length > 0) {
+        // Reorder columns to put name fields first
+        const allColumns = Object.keys(data[0]);
+        const nameColumns = allColumns.filter(col => 
+          col.endsWith('_name') || col === 'driver_name' || col === 'dispatcher_name' || col === 'user_name' || col === 'client_name'
+        );
+        const otherColumns = allColumns.filter(col => !nameColumns.includes(col));
+        
+        columns = [...nameColumns, ...otherColumns];
+        allRecords = data;
+        displayedRecords = data;
+        
+        detectColumnTypes(data[0]);
+        newFilterColumn = columns[0];
+      } else {
+        allRecords = [];
+        displayedRecords = [];
+        columns = [];
+      }
+    } catch (err: any) {
+      error = err.message || 'Failed to load data';
+      console.error('Error loading table data:', err);
+    } finally {
+      loading = false;
+    }
+  }
+  
+  function detectColumnTypes(sampleRecord: any) {
+    const types: Record<string, string> = {};
+    
+    for (const col in sampleRecord) {
+      const value = sampleRecord[col];
+      
+      if (value === null) {
+        types[col] = 'string';
+      } else if (typeof value === 'boolean') {
+        types[col] = 'boolean';
+      } else if (typeof value === 'number') {
+        types[col] = 'number';
+      } else if (typeof value === 'string') {
+        if (value.match(/^\d{4}-\d{2}-\d{2}/)) {
+          types[col] = 'date';
+        } else {
+          types[col] = 'string';
+        }
+      } else {
+        types[col] = 'string';
+      }
     }
     
-    displayedRecords = allRecords.filter(record => {
-      // Record must match ALL filters (AND logic)
-      return filters.every(filter => {
-        const recordValue = record[filter.column];
-        const filterValue = filter.value.toLowerCase();
-        
-        if (recordValue === null || recordValue === undefined) {
-          return filterValue === 'null' || filterValue === '';
-        }
-        
-        const recordValueStr = String(recordValue).toLowerCase();
-        
-        // Use contains logic for string matching
-        return recordValueStr.includes(filterValue);
-      });
-    });
+    columnTypes = types;
   }
   
   async function handleExport() {
     exporting = true;
     
     try {
-      // Export the currently displayed (filtered) records
       const dataToExport = displayedRecords.length > 0 ? displayedRecords : allRecords;
       
       if (dataToExport.length > 0) {
@@ -239,12 +227,19 @@
     }
   }
   
+  function nextPage() { if (currentPage < totalPages) currentPage++; }
+  function prevPage() { if (currentPage > 1) currentPage--; }
+  function changePageSize(size: number) {
+    pageSize = size;
+    currentPage = 1;
+  }
+  
   $effect(() => {
     if (tableName) {
-      // Reset state when table changes
       filters = [];
       nextFilterId = 0;
       newFilterValue = '';
+      currentPage = 1;
       loadTableData();
     }
   });
@@ -282,7 +277,6 @@
         <span>Search & Filter</span>
       </div>
       
-      <!-- Add Filter Form -->
       <div class="flex gap-2">
         <select
           bind:value={newFilterColumn}
@@ -314,7 +308,6 @@
         </button>
       </div>
       
-      <!-- Active Filters -->
       {#if filters.length > 0}
         <div class="space-y-2">
           <div class="flex items-center justify-between">
@@ -409,7 +402,7 @@
               </td>
             </tr>
           {:else}
-            {#each displayedRecords as record}
+            {#each paginatedRecords as record}
               <tr class="hover:bg-gray-50 transition-colors">
                 {#each columns as col}
                   {@const cellData = formatCellValue(record[col], col)}
@@ -434,7 +427,51 @@
       </table>
     </div>
     
-    <!-- Pagination hint -->
+    <!-- Pagination -->
+    {#if displayedRecords.length > 0}
+      <div class="flex flex-col sm:flex-row items-center justify-between gap-3 pt-4 border-t">
+        <div class="flex items-center gap-2 text-sm text-gray-600">
+          <span>Show</span>
+          <select
+            bind:value={pageSize}
+            onchange={(e) => changePageSize(parseInt(e.currentTarget.value))}
+            class="border rounded px-2 py-1 text-sm"
+          >
+            <option value="10">10</option>
+            <option value="20">20</option>
+            <option value="50">50</option>
+            <option value="100">100</option>
+          </select>
+          <span>entries</span>
+          <span class="ml-2 text-gray-500">
+            ({displayedRecords.length} total)
+          </span>
+        </div>
+
+        <div class="flex items-center gap-4">
+          <button
+            class="px-3 py-1 border rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+            onclick={prevPage}
+            disabled={currentPage === 1}
+          >
+            Previous
+          </button>
+
+          <span class="text-sm text-gray-600">
+            Page {currentPage} of {totalPages}
+          </span>
+
+          <button
+            class="px-3 py-1 border rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+            onclick={nextPage}
+            disabled={currentPage === totalPages}
+          >
+            Next
+          </button>
+        </div>
+      </div>
+    {/if}
+    
     {#if allRecords.length >= 1000}
       <div class="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg p-3">
         ⚠️ Showing first 1,000 records. Use filters to narrow down results for better performance.
