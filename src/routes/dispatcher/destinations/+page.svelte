@@ -3,6 +3,7 @@
 	import { onMount } from 'svelte';
 	import { supabase } from '$lib/supabase';
 	import { invalidate } from '$app/navigation';
+	import { invalidateAll } from '$app/navigation';
 
 	// shadcn/ui
 	import * as Dialog from '$lib/components/ui/dialog/index.js';
@@ -50,6 +51,12 @@
 	$effect(() => {
 		if (data?.destinations) {
 			destinations = data.destinations;
+		}
+		if (data?.session?.user?.id) {
+			viewerUid = data.session.user.id;
+		}
+		if (data?.profile?.org_id !== undefined) {
+			viewerOrgId = data.profile.org_id;
 		}
 	});
 
@@ -162,14 +169,14 @@
 
 			if (!viewerOrgId) {
 				destinations = [];
+				isLoading = false;
 				return;
 			}
 
 			// Invalidate the page to reload data from server
 			await invalidate('/dispatcher/destinations');
-
-			// After invalidation, the page will reload with new server data
-			// The $effect hook will update the destinations state
+			// Also invalidate all to ensure everything refreshes
+			await invalidateAll();
 		} catch (e: any) {
 			console.error('Load error:', e?.message ?? e);
 			setToast('Error loading destinations.', false);
