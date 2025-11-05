@@ -544,11 +544,6 @@
                   Cancel
                 </Button>
               {/if}
-              
-              <Button variant="outline" size="sm">
-                <Navigation class="w-4 h-4 mr-1" />
-                Navigate
-              </Button>
             </div>
           </div>
         </CardContent>
