@@ -31,6 +31,8 @@
   // When ride changes or modal opens, populate form with ride data
   $effect(() => {
     if (ride && show) {
+      console.log('Modal opening with ride data:', ride); // ← Add this
+      console.log('completion_status:', ride.completion_status); // ← And this
       formData = {
         miles_driven: ride.miles_driven?.toString() || '',
         hours: ride.hours?.toString() || '',

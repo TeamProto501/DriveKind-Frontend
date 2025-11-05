@@ -521,18 +521,7 @@
                   <CheckCircle class="w-4 h-4 mr-1" />
                   Report Complete
                 </Button>
-              {:else if ride.status === "Completed"}
-                <Button 
-                  size="sm" 
-                  onclick={() => completeRide(ride.ride_id)}
-                  disabled={isUpdating}
-                  variant="outline"
-                >
-                  <Edit class="w-4 h-4 mr-1" />
-                  Edit Completion
-                </Button>
-              {/if}
-              
+  
               {#if ride.status !== "Completed" && ride.status !== "Cancelled" && ride.status !== "Reported"}
                 <Button 
                   variant="outline" 
