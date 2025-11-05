@@ -2,8 +2,12 @@
 	import { Building2, Plus, Search, Edit, Trash2, Save, X, Mail, Phone, MapPin, Link as LinkIcon } from '@lucide/svelte';
 	import { onMount } from 'svelte';
 	import { supabase } from '$lib/supabase';
+	import { invalidate, invalidateAll } from '$app/navigation';
 
 	type OrgRow = Record<string, any> & { org_id: number; name: string };
+
+	// Get data from server
+	let { data }: { data?: { organizations?: OrgRow[]; session?: any; error?: string | null } } = $props();
 
 	// ---------- Constants ----------
 	const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
@@ -208,20 +212,28 @@
 	}
 
 	// ---------- Data / UI State ----------
-	let organizations: OrgRow[] = [];
-	let filteredOrganizations: OrgRow[] = [];
-	let isLoading = $state(true);
+	let organizations: OrgRow[] = $state(data?.organizations || []);
+	let filteredOrganizations: OrgRow[] = $state([]);
+	let isLoading = $state(false);
 	let searchTerm = $state('');
 	let showAddModal = $state(false);
 	let showEditModal = $state(false);
 	let showDeleteModal = $state(false);
 	let showPasswordModal = $state(false);
-	let selectedOrg: OrgRow | null = null;
-	let editingOrg: OrgRow | null = null;
+	let selectedOrg: OrgRow | null = $state(null);
+	let editingOrg: OrgRow | null = $state(null);
 	let editMessage = $state('');
 	let editMessageSuccess = $state(false);
 	let passwordInput = $state('');
 	let passwordError = $state('');
+
+	// Reactively update organizations when data changes
+	$effect(() => {
+		if (data?.organizations) {
+			organizations = data.organizations.sort((a,b) => (a.org_id ?? 0) - (b.org_id ?? 0));
+			applyFilter();
+		}
+	});
 
 	function showEditMessage(message: string, success: boolean) {
 		editMessage = message;
@@ -230,35 +242,24 @@
 	}
 
 	onMount(async () => {
-		await loadOrganizations();
-		if (filteredOrganizations.length === 0 && organizations.length > 0) {
-			filteredOrganizations = organizations;
+		// Use server-loaded data
+		if (data?.organizations) {
+			organizations = data.organizations.sort((a,b) => (a.org_id ?? 0) - (b.org_id ?? 0));
+			applyFilter();
 		}
 	});
 
-	async function loadOrganizations() {
-		try {
-			isLoading = true;
-			// Order by org_id ASC (lowest on top)
-			const { data, error } = await supabase.from('organization').select('*').order('org_id', { ascending: true });
-			if (error) { showEditMessage('Failed to load organizations: ' + error.message, false); return; }
-			// Client-side safety sort as well
-			organizations = (data || []).sort((a,b) => (a.org_id ?? 0) - (b.org_id ?? 0));
-			applyFilter();
-		} catch (e: any) {
-			showEditMessage('Failed to load organizations: ' + (e?.message ?? 'Unknown error'), false);
-		} finally { isLoading = false; }
-	}
 	async function refreshOrganizations() {
 		try {
 			isLoading = true;
-			const { data, error } = await supabase.from('organization').select('*').order('org_id', { ascending: true });
-			if (error) { showEditMessage('Failed to refresh organizations: ' + error.message, false); return; }
-			organizations = (data || []).sort((a,b) => (a.org_id ?? 0) - (b.org_id ?? 0));
-			applyFilter();
+			// Invalidate the page to reload data from server
+			await invalidate('/admin/organizations');
+			await invalidateAll();
 		} catch (e: any) {
 			showEditMessage('Failed to refresh organizations: ' + (e?.message ?? 'Unknown error'), false);
-		} finally { isLoading = false; }
+		} finally {
+			isLoading = false;
+		}
 	}
 
 	function applyFilter() {
@@ -364,8 +365,17 @@
 			if ('org_status' in payload) { payload.org_status_enum = payload.org_status; delete payload.org_status; }
 			delete payload.org_creation_date; delete payload.first_ride_date; delete payload.last_activity_in_portal;
 
-			const { error } = await supabase.from('organization').insert([payload]).select().single();
-			if (error) { showEditMessage('Failed to add organization: ' + error.message, false); return; }
+			const res = await fetch('/admin/organizations/create', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(payload)
+			});
+
+			const result = await res.json();
+			if (!res.ok) {
+				showEditMessage('Failed to add organization: ' + (result.error || 'Unknown error'), false);
+				return;
+			}
 
 			showEditMessage('Organization added successfully!', true);
 			closeModals();
@@ -400,14 +410,17 @@
 			if ('org_status' in payload) { payload.org_status_enum = payload.org_status; delete payload.org_status; }
 			delete payload.org_creation_date; delete payload.first_ride_date; delete payload.last_activity_in_portal;
 
-			const { error } = await supabase
-				.from('organization')
-				.update(payload)
-				.eq('org_id', editingOrg.org_id)
-				.select()
-				.single();
+			const res = await fetch(`/admin/organizations/update/${editingOrg.org_id}`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(payload)
+			});
 
-			if (error) { showEditMessage('Failed to update organization: ' + error.message, false); return; }
+			const result = await res.json();
+			if (!res.ok) {
+				showEditMessage('Failed to update organization: ' + (result.error || 'Unknown error'), false);
+				return;
+			}
 
 			showEditMessage('Organization updated successfully!', true);
 			closeModals();
@@ -420,8 +433,17 @@
 	async function deleteOrganization() {
 		if (!selectedOrg) return;
 		try {
-			const { error } = await supabase.from('organization').delete().eq('org_id', selectedOrg.org_id);
-			if (error) { showEditMessage('Failed to delete organization: ' + error.message, false); return; }
+			const res = await fetch(`/admin/organizations/delete/${selectedOrg.org_id}`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' }
+			});
+
+			const result = await res.json();
+			if (!res.ok) {
+				showEditMessage('Failed to delete organization: ' + (result.error || 'Unknown error'), false);
+				return;
+			}
+
 			showEditMessage('Organization deleted successfully!', true);
 			closeModals();
 			await refreshOrganizations();
@@ -574,10 +596,16 @@
 									</td>
 									<td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
 										<div class="flex space-x-2">
-											<button onclick={() => openEditModal(org)} class="inline-flex items-center px-3 py-2 rounded-md text-white bg-blue-600 hover:bg-blue-700">
+											<button 
+												type="button"
+												onclick={(e) => { e.preventDefault(); e.stopPropagation(); openEditModal(org); }} 
+												class="inline-flex items-center px-3 py-2 rounded-md text-white bg-blue-600 hover:bg-blue-700">
 												<Edit class="w-4 h-4 mr-1" /> Edit
 											</button>
-											<button onclick={() => openDeleteModal(org)} class="inline-flex items-center px-3 py-2 rounded-md text-white bg-red-600 hover:bg-red-700">
+											<button 
+												type="button"
+												onclick={(e) => { e.preventDefault(); e.stopPropagation(); openDeleteModal(org); }} 
+												class="inline-flex items-center px-3 py-2 rounded-md text-white bg-red-600 hover:bg-red-700">
 												<Trash2 class="w-4 h-4 mr-1" /> Delete
 											</button>
 										</div>
