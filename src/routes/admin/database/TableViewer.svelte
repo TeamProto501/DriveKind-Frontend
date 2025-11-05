@@ -1,16 +1,26 @@
 <script lang="ts">
   import { supabase } from '$lib/supabase';
-  import { Loader2, AlertCircle, Download, Search, X, Filter, Plus } from '@lucide/svelte';
+  import { Loader2, AlertCircle, Download, Search, X, Filter, Plus, ChevronUp, ChevronDown, ChevronsUpDown } from '@lucide/svelte';
   import { exportToCSV } from '$lib/utils/csvExport';
   
   let { tableName, orgId }: { tableName: string, orgId: number } = $props();
   
-  let allRecords = $state([]); // Store all records
-  let displayedRecords = $state([]); // Records after filtering
+  let allRecords = $state([]);
+  let displayedRecords = $state([]);
   let columns = $state([]);
   let loading = $state(true);
   let error = $state<string | null>(null);
   let exporting = $state(false);
+  
+  // Pagination
+  let currentPage = $state(1);
+  let pageSize = $state(20);
+  
+  // Sorting
+  type SortField = string | null;
+  type SortDirection = 'asc' | 'desc' | null;
+  let sortField = $state<SortField>(null);
+  let sortDirection = $state<SortDirection>(null);
   
   // Filter state
   let filters = $state<Array<{id: number, column: string, value: string}>>([]);
@@ -18,32 +28,128 @@
   let newFilterColumn = $state('');
   let newFilterValue = $state('');
   
-  // Column types for better filtering
   let columnTypes = $state<Record<string, string>>({});
+  
+  // Derived pagination values
+  let totalPages = $derived(Math.max(Math.ceil(displayedRecords.length / pageSize), 1));
+  let paginatedRecords = $derived(displayedRecords.slice((currentPage - 1) * pageSize, currentPage * pageSize));
+  
+  function toggleSort(field: string) {
+    if (sortField === field) {
+      if (sortDirection === null) sortDirection = 'asc';
+      else if (sortDirection === 'asc') sortDirection = 'desc';
+      else { sortDirection = null; sortField = null; }
+    } else {
+      sortField = field;
+      sortDirection = 'asc';
+    }
+    applySortingAndFilters();
+  }
+
+  function getSortIcon(field: string) {
+    if (sortField !== field) return ChevronsUpDown;
+    if (sortDirection === 'asc') return ChevronUp;
+    if (sortDirection === 'desc') return ChevronDown;
+    return ChevronsUpDown;
+  }
+
+  function applySortingAndFilters() {
+    let results = [...allRecords];
+
+    // Apply filters first
+    if (filters.length > 0) {
+      results = results.filter(record => {
+        return filters.every(filter => {
+          const recordValue = record[filter.column];
+          const filterValue = filter.value.toLowerCase();
+          
+          if (recordValue === null || recordValue === undefined) {
+            return filterValue === 'null' || filterValue === '';
+          }
+          
+          const recordValueStr = String(recordValue).toLowerCase();
+          return recordValueStr.includes(filterValue);
+        });
+      });
+    }
+
+    // Apply sorting
+    if (sortField && sortDirection) {
+      results.sort((a, b) => {
+        let aVal = a[sortField];
+        let bVal = b[sortField];
+
+        if (aVal === null || aVal === undefined) return sortDirection === 'asc' ? 1 : -1;
+        if (bVal === null || bVal === undefined) return sortDirection === 'asc' ? -1 : 1;
+
+        if (typeof aVal === 'string') {
+          aVal = aVal.toLowerCase();
+          bVal = bVal.toLowerCase();
+        }
+
+        if (aVal < bVal) return sortDirection === 'asc' ? -1 : 1;
+        if (aVal > bVal) return sortDirection === 'asc' ? 1 : -1;
+        return 0;
+      });
+    }
+
+    displayedRecords = results;
+    currentPage = 1; // Reset to page 1 after filtering/sorting
+  }
+  
+  function addFilter() {
+    if (!newFilterColumn || newFilterValue.trim() === '') return;
+    
+    filters = [...filters, {
+      id: nextFilterId++,
+      column: newFilterColumn,
+      value: newFilterValue.trim()
+    }];
+    
+    newFilterValue = '';
+    applySortingAndFilters();
+  }
+  
+  function removeFilter(filterId: number) {
+    filters = filters.filter(f => f.id !== filterId);
+    applySortingAndFilters();
+  }
+  
+  function clearAllFilters() {
+    filters = [];
+    newFilterValue = '';
+    sortField = null;
+    sortDirection = null;
+    displayedRecords = allRecords;
+    currentPage = 1;
+  }
   
   async function loadTableData() {
     loading = true;
     error = null;
     
     try {
-      const { data, error: fetchError } = await supabase
-        .from(tableName)
-        .select('*')
-        .eq('org_id', orgId)
-        .limit(1000); // Increased limit for better searching
+      const response = await fetch(`/admin/database/${tableName}?orgId=${orgId}`);
+      const result = await response.json();
       
-      if (fetchError) throw fetchError;
+      if (result.error) throw new Error(result.error);
+      
+      const data = result.data;
       
       if (data && data.length > 0) {
-        columns = Object.keys(data[0]);
+        // Reorder columns to put name fields first
+        const allColumns = Object.keys(data[0]);
+        const nameColumns = allColumns.filter(col => 
+          col.endsWith('_name') || col === 'driver_name' || col === 'dispatcher_name' || col === 'user_name' || col === 'client_name'
+        );
+        const otherColumns = allColumns.filter(col => !nameColumns.includes(col));
+        
+        columns = [...nameColumns, ...otherColumns];
         allRecords = data;
         displayedRecords = data;
         
-        // Detect column types
         detectColumnTypes(data[0]);
-        
-        // Set default filter column to first non-id column
-        newFilterColumn = columns.find(col => !col.includes('id')) || columns[0];
+        newFilterColumn = columns[0];
       } else {
         allRecords = [];
         displayedRecords = [];
@@ -70,7 +176,6 @@
       } else if (typeof value === 'number') {
         types[col] = 'number';
       } else if (typeof value === 'string') {
-        // Check if it looks like a date
         if (value.match(/^\d{4}-\d{2}-\d{2}/)) {
           types[col] = 'date';
         } else {
@@ -84,59 +189,10 @@
     columnTypes = types;
   }
   
-  function addFilter() {
-    if (!newFilterColumn || newFilterValue.trim() === '') return;
-    
-    filters = [...filters, {
-      id: nextFilterId++,
-      column: newFilterColumn,
-      value: newFilterValue.trim()
-    }];
-    
-    newFilterValue = '';
-    applyFilters();
-  }
-  
-  function removeFilter(filterId: number) {
-    filters = filters.filter(f => f.id !== filterId);
-    applyFilters();
-  }
-  
-  function clearAllFilters() {
-    filters = [];
-    newFilterValue = '';
-    displayedRecords = allRecords;
-  }
-  
-  function applyFilters() {
-    if (filters.length === 0) {
-      displayedRecords = allRecords;
-      return;
-    }
-    
-    displayedRecords = allRecords.filter(record => {
-      // Record must match ALL filters (AND logic)
-      return filters.every(filter => {
-        const recordValue = record[filter.column];
-        const filterValue = filter.value.toLowerCase();
-        
-        if (recordValue === null || recordValue === undefined) {
-          return filterValue === 'null' || filterValue === '';
-        }
-        
-        const recordValueStr = String(recordValue).toLowerCase();
-        
-        // Use contains logic for string matching
-        return recordValueStr.includes(filterValue);
-      });
-    });
-  }
-  
   async function handleExport() {
     exporting = true;
     
     try {
-      // Export the currently displayed (filtered) records
       const dataToExport = displayedRecords.length > 0 ? displayedRecords : allRecords;
       
       if (dataToExport.length > 0) {
@@ -171,12 +227,19 @@
     }
   }
   
+  function nextPage() { if (currentPage < totalPages) currentPage++; }
+  function prevPage() { if (currentPage > 1) currentPage--; }
+  function changePageSize(size: number) {
+    pageSize = size;
+    currentPage = 1;
+  }
+  
   $effect(() => {
     if (tableName) {
-      // Reset state when table changes
       filters = [];
       nextFilterId = 0;
       newFilterValue = '';
+      currentPage = 1;
       loadTableData();
     }
   });
@@ -214,7 +277,6 @@
         <span>Search & Filter</span>
       </div>
       
-      <!-- Add Filter Form -->
       <div class="flex gap-2">
         <select
           bind:value={newFilterColumn}
@@ -246,7 +308,6 @@
         </button>
       </div>
       
-      <!-- Active Filters -->
       {#if filters.length > 0}
         <div class="space-y-2">
           <div class="flex items-center justify-between">
@@ -305,14 +366,21 @@
       </button>
     </div>
     
-    <!-- Table -->
-    <div class="overflow-x-auto border border-gray-200 rounded-lg">
+   <!-- Table -->
+    <div class="overflow-x-auto border border-gray-200 rounded-lg max-h-[600px] overflow-y-auto">
       <table class="min-w-full divide-y divide-gray-200">
-        <thead class="bg-gray-50">
+        <thead class="bg-gray-50 sticky top-0 z-10">
           <tr>
             {#each columns as col}
-              <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
-                {col}
+              {@const Icon = getSortIcon(col)}
+              <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap bg-gray-50">
+                <button 
+                  class="flex items-center gap-1 hover:text-gray-900 transition-colors"
+                  onclick={() => toggleSort(col)}
+                >
+                  {col}
+                  <Icon class="w-4 h-4" />
+                </button>
               </th>
             {/each}
           </tr>
@@ -334,7 +402,7 @@
               </td>
             </tr>
           {:else}
-            {#each displayedRecords as record}
+            {#each paginatedRecords as record}
               <tr class="hover:bg-gray-50 transition-colors">
                 {#each columns as col}
                   {@const cellData = formatCellValue(record[col], col)}
@@ -359,7 +427,51 @@
       </table>
     </div>
     
-    <!-- Pagination hint -->
+    <!-- Pagination -->
+    {#if displayedRecords.length > 0}
+      <div class="flex flex-col sm:flex-row items-center justify-between gap-3 pt-4 border-t">
+        <div class="flex items-center gap-2 text-sm text-gray-600">
+          <span>Show</span>
+          <select
+            bind:value={pageSize}
+            onchange={(e) => changePageSize(parseInt(e.currentTarget.value))}
+            class="border rounded px-2 py-1 text-sm"
+          >
+            <option value="10">10</option>
+            <option value="20">20</option>
+            <option value="50">50</option>
+            <option value="100">100</option>
+          </select>
+          <span>entries</span>
+          <span class="ml-2 text-gray-500">
+            ({displayedRecords.length} total)
+          </span>
+        </div>
+
+        <div class="flex items-center gap-4">
+          <button
+            class="px-3 py-1 border rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+            onclick={prevPage}
+            disabled={currentPage === 1}
+          >
+            Previous
+          </button>
+
+          <span class="text-sm text-gray-600">
+            Page {currentPage} of {totalPages}
+          </span>
+
+          <button
+            class="px-3 py-1 border rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+            onclick={nextPage}
+            disabled={currentPage === totalPages}
+          >
+            Next
+          </button>
+        </div>
+      </div>
+    {/if}
+    
     {#if allRecords.length >= 1000}
       <div class="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg p-3">
         ⚠️ Showing first 1,000 records. Use filters to narrow down results for better performance.
