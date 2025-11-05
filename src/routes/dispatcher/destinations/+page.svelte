@@ -42,13 +42,20 @@
 		org_id: number | null; // used only for filtering/guarding
 	}
 
-	let destinations = $state<Destination[]>([]);
-	let isLoading = $state(true);
+	let destinations = $state<Destination[]>(data?.destinations || []);
+	let isLoading = $state(false);
 	let searchTerm = $state('');
 
+	// Reactively update destinations when data changes
+	$effect(() => {
+		if (data?.destinations) {
+			destinations = data.destinations;
+		}
+	});
+
 	// viewer identity
-	let viewerUid: string | null = $state(null);
-	let viewerOrgId: number | null = $state(null);
+	let viewerUid: string | null = $state(data?.session?.user?.id || null);
+	let viewerOrgId: number | null = $state(data?.profile?.org_id || null);
 
 	// toast
 	let toast = $state('');
@@ -82,11 +89,29 @@
 
 	onMount(async () => {
 		try {
-			await loadViewerOrg();
-			if (!viewerOrgId) {
-				setToast('Your staff profile is not linked to an organization.', false);
+			// Use server-loaded data
+			if (data?.session?.user?.id) {
+				viewerUid = data.session.user.id;
+			}
+			if (data?.profile?.org_id) {
+				viewerOrgId = data.profile.org_id;
+			}
+			
+			// If server data is available, use it
+			if (data?.destinations) {
+				destinations = data.destinations;
 				isLoading = false;
 				return;
+			}
+
+			// Fallback: load org if not in server data
+			if (!viewerOrgId) {
+				await loadViewerOrg();
+				if (!viewerOrgId) {
+					setToast('Your staff profile is not linked to an organization.', false);
+					isLoading = false;
+					return;
+				}
 			}
 			await loadDestinations();
 		} catch (e: any) {
@@ -130,7 +155,7 @@
 		viewerOrgId = (sp?.org_id ?? null) as number | null;
 	}
 
-	// Load (filter by org)
+	// Load (filter by org) - now uses server data, but can refresh if needed
 	async function loadDestinations() {
 		try {
 			isLoading = true;
@@ -143,30 +168,8 @@
 			// Invalidate the page to reload data from server
 			await invalidate('/dispatcher/destinations');
 
-			const { data: rows, error } = await supabase
-				.from('destinations')
-				.select(`
-					destination_id,
-					created_at,
-					address,
-					address2,
-					city,
-					state,
-					zipcode,
-					location_name,
-					org_id
-				`)
-				.eq('org_id', viewerOrgId)
-				.order('destination_id', { ascending: true });
-
-			if (error) {
-				console.error('Load error:', error.message);
-				setToast('Failed to load destinations.', false);
-				destinations = [];
-				return;
-			}
-
-			destinations = (rows ?? []) as Destination[];
+			// After invalidation, the page will reload with new server data
+			// The $effect hook will update the destinations state
 		} catch (e: any) {
 			console.error('Load error:', e?.message ?? e);
 			setToast('Error loading destinations.', false);
