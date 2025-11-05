@@ -471,74 +471,72 @@
             </div>
             
             <div class="flex gap-2 ml-4">
-              <!-- Update buttons for Pending rides in the rides list: -->
-              {#if ride.status === "Pending"}
-            <div class="flex gap-2">
-                  <Button 
-                    size="sm" 
-                    onclick={() => acceptRide(ride.ride_id)}
-                    disabled={isUpdating}
-                  >
-                    <CheckCircle class="w-4 h-4 mr-1" />
-                    Accept
-                  </Button>
-                  
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onclick={() => declineRide(ride.ride_id)}
-                    disabled={isUpdating}
-                  >
-                    <XCircle class="w-4 h-4 mr-1" />
-                    Decline
-                  </Button>
-                </div>
-              {:else if ride.status === "Scheduled" || ride.status === "Assigned"}
-                <Button 
-                  size="sm" 
-                  onclick={() => startRide(ride.ride_id)}
-                  disabled={isUpdating}
-                >
-                  <Play class="w-4 h-4 mr-1" />
-                  Start Ride
-                </Button>
-                
-                <Button 
-                  size="sm" 
-                  variant="outline"
-                  onclick={() => openCompletionModal(ride)}
-                  disabled={isUpdating}
-                >
-                  <CheckCircle class="w-4 h-4 mr-1" />
-                  Complete
-                </Button>
-              {:else if ride.status === "In Progress"}
-                <Button 
-                  size="sm" 
-                  onclick={() => openCompletionModal(ride)}
-                  disabled={isUpdating}
-                >
-                  <CheckCircle class="w-4 h-4 mr-1" />
-                  Report Complete
-                </Button>
-  
-              {#if ride.status !== "Completed" && ride.status !== "Cancelled" && ride.status !== "Reported"}
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  onclick={() => cancelRide(ride.ride_id)}
-                  disabled={isUpdating}
-                >
-                  <XCircle class="w-4 h-4 mr-1" />
-                  Cancel
-                </Button>
-              {/if}
-              
-              <Button variant="outline" size="sm">
-                <Navigation class="w-4 h-4 mr-1" />
-                Navigate
+            {#if ride.status === "Pending"}
+              <Button 
+                size="sm" 
+                onclick={() => acceptRide(ride.ride_id)}
+                disabled={isUpdating}
+              >
+                <CheckCircle class="w-4 h-4 mr-1" />
+                Accept
               </Button>
-            </div>
+              
+              <Button 
+                variant="outline" 
+                size="sm"
+                onclick={() => declineRide(ride.ride_id)}
+                disabled={isUpdating}
+              >
+                <XCircle class="w-4 h-4 mr-1" />
+                Decline
+              </Button>
+            {:else if ride.status === "Scheduled" || ride.status === "Assigned"}
+              <Button 
+                size="sm" 
+                onclick={() => startRide(ride.ride_id)}
+                disabled={isUpdating}
+              >
+                <Play class="w-4 h-4 mr-1" />
+                Start Ride
+              </Button>
+              
+              <Button 
+                size="sm" 
+                variant="outline"
+                onclick={() => openCompletionModal(ride)}
+                disabled={isUpdating}
+              >
+                <CheckCircle class="w-4 h-4 mr-1" />
+                Complete
+              </Button>
+            {:else if ride.status === "In Progress"}
+              <Button 
+                size="sm" 
+                onclick={() => openCompletionModal(ride)}
+                disabled={isUpdating}
+              >
+                <CheckCircle class="w-4 h-4 mr-1" />
+                Report Complete
+              </Button>
+            {/if}
+            
+            {#if ride.status !== "Completed" && ride.status !== "Cancelled" && ride.status !== "Reported"}
+              <Button 
+                variant="outline" 
+                size="sm"
+                onclick={() => cancelRide(ride.ride_id)}
+                disabled={isUpdating}
+              >
+                <XCircle class="w-4 h-4 mr-1" />
+                Cancel
+              </Button>
+            {/if}
+            
+            <Button variant="outline" size="sm">
+              <Navigation class="w-4 h-4 mr-1" />
+              Navigate
+            </Button>
+          </div>
           </div>
         </CardContent>
       </Card>
