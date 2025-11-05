@@ -26,23 +26,20 @@
     error = null;
     
     try {
-      const { data, error: fetchError } = await supabase
-        .from(tableName)
-        .select('*')
-        .eq('org_id', orgId)
-        .limit(1000); // Increased limit for better searching
+      // Use server API instead of client query
+      const response = await fetch(`/admin/database/${tableName}?orgId=${orgId}`);
+      const result = await response.json();
       
-      if (fetchError) throw fetchError;
+      if (result.error) throw new Error(result.error);
+      
+      const data = result.data;
       
       if (data && data.length > 0) {
         columns = Object.keys(data[0]);
         allRecords = data;
         displayedRecords = data;
         
-        // Detect column types
         detectColumnTypes(data[0]);
-        
-        // Set default filter column to first non-id column
         newFilterColumn = columns.find(col => !col.includes('id')) || columns[0];
       } else {
         allRecords = [];
