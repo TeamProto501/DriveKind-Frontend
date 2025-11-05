@@ -1,16 +1,22 @@
 <script lang="ts">
   import { supabase } from '$lib/supabase';
-  import { Loader2, AlertCircle, Download, Search, X, Filter, Plus } from '@lucide/svelte';
+  import { Loader2, AlertCircle, Download, Search, X, Filter, Plus, ChevronUp, ChevronDown, ChevronsUpDown } from '@lucide/svelte';
   import { exportToCSV } from '$lib/utils/csvExport';
   
   let { tableName, orgId }: { tableName: string, orgId: number } = $props();
   
-  let allRecords = $state([]); // Store all records
-  let displayedRecords = $state([]); // Records after filtering
+  let allRecords = $state([]);
+  let displayedRecords = $state([]);
   let columns = $state([]);
   let loading = $state(true);
   let error = $state<string | null>(null);
   let exporting = $state(false);
+  
+  // Sorting
+  type SortField = string | null;
+  type SortDirection = 'asc' | 'desc' | null;
+  let sortField = $state<SortField>(null);
+  let sortDirection = $state<SortDirection>(null);
   
   // Filter state
   let filters = $state<Array<{id: number, column: string, value: string}>>([]);
@@ -18,69 +24,73 @@
   let newFilterColumn = $state('');
   let newFilterValue = $state('');
   
-  // Column types for better filtering
   let columnTypes = $state<Record<string, string>>({});
   
-  async function loadTableData() {
-    loading = true;
-    error = null;
-    
-    try {
-      // Use server API instead of client query
-      const response = await fetch(`/admin/database/${tableName}?orgId=${orgId}`);
-      const result = await response.json();
-      
-      if (result.error) throw new Error(result.error);
-      
-      const data = result.data;
-      
-      if (data && data.length > 0) {
-        columns = Object.keys(data[0]);
-        allRecords = data;
-        displayedRecords = data;
-        
-        detectColumnTypes(data[0]);
-        newFilterColumn = columns.find(col => !col.includes('id')) || columns[0];
-      } else {
-        allRecords = [];
-        displayedRecords = [];
-        columns = [];
-      }
-    } catch (err: any) {
-      error = err.message || 'Failed to load data';
-      console.error('Error loading table data:', err);
-    } finally {
-      loading = false;
+  function toggleSort(field: string) {
+    if (sortField === field) {
+      if (sortDirection === null) sortDirection = 'asc';
+      else if (sortDirection === 'asc') sortDirection = 'desc';
+      else { sortDirection = null; sortField = null; }
+    } else {
+      sortField = field;
+      sortDirection = 'asc';
     }
+    applySortingAndFilters();
   }
-  
-  function detectColumnTypes(sampleRecord: any) {
-    const types: Record<string, string> = {};
-    
-    for (const col in sampleRecord) {
-      const value = sampleRecord[col];
-      
-      if (value === null) {
-        types[col] = 'string';
-      } else if (typeof value === 'boolean') {
-        types[col] = 'boolean';
-      } else if (typeof value === 'number') {
-        types[col] = 'number';
-      } else if (typeof value === 'string') {
-        // Check if it looks like a date
-        if (value.match(/^\d{4}-\d{2}-\d{2}/)) {
-          types[col] = 'date';
-        } else {
-          types[col] = 'string';
+
+  function getSortIcon(field: string) {
+    if (sortField !== field) return ChevronsUpDown;
+    if (sortDirection === 'asc') return ChevronUp;
+    if (sortDirection === 'desc') return ChevronDown;
+    return ChevronsUpDown;
+  }
+
+  function applySortingAndFilters() {
+    let results = [...allRecords];
+
+    // Apply filters first
+    if (filters.length > 0) {
+      results = results.filter(record => {
+        return filters.every(filter => {
+          const recordValue = record[filter.column];
+          const filterValue = filter.value.toLowerCase();
+          
+          if (recordValue === null || recordValue === undefined) {
+            return filterValue === 'null' || filterValue === '';
+          }
+          
+          const recordValueStr = String(recordValue).toLowerCase();
+          return recordValueStr.includes(filterValue);
+        });
+      });
+    }
+
+    // Apply sorting
+    if (sortField && sortDirection) {
+      results.sort((a, b) => {
+        let aVal = a[sortField];
+        let bVal = b[sortField];
+
+        // Handle nulls
+        if (aVal === null || aVal === undefined) return sortDirection === 'asc' ? 1 : -1;
+        if (bVal === null || bVal === undefined) return sortDirection === 'asc' ? -1 : 1;
+
+        // Compare
+        if (typeof aVal === 'string') {
+          aVal = aVal.toLowerCase();
+          bVal = bVal.toLowerCase();
         }
-      } else {
-        types[col] = 'string';
-      }
+
+        if (aVal < bVal) return sortDirection === 'asc' ? -1 : 1;
+        if (aVal > bVal) return sortDirection === 'asc' ? 1 : -1;
+        return 0;
+      });
     }
-    
-    columnTypes = types;
+
+    displayedRecords = results;
   }
   
+  // Update other functions
   function addFilter() {
     if (!newFilterColumn || newFilterValue.trim() === '') return;
     
@@ -91,17 +101,19 @@
     }];
     
     newFilterValue = '';
-    applyFilters();
+    applySortingAndFilters();
   }
   
   function removeFilter(filterId: number) {
     filters = filters.filter(f => f.id !== filterId);
-    applyFilters();
+    applySortingAndFilters();
   }
   
   function clearAllFilters() {
     filters = [];
     newFilterValue = '';
+    sortField = null;
+    sortDirection = null;
     displayedRecords = allRecords;
   }
   
@@ -308,8 +320,15 @@
         <thead class="bg-gray-50">
           <tr>
             {#each columns as col}
+              {@const Icon = getSortIcon(col)}
               <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
-                {col}
+                <button 
+                  class="flex items-center gap-1 hover:text-gray-900 transition-colors"
+                  onclick={() => toggleSort(col)}
+                >
+                  {col}
+                  <Icon class="w-4 h-4" />
+                </button>
               </th>
             {/each}
           </tr>

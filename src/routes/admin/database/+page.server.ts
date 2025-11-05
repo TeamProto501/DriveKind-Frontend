@@ -1,4 +1,3 @@
-// src/routes/admin/database/+page.server.ts
 import { createSupabaseServerClient } from '$lib/supabase.server';
 import { error, redirect } from '@sveltejs/kit';
 
@@ -20,14 +19,20 @@ export const load = async (event) => {
     throw error(403, 'User profile not found');
   }
 
-  // ADD destinations entry here
+  // Fetch org name
+  const { data: org } = await supabase
+    .from('organization')
+    .select('name')
+    .eq('org_id', userProfile.org_id)
+    .single();
+
   const tables = [
     { name: 'staff_profiles', display: 'Staff Profiles', icon: 'users' },
     { name: 'clients',        display: 'Clients',        icon: 'user'  },
     { name: 'rides',          display: 'Rides',          icon: 'car'   },
     { name: 'vehicles',       display: 'Vehicles',       icon: 'truck' },
     { name: 'calls',          display: 'Calls',          icon: 'phone' },
-    { name: 'destinations',   display: 'Destinations',   icon: 'map'   } // ← NEW
+    { name: 'destinations',   display: 'Destinations',   icon: 'map'   }
   ];
   
   const tableData = await Promise.all(
@@ -48,6 +53,7 @@ export const load = async (event) => {
   return {
     tables: tableData,
     userOrgId: userProfile.org_id,
+    orgName: org?.name || 'Unknown Organization',
     session
   };
 };

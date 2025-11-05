@@ -1,4 +1,3 @@
-<!-- src/routes/admin/database/+page.svelte -->
 <script lang="ts">
   import RoleGuard from '$lib/components/RoleGuard.svelte';
   import Breadcrumbs from '$lib/components/Breadcrumbs.svelte';
@@ -12,7 +11,7 @@
     Phone,
     X,
     ChevronRight,
-    MapPin            // ← ADD THIS
+    MapPin
   } from '@lucide/svelte';
   
   let { data } = $props();
@@ -37,7 +36,7 @@
       car: Car,
       truck: Truck,
       phone: Phone,
-      map: MapPin       // ← ADD THIS
+      map: MapPin
     };
     return icons[iconName] || Database;
   }
@@ -52,10 +51,10 @@
       <div class="mb-8">
         <h1 class="text-3xl font-bold text-gray-900 flex items-center gap-3">
           <Database class="w-8 h-8 text-blue-600" />
-          Database Management
+          Database Viewer
         </h1>
         <p class="text-gray-600 mt-2">
-          View and manage your organization's database tables
+          {data.orgName}
         </p>
       </div>
 
@@ -95,31 +94,6 @@
           </button>
         {/each}
       </div>
-
-      <!-- Statistics Overview -->
-      <div class="mt-8 bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-        <h2 class="text-lg font-semibold text-gray-900 mb-4">Database Overview</h2>
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-6">
-          <div>
-            <p class="text-sm text-gray-600 mb-1">Total Tables</p>
-            <p class="text-2xl font-bold text-gray-900">{data.tables.length}</p>
-          </div>
-          <div>
-            <p class="text-sm text-gray-600 mb-1">Total Records</p>
-            <p class="text-2xl font-bold text-gray-900">
-              {data.tables.reduce((sum, t) => sum + t.records, 0).toLocaleString()}
-            </p>
-          </div>
-          <div>
-            <p class="text-sm text-gray-600 mb-1">Organization ID</p>
-            <p class="text-2xl font-bold text-gray-900">{data.userOrgId}</p>
-          </div>
-          <div>
-            <p class="text-sm text-gray-600 mb-1">Access Level</p>
-            <p class="text-2xl font-bold text-green-600">Admin</p>
-          </div>
-        </div>
-      </div>
     </div>
 
     <!-- Table Viewer Modal -->
@@ -132,7 +106,7 @@
               <Database class="w-5 h-5 text-blue-600" />
               <h2 class="text-xl font-semibold text-gray-900">{selectedTableDisplay}</h2>
               <span class="px-2 py-1 bg-blue-100 text-blue-700 text-xs font-medium rounded">
-                Org ID: {data.userOrgId}
+                {data.orgName}
               </span>
             </div>
             <button
