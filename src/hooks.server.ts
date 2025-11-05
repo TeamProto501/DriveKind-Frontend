@@ -8,6 +8,8 @@ const PUBLIC_ROUTES = [
 	'/register',
 	'/auth/callback',
 	'/auth/logout',
+	'/reset-password',
+	'/reset-password/update',
 	// Add other public routes here as needed
 ];
 

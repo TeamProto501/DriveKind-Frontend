@@ -88,6 +88,12 @@
     </form>
     
     <div class="text-center space-y-2">
+      <button
+        onclick={() => goto('/reset-password')}
+        class="text-sm text-blue-600 hover:text-blue-700 font-medium"
+      >
+        Forgot your password?
+      </button>
       <p class="text-sm text-gray-600">
         Don't have an account?
         <button
