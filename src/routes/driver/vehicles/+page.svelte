@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { supabase } from '$lib/supabase';
 	import { invalidateAll } from '$app/navigation';
+	import { invalidate } from '$app/navigation';
 	import RoleGuard from '$lib/components/RoleGuard.svelte';
 	import Breadcrumbs from '$lib/components/Breadcrumbs.svelte';
 	import { Car, CheckCircle2, AlertTriangle, Pencil, Trash2, X, Plus } from '@lucide/svelte';
@@ -13,6 +14,22 @@
 	let userOrgId = $state(data.userOrgId);
 	let loadError = $state(data.error || '');
 	let isLoading = $state(false);
+
+	// Reactively update vehicles when data changes
+	$effect(() => {
+		if (data.vehicles) {
+			vehicles = data.vehicles;
+		}
+		if (data.session?.user?.id) {
+			uid = data.session.user.id;
+		}
+		if (data.userOrgId !== undefined) {
+			userOrgId = data.userOrgId;
+		}
+		if (data.error !== undefined) {
+			loadError = data.error || '';
+		}
+	});
 
 	type Vehicle = {
 		vehicle_id: number;
@@ -97,7 +114,17 @@
 	}
 
 	async function loadVehicles() {
-		await invalidateAll();
+		isLoading = true;
+		try {
+			// Invalidate the page data to trigger a reload
+			await invalidate('/driver/vehicles');
+			// Also invalidate all to ensure everything refreshes
+			await invalidateAll();
+		} catch (error) {
+			console.error('Error reloading vehicles:', error);
+		} finally {
+			isLoading = false;
+		}
 	}
 
 	async function setActive(vehicle_id: number) {
