@@ -597,14 +597,11 @@
     } finally { isUpdating = false; }
   }
 
-  $effect(() => {
+  onMount(() => {
     const editParam = $page.url.searchParams.get('edit');
     if (editParam) {
       const rideId = parseInt(editParam);
       if (!isNaN(rideId)) {
-        editRideIdFromUrl = rideId;
-        
-        // Find and open the ride for editing
         const rideToEdit = data.rides?.find(r => r.ride_id === rideId);
         if (rideToEdit) {
           openEditModal(rideToEdit);
