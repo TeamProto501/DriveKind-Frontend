@@ -4,7 +4,6 @@ import { createSupabaseServerClient } from '$lib/supabase.server';
 
 export const POST: RequestHandler = async (event) => {
 	try {
-		// Support both old and new API formats
 		const body = await event.request.json();
 		const { 
 			rideId, 
@@ -12,9 +11,8 @@ export const POST: RequestHandler = async (event) => {
 			miles_driven, 
 			donation_received, 
 			donation_amount, 
-			completion_status, 
+			completion_status, // ← Extracted but not saved!
 			comments,
-			// New format fields
 			riders,
 			donation,
 			notes,
@@ -23,7 +21,6 @@ export const POST: RequestHandler = async (event) => {
 			status
 		} = body;
 
-		// Determine which fields to use (prioritize new format)
 		const finalStatus = status || (completion_status === 'Completed' ? 'Completed' : 'Reported');
 		const finalMiles = miles_driven ? parseFloat(miles_driven) : null;
 		const finalHours = hours ? parseFloat(hours) : null;
@@ -31,6 +28,7 @@ export const POST: RequestHandler = async (event) => {
 		const finalNotes = notes || comments || null;
 		const finalRiders = riders ? parseInt(riders) : null;
 		const finalDonationAmount = donation_amount ? parseFloat(donation_amount) : null;
+		const finalCompletionStatus = completion_status || null; // ← NEW
 
 		if (!rideId || !finalStatus) {
 			return json({ error: 'Missing required fields' }, { status: 400 });
@@ -48,7 +46,6 @@ export const POST: RequestHandler = async (event) => {
 			return json({ error: 'Unauthorized' }, { status: 401 });
 		}
 
-		// Verify the ride belongs to this driver
 		const { data: ride, error: rideError } = await supabase
 			.from('rides')
 			.select('ride_id, driver_user_id, status')
@@ -66,7 +63,8 @@ export const POST: RequestHandler = async (event) => {
 			miles_driven: finalMiles,
 			hours: finalHours,
 			donation: finalDonation,
-			notes: finalNotes
+			notes: finalNotes,
+			completion_status: finalCompletionStatus // ← ADD THIS LINE
 		};
 
 		if (finalRiders !== null) {
@@ -101,14 +99,12 @@ export const POST: RequestHandler = async (event) => {
 			comments: finalNotes
 		};
 
-		// Add start and end times if provided (new format)
 		if (start_time) {
 			completedData.actual_start = new Date(start_time).toISOString();
 		}
 		if (end_time) {
 			completedData.actual_end = new Date(end_time).toISOString();
 		} else if (finalStatus === 'Completed' || finalStatus === 'Reported') {
-			// If end time not provided but completing, set it to now
 			completedData.actual_end = new Date().toISOString();
 		}
 

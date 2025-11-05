@@ -660,7 +660,7 @@
             Reported Rides {#if rideCounts().reported > 0}<span class="ml-2 py-0.5 px-2 rounded-full text-xs bg-purple-100 text-purple-600">{rideCounts().reported}</span>{/if}
           </button>
           <button onclick={() => activeTab = "completed"} class="py-4 px-1 border-b-2 font-medium text-sm transition-colors {activeTab === 'completed' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}">
-            Completed {#if rideCounts().completed > 0}<span class="ml-2 py-0.5 px-2 rounded-full text-xs bg-green-100 text-green-600">{rideCounts().completed}</span>{/if}
+            Completed/Cancelled {#if rideCounts().completed > 0}<span class="ml-2 py-0.5 px-2 rounded-full text-xs bg-green-100 text-green-600">{rideCounts().completed}</span>{/if}
           </button>
         </div>
       </div>

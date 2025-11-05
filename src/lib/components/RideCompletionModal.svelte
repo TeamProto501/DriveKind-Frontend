@@ -1,67 +1,92 @@
 <script lang="ts">
   import { Button } from "$lib/components/ui/button";
+  import { Input } from "$lib/components/ui/input";
   import Textarea from "$lib/components/ui/textarea.svelte";
-  import { X } from "@lucide/svelte";
-
+  import { X, AlertTriangle } from "@lucide/svelte";
+  
   let { 
     show = $bindable(false),
     ride,
-    isDriver = false,
+    isDriver = true,
     onSubmit,
     isSubmitting = false
   } = $props();
 
+  // Initialize formData with ride data
   let formData = $state({
-    hours: '',
     miles_driven: '',
-    donation_received: false,
+    hours: '',
+    riders: '',
+    donation: false,
     donation_amount: '',
     completion_status: '',
-    comments: ''
+    notes: '',
+    comments: '',
+    start_time: '',
+    end_time: ''
   });
+
+  let validationErrors = $state<string[]>([]);
+
+  // When ride changes or modal opens, populate form with ride data
+  $effect(() => {
+    if (ride && show) {
+      formData = {
+        miles_driven: ride.miles_driven?.toString() || '',
+        hours: ride.hours?.toString() || '',
+        riders: ride.riders?.toString() || '',
+        donation: ride.donation || false,
+        donation_amount: ride.donation_amount?.toString() || '',
+        completion_status: ride.completion_status || '', // ← This is the key line
+        notes: ride.notes || '',
+        comments: '',
+        start_time: '',
+        end_time: ''
+      };
+      validationErrors = [];
+    }
+  });
+
+  function validate() {
+    validationErrors = [];
+    
+    if (isDriver) {
+      // Driver must provide completion status
+      if (!formData.completion_status) {
+        validationErrors.push('Completion status is required');
+      }
+    }
+    
+    // Optional: validate numeric fields
+    if (formData.miles_driven && isNaN(Number(formData.miles_driven))) {
+      validationErrors.push('Miles driven must be a number');
+    }
+    if (formData.hours && isNaN(Number(formData.hours))) {
+      validationErrors.push('Hours must be a number');
+    }
+    
+    return validationErrors.length === 0;
+  }
 
   function handleSubmit() {
-    onSubmit(formData);
-  }
-
-  function closeModal() {
-    show = false;
-  }
-
-  // Reset form when modal opens
-  $effect(() => {
-    if (show) {
-      formData = {
-        hours: ride?.hours?.toString() || '',
-        miles_driven: ride?.miles_driven?.toString() || '',
-        donation_received: ride?.donation || false,
-        donation_amount: ride?.donation_amount?.toString() || '',
-        completion_status: ride?.completion_status || '',
-        comments: ''
-      };
-    }
-  });
-
-  function getClientName() {
-    if (ride?.clients) {
-      return `${ride.clients.first_name} ${ride.clients.last_name}`;
-    }
-    return 'Unknown Client';
-  }
-
-  function getDriverName() {
-    if (ride?.drivers) {
-      return `${ride.drivers.first_name} ${ride.drivers.last_name}`;
-    }
-    return 'Unknown Driver';
-  }
-
-  function formatDate(timestamp: string) {
-    return new Date(timestamp).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
+    if (!validate()) return;
+    
+    onSubmit({
+      miles_driven: formData.miles_driven ? parseFloat(formData.miles_driven) : null,
+      hours: formData.hours ? parseFloat(formData.hours) : null,
+      riders: formData.riders ? parseInt(formData.riders) : null,
+      donation_received: formData.donation,
+      donation_amount: formData.donation && formData.donation_amount ? parseFloat(formData.donation_amount) : null,
+      completion_status: formData.completion_status || null,
+      notes: formData.notes || null,
+      comments: formData.comments || null,
+      start_time: formData.start_time || null,
+      end_time: formData.end_time || null
     });
+  }
+
+  function close() {
+    show = false;
   }
 </script>
 
@@ -69,171 +94,146 @@
   <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
     <div class="bg-white rounded-lg p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
       <div class="flex items-center justify-between mb-4">
-        <div>
-          <h2 class="text-xl font-semibold">
-            {isDriver ? 'Report Ride Completion' : 'Confirm Ride Completion'}
-          </h2>
-          <p class="text-sm text-gray-600">
-            {isDriver ? 'Enter ride details to report completion' : 'Review and confirm the ride completion details'}
-          </p>
-        </div>
-        <button onclick={closeModal} class="text-gray-400 hover:text-gray-600">
+        <h2 class="text-xl font-semibold">
+          {isDriver ? 'Report Completion' : 'Confirm Ride Completion'}
+        </h2>
+        <button onclick={close} class="p-2 hover:bg-gray-100 rounded-lg transition-colors">
           <X class="w-5 h-5" />
         </button>
       </div>
 
-      <!-- Ride Summary -->
-      <div class="bg-gray-50 rounded-lg p-4 mb-6 space-y-2 text-sm">
-        <div class="grid grid-cols-2 gap-4">
-          <div>
-            <span class="font-medium text-gray-700">Client:</span>
-            <span class="ml-2 text-gray-900">{getClientName()}</span>
-          </div>
-          <div>
-            <span class="font-medium text-gray-700">Driver:</span>
-            <span class="ml-2 text-gray-900">{getDriverName()}</span>
-          </div>
-          <div>
-            <span class="font-medium text-gray-700">Date:</span>
-            <span class="ml-2 text-gray-900">{formatDate(ride?.appointment_time)}</span>
-          </div>
-          <div>
-            <span class="font-medium text-gray-700">Passengers:</span>
-            <span class="ml-2 text-gray-900">{ride?.riders || 1}</span>
-          </div>
-          <div class="col-span-2">
-            <span class="font-medium text-gray-700">Destination:</span>
-            <span class="ml-2 text-gray-900">{ride?.destination_name}</span>
+      {#if validationErrors.length > 0}
+        <div class="mb-4 bg-red-50 border border-red-200 rounded-lg p-3">
+          <div class="flex items-start gap-2">
+            <AlertTriangle class="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+            <div class="text-sm text-red-800">
+              <div class="font-medium mb-1">Please fix the following:</div>
+              <ul class="list-disc ml-5">
+                {#each validationErrors as error}
+                  <li>{error}</li>
+                {/each}
+              </ul>
+            </div>
           </div>
         </div>
-      </div>
+      {/if}
 
-      <!-- Completion Form -->
-      <div class="space-y-4">
-        <!-- Completion Status -->
+      <form onsubmit={(e) => { e.preventDefault(); handleSubmit(); }} class="space-y-4">
+        <!-- Completion Status - REQUIRED for driver -->
         <div>
-          <label for="completion_status" class="block text-sm font-medium text-gray-700 mb-2">
-            Completion Status *
+          <label for="completion_status" class="block text-sm font-medium text-gray-700 mb-1">
+            Completion Status {isDriver ? '*' : ''}
           </label>
-          <select 
+          <select
             id="completion_status"
             bind:value={formData.completion_status}
-            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            required
+            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+            required={isDriver}
           >
-            <option value="">Select completion status</option>
+            <option value="">Select status...</option>
             <option value="Completed Round Trip">Completed Round Trip</option>
             <option value="Completed One Way To">Completed One Way To</option>
             <option value="Completed One Way From">Completed One Way From</option>
             <option value="Cancelled by Client">Cancelled by Client</option>
             <option value="Cancelled by Driver">Cancelled by Driver</option>
           </select>
+          {#if isDriver}
+            <p class="text-xs text-gray-500 mt-1">Required - select how the ride was completed</p>
+          {/if}
         </div>
 
-        <!-- Hours and Miles -->
-        <div class="grid grid-cols-2 gap-4">
-          <div>
-            <label for="hours" class="block text-sm font-medium text-gray-700 mb-2">
-              Hours Worked *
-            </label>
-            <input 
-              id="hours"
-              type="number"
-              step="0.01"
-              min="0"
-              bind:value={formData.hours}
-              placeholder="e.g., 2.50"
-              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              required
-            />
-            <p class="text-xs text-gray-500 mt-1">Format: XX.XX (e.g., 2.50 for 2.5 hours)</p>
-          </div>
+        <!-- Miles Driven -->
+        <div>
+          <label for="miles_driven" class="block text-sm font-medium text-gray-700 mb-1">
+            Miles Driven
+          </label>
+          <Input
+            id="miles_driven"
+            type="number"
+            step="0.1"
+            bind:value={formData.miles_driven}
+            placeholder="e.g., 12.5"
+          />
+        </div>
 
-          <div>
-            <label for="miles_driven" class="block text-sm font-medium text-gray-700 mb-2">
-              Miles Driven *
-            </label>
-            <input 
-              id="miles_driven"
-              type="number"
-              step="0.1"
-              min="0"
-              bind:value={formData.miles_driven}
-              placeholder="e.g., 15.5"
-              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              required
-            />
-            <p class="text-xs text-gray-500 mt-1">Format: XX.X (e.g., 15.5 miles)</p>
-          </div>
+        <!-- Hours -->
+        <div>
+          <label for="hours" class="block text-sm font-medium text-gray-700 mb-1">
+            Hours
+          </label>
+          <Input
+            id="hours"
+            type="number"
+            step="0.1"
+            bind:value={formData.hours}
+            placeholder="e.g., 1.5"
+          />
+        </div>
+
+        <!-- Riders -->
+        <div>
+          <label for="riders" class="block text-sm font-medium text-gray-700 mb-1">
+            Number of Passengers
+          </label>
+          <Input
+            id="riders"
+            type="number"
+            min="0"
+            bind:value={formData.riders}
+            placeholder="e.g., 1"
+          />
         </div>
 
         <!-- Donation -->
-        <div>
-          <div class="flex items-center space-x-2 mb-2">
-            <input 
-              type="checkbox" 
-              id="donation_received" 
-              bind:checked={formData.donation_received}
-              class="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+        <div class="space-y-2">
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              bind:checked={formData.donation}
+              class="h-4 w-4 text-blue-600 border-gray-300 rounded"
             />
-            <label for="donation_received" class="text-sm font-medium text-gray-700 cursor-pointer">
-              Donation Received?
-            </label>
-          </div>
+            <span class="text-sm font-medium text-gray-700">Donation Received</span>
+          </label>
 
-          {#if formData.donation_received}
-            <div class="ml-6">
-              <label for="donation_amount" class="block text-sm font-medium text-gray-700 mb-2">
-                Donation Amount (Optional)
+          {#if formData.donation}
+            <div>
+              <label for="donation_amount" class="block text-sm font-medium text-gray-700 mb-1">
+                Donation Amount (USD)
               </label>
-              <div class="relative">
-                <span class="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">$</span>
-                <input 
-                  id="donation_amount"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  bind:value={formData.donation_amount}
-                  placeholder="0.00"
-                  class="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
+              <Input
+                id="donation_amount"
+                type="number"
+                step="0.01"
+                bind:value={formData.donation_amount}
+                placeholder="0.00"
+              />
             </div>
           {/if}
         </div>
 
-        <!-- Comments -->
+        <!-- Notes (driver) / Comments (dispatcher) -->
         <div>
-          <label for="comments" class="block text-sm font-medium text-gray-700 mb-2">
-            Comments / Notes (Optional)
+          <label for="notes" class="block text-sm font-medium text-gray-700 mb-1">
+            {isDriver ? 'Notes' : 'Comments'}
           </label>
-          <Textarea 
-            id="comments"
-            bind:value={formData.comments}
-            placeholder="Add any additional notes or comments about this ride..."
-            rows="3"
-            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          <Textarea
+            id="notes"
+            bindvalue={isDriver ? formData.notes : formData.comments}
+            placeholder={isDriver ? 'Any additional notes about the ride...' : 'Comments or adjustments...'}
+            rows={3}
           />
         </div>
-      </div>
 
-      <!-- Action Buttons -->
-      <div class="flex justify-end gap-2 mt-6">
-        <button 
-          onclick={closeModal}
-          class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
-          disabled={isSubmitting}
-        >
-          Cancel
-        </button>
-        <button 
-          onclick={handleSubmit}
-          disabled={isSubmitting || !formData.hours || !formData.miles_driven || !formData.completion_status}
-          class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {isSubmitting ? 'Submitting...' : (isDriver ? 'Report Complete' : 'Confirm Completion')}
-        </button>
-      </div>
+        <!-- Buttons -->
+        <div class="flex items-center justify-end gap-3 pt-4 border-t">
+          <Button type="button" variant="outline" onclick={close} disabled={isSubmitting}>
+            Cancel
+          </Button>
+          <Button type="submit" disabled={isSubmitting}>
+            {isSubmitting ? 'Submitting...' : (isDriver ? 'Report Complete' : 'Confirm')}
+          </Button>
+        </div>
+      </form>
     </div>
   </div>
 {/if}
