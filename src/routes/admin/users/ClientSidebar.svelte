@@ -91,14 +91,17 @@
 
   $: form = initForm();
 
+  // --- REQUIRED FIELD VALIDATION (now includes Email + Contact Preference) ---
   function errsStep(s:number): string[] {
     const e:string[]=[];
     if(s===1){
       if(!form.first_name.trim()) e.push('First name is required.');
       if(!form.last_name.trim()) e.push('Last name is required.');
+      if(!form.email || !String(form.email).trim()) e.push('Email is required.');
       if(!form.primary_phone.trim()) e.push('Primary phone is required.');
       if(!form.date_of_birth) e.push('Date of birth is required.');
       if(!form.gender) e.push('Gender is required.');
+      if(!form.contact_pref) e.push('Contact preference is required.');
     }
     if(s===2){
       if(!form.street_address.trim()) e.push('Street address is required.');
@@ -108,6 +111,7 @@
     }
     return e;
   }
+
   function next(){ const e = errsStep(step); if(e.length){ errorMessage=e.join(' '); return; } errorMessage=null; step=Math.min(4, step+1); }
   function back(){ step=Math.max(1, step-1); errorMessage=null; }
 
@@ -248,23 +252,23 @@
       {#if step===1}
         <!-- Basic Info -->
         <div class="space-y-3">
-          <div><label class="block text-base font-medium">First Name *</label><input class="mt-1 w-full border rounded px-3 py-2 text-base" bind:value={form.first_name} /></div>
-          <div><label class="block text-base font-medium">Last Name *</label><input class="mt-1 w-full border rounded px-3 py-2 text-base" bind:value={form.last_name} /></div>
+          <div><label class="block text-base font-medium">First Name *</label><input required class="mt-1 w-full border rounded px-3 py-2 text-base" bind:value={form.first_name} /></div>
+          <div><label class="block text-base font-medium">Last Name *</label><input required class="mt-1 w-full border rounded px-3 py-2 text-base" bind:value={form.last_name} /></div>
           <div class="grid grid-cols-2 gap-3">
-            <div><label class="block text-base font-medium">Date of Birth *</label><input type="date" class="mt-1 w-full border rounded px-3 py-2 text-base" bind:value={form.date_of_birth} /></div>
+            <div><label class="block text-base font-medium">Date of Birth *</label><input required type="date" class="mt-1 w-full border rounded px-3 py-2 text-base" bind:value={form.date_of_birth} /></div>
             <div><label class="block text-base font-medium">Gender *</label>
-              <select class="mt-1 w-full border rounded px-3 py-2 text-base" bind:value={form.gender}>
+              <select required class="mt-1 w-full border rounded px-3 py-2 text-base" bind:value={form.gender}>
                 {#each genderOptions as g}<option value={g}>{g}</option>{/each}
               </select>
             </div>
           </div>
-          <div><label class="block text-base font-medium">Email</label><input type="email" class="mt-1 w-full border rounded px-3 py-2 text-base" bind:value={form.email} /></div>
+          <div><label class="block text-base font-medium">Email *</label><input required type="email" class="mt-1 w-full border rounded px-3 py-2 text-base" bind:value={form.email} /></div>
           <div class="grid grid-cols-2 gap-3">
-            <div><label class="block text-base font-medium">Primary Phone *</label><input class="mt-1 w-full border rounded px-3 py-2 text-base" bind:value={form.primary_phone} /></div>
+            <div><label class="block text-base font-medium">Primary Phone *</label><input required class="mt-1 w-full border rounded px-3 py-2 text-base" bind:value={form.primary_phone} /></div>
             <div><label class="block text-base font-medium">Secondary Phone</label><input class="mt-1 w-full border rounded px-3 py-2 text-base" bind:value={form.secondary_phone} /></div>
           </div>
-          <div><label class="block text-base font-medium">Contact Preference</label>
-            <select class="mt-1 w-full border rounded px-3 py-2 text-base" bind:value={form.contact_pref}>
+          <div><label class="block text-base font-medium">Contact Preference *</label>
+            <select required class="mt-1 w-full border rounded px-3 py-2 text-base" bind:value={form.contact_pref}>
               {#each contactPrefOptions as p}<option value={p}>{p || 'None'}</option>{/each}
             </select>
           </div>
@@ -274,13 +278,13 @@
       {#if step===2}
         <!-- Address -->
         <div class="space-y-3">
-          <div><label class="block text-base font-medium">Street Address *</label><input class="mt-1 w-full border rounded px-3 py-2 text-base" bind:value={form.street_address} /></div>
+          <div><label class="block text-base font-medium">Street Address *</label><input required class="mt-1 w-full border rounded px-3 py-2 text-base" bind:value={form.street_address} /></div>
           <div><label class="block text-base font-medium">Address Line 2</label><input class="mt-1 w-full border rounded px-3 py-2 text-base" bind:value={form.address2} placeholder="Apt, Suite, etc." /></div>
           <div class="grid grid-cols-2 gap-3">
-            <div><label class="block text-base font-medium">City *</label><input class="mt-1 w-full border rounded px-3 py-2 text-base" bind:value={form.city} /></div>
-            <div><label class="block text-base font-medium">State *</label><input class="mt-1 w-full border rounded px-3 py-2 text-base uppercase" maxlength="2" bind:value={form.state} placeholder="NY" /></div>
+            <div><label class="block text-base font-medium">City *</label><input required class="mt-1 w-full border rounded px-3 py-2 text-base" bind:value={form.city} /></div>
+            <div><label class="block text-base font-medium">State *</label><input required class="mt-1 w-full border rounded px-3 py-2 text-base uppercase" maxlength="2" bind:value={form.state} placeholder="NY" /></div>
           </div>
-          <div><label class="block text-base font-medium">Zip Code *</label><input class="mt-1 w-full border rounded px-3 py-2 text-base" bind:value={form.zip_code} maxlength="10" /></div>
+          <div><label class="block text-base font-medium">Zip Code *</label><input required class="mt-1 w-full border rounded px-3 py-2 text-base" bind:value={form.zip_code} maxlength="10" /></div>
           <div class="grid grid-cols-2 gap-3">
             <label class="flex items-center gap-2 text-base"><input type="checkbox" bind:checked={form.lives_alone} /> Lives alone</label>
             <label class="flex items-center gap-2 text-base"><input type="checkbox" bind:checked={form.primaryPhone_is_cell} /> Primary phone is cell</label>
@@ -306,7 +310,7 @@
               </select>
             </div>
             <div><label class="block text-base font-medium">Residence *</label>
-              <select class="mt-1 w-full border rounded px-3 py-2 text-base" bind:value={form.residence_enum}>
+              <select required class="mt-1 w-full border rounded px-3 py-2 text-base" bind:value={form.residence_enum}>
                 {#each residenceOptions as r}<option value={r}>{r}</option>{/each}
               </select>
             </div>
@@ -334,12 +338,12 @@
         <div class="space-y-3">
           <div class="grid grid-cols-2 gap-3">
             <div><label class="block text-base font-medium">Status *</label>
-              <select class="mt-1 w-full border rounded px-3 py-2 text-base" bind:value={form.client_status_enum}>
+              <select required class="mt-1 w-full border rounded px-3 py-2 text-base" bind:value={form.client_status_enum}>
                 {#each statusOptions as s}<option value={s}>{s}</option>{/each}
               </select>
             </div>
             <div><label class="block text-base font-medium">Date Enrolled *</label>
-              <input type="date" class="mt-1 w-full border rounded px-3 py-2 text-base" bind:value={form.date_enrolled} />
+              <input required type="date" class="mt-1 w-full border rounded px-3 py-2 text-base" bind:value={form.date_enrolled} />
             </div>
           </div>
           {#if form.client_status_enum==='Temporary Thru'}

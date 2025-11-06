@@ -4,14 +4,14 @@
   import type { AuthInfo } from '$lib/types';
   import { browser } from '$app/environment';
   import { supabase } from '$lib/supabase';
-  import { X } from '@lucide/svelte';  // Add this import
-  import { toastStore } from '$lib/toast';  // Add this import
+  import { X } from '@lucide/svelte';
+  import { toastStore } from '$lib/toast';
   import { onMount } from 'svelte';
 
   export let user: StaffProfile | null = null;
   export let createMode: boolean = false;
   export let session: any = undefined;
-  export let orgId: number;  // ADD THIS LINE
+  export let orgId: number;
 
   const dispatch = createEventDispatcher();
 
@@ -46,7 +46,7 @@
 
   type StaffProfile = StaffForm & { user_id: string; org_id?: number; role: string[] | string; last_drove?: string|null; active_vehicle?: number|null; };
 
-  // ---- Role gating: only show "Super Admin" if the current (logged-in) user has it
+  // Role gating for Super Admin
   const allRoles = ['Admin','Dispatcher','Driver','Volunteer','Super Admin'];
   let canManageSuperAdmin = false;
 
@@ -74,7 +74,7 @@
         canManageSuperAdmin = myRoles.includes('Super Admin');
       }
     } catch {
-      // leave canManageSuperAdmin as false on any failure
+      // keep default
     }
   });
 
@@ -114,25 +114,34 @@
       town_preference: user.town_preference||'',
       allergens: user.allergens||'',
       driver_other_limitations: user.driver_other_limitations||'',
-      primary_is_cell: user.primary_is_cell, 
+      primary_is_cell: user.primary_is_cell,
       primary_can_text: user.primary_can_text
     };
   }
-  $: form = initForm(); // keep in sync when prop changes
+  $: form = initForm();
 
+  // --- REQUIRED FIELD VALIDATION (email, primary phone, dob, gender, contact pref, address, city, state, zip) ---
   function validateStep(s:number): string[] {
     const errs:string[]=[];
     if (s===1){
       if(!form.first_name?.trim()) errs.push('First name is required.');
       if(!form.last_name?.trim()) errs.push('Last name is required.');
-      if(createMode && !form.email?.trim()) errs.push('Email is required for new users.');
+      if(!form.email || !form.email.trim()) errs.push('Email is required.');
+      if(!form.primary_phone || !form.primary_phone.trim()) errs.push('Primary phone is required.');
       if(createMode && !tempPassword) errs.push('Temporary password is required for new users.');
       if(createMode && tempPassword && tempPassword.length<6) errs.push('Password must be at least 6 characters.');
       if(!form.role || form.role.length===0) errs.push('Select at least one role.');
     }
     if (s===2){
-      if(form.zipcode && !/^\d{5}(-\d{4})?$/.test(form.zipcode)) errs.push('ZIP code looks invalid.');
+      if(!form.dob) errs.push('DOB is required.');
+      if(!form.gender) errs.push('Gender is required.');
+      if(!form.contact_pref_enum) errs.push('Contact preference is required.');
+      if(!form.address || !form.address.trim()) errs.push('Street address is required.');
+      if(!form.city || !form.city.trim()) errs.push('City is required.');
+      if(!form.state || !form.state.trim()) errs.push('State is required.');
       if(form.state && form.state.length>2) errs.push('Use 2-letter state code.');
+      if(!form.zipcode || !form.zipcode.trim()) errs.push('ZIP is required.');
+      if(form.zipcode && !/^\d{5}(-\d{4})?$/.test(form.zipcode)) errs.push('ZIP code looks invalid.');
     }
     return errs;
   }
@@ -140,98 +149,86 @@
   function back(){ step=Math.max(1, step-1); errorMessage=null; }
 
   async function saveUser(){
-    const allErrs=[...validateStep(1),...validateStep(2)]; 
-    if(allErrs.length){ 
-      errorMessage=allErrs.join(' '); 
+    const allErrs=[...validateStep(1),...validateStep(2)];
+    if(allErrs.length){
+      errorMessage=allErrs.join(' ');
       toastStore.error(errorMessage);
-      return; 
+      return;
     }
-    
-    saving=true; 
+
+    saving=true;
     errorMessage=null;
-    
+
     try{
       if (createMode){
-        console.log('Creating user with email:', form.email);
-        
         const payload = {
           email: form.email || '',
           password: tempPassword,
           first_name: form.first_name,
           last_name: form.last_name,
-          profileData: { 
-            ...form, 
+          profileData: {
+            ...form,
             role: form.role,
-            // orgId will be set server-side from admin's profile
+            // orgId set server-side from admin's profile
           }
         };
-        
-        console.log('Creating user with payload:', payload);
-        
+
         const res = await fetch(`${import.meta.env.VITE_API_URL}/admin/create-auth-user`, {
           method: 'POST',
-          headers: { 
+          headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${session.access_token}`
           },
           body: JSON.stringify(payload)
         });
-        
-        console.log('Create user response status:', res.status);
-        
+
         if (!res.ok) {
           const errorData = await res.json().catch(() => ({ error: 'Failed to create user' }));
-          console.error('Create user failed:', errorData);
           throw new Error(errorData.error || 'Failed to create user');
         }
-        
+
         const data = await res.json();
-        console.log('Create user response data:', data);
-        
-        if (!data.success) {
-          throw new Error(data.error || 'Failed to create user');
-        }
-        
+        if (!data.success) throw new Error(data.error || 'Failed to create user');
+
         toastStore.success('User created successfully');
-        dispatch('updated'); 
+        dispatch('updated');
         dispatch('close');
-        
+
       } else if (user){
         // update existing user
         let auth: AuthInfo;
         if (session) {
-          auth = { 
-            token: session.access_token, 
-            access_token: session.access_token, 
-            refresh_token: session.refresh_token, 
-            user: session.user, 
-            userId: session.user?.id 
+          auth = {
+            token: session.access_token,
+            access_token: session.access_token,
+            refresh_token: session.refresh_token,
+            user: session.user,
+            userId: session.user?.id
           };
         } else if (browser) {
           const { data: { session: s } } = await supabase.auth.getSession();
           if(!s) throw new Error('No session');
-          auth = { 
-            token: s.access_token, 
-            access_token: s.access_token, 
-            refresh_token: s.refresh_token, 
-            user: s.user, 
-            userId: s.user?.id 
+          auth = {
+            token: s.access_token,
+            access_token: s.access_token,
+            refresh_token: s.refresh_token,
+            user: s.user,
+            userId: s.user?.id
           };
-        } else { 
-          throw new Error('No session'); 
+        } else {
+          throw new Error('No session');
         }
-        
+
         await updateStaffProfile(user.user_id, { ...form, role: form.role }, auth);
         toastStore.success('User updated successfully');
-        dispatch('updated'); 
+        dispatch('updated');
         dispatch('close');
       }
-    } catch(e:any){ 
-      console.error('Save user error:', e);
+    } catch(e:any){
       errorMessage = e.message || 'Failed to save user';
       toastStore.error(errorMessage);
-    } finally{ 
-      saving=false; 
+    } finally{
+      saving=false;
     }
   }
 </script>
@@ -242,7 +239,9 @@
     <h2 class="text-lg md:text-xl font-semibold text-gray-900">
       {createMode ? 'Add New User' : mode==='view' ? 'User Profile' : 'Edit User'}
     </h2>
-    <button on:click={() => dispatch('close')} class="text-gray-500 hover:text-gray-700">✕</button>
+    <button on:click={() => dispatch('close')} class="text-gray-500 hover:text-gray-700">
+      <X class="w-5 h-5" />
+    </button>
   </div>
 
   <!-- Body -->
@@ -312,18 +311,19 @@
 
       {#if step===1}
         <div class="space-y-3">
-          <div><label class="block text-base font-medium">First Name *</label><input class="mt-1 w-full border rounded px-3 py-2 text-base" bind:value={form.first_name} /></div>
-          <div><label class="block text-base font-medium">Last Name *</label><input class="mt-1 w-full border rounded px-3 py-2 text-base" bind:value={form.last_name} /></div>
-          <div><label class="block text-base font-medium">Email {createMode ? '*' : ''}</label>
-            <input class="mt-1 w-full border rounded px-3 py-2 text-base" type="email" bind:value={form.email} disabled={!createMode && !!user} />
+          <div><label class="block text-base font-medium">First Name *</label><input required class="mt-1 w-full border rounded px-3 py-2 text-base" bind:value={form.first_name} /></div>
+          <div><label class="block text-base font-medium">Last Name *</label><input required class="mt-1 w-full border rounded px-3 py-2 text-base" bind:value={form.last_name} /></div>
+          <div>
+            <label class="block text-base font-medium">Email *</label>
+            <input required class="mt-1 w-full border rounded px-3 py-2 text-base" type="email" bind:value={form.email} disabled={!createMode && !!user} />
             {#if !createMode && user}<p class="text-xs text-gray-500 mt-1">Email cannot be changed after creation</p>{/if}
           </div>
           {#if createMode}
             <div><label class="block text-base font-medium">Temporary Password *</label>
-              <input class="mt-1 w-full border rounded px-3 py-2 text-base" type="password" bind:value={tempPassword} placeholder="User can change later" />
+              <input required class="mt-1 w-full border rounded px-3 py-2 text-base" type="password" bind:value={tempPassword} placeholder="User can change later" />
             </div>
           {/if}
-          <div><label class="block text-base font-medium">Primary Phone</label><input class="mt-1 w-full border rounded px-3 py-2 text-base" bind:value={form.primary_phone} /></div>
+          <div><label class="block text-base font-medium">Primary Phone *</label><input required class="mt-1 w-full border rounded px-3 py-2 text-base" bind:value={form.primary_phone} /></div>
           <div><label class="block text-base font-medium">Secondary Phone</label><input class="mt-1 w-full border rounded px-3 py-2 text-base" bind:value={form.secondary_phone} /></div>
 
           <div>
@@ -344,28 +344,28 @@
 
       {#if step===2}
         <div class="space-y-3">
-          <div><label class="block text-base font-medium">DOB</label><input class="mt-1 w-full border rounded px-3 py-2 text-base" type="date" bind:value={form.dob} /></div>
+          <div><label class="block text-base font-medium">DOB *</label><input required class="mt-1 w-full border rounded px-3 py-2 text-base" type="date" bind:value={form.dob} /></div>
           <div>
-            <label class="block text-base font-medium">Gender</label>
-            <select class="mt-1 w-full border rounded px-3 py-2 text-base" bind:value={form.gender}>
+            <label class="block text-base font-medium">Gender *</label>
+            <select required class="mt-1 w-full border rounded px-3 py-2 text-base" bind:value={form.gender}>
               <option value={undefined}>Select...</option>
               <option value="Male">Male</option>
               <option value="Female">Female</option>
               <option value="Other">Other</option>
             </select>
           </div>
-          <div><label class="block text-base font-medium">Contact Preference</label>
-            <select class="mt-1 w-full border rounded px-3 py-2 text-base" bind:value={form.contact_pref_enum}>
+          <div><label class="block text-base font-medium">Contact Preference *</label>
+            <select required class="mt-1 w-full border rounded px-3 py-2 text-base" bind:value={form.contact_pref_enum}>
               {#each contactPrefs as p}<option value={p}>{p}</option>{/each}
             </select>
           </div>
-          <div><label class="block text-base font-medium">Street Address</label><input class="mt-1 w-full border rounded px-3 py-2 text-base" bind:value={form.address} /></div>
+          <div><label class="block text-base font-medium">Street Address *</label><input required class="mt-1 w-full border rounded px-3 py-2 text-base" bind:value={form.address} /></div>
           <div><label class="block text-base font-medium">Address Line 2</label><input class="mt-1 w-full border rounded px-3 py-2 text-base" bind:value={form.address2} /></div>
           <div class="grid grid-cols-2 gap-3">
-            <div><label class="block text-base font-medium">City</label><input class="mt-1 w-full border rounded px-3 py-2 text-base" bind:value={form.city} /></div>
-            <div><label class="block text-base font-medium">State</label><input class="mt-1 w-full border rounded px-3 py-2 text-base uppercase" maxlength="2" bind:value={form.state} placeholder="NY" /></div>
+            <div><label class="block text-base font-medium">City *</label><input required class="mt-1 w-full border rounded px-3 py-2 text-base" bind:value={form.city} /></div>
+            <div><label class="block text-base font-medium">State *</label><input required class="mt-1 w-full border rounded px-3 py-2 text-base uppercase" maxlength="2" bind:value={form.state} placeholder="NY" /></div>
           </div>
-          <div><label class="block text-base font-medium">ZIP</label><input class="mt-1 w-full border rounded px-3 py-2 text-base" bind:value={form.zipcode} /></div>
+          <div><label class="block text-base font-medium">ZIP *</label><input required class="mt-1 w-full border rounded px-3 py-2 text-base" bind:value={form.zipcode} /></div>
         </div>
       {/if}
 
