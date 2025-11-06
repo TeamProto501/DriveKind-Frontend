@@ -84,7 +84,7 @@
       description: "Manage Dispatchers and their accounts",
     },
   ];
-  $: rows = data?.data ?? [];
+  $: rows = Array.isArray(data) ? data : (data?.data ?? []);
   $: selectedTab = data?.tab ?? "clients";
   $: isNavigating = $navigating;
   function selectTab(tabId: string) {
