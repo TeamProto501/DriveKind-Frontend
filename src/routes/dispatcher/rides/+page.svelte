@@ -421,6 +421,27 @@
     return miss;
   }
 
+  // --- pickup vs appointment window validation ---
+function pickupWindowErrors(apptLocal: string, pickupLocal: string): string[] {
+  const errs: string[] = [];
+  if (!pickupLocal || !pickupLocal.trim()) return errs; // no pickup set → no check
+  if (!apptLocal || !apptLocal.trim()) {
+    errs.push('Appointment time is required when pickup time is set.');
+    return errs;
+  }
+  const appt = new Date(apptLocal);
+  const pick = new Date(pickupLocal);
+  if (Number.isNaN(appt.getTime())) errs.push('Appointment time is invalid.');
+  if (Number.isNaN(pick.getTime())) errs.push('Pickup time is invalid.');
+  if (errs.length) return errs;
+
+  const diffMs = appt.getTime() - pick.getTime(); // positive means pickup before appt
+  if (diffMs <= 0) errs.push('Pickup time must be before the appointment time.');
+  const diffMin = diffMs / 60000;
+  if (diffMin > 120) errs.push('Pickup time cannot be more than 2 hours before the appointment.');
+  return errs;
+}
+
   /* ---------------- validation (per-step) ---------------- */
   function validateStep(step: number): boolean {
     stepErrors = [];
@@ -431,9 +452,15 @@
         validateRequired(rideForm.client_id || (isEditing() ? String(selectedRide?.client_id ?? '') : ''), 'Client'),
       ];
       if (needAppt) validators.push(validateDateTime(rideForm.appointment_time, 'Appointment time'));
+
       const v = combineValidations(...validators);
-      if (!v.valid) stepErrors = v.errors;
-      return v.valid;
+      const errs: string[] = v.valid ? [] : [...v.errors];
+
+      // Enforce pickup window when pickup_time is provided (both create & edit)
+      errs.push(...pickupWindowErrors(rideForm.appointment_time, rideForm.pickup_time));
+
+      stepErrors = errs;
+      return errs.length === 0;
     }
     if (step === 2) {
       const v = combineValidations(
@@ -473,6 +500,15 @@
 
   /* ---------------- submit ---------------- */
   async function createRide() {
+    // Hard guard on pickup vs appointment window (create)
+    {
+      const errs = pickupWindowErrors(rideForm.appointment_time, rideForm.pickup_time);
+      if (errs.length) {
+        alert('Cannot create ride:\n• ' + errs.join('\n• '));
+        return;
+      }
+    }
+    
     const payload = buildPayload(rideForm);
     const missing = listMissingRequiredFields(payload, true);
     if (missing.length) {
@@ -506,6 +542,14 @@
 
   async function updateRide() {
     if (!selectedRide) return;
+    // Hard guard on pickup vs appointment window (edit)
+    {
+      const errs = pickupWindowErrors(rideForm.appointment_time, rideForm.pickup_time);
+      if (errs.length) {
+        alert('Cannot update ride:\n• ' + errs.join('\n• '));
+        return;
+      }
+    }
 
     const payload = buildPayload(rideForm);
     const missing = listMissingRequiredFields(payload, false);

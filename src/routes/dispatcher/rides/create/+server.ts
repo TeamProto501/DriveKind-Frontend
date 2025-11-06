@@ -63,6 +63,26 @@ export const POST: RequestHandler = async (event) => {
       // created_at defaults to now(); ride_id auto-increments
     };
 
+    // Enforce pickup vs appointment window if pickup_time provided
+    if (payload.pickup_time) {
+      if (!payload.appointment_time) {
+        return json({ error: 'Appointment time is required when pickup time is set.' }, { status: 400 });
+      }
+      const appt = new Date(payload.appointment_time as string);
+      const pick = new Date(payload.pickup_time as string);
+      if (Number.isNaN(appt.getTime()) || Number.isNaN(pick.getTime())) {
+        return json({ error: 'Invalid appointment or pickup time.' }, { status: 400 });
+      }
+      const diffMs = appt.getTime() - pick.getTime();
+      if (diffMs <= 0) {
+        return json({ error: 'Pickup time must be before the appointment time.' }, { status: 400 });
+      }
+      const diffMin = diffMs / 60000;
+      if (diffMin > 120) {
+        return json({ error: 'Pickup time cannot be more than 2 hours before the appointment.' }, { status: 400 });
+      }
+    }
+
     // Basic required fields
     if (!payload.client_id || !payload.dropoff_address || !payload.destination_name || !payload.appointment_time) {
       return json({ error: 'Missing required fields (client_id, dropoff_address, destination_name, appointment_time).' }, { status: 400 });

@@ -178,6 +178,31 @@ export const POST: RequestHandler = async (event) => {
     // We check them against "resulting" values (existing merged with update).
     const resulting = { ...existing, ...updateIn };
 
+    // Enforce pickup vs appointment window using resulting values
+    {
+      const apptISO = resulting.appointment_time as string | null | undefined;
+      const pickISO = resulting.pickup_time as string | null | undefined;
+
+      if (pickISO) {
+        if (!apptISO) {
+          return json({ error: 'Appointment time is required when pickup time is set.' }, { status: 400 });
+        }
+        const appt = new Date(apptISO);
+        const pick = new Date(pickISO);
+        if (Number.isNaN(appt.getTime()) || Number.isNaN(pick.getTime())) {
+          return json({ error: 'Invalid appointment or pickup time.' }, { status: 400 });
+        }
+        const diffMs = appt.getTime() - pick.getTime();
+        if (diffMs <= 0) {
+          return json({ error: 'Pickup time must be before the appointment time.' }, { status: 400 });
+        }
+        const diffMin = diffMs / 60000;
+        if (diffMin > 120) {
+          return json({ error: 'Pickup time cannot be more than 2 hours before the appointment.' }, { status: 400 });
+        }
+      }
+    }
+
     const missing: string[] = [];
     if (!resulting.client_id) missing.push('client_id');
     if (!resulting.dropoff_address) missing.push('dropoff_address');
