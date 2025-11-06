@@ -554,7 +554,7 @@
 		</div>
 	{/if}
 
-	<!-- DELETE MODAL -->
+	<!-- DELETE MODAL  here-->
 	{#if showDeleteModal}
 		<div class="fixed inset-0 flex items-center justify-center bg-black/50 z-50">
 			<div class="bg-white p-6 rounded-2xl w-full max-w-sm shadow-xl">
