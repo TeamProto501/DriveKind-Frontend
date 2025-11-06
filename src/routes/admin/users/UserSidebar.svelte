@@ -6,6 +6,7 @@
   import { supabase } from '$lib/supabase';
   import { X } from '@lucide/svelte';  // Add this import
   import { toastStore } from '$lib/toast';  // Add this import
+  import { onMount } from 'svelte';
 
   export let user: StaffProfile | null = null;
   export let createMode: boolean = false;
@@ -45,7 +46,38 @@
 
   type StaffProfile = StaffForm & { user_id: string; org_id?: number; role: string[] | string; last_drove?: string|null; active_vehicle?: number|null; };
 
-  const roles = ['Admin','Dispatcher','Driver','Volunteer','Super Admin'];
+  // ---- Role gating: only show "Super Admin" if the current (logged-in) user has it
+  const allRoles = ['Admin','Dispatcher','Driver','Volunteer','Super Admin'];
+  let canManageSuperAdmin = false;
+
+  function normalizeRoles(r: unknown): string[] {
+    if (Array.isArray(r)) return r as string[];
+    if (typeof r === 'string' && r) return [r];
+    return [];
+  }
+
+  $: visibleRoles = canManageSuperAdmin ? allRoles : allRoles.filter(r => r !== 'Super Admin');
+
+  onMount(async () => {
+    try {
+      const currentUserId = session?.user?.id;
+      if (!currentUserId) return;
+
+      const { data, error } = await supabase
+        .from('staff_profiles')
+        .select('role')
+        .eq('user_id', currentUserId)
+        .maybeSingle();
+
+      if (!error && data) {
+        const myRoles = normalizeRoles((data as any).role);
+        canManageSuperAdmin = myRoles.includes('Super Admin');
+      }
+    } catch {
+      // leave canManageSuperAdmin as false on any failure
+    }
+  });
+
   const contactPrefs = ['Phone','Email','Text'];
 
   let mode: 'view'|'edit' = createMode ? 'edit' : 'view';
@@ -108,100 +140,100 @@
   function back(){ step=Math.max(1, step-1); errorMessage=null; }
 
   async function saveUser(){
-  const allErrs=[...validateStep(1),...validateStep(2)]; 
-  if(allErrs.length){ 
-    errorMessage=allErrs.join(' '); 
-    toastStore.error(errorMessage);
-    return; 
-  }
-  
-  saving=true; 
-  errorMessage=null;
-  
-  try{
-    if (createMode){
-      console.log('Creating user with email:', form.email);
-      
-      const payload = {
-        email: form.email || '',
-        password: tempPassword,
-        first_name: form.first_name,
-        last_name: form.last_name,
-        profileData: { 
-          ...form, 
-          role: form.role,
-          // orgId will be set server-side from admin's profile
-        }
-      };
-      
-      console.log('Creating user with payload:', payload);
-      
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/admin/create-auth-user`, {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`
-        },
-        body: JSON.stringify(payload)
-      });
-      
-      console.log('Create user response status:', res.status);
-      
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({ error: 'Failed to create user' }));
-        console.error('Create user failed:', errorData);
-        throw new Error(errorData.error || 'Failed to create user');
-      }
-      
-      const data = await res.json();
-      console.log('Create user response data:', data);
-      
-      if (!data.success) {
-        throw new Error(data.error || 'Failed to create user');
-      }
-      
-      toastStore.success('User created successfully');
-      dispatch('updated'); 
-      dispatch('close');
-      
-    } else if (user){
-      // update existing user
-      let auth: AuthInfo;
-      if (session) {
-        auth = { 
-          token: session.access_token, 
-          access_token: session.access_token, 
-          refresh_token: session.refresh_token, 
-          user: session.user, 
-          userId: session.user?.id 
-        };
-      } else if (browser) {
-        const { data: { session: s } } = await supabase.auth.getSession();
-        if(!s) throw new Error('No session');
-        auth = { 
-          token: s.access_token, 
-          access_token: s.access_token, 
-          refresh_token: s.refresh_token, 
-          user: s.user, 
-          userId: s.user?.id 
-        };
-      } else { 
-        throw new Error('No session'); 
-      }
-      
-      await updateStaffProfile(user.user_id, { ...form, role: form.role }, auth);
-      toastStore.success('User updated successfully');
-      dispatch('updated'); 
-      dispatch('close');
+    const allErrs=[...validateStep(1),...validateStep(2)]; 
+    if(allErrs.length){ 
+      errorMessage=allErrs.join(' '); 
+      toastStore.error(errorMessage);
+      return; 
     }
-  } catch(e:any){ 
-    console.error('Save user error:', e);
-    errorMessage = e.message || 'Failed to save user';
-    toastStore.error(errorMessage);
-  } finally{ 
-    saving=false; 
+    
+    saving=true; 
+    errorMessage=null;
+    
+    try{
+      if (createMode){
+        console.log('Creating user with email:', form.email);
+        
+        const payload = {
+          email: form.email || '',
+          password: tempPassword,
+          first_name: form.first_name,
+          last_name: form.last_name,
+          profileData: { 
+            ...form, 
+            role: form.role,
+            // orgId will be set server-side from admin's profile
+          }
+        };
+        
+        console.log('Creating user with payload:', payload);
+        
+        const res = await fetch(`${import.meta.env.VITE_API_URL}/admin/create-auth-user`, {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`
+          },
+          body: JSON.stringify(payload)
+        });
+        
+        console.log('Create user response status:', res.status);
+        
+        if (!res.ok) {
+          const errorData = await res.json().catch(() => ({ error: 'Failed to create user' }));
+          console.error('Create user failed:', errorData);
+          throw new Error(errorData.error || 'Failed to create user');
+        }
+        
+        const data = await res.json();
+        console.log('Create user response data:', data);
+        
+        if (!data.success) {
+          throw new Error(data.error || 'Failed to create user');
+        }
+        
+        toastStore.success('User created successfully');
+        dispatch('updated'); 
+        dispatch('close');
+        
+      } else if (user){
+        // update existing user
+        let auth: AuthInfo;
+        if (session) {
+          auth = { 
+            token: session.access_token, 
+            access_token: session.access_token, 
+            refresh_token: session.refresh_token, 
+            user: session.user, 
+            userId: session.user?.id 
+          };
+        } else if (browser) {
+          const { data: { session: s } } = await supabase.auth.getSession();
+          if(!s) throw new Error('No session');
+          auth = { 
+            token: s.access_token, 
+            access_token: s.access_token, 
+            refresh_token: s.refresh_token, 
+            user: s.user, 
+            userId: s.user?.id 
+          };
+        } else { 
+          throw new Error('No session'); 
+        }
+        
+        await updateStaffProfile(user.user_id, { ...form, role: form.role }, auth);
+        toastStore.success('User updated successfully');
+        dispatch('updated'); 
+        dispatch('close');
+      }
+    } catch(e:any){ 
+      console.error('Save user error:', e);
+      errorMessage = e.message || 'Failed to save user';
+      toastStore.error(errorMessage);
+    } finally{ 
+      saving=false; 
+    }
   }
-}
 </script>
 
 <div class="fixed top-0 right-0 w-[28rem] max-w-[92vw] h-full bg-white shadow-xl border-l border-gray-200 flex flex-col z-50">
@@ -297,7 +329,7 @@
           <div>
             <label class="block text-base font-medium">Roles *</label>
             <div class="mt-2 grid grid-cols-2 gap-2">
-              {#each roles as r}
+              {#each visibleRoles as r}
                 <label class="flex items-center gap-2 text-base">
                   <input type="checkbox" checked={form.role.includes(r)} on:change={()=>{
                     form.role = form.role.includes(r) ? form.role.filter(x=>x!==r) : [...form.role, r];

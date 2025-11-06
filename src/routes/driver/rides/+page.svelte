@@ -5,7 +5,7 @@
   import { Input } from "$lib/components/ui/input";
   import { Select, SelectContent, SelectItem, SelectTrigger } from "$lib/components/ui/select";
   import { Label } from "$lib/components/ui/label";
-  import { Car, Clock, MapPin, User, Phone, Calendar, Filter, Search, Navigation, Play, CheckCircle, XCircle, X, AlertTriangle, Edit } from "@lucide/svelte";
+  import { Car, Clock, MapPin, User, Phone, Calendar, Filter, Search, Navigation, Play, CheckCircle, XCircle, X, AlertTriangle } from "@lucide/svelte";
   import { enhance } from '$app/forms';
   import { invalidateAll } from '$app/navigation';
   import type { PageData } from './$types';
@@ -520,16 +520,6 @@
                 >
                   <CheckCircle class="w-4 h-4 mr-1" />
                   Report Complete
-                </Button>
-              {:else if ride.status === "Completed"}
-                <Button 
-                  size="sm" 
-                  onclick={() => completeRide(ride.ride_id)}
-                  disabled={isUpdating}
-                  variant="outline"
-                >
-                  <Edit class="w-4 h-4 mr-1" />
-                  Edit Completion
                 </Button>
               {/if}
               
