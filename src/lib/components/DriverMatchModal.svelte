@@ -1,34 +1,30 @@
 <script lang="ts">
-  import { X, UserCheck, AlertCircle, Clock, XCircle } from "@lucide/svelte";
+  import { X, UserCheck, AlertCircle, Star, TrendingUp, MapPin, Calendar } from "@lucide/svelte";
 
   let { 
     show = $bindable(false),
     ride,
-    token,               // Auth token
-    onSelectDriver,      // Called to send request
+    token, // Add token prop
+    onSelectDriver,
     isLoading = false
   } = $props();
 
-  // Matched drivers as returned by your existing API
-  let matchedDrivers = $state<{ available: any[]; excluded: any[] }>({ available: [], excluded: [] });
+  let matchedDrivers = $state({ available: [], excluded: [] });
   let isMatching = $state(false);
   let searchTerm = $state("");
   let selectedDriver = $state<any>(null);
 
-  // Request-status map keyed by driver_user_id
-  // value: { denied: boolean }  (missing key => no request sent yet)
-  let requestStatusByDriverId = $state<Record<string, { denied: boolean }>>({});
+  // Map of driver_id -> 'pending' | 'denied'
+  let requestStatusMap = $state<Record<string, 'pending' | 'denied'>>({});
 
-  // --- Deriveds ---
+  // Filtered drivers based on search
   let filteredAvailable = $derived(() => {
     if (!searchTerm) return matchedDrivers.available;
-    const q = searchTerm.toLowerCase();
-    return matchedDrivers.available.filter(d =>
-      `${d.first_name} ${d.last_name}`.toLowerCase().includes(q)
+    return matchedDrivers.available.filter((driver: any) => 
+      `${driver.first_name} ${driver.last_name}`.toLowerCase().includes(searchTerm.toLowerCase())
     );
   });
 
-  // --- UI helpers ---
   function closeModal() {
     show = false;
     searchTerm = "";
@@ -37,114 +33,95 @@
 
   function getQualityColor(quality: string) {
     switch (quality) {
-      case "excellent": return "bg-green-100 text-green-800 border-green-200";
-      case "good":      return "bg-blue-100 text-blue-800 border-blue-200";
-      case "fair":      return "bg-yellow-100 text-yellow-800 border-yellow-200";
-      case "poor":      return "bg-orange-100 text-orange-800 border-orange-200";
-      default:          return "bg-gray-100 text-gray-800 border-gray-200";
+      case 'excellent': return 'bg-green-100 text-green-800 border-green-200';
+      case 'good': return 'bg-blue-100 text-blue-800 border-blue-200';
+      case 'fair': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+      case 'poor': return 'bg-orange-100 text-orange-800 border-orange-200';
+      default: return 'bg-gray-100 text-gray-800 border-gray-200';
     }
   }
 
   function getQualityIcon(quality: string) {
     switch (quality) {
-      case "excellent": return "⭐⭐⭐";
-      case "good":      return "⭐⭐";
-      case "fair":      return "⭐";
-      default:          return "";
+      case 'excellent': return '⭐⭐⭐';
+      case 'good': return '⭐⭐';
+      case 'fair': return '⭐';
+      default: return '';
     }
   }
 
-  // --- Core actions ---
   async function handleSelectDriver(driver: any) {
-    // Optimistic: mark as pending (exists in table with denied=false)
-    requestStatusByDriverId = {
-      ...requestStatusByDriverId,
-      [driver.user_id]: { denied: false }
-    };
     selectedDriver = driver;
-
-    // Let parent perform the actual send (which updates DB and ride status)
+    // Optimistically mark as pending so the button swaps immediately
+    requestStatusMap = { ...requestStatusMap, [driver.user_id]: 'pending' };
     await onSelectDriver(driver.user_id);
-
-    // Refresh statuses from DB in case something changed server-side
-    await fetchRequestStatuses();
-
     closeModal();
   }
 
-  // When modal opens or ride changes, (1) fetch matches, (2) fetch request statuses
+  // Fetch matched drivers when modal opens
   $effect(() => {
     if (show && ride) {
-      fetchMatchedDrivers().then(fetchRequestStatuses);
+      fetchMatchedDrivers();
     }
   });
 
   async function fetchMatchedDrivers() {
     if (!token) {
-      console.error("No authentication token available");
+      console.error('No authentication token available');
       return;
     }
     isMatching = true;
     try {
-      const resp = await fetch(
-        `${import.meta.env.VITE_API_URL}/rides/${ride.ride_id}/match-drivers`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`
-          }
+      // 1) Get matched drivers (unchanged)
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/rides/${ride.ride_id}/match-drivers`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
         }
-      );
+      });
 
-      if (!resp.ok) {
-        const t = await resp.text();
-        console.error("Failed to fetch matched drivers:", resp.status, t);
-        alert("Failed to load drivers. Please try again.");
-        return;
+      if (response.ok) {
+        const data = await response.json();
+        matchedDrivers = data;
+      } else {
+        const errorText = await response.text();
+        console.error('Failed to fetch matched drivers:', response.status, errorText);
+        alert('Failed to load drivers. Please try again.');
+        return; // bail before loading statuses
       }
 
-      const data = await resp.json();
-      matchedDrivers = data ?? { available: [], excluded: [] };
-    } catch (e) {
-      console.error("Error fetching matched drivers:", e);
-      alert("Error loading drivers. Please check your connection and try again.");
+      // 2) Load request statuses for this ride and map by driver_id
+      await loadRequestStatuses();
+    } catch (error) {
+      console.error('Error fetching matched drivers:', error);
+      alert('Error loading drivers. Please check your connection and try again.');
     } finally {
       isMatching = false;
     }
   }
 
-  // Fetch current ride_requests rows for this ride and map them by driver_id
-  async function fetchRequestStatuses() {
-    if (!token || !ride?.ride_id) return;
-
+  async function loadRequestStatuses() {
     try {
-      const resp = await fetch(
-        `${import.meta.env.VITE_API_URL}/rides/${ride.ride_id}/requests`,
-        {
-          headers: { Authorization: `Bearer ${token}` }
+      const url = `${import.meta.env.VITE_API_URL}/rides/${ride.ride_id}/requests`;
+      const res = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${token}`
         }
-      );
-
-      if (!resp.ok) {
-        // Non-fatal: just log
-        const t = await resp.text();
-        console.warn("Failed to load request statuses:", resp.status, t);
+      });
+      if (!res.ok) {
+        const t = await res.text();
+        console.warn('Request status fetch failed:', res.status, t);
         return;
       }
-
-      // Expecting: [{ driver_id: "uuid", denied: boolean }, ...]
-      const rows: Array<{ driver_id: string; denied: boolean }> = await resp.json();
-
-      const map: Record<string, { denied: boolean }> = {};
-      for (const r of rows || []) {
-        if (r?.driver_id) {
-          map[r.driver_id] = { denied: !!r.denied };
-        }
-      }
-      requestStatusByDriverId = map;
+      const rows = await res.json(); // expect [{ ride_id, driver_id, denied, ... }, ...]
+      const map: Record<string, 'pending' | 'denied'> = {};
+      rows.forEach((r: any) => {
+        map[r.driver_id] = r.denied ? 'denied' : 'pending';
+      });
+      requestStatusMap = map;
     } catch (e) {
-      console.warn("Error fetching request statuses:", e);
+      console.error('Error loading ride request statuses:', e);
     }
   }
 </script>
@@ -162,6 +139,7 @@
         </button>
       </div>
 
+      <!-- Ride Summary -->
       {#if ride}
         <div class="bg-blue-50 rounded-lg p-4 mb-6">
           <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
@@ -179,9 +157,7 @@
             </div>
             <div>
               <span class="font-medium text-gray-700">Time:</span>
-              <span class="ml-2 text-gray-900">
-                {new Date(ride.appointment_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-              </span>
+              <span class="ml-2 text-gray-900">{new Date(ride.appointment_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
             </div>
           </div>
         </div>
@@ -193,7 +169,7 @@
           <p class="mt-4 text-gray-600">Finding best matched drivers...</p>
         </div>
       {:else}
-        <!-- Search -->
+        <!-- Search Bar -->
         <div class="mb-4">
           <input 
             type="text"
@@ -203,13 +179,10 @@
           />
         </div>
 
-        <!-- Available -->
+        <!-- Available Drivers -->
         {#if filteredAvailable().length > 0}
           <div class="space-y-3 mb-6">
-            <h3 class="text-sm font-semibold text-gray-700 uppercase tracking-wide">
-              Available Drivers ({filteredAvailable().length})
-            </h3>
-
+            <h3 class="text-sm font-semibold text-gray-700 uppercase tracking-wide">Available Drivers ({filteredAvailable().length})</h3>
             {#each filteredAvailable() as driver}
               <div class="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors">
                 <div class="flex items-start justify-between">
@@ -222,7 +195,7 @@
                       <span class="text-sm text-gray-600">Score: {driver.score}</span>
                     </div>
 
-                    {#if driver.reasons?.length > 0}
+                    {#if driver.reasons.length > 0}
                       <div class="space-y-1">
                         {#each driver.reasons as reason}
                           <div class="flex items-center gap-2 text-sm text-gray-600">
@@ -234,23 +207,17 @@
                     {/if}
                   </div>
 
-                  {#if requestStatusByDriverId[driver.user_id]}
-                    {#if requestStatusByDriverId[driver.user_id].denied}
-                      <!-- Denied state -->
-                      <div class="ml-4 px-3 py-2 rounded-lg text-sm border border-red-200 bg-red-50 text-red-700 flex items-center gap-2">
-                        <XCircle class="w-4 h-4" />
-                        Denied
-                      </div>
-                    {:else}
-                      <!-- Pending state -->
-                      <div class="ml-4 px-3 py-2 rounded-lg text-sm border border-amber-200 bg-amber-50 text-amber-700 flex items-center gap-2">
-                        <Clock class="w-4 h-4" />
-                        Pending
-                      </div>
-                    {/if}
+                  <!-- Button/Status: based on ride_requests -->
+                  {#if requestStatusMap[driver.user_id] === 'pending'}
+                    <span class="ml-4 px-3 py-2 text-sm rounded-lg border bg-gray-100 text-gray-700">
+                      Pending
+                    </span>
+                  {:else if requestStatusMap[driver.user_id] === 'denied'}
+                    <span class="ml-4 px-3 py-2 text-sm rounded-lg border bg-red-50 text-red-700">
+                      Denied
+                    </span>
                   {:else}
-                    <!-- Default: Send Request -->
-                    <button
+                    <button 
                       onclick={() => handleSelectDriver(driver)}
                       disabled={isLoading}
                       class="ml-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm flex items-center gap-2 transition-colors disabled:opacity-50"
@@ -269,21 +236,19 @@
           </div>
         {/if}
 
-        <!-- Excluded -->
+        <!-- Excluded Drivers (Collapsible) -->
         {#if matchedDrivers.excluded.length > 0}
           <details class="border border-gray-200 rounded-lg">
             <summary class="px-4 py-3 cursor-pointer hover:bg-gray-50 flex items-center gap-2">
               <AlertCircle class="w-4 h-4 text-gray-400" />
-              <span class="text-sm font-medium text-gray-700">
-                Unavailable Drivers ({matchedDrivers.excluded.length})
-              </span>
+              <span class="text-sm font-medium text-gray-700">Unavailable Drivers ({matchedDrivers.excluded.length})</span>
             </summary>
             <div class="px-4 py-3 space-y-2 border-t border-gray-200">
               {#each matchedDrivers.excluded as driver}
                 <div class="flex items-center justify-between py-2">
                   <div>
                     <p class="font-medium text-gray-900">{driver.first_name} {driver.last_name}</p>
-                    {#if driver.exclusion_reasons?.length > 0}
+                    {#if driver.exclusion_reasons.length > 0}
                       <div class="space-y-0.5 mt-1">
                         {#each driver.exclusion_reasons as reason}
                           <p class="text-xs text-red-600">• {reason}</p>
