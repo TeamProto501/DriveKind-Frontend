@@ -632,7 +632,7 @@
           <!-- Generate Button -->
           <div class="pt-4">
             <button
-              on:click={generateReport}
+              onclick={generateReport}
               disabled={isGenerating || (isDriverRole && isFetchingRides)}
               class="w-full px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200 flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
             >
