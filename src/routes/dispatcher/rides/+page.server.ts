@@ -129,6 +129,7 @@ export const load: PageServerLoad = async (event) => {
         first_name,
         last_name,
         primary_phone,
+        email,
         street_address,
         address2,
         city,

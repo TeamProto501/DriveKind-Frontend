@@ -34,6 +34,65 @@
   let selectedRideForMatch: any = null;
   let editRideIdFromUrl = $state<number | null>(null);
 
+  // Query + dropdown state (separate for create/edit forms)
+  let clientQueryCreate = $state('');
+  let clientQueryEdit   = $state('');
+  let showClientListCreate = $state(false);
+  let showClientListEdit   = $state(false);
+
+  // Normalize & score helpers
+  function norm(s: unknown) {
+    return (s ?? '').toString().toLowerCase().trim();
+  }
+  function fullName(c: any) {
+    return `${c.first_name ?? ''} ${c.last_name ?? ''}`.trim();
+  }
+  // Simple scoring: prioritize startsWith, then substring; include phone/email matches
+  function scoreClient(c: any, q: string) {
+    if (!q) return -1;
+    const name = norm(fullName(c));
+    const phone = norm(c.primary_phone);
+    const email = norm(c.email);
+    const nq = norm(q);
+
+    // exact starts get highest, then contains
+    if (name.startsWith(nq)) return 100 - name.indexOf(nq);
+    if (phone.startsWith(nq)) return 90;
+    if (email.startsWith(nq)) return 85;
+
+    if (name.includes(nq))  return 70 - name.indexOf(nq);
+    if (phone.includes(nq)) return 60;
+    if (email.includes(nq)) return 55;
+
+    return -1;
+  }
+
+  // Filter + rank list
+  function filteredClientList(q: string) {
+    const base = filteredClients(); // already org-scoped
+    if (!q.trim()) return base.slice(0, 25);
+    return base
+      .map((c: any) => ({ c, s: scoreClient(c, q) }))
+      .filter(x => x.s >= 0)
+      .sort((a, b) => b.s - a.s || fullName(a.c).localeCompare(fullName(b.c)))
+      .map(x => x.c)
+      .slice(0, 25);
+  }
+
+  // Selection setter used by both forms
+  function selectClientById(clientId: number, isEdit = false) {
+    rideForm.client_id = String(clientId);
+    // keep your existing behavior
+    if (rideForm.pickup_from_home) applyClientAddressToPickup();
+    if (isEdit) {
+      showClientListEdit = false;
+      clientQueryEdit = fullName(filteredClients().find((c: any) => c.client_id === clientId) || '');
+    } else {
+      showClientListCreate = false;
+      clientQueryCreate = fullName(filteredClients().find((c: any) => c.client_id === clientId) || '');
+    }
+  }
+
   const dispatcherName = $derived(
     () => (data?.profile ? `${data.profile.first_name} ${data.profile.last_name}` : '')
   );
@@ -269,7 +328,13 @@
     if (rideForm.pickup_from_home) applyClientAddressToPickup();
   }
 
-  function openCreateModal() { resetRideForm(); resetDestinationSelection(); createStep = 1; showCreateModal = true; }
+  function openCreateModal() {
+    resetRideForm();
+    resetDestinationSelection();
+    clientQueryCreate = '';
+    createStep = 1;
+    showCreateModal = true;
+  }
 
   function toLocalDateTimeInput(ts: string | null | undefined) {
     if (!ts) return '';
@@ -317,6 +382,10 @@
     stepErrors = [];
     editStep = 1;
     showEditModal = true;
+
+    clientQueryEdit = '';
+    const sel = filteredClients().find((c: any) => String(c.client_id) === String(rideForm.client_id));
+    if (sel) clientQueryEdit = fullName(sel);
   }
 
   function openDriverMatchModal(ride: any) {
@@ -830,18 +899,39 @@ function pickupWindowErrors(apptLocal: string, pickupLocal: string): string[] {
         <div class="grid gap-3 md:grid-cols-3">
           <div class="md:col-span-2">
             <label for="client_id">Client *</label>
-            <select
-              id="client_id"
-              bind:value={rideForm.client_id}
-              onchange={onClientChange}
-              class="w-full px-3 py-2 border border-gray-300 rounded-lg"
-            >
-              <option value="">Select client…</option>
-              {#each filteredClients() as c}
-                <option value={String(c.client_id)}>{c.first_name} {c.last_name}</option>
-              {/each}
-            </select>
-            <p class="text-xs text-gray-500 mt-1">Only clients in your organization are shown.</p>
+            <div class="relative">
+              <Input
+                id="client_id"
+                placeholder="Type name, phone, or email…"
+                bind:value={clientQueryCreate}
+                onfocus={() => (showClientListCreate = true)}
+                oninput={() => (showClientListCreate = true)}
+                class="w-full"
+              />
+              <!-- hidden actual value so validation & payload remain the same -->
+              <input type="hidden" value={rideForm.client_id} />
+
+              {#if showClientListCreate}
+                <div class="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow">
+                  {#each filteredClientList(clientQueryCreate) as c}
+                    <button
+                      type="button"
+                      class="w-full text-left px-3 py-2 hover:bg-gray-50"
+                      onclick={() => selectClientById(c.client_id, false)}
+                    >
+                      <div class="font-medium">{c.first_name} {c.last_name}</div>
+                      <div class="text-xs text-gray-500">
+                        {c.primary_phone || '—'}{c.email ? ` • ${c.email}` : ''}
+                      </div>
+                    </button>
+                  {/each}
+                  {#if filteredClientList(clientQueryCreate).length === 0}
+                    <div class="px-3 py-2 text-sm text-gray-500">No matches</div>
+                  {/if}
+                </div>
+              {/if}
+            </div>
+            <p class="text-xs text-gray-500 mt-1">Search by name, phone, or email.</p>
           </div>
 
           <div>
@@ -1095,17 +1185,38 @@ function pickupWindowErrors(apptLocal: string, pickupLocal: string): string[] {
         <div class="grid gap-3 md:grid-cols-3">
           <div class="md:col-span-2">
             <label for="e_client_id">Client *</label>
-            <select
-              id="e_client_id"
-              bind:value={rideForm.client_id}
-              onchange={onClientChange}
-              class="w-full px-3 py-2 border border-gray-300 rounded-lg"
-            >
-              <option value="">Select client…</option>
-              {#each filteredClients() as c}
-                <option value={String(c.client_id)}>{c.first_name} {c.last_name}</option>
-              {/each}
-            </select>
+            <div class="relative">
+              <Input
+                id="e_client_id"
+                placeholder="Type name, phone, or email…"
+                bind:value={clientQueryEdit}
+                onfocus={() => (showClientListEdit = true)}
+                oninput={() => (showClientListEdit = true)}
+                class="w-full"
+              />
+              <input type="hidden" value={rideForm.client_id} />
+
+              {#if showClientListEdit}
+                <div class="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow">
+                  {#each filteredClientList(clientQueryEdit) as c}
+                    <button
+                      type="button"
+                      class="w-full text-left px-3 py-2 hover:bg-gray-50"
+                      onclick={() => selectClientById(c.client_id, true)}
+                    >
+                      <div class="font-medium">{c.first_name} {c.last_name}</div>
+                      <div class="text-xs text-gray-500">
+                        {c.primary_phone || '—'}{c.email ? ` • ${c.email}` : ''}
+                      </div>
+                    </button>
+                  {/each}
+                  {#if filteredClientList(clientQueryEdit).length === 0}
+                    <div class="px-3 py-2 text-sm text-gray-500">No matches</div>
+                  {/if}
+                </div>
+              {/if}
+            </div>
+            <p class="text-xs text-gray-500 mt-1">Search by name, phone, or email.</p>
           </div>
 
           <div>
