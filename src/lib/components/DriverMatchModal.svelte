@@ -1,28 +1,37 @@
 <script lang="ts">
-  import { X, UserCheck, AlertCircle, Star, TrendingUp, MapPin, Calendar } from "@lucide/svelte";
+  import { X, UserCheck, AlertCircle } from "@lucide/svelte";
 
   let { 
     show = $bindable(false),
     ride,
-    token, // Add token prop
-    onSelectDriver,
-    isLoading = false
+    token,               // required: auth token
+    isLoading = false    // external loading flag (optional)
   } = $props();
 
-  let matchedDrivers = $state({ available: [], excluded: [] });
+  // Matched drivers shape expected from /rides/:rideId/match-drivers
+  type MatchDriver = {
+    user_id: string;
+    first_name: string;
+    last_name: string;
+    score: number;
+    match_quality: 'excellent'|'good'|'fair'|'poor'|'excluded';
+    reasons: string[];
+    exclusion_reasons: string[];
+  };
+
+  let matchedDrivers = $state<{ available: MatchDriver[]; excluded: MatchDriver[] }>({ available: [], excluded: [] });
   let isMatching = $state(false);
   let searchTerm = $state("");
-  let selectedDriver = $state<any>(null);
+  let selectedDriver = $state<string | null>(null);
 
-  // Map of driver_id -> 'pending' | 'denied'
+  // driver_id -> 'pending' | 'denied'
   let requestStatusMap = $state<Record<string, 'pending' | 'denied'>>({});
 
-  // Filtered drivers based on search
+  // Derived: filter available by search
   let filteredAvailable = $derived(() => {
     if (!searchTerm) return matchedDrivers.available;
-    return matchedDrivers.available.filter((driver: any) => 
-      `${driver.first_name} ${driver.last_name}`.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    const q = searchTerm.toLowerCase();
+    return matchedDrivers.available.filter(d => `${d.first_name} ${d.last_name}`.toLowerCase().includes(q));
   });
 
   function closeModal() {
@@ -50,30 +59,19 @@
     }
   }
 
-  async function handleSelectDriver(driver: any) {
-    selectedDriver = driver;
-    // Optimistically mark as pending so the button swaps immediately
-    requestStatusMap = { ...requestStatusMap, [driver.user_id]: 'pending' };
-    await onSelectDriver(driver.user_id);
-    closeModal();
-  }
-
-  // Fetch matched drivers when modal opens
+  // Open -> load matches, then load request statuses so Pending/Denied persist
   $effect(() => {
     if (show && ride) {
-      fetchMatchedDrivers();
+      void fetchMatchedDrivers();
     }
   });
 
   async function fetchMatchedDrivers() {
-    if (!token) {
-      console.error('No authentication token available');
-      return;
-    }
+    if (!token || !ride?.ride_id) return;
+
     isMatching = true;
     try {
-      // 1) Get matched drivers (unchanged)
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/rides/${ride.ride_id}/match-drivers`, {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/rides/${ride.ride_id}/match-drivers`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -81,47 +79,85 @@
         }
       });
 
-      if (response.ok) {
-        const data = await response.json();
-        matchedDrivers = data;
-      } else {
-        const errorText = await response.text();
-        console.error('Failed to fetch matched drivers:', response.status, errorText);
-        alert('Failed to load drivers. Please try again.');
-        return; // bail before loading statuses
+      if (!res.ok) {
+        const t = await res.text();
+        console.error('match-drivers failed:', res.status, t);
+        alert('Failed to load drivers.');
+        return;
       }
+      const data = await res.json();
+      // API may return {success, available, excluded,...} or just the arrays – normalize:
+      matchedDrivers = {
+        available: data.available ?? data?.data?.available ?? [],
+        excluded:  data.excluded  ?? data?.data?.excluded  ?? [],
+      };
 
-      // 2) Load request statuses for this ride and map by driver_id
+      // Now load previously sent requests so buttons show Pending/Denied on refresh
       await loadRequestStatuses();
-    } catch (error) {
-      console.error('Error fetching matched drivers:', error);
-      alert('Error loading drivers. Please check your connection and try again.');
+    } catch (e) {
+      console.error('Error fetching matched drivers:', e);
+      alert('Error loading drivers. Please try again.');
     } finally {
       isMatching = false;
     }
   }
 
   async function loadRequestStatuses() {
+    if (!token || !ride?.ride_id) return;
     try {
-      const url = `${import.meta.env.VITE_API_URL}/rides/${ride.ride_id}/requests`;
-      const res = await fetch(url, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/rides/${ride.ride_id}/requests`, {
+        headers: { 'Authorization': `Bearer ${token}` }
       });
       if (!res.ok) {
-        const t = await res.text();
-        console.warn('Request status fetch failed:', res.status, t);
+        console.warn('requests fetch non-OK', res.status);
+        requestStatusMap = {};
         return;
       }
-      const rows = await res.json(); // expect [{ ride_id, driver_id, denied, ... }, ...]
+      const payload = await res.json();
+      // Backend returns { success: true, requests: [{driver_id, denied}] }
+      const rows = Array.isArray(payload) ? payload : (payload.requests ?? []);
       const map: Record<string, 'pending' | 'denied'> = {};
       rows.forEach((r: any) => {
-        map[r.driver_id] = r.denied ? 'denied' : 'pending';
+        map[String(r.driver_id)] = r.denied ? 'denied' : 'pending';
       });
       requestStatusMap = map;
     } catch (e) {
-      console.error('Error loading ride request statuses:', e);
+      console.error('loadRequestStatuses error:', e);
+      requestStatusMap = {};
+    }
+  }
+
+  async function sendRequestToDriver(driverId: string) {
+    if (!token || !ride?.ride_id) return;
+
+    selectedDriver = driverId;
+    try {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/rides/${ride.ride_id}/send-request`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ driver_user_id: driverId })
+      });
+
+      if (!res.ok) {
+        const t = await res.text();
+        console.error('send-request failed:', res.status, t);
+        alert('Failed to send request.');
+        return;
+      }
+
+      // Optimistically set button to Pending and lock it
+      requestStatusMap = { ...requestStatusMap, [String(driverId)]: 'pending' };
+
+      // Optionally re-pull statuses (keeps UI consistent if others changed)
+      // await loadRequestStatuses();
+    } catch (e) {
+      console.error('send-request error:', e);
+      alert('Error sending request.');
+    } finally {
+      selectedDriver = null;
     }
   }
 </script>
@@ -157,7 +193,9 @@
             </div>
             <div>
               <span class="font-medium text-gray-700">Time:</span>
-              <span class="ml-2 text-gray-900">{new Date(ride.appointment_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+              <span class="ml-2 text-gray-900">
+                {new Date(ride.appointment_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              </span>
             </div>
           </div>
         </div>
@@ -169,7 +207,7 @@
           <p class="mt-4 text-gray-600">Finding best matched drivers...</p>
         </div>
       {:else}
-        <!-- Search Bar -->
+        <!-- Search -->
         <div class="mb-4">
           <input 
             type="text"
@@ -182,7 +220,10 @@
         <!-- Available Drivers -->
         {#if filteredAvailable().length > 0}
           <div class="space-y-3 mb-6">
-            <h3 class="text-sm font-semibold text-gray-700 uppercase tracking-wide">Available Drivers ({filteredAvailable().length})</h3>
+            <h3 class="text-sm font-semibold text-gray-700 uppercase tracking-wide">
+              Available Drivers ({filteredAvailable().length})
+            </h3>
+
             {#each filteredAvailable() as driver}
               <div class="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors">
                 <div class="flex items-start justify-between">
@@ -195,7 +236,7 @@
                       <span class="text-sm text-gray-600">Score: {driver.score}</span>
                     </div>
 
-                    {#if driver.reasons.length > 0}
+                    {#if driver.reasons?.length > 0}
                       <div class="space-y-1">
                         {#each driver.reasons as reason}
                           <div class="flex items-center gap-2 text-sm text-gray-600">
@@ -207,23 +248,22 @@
                     {/if}
                   </div>
 
-                  <!-- Button/Status: based on ride_requests -->
-                  {#if requestStatusMap[driver.user_id] === 'pending'}
+                  {#if requestStatusMap[String(driver.user_id)] === 'pending'}
                     <span class="ml-4 px-3 py-2 text-sm rounded-lg border bg-gray-100 text-gray-700">
                       Pending
                     </span>
-                  {:else if requestStatusMap[driver.user_id] === 'denied'}
+                  {:else if requestStatusMap[String(driver.user_id)] === 'denied'}
                     <span class="ml-4 px-3 py-2 text-sm rounded-lg border bg-red-50 text-red-700">
                       Denied
                     </span>
                   {:else}
                     <button 
-                      onclick={() => handleSelectDriver(driver)}
-                      disabled={isLoading}
+                      onclick={() => sendRequestToDriver(driver.user_id)}
+                      disabled={isLoading || selectedDriver === driver.user_id}
                       class="ml-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm flex items-center gap-2 transition-colors disabled:opacity-50"
                     >
                       <UserCheck class="w-4 h-4" />
-                      Send Request
+                      {selectedDriver === driver.user_id ? 'Sending...' : 'Send Request'}
                     </button>
                   {/if}
                 </div>
@@ -236,26 +276,26 @@
           </div>
         {/if}
 
-        <!-- Excluded Drivers (Collapsible) -->
+        <!-- Excluded Drivers -->
         {#if matchedDrivers.excluded.length > 0}
           <details class="border border-gray-200 rounded-lg">
             <summary class="px-4 py-3 cursor-pointer hover:bg-gray-50 flex items-center gap-2">
               <AlertCircle class="w-4 h-4 text-gray-400" />
-              <span class="text-sm font-medium text-gray-700">Unavailable Drivers ({matchedDrivers.excluded.length})</span>
+              <span class="text-sm font-medium text-gray-700">
+                Unavailable Drivers ({matchedDrivers.excluded.length})
+              </span>
             </summary>
             <div class="px-4 py-3 space-y-2 border-t border-gray-200">
-              {#each matchedDrivers.excluded as driver}
-                <div class="flex items-center justify-between py-2">
-                  <div>
-                    <p class="font-medium text-gray-900">{driver.first_name} {driver.last_name}</p>
-                    {#if driver.exclusion_reasons.length > 0}
-                      <div class="space-y-0.5 mt-1">
-                        {#each driver.exclusion_reasons as reason}
-                          <p class="text-xs text-red-600">• {reason}</p>
-                        {/each}
-                      </div>
-                    {/if}
-                  </div>
+              {#each matchedDrivers.excluded as d}
+                <div class="py-2">
+                  <p class="font-medium text-gray-900">{d.first_name} {d.last_name}</p>
+                  {#if d.exclusion_reasons?.length > 0}
+                    <div class="space-y-0.5 mt-1">
+                      {#each d.exclusion_reasons as reason}
+                        <p class="text-xs text-red-600">• {reason}</p>
+                      {/each}
+                    </div>
+                  {/if}
                 </div>
               {/each}
             </div>
