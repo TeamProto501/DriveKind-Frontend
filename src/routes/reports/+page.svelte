@@ -358,19 +358,34 @@
     });
   }
 
-  $: if (isDriverRole && startDate && endDate) {
-    fetchRideStats();
-  }
+  $effect(() => {
+    if (isDriverRole && startDate && endDate) {
+      fetchRideStats();
+    }
+  });
 
-  $: if (manualHoursWorked >= 0) showHoursWarning = false;
-  $: if (manualMileage >= 0) showMileageWarning = false;
-  $: if (startDate) showStartDateWarning = false;
-  $: if (endDate) showEndDateWarning = false;
+  $effect(() => {
+    if (manualHoursWorked >= 0) showHoursWarning = false;
+  });
+
+  $effect(() => {
+    if (manualMileage >= 0) showMileageWarning = false;
+  });
+
+  $effect(() => {
+    if (startDate) showStartDateWarning = false;
+  });
+
+  $effect(() => {
+    if (endDate) showEndDateWarning = false;
+  });
   
   // Clear selected rides when role changes
-  $: if (!isDriverRole) {
-    selectedRideIds = new Set();
-  }
+  $effect(() => {
+    if (!isDriverRole) {
+      selectedRideIds = new Set();
+    }
+  });
 </script>
 
 <RoleGuard requiredRoles={['Admin', 'Driver', 'Dispatcher', 'Volunteer']}>
