@@ -7,7 +7,7 @@
   import type { PageData } from './$types';
   import jsPDF from 'jspdf';
 
-  export let data: PageData;
+  let { data }: { data: PageData } = $props();
 
   type RideStats = {
     scheduled: number;
