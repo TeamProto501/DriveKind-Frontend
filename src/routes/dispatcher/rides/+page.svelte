@@ -112,19 +112,50 @@
   function norm(s: unknown) { return (s ?? '').toString().toLowerCase().trim(); }
   function fullName(c: any) { return `${c.first_name ?? ''} ${c.last_name ?? ''}`.trim(); }
 
+  function formatAddress(c: any) {
+    const parts = [
+      c.street_address ?? '',
+      c.address2 ?? '',
+      c.city ?? '',
+      c.state ?? '',
+      c.zip_code ?? ''
+    ].map((p) => (p || '').toString().trim()).filter(Boolean);
+    return parts.join(', ');
+  }
+
   function scoreClient(c: any, q: string) {
     if (!q) return -1;
-    const name = norm(fullName(c));
-    const phone = norm(c.primary_phone);
-    const email = norm(c.email);
     const nq = norm(q);
 
-    if (name.startsWith(nq)) return 100 - name.indexOf(nq);
-    if (phone.startsWith(nq)) return 90;
-    if (email.startsWith(nq)) return 85;
-    if (name.includes(nq))  return 70 - name.indexOf(nq);
-    if (phone.includes(nq)) return 60;
-    if (email.includes(nq)) return 55;
+    const name   = norm(fullName(c));
+    const phone  = norm(c.primary_phone);
+    const email  = norm(c.email);
+    const addr   = norm(formatAddress(c));
+    const street = norm(c.street_address);
+    const city   = norm(c.city);
+    const state  = norm(c.state);
+    const zip    = norm(c.zip_code);
+
+    // Highest weight: prefix matches
+    if (name.startsWith(nq))   return 100 - name.indexOf(nq);
+    if (phone.startsWith(nq))  return 92;
+    if (email.startsWith(nq))  return 88;
+    if (addr.startsWith(nq))   return 86;
+    if (street?.startsWith(nq))return 84;
+    if (city?.startsWith(nq))  return 82;
+    if (state?.startsWith(nq)) return 80;
+    if (zip?.startsWith(nq))   return 78;
+
+    // Contains matches (lower weight)
+    if (name.includes(nq))     return 70 - name.indexOf(nq);
+    if (phone.includes(nq))    return 64;
+    if (email.includes(nq))    return 60;
+    if (addr.includes(nq))     return 58;
+    if (street?.includes(nq))  return 56;
+    if (city?.includes(nq))    return 54;
+    if (state?.includes(nq))   return 52;
+    if (zip?.includes(nq))     return 50;
+
     return -1;
   }
 
@@ -960,7 +991,7 @@
             <div class="relative">
               <Input
                 id="client_id"
-                placeholder="Type name, phone, or email…"
+                placeholder="Type name, phone, email, or address…"
                 bind:value={clientQueryCreate}
                 onfocus={() => (showClientListCreate = true)}
                 oninput={() => (showClientListCreate = true)}
@@ -976,9 +1007,12 @@
                       onclick={() => selectClientById(c.client_id, false)}
                     >
                       <div class="font-medium">{c.first_name} {c.last_name}</div>
-                      <div class="text-xs text-gray-500">
-                        {c.primary_phone || '—'}{c.email ? ` • ${c.email}` : ''}
-                      </div>
+                        <div class="text-xs text-gray-500">
+                          {c.primary_phone || '—'}{c.email ? ` • ${c.email}` : ''}
+                        </div>
+                        <div class="text-[11px] text-gray-400">
+                          {formatAddress(c) || '—'}
+                        </div>
                     </button>
                   {/each}
                   {#if filteredClientList(clientQueryCreate).length === 0}
@@ -1261,7 +1295,7 @@
             <div class="relative">
               <Input
                 id="e_client_id"
-                placeholder="Type name, phone, or email…"
+                placeholder="Type name, phone, email, or address…"
                 bind:value={clientQueryEdit}
                 onfocus={() => (showClientListEdit = true)}
                 oninput={() => (showClientListEdit = true)}
@@ -1277,9 +1311,12 @@
                       onclick={() => selectClientById(c.client_id, true)}
                     >
                       <div class="font-medium">{c.first_name} {c.last_name}</div>
-                      <div class="text-xs text-gray-500">
-                        {c.primary_phone || '—'}{c.email ? ` • ${c.email}` : ''}
-                      </div>
+                        <div class="text-xs text-gray-500">
+                          {c.primary_phone || '—'}{c.email ? ` • ${c.email}` : ''}
+                        </div>
+                        <div class="text-[11px] text-gray-400">
+                          {formatAddress(c) || '—'}
+                        </div>
                     </button>
                   {/each}
                   {#if filteredClientList(clientQueryEdit).length === 0}
