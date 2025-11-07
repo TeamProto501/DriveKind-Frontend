@@ -3,7 +3,6 @@
   import { Card } from "$lib/components/ui/card";
   import { Input } from "$lib/components/ui/input";
   import Textarea from "$lib/components/ui/textarea.svelte";
-  // import Label from "$lib/components/ui/label.svelte"; // removed
   import {
     Car, Clock, MapPin, User, Phone, Calendar, Search, Plus, Edit,
     AlertCircle, UserCheck, CheckCircle
@@ -34,65 +33,6 @@
   let selectedRideForMatch: any = null;
   let editRideIdFromUrl = $state<number | null>(null);
 
-  // Query + dropdown state (separate for create/edit forms)
-  let clientQueryCreate = $state('');
-  let clientQueryEdit   = $state('');
-  let showClientListCreate = $state(false);
-  let showClientListEdit   = $state(false);
-
-  // Normalize & score helpers
-  function norm(s: unknown) {
-    return (s ?? '').toString().toLowerCase().trim();
-  }
-  function fullName(c: any) {
-    return `${c.first_name ?? ''} ${c.last_name ?? ''}`.trim();
-  }
-  // Simple scoring: prioritize startsWith, then substring; include phone/email matches
-  function scoreClient(c: any, q: string) {
-    if (!q) return -1;
-    const name = norm(fullName(c));
-    const phone = norm(c.primary_phone);
-    const email = norm(c.email);
-    const nq = norm(q);
-
-    // exact starts get highest, then contains
-    if (name.startsWith(nq)) return 100 - name.indexOf(nq);
-    if (phone.startsWith(nq)) return 90;
-    if (email.startsWith(nq)) return 85;
-
-    if (name.includes(nq))  return 70 - name.indexOf(nq);
-    if (phone.includes(nq)) return 60;
-    if (email.includes(nq)) return 55;
-
-    return -1;
-  }
-
-  // Filter + rank list
-  function filteredClientList(q: string) {
-    const base = filteredClients(); // already org-scoped
-    if (!q.trim()) return base.slice(0, 25);
-    return base
-      .map((c: any) => ({ c, s: scoreClient(c, q) }))
-      .filter(x => x.s >= 0)
-      .sort((a, b) => b.s - a.s || fullName(a.c).localeCompare(fullName(b.c)))
-      .map(x => x.c)
-      .slice(0, 25);
-  }
-
-  // Selection setter used by both forms
-  function selectClientById(clientId: number, isEdit = false) {
-    rideForm.client_id = String(clientId);
-    // keep your existing behavior
-    if (rideForm.pickup_from_home) applyClientAddressToPickup();
-    if (isEdit) {
-      showClientListEdit = false;
-      clientQueryEdit = fullName(filteredClients().find((c: any) => c.client_id === clientId) || '');
-    } else {
-      showClientListCreate = false;
-      clientQueryCreate = fullName(filteredClients().find((c: any) => c.client_id === clientId) || '');
-    }
-  }
-
   const dispatcherName = $derived(
     () => (data?.profile ? `${data.profile.first_name} ${data.profile.last_name}` : '')
   );
@@ -105,7 +45,7 @@
     return userOrgId ? all.filter((c: any) => c.org_id === userOrgId) : all;
   });
 
-  const STATUS_OPTIONS = ["Requested","Scheduled","In Progress","Completed","Cancelled","Reported","Pending"];
+  const STATUS_OPTIONS = ["Requested","Scheduled","Assigned","In Progress","Completed","Cancelled","Reported","Pending"];
   const COMPLETION_STATUS_OPTIONS = [
     "Completed Round Trip","Completed One Way To","Completed One Way From","Cancelled by Client","Cancelled by Driver"
   ];
@@ -162,6 +102,121 @@
   const getClientName  = (ride: any) => ride.clients ? `${ride.clients.first_name} ${ride.clients.last_name}` : 'Unknown Client';
   const getClientPhone = (ride: any) => ride.clients?.primary_phone || 'No phone';
   const getDriverName  = (ride: any) => ride.drivers ? `${ride.drivers.first_name} ${ride.drivers.last_name}` : 'Unassigned';
+
+  /* ---------------- Searchable Client Picker ---------------- */
+  let clientQueryCreate = $state('');
+  let clientQueryEdit   = $state('');
+  let showClientListCreate = $state(false);
+  let showClientListEdit   = $state(false);
+
+  function norm(s: unknown) { return (s ?? '').toString().toLowerCase().trim(); }
+  function fullName(c: any) { return `${c.first_name ?? ''} ${c.last_name ?? ''}`.trim(); }
+
+  function scoreClient(c: any, q: string) {
+    if (!q) return -1;
+    const name = norm(fullName(c));
+    const phone = norm(c.primary_phone);
+    const email = norm(c.email);
+    const nq = norm(q);
+
+    if (name.startsWith(nq)) return 100 - name.indexOf(nq);
+    if (phone.startsWith(nq)) return 90;
+    if (email.startsWith(nq)) return 85;
+    if (name.includes(nq))  return 70 - name.indexOf(nq);
+    if (phone.includes(nq)) return 60;
+    if (email.includes(nq)) return 55;
+    return -1;
+  }
+
+  function filteredClientList(q: string) {
+    const base = filteredClients();
+    if (!q.trim()) return base.slice(0, 25);
+    return base
+      .map((c: any) => ({ c, s: scoreClient(c, q) }))
+      .filter(x => x.s >= 0)
+      .sort((a, b) => b.s - a.s || fullName(a.c).localeCompare(fullName(b.c)))
+      .map(x => x.c)
+      .slice(0, 25);
+  }
+
+  function selectClientById(clientId: number, isEdit = false) {
+    rideForm.client_id = String(clientId);
+    if (rideForm.pickup_from_home) applyClientAddressToPickup();
+    const sel = filteredClients().find((c: any) => c.client_id === clientId);
+    const label = sel ? fullName(sel) : '';
+    if (isEdit) {
+      showClientListEdit = false;
+      clientQueryEdit = label;
+    } else {
+      showClientListCreate = false;
+      clientQueryCreate = label;
+    }
+  }
+
+  /* ---------------- Estimated length parsing/formatting ---------------- */
+  function plural(n: number, one: string, many: string) {
+    return `${n} ${n === 1 ? one : many}`;
+  }
+  function parseEstimatedLen(raw: unknown): { h: number; m: number } | null {
+    if (raw == null) return null;
+    const s = String(raw).trim().toLowerCase();
+    if (!s) return null;
+
+    // H:MM
+    let m = s.match(/^(\d+)\s*:\s*(\d{1,2})$/);
+    if (m) {
+      const h = parseInt(m[1], 10);
+      const mi = parseInt(m[2], 10);
+      if (Number.isFinite(h) && Number.isFinite(mi) && mi >= 0 && mi < 60) return { h, m: mi };
+      return null;
+    }
+    // Xh [Ym]
+    m = s.match(/^(\d+(?:\.\d+)?)\s*(h|hr|hrs|hour|hours)\s*(\d+)?\s*(m|min|mins|minute|minutes)?$/);
+    if (m) {
+      const hoursNum = parseFloat(m[1]);
+      if (!Number.isFinite(hoursNum)) return null;
+      let totalMinutes = Math.round(hoursNum * 60);
+      if (m[3]) totalMinutes += parseInt(m[3], 10);
+      return { h: Math.floor(totalMinutes / 60), m: totalMinutes % 60 };
+    }
+    // Xm
+    m = s.match(/^(\d+)\s*(m|min|mins|minute|minutes)$/);
+    if (m) {
+      const mins = parseInt(m[1], 10);
+      if (!Number.isFinite(mins)) return null;
+      return { h: Math.floor(mins / 60), m: mins % 60 };
+    }
+    // bare number = minutes
+    m = s.match(/^(\d+)$/);
+    if (m) {
+      const mins = parseInt(m[1], 10);
+      if (!Number.isFinite(mins)) return null;
+      return { h: Math.floor(mins / 60), m: mins % 60 };
+    }
+    return null;
+  }
+
+  let estHours = '';
+  let estMinutes = '';
+
+  function updateEstimatedLength() {
+    const h = parseInt(estHours || '0', 10);
+    const m = parseInt(estMinutes || '0', 10);
+    const parts = [];
+    if (h) parts.push(`${h} ${h === 1 ? 'hr' : 'hrs'}`);
+    if (m) parts.push(`${m} ${m === 1 ? 'min' : 'mins'}`);
+    rideForm.estimated_appointment_length = parts.join(' ') || '0 mins';
+  }
+
+  function canonEstimatedLen(raw: unknown): string | null {
+    const parsed = parseEstimatedLen(raw);
+    if (!parsed) return null;
+    const parts: string[] = [];
+    if (parsed.h) parts.push(plural(parsed.h, 'hr', 'hrs'));
+    if (parsed.m) parts.push(plural(parsed.m, 'min', 'mins'));
+    if (!parts.length) return '0 mins';
+    return parts.join(' ');
+  }
 
   /* ---------------- Form model ---------------- */
   type RideForm = {
@@ -228,7 +283,6 @@
     completion_status: ''
   });
 
-  /* ---------- Destinations (saved locations) ---------- */
   type Destination = {
     destination_id: number;
     org_id: number;
@@ -240,13 +294,11 @@
     zipcode: string | null;
   };
 
-  // Replace the Destination block’s derived with this:
   const filteredDestinations = $derived(() => {
     const all = (data as any)?.destinations ?? [];
     return userOrgId ? all.filter((d: any) => d.org_id === userOrgId) : all;
   });
 
-  // One selection state (only one modal is open at a time)
   let selectedDestinationId = $state<string>("");
 
   function applyDestinationToDropoff(destIdStr: string) {
@@ -305,10 +357,8 @@
     stepErrors = [];
   }
 
-  /* donation amount lock */
   $effect(() => { if (!rideForm.donation) rideForm.donation_amount = '0.00'; });
 
-  /* pickup-from-home autofill */
   function applyClientAddressToPickup() {
     const cid = parseInt(rideForm.client_id || '0', 10);
     if (!cid) return;
@@ -328,12 +378,12 @@
     if (rideForm.pickup_from_home) applyClientAddressToPickup();
   }
 
-  function openCreateModal() {
-    resetRideForm();
-    resetDestinationSelection();
+  function openCreateModal() { 
+    resetRideForm(); 
+    resetDestinationSelection(); 
     clientQueryCreate = '';
-    createStep = 1;
-    showCreateModal = true;
+    createStep = 1; 
+    showCreateModal = true; 
   }
 
   function toLocalDateTimeInput(ts: string | null | undefined) {
@@ -381,11 +431,13 @@
     if (rideForm.pickup_from_home && rideForm.client_id) applyClientAddressToPickup();
     stepErrors = [];
     editStep = 1;
-    showEditModal = true;
 
+    // prefill edit picker label
     clientQueryEdit = '';
     const sel = filteredClients().find((c: any) => String(c.client_id) === String(rideForm.client_id));
     if (sel) clientQueryEdit = fullName(sel);
+
+    showEditModal = true;
   }
 
   function openDriverMatchModal(ride: any) {
@@ -463,9 +515,14 @@
 
       round_trip: base.round_trip ?? false,
       purpose: has(form.purpose) ? sanitizeInput(form.purpose) : (base.purpose ?? null),
-      estimated_appointment_length: has(form.estimated_appointment_length)
-        ? sanitizeInput(form.estimated_appointment_length)
-        : (base.estimated_appointment_length ?? null),
+
+      estimated_appointment_length: (() => {
+        const v = has(form.estimated_appointment_length)
+          ? form.estimated_appointment_length
+          : (base.estimated_appointment_length ?? null);
+        const c = canonEstimatedLen(v);
+        return c ?? null;
+      })(),
 
       destination_name: sanitizeInput(_dest),
       pickup_from_home: has(form.pickup_from_home) ? !!form.pickup_from_home : !!base.pickup_from_home,
@@ -491,25 +548,25 @@
   }
 
   // --- pickup vs appointment window validation ---
-function pickupWindowErrors(apptLocal: string, pickupLocal: string): string[] {
-  const errs: string[] = [];
-  if (!pickupLocal || !pickupLocal.trim()) return errs; // no pickup set → no check
-  if (!apptLocal || !apptLocal.trim()) {
-    errs.push('Appointment time is required when pickup time is set.');
+  function pickupWindowErrors(apptLocal: string, pickupLocal: string): string[] {
+    const errs: string[] = [];
+    if (!pickupLocal || !pickupLocal.trim()) return errs;
+    if (!apptLocal || !apptLocal.trim()) {
+      errs.push('Appointment time is required when pickup time is set.');
+      return errs;
+    }
+    const appt = new Date(apptLocal);
+    const pick = new Date(pickupLocal);
+    if (Number.isNaN(appt.getTime())) errs.push('Appointment time is invalid.');
+    if (Number.isNaN(pick.getTime())) errs.push('Pickup time is invalid.');
+    if (errs.length) return errs;
+
+    const diffMs = appt.getTime() - pick.getTime();
+    if (diffMs <= 0) errs.push('Pickup time must be before the appointment time.');
+    const diffMin = diffMs / 60000;
+    if (diffMin > 120) errs.push('Pickup time cannot be more than 2 hours before the appointment.');
     return errs;
   }
-  const appt = new Date(apptLocal);
-  const pick = new Date(pickupLocal);
-  if (Number.isNaN(appt.getTime())) errs.push('Appointment time is invalid.');
-  if (Number.isNaN(pick.getTime())) errs.push('Pickup time is invalid.');
-  if (errs.length) return errs;
-
-  const diffMs = appt.getTime() - pick.getTime(); // positive means pickup before appt
-  if (diffMs <= 0) errs.push('Pickup time must be before the appointment time.');
-  const diffMin = diffMs / 60000;
-  if (diffMin > 120) errs.push('Pickup time cannot be more than 2 hours before the appointment.');
-  return errs;
-}
 
   /* ---------------- validation (per-step) ---------------- */
   function validateStep(step: number): boolean {
@@ -525,7 +582,6 @@ function pickupWindowErrors(apptLocal: string, pickupLocal: string): string[] {
       const v = combineValidations(...validators);
       const errs: string[] = v.valid ? [] : [...v.errors];
 
-      // Enforce pickup window when pickup_time is provided (both create & edit)
       errs.push(...pickupWindowErrors(rideForm.appointment_time, rideForm.pickup_time));
 
       stepErrors = errs;
@@ -551,6 +607,14 @@ function pickupWindowErrors(apptLocal: string, pickupLocal: string): string[] {
       if (rideForm.donation && rideForm.donation_amount && isNaN(Number(rideForm.donation_amount))) {
         errs.push('Donation amount must be a number like 10 or 10.00');
       }
+      if (rideForm.estimated_appointment_length) {
+        if (!parseEstimatedLen(rideForm.estimated_appointment_length)) {
+          errs.push("Estimated appointment length must look like '30 mins' or '2 hrs 30 mins'.");
+        } else {
+          const c = canonEstimatedLen(rideForm.estimated_appointment_length);
+          if (c) rideForm.estimated_appointment_length = c;
+        }
+      }
       stepErrors = errs; return errs.length === 0;
     }
     if (step === 4) {
@@ -569,7 +633,6 @@ function pickupWindowErrors(apptLocal: string, pickupLocal: string): string[] {
 
   /* ---------------- submit ---------------- */
   async function createRide() {
-    // Hard guard on pickup vs appointment window (create)
     {
       const errs = pickupWindowErrors(rideForm.appointment_time, rideForm.pickup_time);
       if (errs.length) {
@@ -577,7 +640,6 @@ function pickupWindowErrors(apptLocal: string, pickupLocal: string): string[] {
         return;
       }
     }
-    
     const payload = buildPayload(rideForm);
     const missing = listMissingRequiredFields(payload, true);
     if (missing.length) {
@@ -611,7 +673,6 @@ function pickupWindowErrors(apptLocal: string, pickupLocal: string): string[] {
 
   async function updateRide() {
     if (!selectedRide) return;
-    // Hard guard on pickup vs appointment window (edit)
     {
       const errs = pickupWindowErrors(rideForm.appointment_time, rideForm.pickup_time);
       if (errs.length) {
@@ -619,7 +680,6 @@ function pickupWindowErrors(apptLocal: string, pickupLocal: string): string[] {
         return;
       }
     }
-
     const payload = buildPayload(rideForm);
     const missing = listMissingRequiredFields(payload, false);
     if (missing.length) {
@@ -718,8 +778,6 @@ function pickupWindowErrors(apptLocal: string, pickupLocal: string): string[] {
         const rideToEdit = data.rides?.find(r => r.ride_id === rideId);
         if (rideToEdit) {
           openEditModal(rideToEdit);
-          
-          // Clear the URL parameter after opening
           const url = new URL(window.location.href);
           url.searchParams.delete('edit');
           window.history.replaceState({}, '', url);
@@ -908,9 +966,7 @@ function pickupWindowErrors(apptLocal: string, pickupLocal: string): string[] {
                 oninput={() => (showClientListCreate = true)}
                 class="w-full"
               />
-              <!-- hidden actual value so validation & payload remain the same -->
               <input type="hidden" value={rideForm.client_id} />
-
               {#if showClientListCreate}
                 <div class="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow">
                   {#each filteredClientList(clientQueryCreate) as c}
@@ -931,7 +987,7 @@ function pickupWindowErrors(apptLocal: string, pickupLocal: string): string[] {
                 </div>
               {/if}
             </div>
-            <p class="text-xs text-gray-500 mt-1">Search by name, phone, or email.</p>
+            <p class="text-xs text-gray-500 mt-1">Only clients in your organization are shown.</p>
           </div>
 
           <div>
@@ -973,11 +1029,10 @@ function pickupWindowErrors(apptLocal: string, pickupLocal: string): string[] {
       {/if}
 
       {#if createStep === 2}
-      <!-- ===== CREATE • Step 2: Pickup & Dropoff ===== -->
+      <!-- CREATE • Step 2: Pickup & Dropoff -->
       <div class="border rounded-lg p-4 mb-2">
         <h3 class="font-semibold mb-3">Pickup &amp; Dropoff</h3>
 
-        <!-- Pickup controls -->
         <div class="mb-3">
           <div class="flex items-center gap-2">
             <input id="pickup_from_home" type="checkbox" bind:checked={rideForm.pickup_from_home} />
@@ -988,7 +1043,6 @@ function pickupWindowErrors(apptLocal: string, pickupLocal: string): string[] {
           </p>
         </div>
 
-        <!-- PICKUP (disabled when from home) -->
         <div class="grid gap-3">
           <div>
             <label for="alt_pickup_address">Pickup Street Address</label>
@@ -1046,7 +1100,6 @@ function pickupWindowErrors(apptLocal: string, pickupLocal: string): string[] {
           </div>
         </div>
 
-        <!-- Saved destination (fills DROPOFF) -->
         <div class="mt-6">
           <label for="saved_destination_create">Use a saved destination</label>
           <select
@@ -1066,7 +1119,6 @@ function pickupWindowErrors(apptLocal: string, pickupLocal: string): string[] {
           <p class="text-xs text-gray-500 mt-1">Choosing one fills the dropoff fields below.</p>
         </div>
 
-        <!-- DROPOFF -->
         <div class="mt-6">
           <label class="text-sm font-semibold text-gray-700">Dropoff Location</label>
           <p class="text-xs text-gray-500">Where the client will be dropped off.</p>
@@ -1099,7 +1151,6 @@ function pickupWindowErrors(apptLocal: string, pickupLocal: string): string[] {
       {/if}
 
       {#if createStep === 3}
-      <!-- Ride Details -->
       <div class="border rounded-lg p-4 mb-2">
         <h3 class="font-semibold mb-3">Ride Details</h3>
 
@@ -1110,15 +1161,37 @@ function pickupWindowErrors(apptLocal: string, pickupLocal: string): string[] {
           </div>
           <div>
             <label for="estimated_appointment_length" class="block text-sm font-medium text-gray-700">Estimated appointment length</label>
-            <Input id="estimated_appointment_length" bind:value={rideForm.estimated_appointment_length} placeholder="e.g., 30 min" />
+            <div class="flex gap-2 items-end">
+              <div class="flex-1">
+                <label for="est_hours">Hours</label>
+                <Input
+                  id="est_hours"
+                  type="number"
+                  min="0"
+                  bindvalue={estHours}
+                  placeholder="0"
+                  oninput={() => updateEstimatedLength()}
+                />
+              </div>
+              <div class="flex-1">
+                <label for="est_minutes">Minutes</label>
+                <Input
+                  id="est_minutes"
+                  type="number"
+                  min="0"
+                  max="59"
+                  bind:value={estMinutes}
+                  placeholder="0"
+                  oninput={() => updateEstimatedLength()}
+                />
+              </div>
+            </div>
           </div>
           <div>
             <label for="riders" class="block text-sm font-medium text-gray-700"># of additional passengers (excluding client)</label>
             <Input id="riders" type="number" min="0" bind:value={rideForm.riders} />
           </div>
         </div>
-
-        <!-- REMOVED: round_trip, donation, donation_amount, status -->
 
         <div class="mt-3">
           <label for="notes" class="block text-sm font-medium text-gray-700">Notes for driver</label>
@@ -1195,7 +1268,6 @@ function pickupWindowErrors(apptLocal: string, pickupLocal: string): string[] {
                 class="w-full"
               />
               <input type="hidden" value={rideForm.client_id} />
-
               {#if showClientListEdit}
                 <div class="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow">
                   {#each filteredClientList(clientQueryEdit) as c}
@@ -1216,7 +1288,6 @@ function pickupWindowErrors(apptLocal: string, pickupLocal: string): string[] {
                 </div>
               {/if}
             </div>
-            <p class="text-xs text-gray-500 mt-1">Search by name, phone, or email.</p>
           </div>
 
           <div>
@@ -1257,11 +1328,10 @@ function pickupWindowErrors(apptLocal: string, pickupLocal: string): string[] {
       {/if}
 
       {#if editStep === 2}
-        <!-- ===== EDIT • Step 2: Pickup & Dropoff ===== -->
+        <!-- EDIT • Step 2: Pickup & Dropoff -->
         <div class="border rounded-lg p-4 mb-2">
           <h3 class="font-semibold mb-3">Pickup &amp; Dropoff</h3>
 
-          <!-- Pickup controls -->
           <div class="mb-3">
             <div class="flex items-center gap-2">
               <input id="e_pickup_from_home" type="checkbox" bind:checked={rideForm.pickup_from_home} />
@@ -1272,7 +1342,6 @@ function pickupWindowErrors(apptLocal: string, pickupLocal: string): string[] {
             </p>
           </div>
 
-          <!-- PICKUP (disabled when from home) -->
           <div class="grid gap-3">
             <div>
               <label for="e_alt_pickup_address">Pickup Street Address</label>
@@ -1330,7 +1399,6 @@ function pickupWindowErrors(apptLocal: string, pickupLocal: string): string[] {
             </div>
           </div>
 
-          <!-- Saved destination (fills DROPOFF) -->
           <div class="mt-6">
             <label for="saved_destination_edit">Use a saved destination</label>
             <select
@@ -1350,7 +1418,6 @@ function pickupWindowErrors(apptLocal: string, pickupLocal: string): string[] {
             <p class="text-xs text-gray-500 mt-1">Choosing one fills the dropoff fields below.</p>
           </div>
 
-          <!-- DROPOFF -->
           <div class="mt-6">
             <label class="text-sm font-semibold text-gray-700">Dropoff Location</label>
             <p class="text-xs text-gray-500">Where the client will be dropped off.</p>
@@ -1382,16 +1449,37 @@ function pickupWindowErrors(apptLocal: string, pickupLocal: string): string[] {
           </div>
           <div>
             <label for="e_est_len" class="block text-sm font-medium text-gray-700">Estimated appointment length</label>
-            <Input id="e_est_len" bind:value={rideForm.estimated_appointment_length} placeholder="e.g., 30 min" />
+            <div class="flex gap-2 items-end">
+              <div class="flex-1">
+                <label for="est_hours">Hours</label>
+                <Input
+                  id="est_hours"
+                  type="number"
+                  min="0"
+                  bind:value={estHours}
+                  placeholder="0"
+                  oninput={() => updateEstimatedLength()}
+                />
+              </div>
+              <div class="flex-1">
+                <label for="est_minutes">Minutes</label>
+                <Input
+                  id="est_minutes"
+                  type="number"
+                  min="0"
+                  max="59"
+                  bind:value={estMinutes}
+                  placeholder="0"
+                  oninput={() => updateEstimatedLength()}
+                />
+              </div>
+            </div>
           </div>
           <div>
             <label for="e_riders" class="block text-sm font-medium text-gray-700"># of additional passengers (excluding client)</label>
             <Input id="e_riders" type="number" min="0" bind:value={rideForm.riders} />
           </div>
         </div>
-
-        <!-- REMOVED: round_trip, donation, donation_amount -->
-        <!-- KEPT: status (for editing existing rides), completion_status -->
 
         <div class="mt-3 grid gap-3 md:grid-cols-2">
           <div>
@@ -1460,7 +1548,6 @@ function pickupWindowErrors(apptLocal: string, pickupLocal: string): string[] {
   </div>
 {/if}
 
-<!-- Existing modals -->
 <RideCompletionModal
   bind:show={showConfirmModal}
   ride={selectedRide}
