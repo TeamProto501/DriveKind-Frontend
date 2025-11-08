@@ -450,7 +450,7 @@
             </div>
           </div>
           <div>
-            <label class="block text-base font-medium">Email *</label><input
+            <label class="block text-base font-medium">Email</label><input
               type="email"
               class="mt-1 w-full border rounded px-3 py-2 text-base"
               bind:value={form.email}
