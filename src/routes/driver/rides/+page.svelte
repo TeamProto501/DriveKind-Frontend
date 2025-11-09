@@ -3,7 +3,7 @@
   import { Badge } from "$lib/components/ui/badge";
   import { Card, CardContent } from "$lib/components/ui/card";
   import { Input } from "$lib/components/ui/input";
-  import { Calendar, Car, CheckCircle, Clock, MapPin, Phone, Play, Search, XCircle } from "@lucide/svelte";
+  import { Calendar, Car, CheckCircle, Clock, MapPin, Phone, Play, Search, XCircle, Edit } from "@lucide/svelte";
   import { invalidateAll } from '$app/navigation';
   import type { PageData } from './$types';
   import RideCompletionModal from '$lib/components/RideCompletionModal.svelte';
@@ -27,7 +27,6 @@
       case "Scheduled": return "bg-blue-100 text-blue-800";
       case "Assigned": return "bg-blue-100 text-blue-800";
       case "In Progress": return "bg-yellow-100 text-yellow-800";
-      case "Reported": return "bg-purple-100 text-purple-800";
       case "Completed": return "bg-green-100 text-green-800";
       case "Cancelled": return "bg-red-100 text-red-800";
       case "Pending": return "bg-purple-100 text-purple-800";
@@ -58,7 +57,7 @@
       } else if (activeTab === "active") {
         matchesTab = ride.status === "In Progress";
       } else if (activeTab === "completed") {
-        matchesTab = ride.status === "Completed" || ride.status === "Cancelled" || ride.status === "Reported";
+        matchesTab = ride.status === "Completed" || ride.status === "Cancelled";
       }
 
       return matchesSearch && matchesTab;
@@ -71,7 +70,7 @@
       requests: list.filter((r: any) => r.status === "Pending").length,
       scheduled: list.filter((r: any) => r.status === "Scheduled" || r.status === "Assigned").length,
       active: list.filter((r: any) => r.status === "In Progress").length,
-      completed: list.filter((r: any) => r.status === "Completed" || r.status === "Cancelled" || r.status === "Reported").length
+      completed: list.filter((r: any) => r.status === "Completed" || r.status === "Cancelled").length
     };
   });
 
@@ -388,7 +387,18 @@
                 </Button>
               {/if}
 
-              {#if ride.status !== "Completed" && ride.status !== "Cancelled" && ride.status !== "Reported"}
+              {#if ride.status !== "Cancelled"}
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onclick={() => window.location.href = `/dispatcher/rides?edit=${ride.ride_id}`}
+                  disabled={isUpdating}
+                >
+                  <Edit class="w-4 h-4 mr-1" />Edit
+                </Button>
+              {/if}
+
+              {#if ride.status !== "Completed" && ride.status !== "Cancelled"}
                 <Button variant="outline" size="sm" onclick={() => updateRideStatus(ride.ride_id, 'Cancelled')} disabled={isUpdating}>
                   <XCircle class="w-4 h-4 mr-1" />Cancel
                 </Button>
