@@ -522,6 +522,9 @@
               bind:value={editForm.miles_driven}
               placeholder="e.g., 12.5"
             />
+            {#if selectedRideForEdit.miles_driven}
+              <p class="text-xs text-gray-500 mt-1">Current: {selectedRideForEdit.miles_driven} miles</p>
+            {/if}
           </div>
 
           <div>
@@ -535,6 +538,9 @@
               bind:value={editForm.hours}
               placeholder="e.g., 1.5"
             />
+            {#if selectedRideForEdit.hours}
+              <p class="text-xs text-gray-500 mt-1">Current: {selectedRideForEdit.hours} hours</p>
+            {/if}
           </div>
 
           <div>
@@ -551,6 +557,11 @@
                 <option value={option}>{option}</option>
               {/each}
             </select>
+            {#if selectedRideForEdit.completion_status}
+              <p class="text-xs text-green-600 mt-1">Current: {selectedRideForEdit.completion_status}</p>
+            {:else}
+              <p class="text-xs text-gray-500 mt-1">Not yet set</p>
+            {/if}
           </div>
 
           <div>

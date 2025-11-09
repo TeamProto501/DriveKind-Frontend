@@ -1527,6 +1527,33 @@
             <Input id="e_hours" type="number" step="0.1" bind:value={rideForm.hours} placeholder="e.g., 1.5" />
             <p class="text-xs text-gray-500 mt-1">Driving and waiting time combined.</p>
           </div>
+
+          <div class="mt-4">
+            <label for="e_completion_status_step4" class="block text-sm font-medium text-gray-700">Completion Status</label>
+            <select 
+              id="e_completion_status_step4" 
+              bind:value={rideForm.completion_status} 
+              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            >
+              <option value="">— Select completion type —</option>
+              {#each COMPLETION_STATUS_OPTIONS as s}
+                <option value={s}>{s}</option>
+              {/each}
+            </select>
+            <p class="text-xs text-gray-500 mt-1">Type of completion (round trip, one-way, etc.)</p>
+          </div>
+
+          <!-- ✅ ADD NOTES FIELD FOR COMPLETION COMMENTS -->
+          <div class="mt-4">
+            <label for="e_completion_notes" class="block text-sm font-medium text-gray-700">Completion Notes</label>
+            <Textarea 
+              id="e_completion_notes" 
+              bindvalue={rideForm.notes} 
+              placeholder="Any notes about the ride completion..."
+              rows="3"
+            />
+            <p class="text-xs text-gray-500 mt-1">Additional details about how the ride was completed.</p>
+          </div>
         </div>
       </div>
       {/if}
