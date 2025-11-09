@@ -11,7 +11,7 @@ export const POST: RequestHandler = async (event) => {
 			miles_driven, 
 			donation_received, 
 			donation_amount, 
-			completion_status, // ← Extracted but not saved!
+			completion_status,
 			comments,
 			riders,
 			donation,
@@ -21,21 +21,18 @@ export const POST: RequestHandler = async (event) => {
 			status
 		} = body;
 
-		const finalStatus = status || (completion_status === 'Completed' ? 'Completed' : 'Reported');
+		// ✅ ALWAYS set to 'Completed' when driver completes a ride
+		const finalStatus = 'Completed';
 		const finalMiles = miles_driven ? parseFloat(miles_driven) : null;
 		const finalHours = hours ? parseFloat(hours) : null;
 		const finalDonation = donation !== undefined ? donation : (donation_received || false);
 		const finalNotes = notes || comments || null;
 		const finalRiders = riders ? parseInt(riders) : null;
 		const finalDonationAmount = donation_amount ? parseFloat(donation_amount) : null;
-		const finalCompletionStatus = completion_status || null; // ← NEW
+		const finalCompletionStatus = completion_status || null;
 
-		if (!rideId || !finalStatus) {
-			return json({ error: 'Missing required fields' }, { status: 400 });
-		}
-
-		if (finalStatus === 'Completed' && (!finalMiles || !finalHours)) {
-			return json({ error: 'Miles driven and hours are required for completion' }, { status: 400 });
+		if (!rideId) {
+			return json({ error: 'Missing ride ID' }, { status: 400 });
 		}
 
 		const supabase = createSupabaseServerClient(event);
@@ -59,12 +56,12 @@ export const POST: RequestHandler = async (event) => {
 
 		// Update the ride with completion data
 		const updateData: any = {
-			status: finalStatus,
+			status: finalStatus, // ✅ Always 'Completed'
 			miles_driven: finalMiles,
 			hours: finalHours,
 			donation: finalDonation,
 			notes: finalNotes,
-			completion_status: finalCompletionStatus // ← ADD THIS LINE
+			completion_status: finalCompletionStatus
 		};
 
 		if (finalRiders !== null) {
@@ -104,7 +101,7 @@ export const POST: RequestHandler = async (event) => {
 		}
 		if (end_time) {
 			completedData.actual_end = new Date(end_time).toISOString();
-		} else if (finalStatus === 'Completed' || finalStatus === 'Reported') {
+		} else {
 			completedData.actual_end = new Date().toISOString();
 		}
 

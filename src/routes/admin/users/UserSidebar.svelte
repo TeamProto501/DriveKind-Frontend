@@ -87,12 +87,13 @@
   let saving = false;
   let errorMessage: string | null = null;
   let tempPassword = '';
+  let tempPasswordConfirm = '';
 
   function initForm(): StaffForm {
     if (!user || createMode) {
       return {
         first_name: '', last_name: '', email: '', primary_phone: '', secondary_phone: '',
-        role: [], dob: '', gender: undefined, address: '', address2: '', city: '', state: '', zipcode: '',
+        role: [], dob: '', gender: undefined, address: '', address2: '', city: '', state: 'NY', zipcode: '',
         contact_pref_enum: 'Phone', emergency_contact: '', emergency_reln: '', emergency_phone: '',
         training_completed: false, mileage_reimbursement: false, can_accept_service_animals: true,
         destination_limitation: '', town_preference: '', allergens: '', driver_other_limitations: '',
@@ -130,6 +131,8 @@
       if(!form.primary_phone || !form.primary_phone.trim()) errs.push('Primary phone is required.');
       if(createMode && !tempPassword) errs.push('Temporary password is required for new users.');
       if(createMode && tempPassword && tempPassword.length<6) errs.push('Password must be at least 6 characters.');
+      if(createMode && !tempPasswordConfirm) errs.push('Password confirmation is required.'); // ← Add this
+      if(createMode && tempPassword !== tempPasswordConfirm) errs.push('Passwords do not match.'); // ← Add this
       if(!form.role || form.role.length===0) errs.push('Select at least one role.');
     }
     if (s===2){
@@ -247,7 +250,14 @@
   <!-- Body -->
   <div class="flex-1 overflow-y-auto p-6 space-y-4">
     {#if errorMessage}
-      <div class="rounded-md bg-red-50 p-3 text-sm text-red-700">{errorMessage}</div>
+      <div class="rounded-md bg-red-50 border border-red-200 p-3 text-sm text-red-700">
+        <p class="font-medium mb-2">Please fix the following errors:</p>
+        <ul class="list-disc list-inside space-y-1">
+          {#each errorMessage.split('. ').filter(e => e.trim()) as err}
+            <li>{err}{err.endsWith('.') ? '' : '.'}</li>
+          {/each}
+        </ul>
+      </div>
     {/if}
 
     {#if !createMode && mode==='view' && user}
@@ -319,8 +329,33 @@
             {#if !createMode && user}<p class="text-xs text-gray-500 mt-1">Email cannot be changed after creation</p>{/if}
           </div>
           {#if createMode}
-            <div><label class="block text-base font-medium">Temporary Password *</label>
-              <input required class="mt-1 w-full border rounded px-3 py-2 text-base" type="password" bind:value={tempPassword} placeholder="User can change later" />
+            <div>
+              <label class="block text-base font-medium">Temporary Password *</label>
+              <input 
+                required 
+                class="mt-1 w-full border rounded px-3 py-2 text-base" 
+                type="password" 
+                bind:value={tempPassword} 
+                placeholder="Minimum 6 characters"
+                autocomplete="new-password"
+              />
+              <p class="text-xs text-gray-500 mt-1">User can change this after first login</p>
+            </div>
+            <div>
+              <label class="block text-base font-medium">Confirm Password *</label>
+              <input 
+                required 
+                class="mt-1 w-full border rounded px-3 py-2 text-base {tempPassword && tempPasswordConfirm && tempPassword !== tempPasswordConfirm ? 'border-red-500 ring-2 ring-red-200' : ''}" 
+                type="password" 
+                bind:value={tempPasswordConfirm} 
+                placeholder="Re-enter password"
+                autocomplete="new-password"
+              />
+              {#if tempPassword && tempPasswordConfirm && tempPassword !== tempPasswordConfirm}
+                <p class="text-xs text-red-600 mt-1">Passwords do not match</p>
+              {:else if tempPassword && tempPasswordConfirm && tempPassword === tempPasswordConfirm}
+                <p class="text-xs text-green-600 mt-1">✓ Passwords match</p>
+              {/if}
             </div>
           {/if}
           <div><label class="block text-base font-medium">Primary Phone *</label><input required class="mt-1 w-full border rounded px-3 py-2 text-base" bind:value={form.primary_phone} /></div>

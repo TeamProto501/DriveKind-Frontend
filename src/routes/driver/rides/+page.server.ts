@@ -77,6 +77,8 @@ export const load: PageServerLoad = async (event) => {
       call_id,
       alt_pickup_address2,
       dropoff_address2,
+      completion_status,
+      donation_amount,
       clients:client_id (
         first_name,
         last_name,
@@ -152,6 +154,8 @@ export const load: PageServerLoad = async (event) => {
         call_id,
         alt_pickup_address2,
         dropoff_address2,
+        completion_status,
+        donation_amount,
         clients:client_id (
           first_name,
           last_name,

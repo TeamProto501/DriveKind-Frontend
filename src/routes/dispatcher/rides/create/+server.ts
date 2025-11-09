@@ -144,8 +144,8 @@ export const POST: RequestHandler = async (event) => {
     }
 
     // Basic required fields
-    if (!payload.client_id || !payload.dropoff_address || !payload.destination_name || !payload.appointment_time) {
-      return json({ error: 'Missing required fields (client_id, dropoff_address, destination_name, appointment_time).' }, { status: 400 });
+    if (!payload.client_id || !payload.dropoff_address || !payload.dropoff_city || !payload.appointment_time) {
+      return json({ error: 'Missing required fields (client_id, dropoff_address, dropoff_city, appointment_time).' }, { status: 400 });
     }
 
     const { data: ride, error: rideError } = await supabase
