@@ -91,7 +91,7 @@
         street_address: "",
         address2: null,
         city: "",
-        state: "",
+        state: "NY", // ← Set default state to NY
         zip_code: "",
         lives_alone: false,
         primaryPhone_is_cell: true,
@@ -130,7 +130,7 @@
     if (s === 1) {
       if (!form.first_name.trim()) e.push("First name is required.");
       if (!form.last_name.trim()) e.push("Last name is required.");
-      //if(!form.email || !String(form.email).trim()) e.push('Email is required.');
+      // Email is optional - removed from validation
       if (!form.primary_phone.trim()) e.push("Primary phone is required.");
       if (!form.date_of_birth) e.push("Date of birth is required.");
       if (!form.gender) e.push("Gender is required.");
@@ -140,7 +140,7 @@
       if (!form.street_address.trim()) e.push("Street address is required.");
       if (!form.city.trim()) e.push("City is required.");
       if (!form.state.trim()) e.push("State is required.");
-      if (!form.zip_code.trim()) e.push("ZIP is required.");
+      if (!form.zip_code.trim()) e.push("ZIP code is required.");
     }
     return e;
   }
@@ -253,8 +253,13 @@
   <!-- Body -->
   <div class="flex-1 overflow-y-auto p-6 space-y-4">
     {#if errorMessage}
-      <div class="rounded-md bg-red-50 p-3 text-sm text-red-700">
-        {errorMessage}
+      <div class="rounded-md bg-red-50 border border-red-200 p-3 text-sm text-red-700">
+        <p class="font-medium mb-2">Please fix the following errors:</p>
+        <ul class="list-disc list-inside space-y-1">
+          {#each errorMessage.split('. ').filter(e => e.trim()) as err}
+            <li>{err}{err.endsWith('.') ? '' : '.'}</li>
+          {/each}
+        </ul>
       </div>
     {/if}
 
@@ -283,8 +288,13 @@
             </div>
           </div>
           <div>
-            <div class="text-xs text-gray-500">Email</div>
-            <div class="font-medium">{client.email || "—"}</div>
+            <label class="block text-base font-medium">Email <span class="text-gray-500 font-normal">(optional)</span></label>
+            <input
+              type="email"
+              class="mt-1 w-full border rounded px-3 py-2 text-base"
+              bind:value={form.email}
+              placeholder="client@example.com"
+            />
           </div>
           <div>
             <div class="text-xs text-gray-500">Address</div>
