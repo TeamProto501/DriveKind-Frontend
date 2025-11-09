@@ -21,6 +21,14 @@
   let isUpdating = $state(false);
   let showCompletionModal = $state(false);
   let selectedRideForCompletion = $state<any>(null);
+  let showEditModal = $state(false);
+  let selectedRideForEdit = $state<any>(null);
+  let editForm = $state({
+    miles_driven: '',
+    hours: '',
+    notes: '',
+    completion_status: ''
+  });
 
   function getStatusColor(status: string) {
     switch (status) {
@@ -218,6 +226,72 @@
       isUpdating = false;
     }
   }
+
+  function openEditModal(ride: any) {
+    selectedRideForEdit = ride;
+    editForm = {
+      miles_driven: ride.miles_driven?.toString() || '',
+      hours: ride.hours?.toString() || '',
+      notes: ride.notes || '',
+      completion_status: ride.completion_status || ''
+    };
+    showEditModal = true;
+  }
+
+  async function saveRideEdit() {
+    if (!selectedRideForEdit) return;
+
+    // Validate numbers
+    if (editForm.miles_driven && isNaN(Number(editForm.miles_driven))) {
+      alert('Miles driven must be a valid number');
+      return;
+    }
+    if (editForm.hours && isNaN(Number(editForm.hours))) {
+      alert('Hours must be a valid number');
+      return;
+    }
+
+    isUpdating = true;
+    try {
+      const payload = {
+        rideId: selectedRideForEdit.ride_id,
+        miles_driven: editForm.miles_driven ? parseFloat(editForm.miles_driven) : null,
+        hours: editForm.hours ? parseFloat(editForm.hours) : null,
+        notes: editForm.notes || null,
+        completion_status: editForm.completion_status || null
+      };
+
+      const resp = await fetch(`/driver/rides/edit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (!resp.ok) {
+        const errorData = await resp.json().catch(() => ({ error: 'Unknown error' }));
+        alert(`Failed to update ride: ${errorData.error || 'Unknown error'}`);
+        return;
+      }
+
+      showEditModal = false;
+      selectedRideForEdit = null;
+      await invalidateAll();
+      alert('Ride updated successfully!');
+    } catch (e) {
+      console.error(e);
+      alert('Error updating ride. Please try again.');
+    } finally {
+      isUpdating = false;
+    }
+  }
+
+  const COMPLETION_STATUS_OPTIONS = [
+    "Completed Round Trip",
+    "Completed One Way To",
+    "Completed One Way From",
+    "Cancelled by Client",
+    "Cancelled by Driver"
+  ];
 </script>
 
 <svelte:head>
@@ -387,11 +461,11 @@
                 </Button>
               {/if}
 
-              {#if ride.status !== "Cancelled"}
+              {#if ride.status !== "Pending" && ride.status !== "Cancelled"}
                 <Button 
                   variant="outline" 
                   size="sm" 
-                  onclick={() => window.location.href = `/dispatcher/rides?edit=${ride.ride_id}`}
+                  onclick={() => openEditModal(ride)}
                   disabled={isUpdating}
                 >
                   <Edit class="w-4 h-4 mr-1" />Edit
@@ -425,12 +499,98 @@
       </CardContent>
     </Card>
   {/if}
-</div>
+  <!-- ======= DRIVER EDIT MODAL ======= -->
+  {#if showEditModal && selectedRideForEdit}
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+      <div class="bg-white rounded-lg p-6 max-w-lg w-full mx-4">
+        <div class="mb-4">
+          <h2 class="text-xl font-semibold">Edit Ride Details</h2>
+          <p class="text-sm text-gray-600 mt-1">
+            Update information for {getClientName(selectedRideForEdit)}
+          </p>
+        </div>
 
-<RideCompletionModal
-  bind:show={showCompletionModal}
-  ride={selectedRideForCompletion}
-  isDriver={true}
-  onSubmit={submitCompletion}
-  isSubmitting={isUpdating}
-/>
+        <div class="space-y-4">
+          <div>
+            <label for="edit_miles" class="block text-sm font-medium text-gray-700 mb-1">
+              Miles Driven
+            </label>
+            <Input
+              id="edit_miles"
+              type="number"
+              step="0.1"
+              bind:value={editForm.miles_driven}
+              placeholder="e.g., 12.5"
+            />
+          </div>
+
+          <div>
+            <label for="edit_hours" class="block text-sm font-medium text-gray-700 mb-1">
+              Hours
+            </label>
+            <Input
+              id="edit_hours"
+              type="number"
+              step="0.1"
+              bind:value={editForm.hours}
+              placeholder="e.g., 1.5"
+            />
+          </div>
+
+          <div>
+            <label for="edit_completion_status" class="block text-sm font-medium text-gray-700 mb-1">
+              Completion Status
+            </label>
+            <select
+              id="edit_completion_status"
+              bind:value={editForm.completion_status}
+              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            >
+              <option value="">— Select completion type —</option>
+              {#each COMPLETION_STATUS_OPTIONS as option}
+                <option value={option}>{option}</option>
+              {/each}
+            </select>
+          </div>
+
+          <div>
+            <label for="edit_notes" class="block text-sm font-medium text-gray-700 mb-1">
+              Notes
+            </label>
+            <textarea
+              id="edit_notes"
+              bind:value={editForm.notes}
+              rows="3"
+              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              placeholder="Any additional notes..."
+            ></textarea>
+          </div>
+        </div>
+
+        <div class="flex justify-end gap-2 mt-6">
+          <Button 
+            variant="outline" 
+            onclick={() => { showEditModal = false; selectedRideForEdit = null; }}
+            disabled={isUpdating}
+          >
+            Cancel
+          </Button>
+          <Button 
+            onclick={saveRideEdit}
+            disabled={isUpdating}
+          >
+            {isUpdating ? 'Saving...' : 'Save Changes'}
+          </Button>
+        </div>
+      </div>
+    </div>
+  {/if}
+
+  <RideCompletionModal
+    bind:show={showCompletionModal}
+    ride={selectedRideForCompletion}
+    isDriver={true}
+    onSubmit={submitCompletion}
+    isSubmitting={isUpdating}
+  />
+</div>

@@ -1500,6 +1500,7 @@
               <option value="">—</option>
               {#each COMPLETION_STATUS_OPTIONS as s}<option value={s}>{s}</option>{/each}
             </select>
+            <p class="text-xs text-gray-500 mt-1">Type of completion (round trip, one-way, etc.)</p>
           </div>
         </div>
 
