@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { X, UserCheck, AlertCircle } from "@lucide/svelte";
+  import { X, UserCheck, AlertCircle, Search } from "@lucide/svelte";
 
   let { 
     show = $bindable(false),
@@ -22,7 +22,7 @@
   let matchedDrivers = $state<{ available: MatchDriver[]; excluded: MatchDriver[] }>({ available: [], excluded: [] });
   let isMatching = $state(false);
   let searchTerm = $state("");
-  let selectedDriver = $state<string | null>(null);
+  let selectedDriverIds = $state<Set<string>>(new Set());
 
   // driver_id -> 'pending' | 'denied'
   let requestStatusMap = $state<Record<string, 'pending' | 'denied'>>({});
@@ -34,10 +34,15 @@
     return matchedDrivers.available.filter(d => `${d.first_name} ${d.last_name}`.toLowerCase().includes(q));
   });
 
+  // Derived: selectable drivers (not pending/denied)
+  let selectableDrivers = $derived(() => {
+    return filteredAvailable().filter(d => !requestStatusMap[String(d.user_id)]);
+  });
+
   function closeModal() {
     show = false;
     searchTerm = "";
-    selectedDriver = null;
+    selectedDriverIds = new Set();
   }
 
   function getQualityColor(quality: string) {
@@ -59,10 +64,31 @@
     }
   }
 
+  function toggleDriver(driverId: string) {
+    if (selectedDriverIds.has(driverId)) {
+      selectedDriverIds.delete(driverId);
+    } else {
+      selectedDriverIds.add(driverId);
+    }
+    selectedDriverIds = new Set(selectedDriverIds); // Trigger reactivity
+  }
+
+  function selectAll() {
+    selectedDriverIds = new Set(selectableDrivers().map(d => d.user_id));
+  }
+
+  function clearSelection() {
+    selectedDriverIds = new Set();
+  }
+
   // Open -> load matches, then load request statuses so Pending/Denied persist
   $effect(() => {
     if (show && ride) {
       void fetchMatchedDrivers();
+    } else if (!show) {
+      // Reset when closed
+      selectedDriverIds = new Set();
+      searchTerm = "";
     }
   });
 
@@ -127,47 +153,60 @@
     }
   }
 
-  async function sendRequestToDriver(driverId: string) {
-    if (!token || !ride?.ride_id) return;
+  async function sendRequestsToSelectedDrivers() {
+    if (!token || !ride?.ride_id || selectedDriverIds.size === 0) return;
 
-    selectedDriver = driverId;
+    const driverIdsArray = Array.from(selectedDriverIds);
+    
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/rides/${ride.ride_id}/send-request`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ driver_user_id: driverId })
-      });
+      const results = await Promise.allSettled(
+        driverIdsArray.map(driverId =>
+          fetch(`${import.meta.env.VITE_API_URL}/rides/${ride.ride_id}/send-request`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ driver_user_id: driverId })
+          }).then(r => r.json())
+        )
+      );
 
-      if (!res.ok) {
-        const t = await res.text();
-        console.error('send-request failed:', res.status, t);
-        alert('Failed to send request.');
-        return;
+      const successful = results.filter(r => r.status === 'fulfilled').length;
+      const failed = results.filter(r => r.status === 'rejected').length;
+
+      // Optimistically update all selected drivers to pending
+      const newMap = { ...requestStatusMap };
+      driverIdsArray.forEach(id => {
+        newMap[String(id)] = 'pending';
+      });
+      requestStatusMap = newMap;
+
+      // Clear selection
+      selectedDriverIds = new Set();
+
+      if (successful > 0) {
+        alert(`Ride request sent to ${successful} driver${successful !== 1 ? 's' : ''}!${failed > 0 ? ` (${failed} failed)` : ''}`);
+      } else {
+        alert('Failed to send ride requests to any drivers');
       }
 
-      // Optimistically set button to Pending and lock it
-      requestStatusMap = { ...requestStatusMap, [String(driverId)]: 'pending' };
-
-      // Optionally re-pull statuses (keeps UI consistent if others changed)
-      // await loadRequestStatuses();
+      // Optionally reload statuses to confirm
+      await loadRequestStatuses();
     } catch (e) {
       console.error('send-request error:', e);
-      alert('Error sending request.');
-    } finally {
-      selectedDriver = null;
+      alert('Error sending requests.');
     }
   }
 </script>
 
 {#if show}
   <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-    <div class="bg-white rounded-lg p-6 max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+    <div class="bg-white rounded-lg p-6 max-w-4xl w-full mx-4 max-h-[90vh] flex flex-col">
+      <!-- Header -->
       <div class="flex items-center justify-between mb-4">
         <div>
-          <h2 class="text-xl font-semibold">Select Driver for Ride</h2>
+          <h2 class="text-xl font-semibold">Send Ride Request</h2>
           <p class="text-sm text-gray-600">Drivers are ranked by best match for this ride</p>
         </div>
         <button onclick={closeModal} class="text-gray-400 hover:text-gray-600">
@@ -177,15 +216,15 @@
 
       <!-- Ride Summary -->
       {#if ride}
-        <div class="bg-blue-50 rounded-lg p-4 mb-6">
+        <div class="bg-blue-50 rounded-lg p-4 mb-4">
           <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
             <div>
-              <span class="font-medium text-gray-700">Pickup:</span>
-              <span class="ml-2 text-gray-900">{ride.pickup_from_home ? 'Client Home' : ride.alt_pickup_city}</span>
+              <span class="font-medium text-gray-700">Client:</span>
+              <span class="ml-2 text-gray-900">{ride.clients?.first_name} {ride.clients?.last_name}</span>
             </div>
             <div>
-              <span class="font-medium text-gray-700">Dropoff:</span>
-              <span class="ml-2 text-gray-900">{ride.dropoff_city}</span>
+              <span class="font-medium text-gray-700">Destination:</span>
+              <span class="ml-2 text-gray-900">{ride.destination_name}</span>
             </div>
             <div>
               <span class="font-medium text-gray-700">Passengers:</span>
@@ -207,108 +246,150 @@
           <p class="mt-4 text-gray-600">Finding best matched drivers...</p>
         </div>
       {:else}
-        <!-- Search -->
-        <div class="mb-4">
-          <input 
-            type="text"
-            bind:value={searchTerm}
-            placeholder="Search drivers by name..."
-            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-          />
+        <!-- Search & Selection Controls -->
+        <div class="space-y-3 mb-4">
+          <div class="relative">
+            <Search class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+            <input 
+              type="text"
+              bind:value={searchTerm}
+              placeholder="Search drivers by name..."
+              class="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            />
+          </div>
+
+          {#if selectedDriverIds.size > 0}
+            <div class="flex items-center justify-between text-sm bg-blue-50 border border-blue-200 rounded-lg px-4 py-2">
+              <span class="text-blue-900 font-medium">
+                <strong>{selectedDriverIds.size}</strong> driver{selectedDriverIds.size !== 1 ? 's' : ''} selected
+              </span>
+              <div class="flex gap-2">
+                <button onclick={clearSelection} class="text-blue-600 hover:text-blue-800 font-medium">
+                  Clear
+                </button>
+                {#if selectableDrivers().length > 0 && selectedDriverIds.size < selectableDrivers().length}
+                  <button onclick={selectAll} class="text-blue-600 hover:text-blue-800 font-medium">
+                    Select All ({selectableDrivers().length})
+                  </button>
+                {/if}
+              </div>
+            </div>
+          {/if}
         </div>
 
         <!-- Available Drivers -->
-        {#if filteredAvailable().length > 0}
-          <div class="space-y-3 mb-6">
-            <h3 class="text-sm font-semibold text-gray-700 uppercase tracking-wide">
-              Available Drivers ({filteredAvailable().length})
-            </h3>
+        <div class="flex-1 overflow-y-auto mb-4">
+          {#if filteredAvailable().length > 0}
+            <div class="space-y-3">
+              <h3 class="text-sm font-semibold text-gray-700 uppercase tracking-wide sticky top-0 bg-white py-2">
+                Available Drivers ({filteredAvailable().length})
+              </h3>
 
-            {#each filteredAvailable() as driver}
-              <div class="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors">
-                <div class="flex items-start justify-between">
-                  <div class="flex-1">
-                    <div class="flex items-center gap-3 mb-2">
-                      <h4 class="font-semibold text-gray-900">{driver.first_name} {driver.last_name}</h4>
-                      <span class="px-2 py-1 text-xs font-medium rounded-full border {getQualityColor(driver.match_quality)}">
-                        {getQualityIcon(driver.match_quality)} {driver.match_quality.toUpperCase()}
-                      </span>
-                      <span class="text-sm text-gray-600">Score: {driver.score}</span>
+              {#each filteredAvailable() as driver}
+                {@const isRequested = !!requestStatusMap[String(driver.user_id)]}
+                {@const requestStatus = requestStatusMap[String(driver.user_id)]}
+                
+                <div class="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors {selectedDriverIds.has(driver.user_id) ? 'bg-blue-50 border-blue-300' : ''}">
+                  <div class="flex items-start gap-3">
+                    <!-- Checkbox (only if not already requested) -->
+                    {#if !isRequested}
+                      <input
+                        type="checkbox"
+                        checked={selectedDriverIds.has(driver.user_id)}
+                        onchange={() => toggleDriver(driver.user_id)}
+                        class="mt-1 h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                      />
+                    {/if}
+
+                    <div class="flex-1">
+                      <div class="flex items-center gap-3 mb-2">
+                        <h4 class="font-semibold text-gray-900">{driver.first_name} {driver.last_name}</h4>
+                        <span class="px-2 py-1 text-xs font-medium rounded-full border {getQualityColor(driver.match_quality)}">
+                          {getQualityIcon(driver.match_quality)} {driver.match_quality.toUpperCase()}
+                        </span>
+                        <span class="text-sm text-gray-600">Score: {driver.score}</span>
+                      </div>
+
+                      {#if driver.reasons?.length > 0}
+                        <div class="space-y-1">
+                          {#each driver.reasons as reason}
+                            <div class="flex items-center gap-2 text-sm text-gray-600">
+                              <div class="w-1.5 h-1.5 bg-green-500 rounded-full"></div>
+                              <span>{reason}</span>
+                            </div>
+                          {/each}
+                        </div>
+                      {/if}
                     </div>
 
-                    {#if driver.reasons?.length > 0}
-                      <div class="space-y-1">
-                        {#each driver.reasons as reason}
-                          <div class="flex items-center gap-2 text-sm text-gray-600">
-                            <div class="w-1.5 h-1.5 bg-green-500 rounded-full"></div>
-                            <span>{reason}</span>
-                          </div>
+                    <!-- Status badge (if already requested) -->
+                    {#if requestStatus === 'pending'}
+                      <span class="ml-4 px-3 py-2 text-sm rounded-lg border bg-gray-100 text-gray-700 whitespace-nowrap">
+                        Pending
+                      </span>
+                    {:else if requestStatus === 'denied'}
+                      <span class="ml-4 px-3 py-2 text-sm rounded-lg border bg-red-50 text-red-700 whitespace-nowrap">
+                        Denied
+                      </span>
+                    {/if}
+                  </div>
+                </div>
+              {/each}
+            </div>
+          {:else if searchTerm}
+            <div class="text-center py-8 text-gray-500">
+              <p>No drivers match your search</p>
+            </div>
+          {:else}
+            <div class="text-center py-8 text-gray-500">
+              <p>No available drivers found</p>
+            </div>
+          {/if}
+
+          <!-- Excluded Drivers -->
+          {#if matchedDrivers.excluded.length > 0}
+            <details class="border border-gray-200 rounded-lg mt-4">
+              <summary class="px-4 py-3 cursor-pointer hover:bg-gray-50 flex items-center gap-2">
+                <AlertCircle class="w-4 h-4 text-gray-400" />
+                <span class="text-sm font-medium text-gray-700">
+                  Unavailable Drivers ({matchedDrivers.excluded.length})
+                </span>
+              </summary>
+              <div class="px-4 py-3 space-y-2 border-t border-gray-200">
+                {#each matchedDrivers.excluded as d}
+                  <div class="py-2">
+                    <p class="font-medium text-gray-900">{d.first_name} {d.last_name}</p>
+                    {#if d.exclusion_reasons?.length > 0}
+                      <div class="space-y-0.5 mt-1">
+                        {#each d.exclusion_reasons as reason}
+                          <p class="text-xs text-red-600">• {reason}</p>
                         {/each}
                       </div>
                     {/if}
                   </div>
-
-                  {#if requestStatusMap[String(driver.user_id)] === 'pending'}
-                    <span class="ml-4 px-3 py-2 text-sm rounded-lg border bg-gray-100 text-gray-700">
-                      Pending
-                    </span>
-                  {:else if requestStatusMap[String(driver.user_id)] === 'denied'}
-                    <span class="ml-4 px-3 py-2 text-sm rounded-lg border bg-red-50 text-red-700">
-                      Denied
-                    </span>
-                  {:else}
-                    <button 
-                      onclick={() => sendRequestToDriver(driver.user_id)}
-                      disabled={isLoading || selectedDriver === driver.user_id}
-                      class="ml-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm flex items-center gap-2 transition-colors disabled:opacity-50"
-                    >
-                      <UserCheck class="w-4 h-4" />
-                      {selectedDriver === driver.user_id ? 'Sending...' : 'Send Request'}
-                    </button>
-                  {/if}
-                </div>
+                {/each}
               </div>
-            {/each}
-          </div>
-        {:else if searchTerm}
-          <div class="text-center py-8 text-gray-500">
-            <p>No drivers match your search</p>
-          </div>
-        {/if}
-
-        <!-- Excluded Drivers -->
-        {#if matchedDrivers.excluded.length > 0}
-          <details class="border border-gray-200 rounded-lg">
-            <summary class="px-4 py-3 cursor-pointer hover:bg-gray-50 flex items-center gap-2">
-              <AlertCircle class="w-4 h-4 text-gray-400" />
-              <span class="text-sm font-medium text-gray-700">
-                Unavailable Drivers ({matchedDrivers.excluded.length})
-              </span>
-            </summary>
-            <div class="px-4 py-3 space-y-2 border-t border-gray-200">
-              {#each matchedDrivers.excluded as d}
-                <div class="py-2">
-                  <p class="font-medium text-gray-900">{d.first_name} {d.last_name}</p>
-                  {#if d.exclusion_reasons?.length > 0}
-                    <div class="space-y-0.5 mt-1">
-                      {#each d.exclusion_reasons as reason}
-                        <p class="text-xs text-red-600">• {reason}</p>
-                      {/each}
-                    </div>
-                  {/if}
-                </div>
-              {/each}
-            </div>
-          </details>
-        {/if}
+            </details>
+          {/if}
+        </div>
       {/if}
 
-      <div class="flex justify-end mt-6">
+      <!-- Footer -->
+      <div class="flex justify-end gap-2 pt-4 border-t">
         <button 
           onclick={closeModal}
-          class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+          disabled={isLoading}
+          class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50"
         >
           Cancel
+        </button>
+        <button
+          onclick={sendRequestsToSelectedDrivers}
+          disabled={isLoading || selectedDriverIds.size === 0}
+          class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-2 transition-colors disabled:opacity-50"
+        >
+          <UserCheck class="w-4 h-4" />
+          {isLoading ? 'Sending...' : `Send to ${selectedDriverIds.size} Driver${selectedDriverIds.size !== 1 ? 's' : ''}`}
         </button>
       </div>
     </div>

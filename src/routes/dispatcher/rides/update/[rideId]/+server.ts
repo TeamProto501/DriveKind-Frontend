@@ -280,12 +280,9 @@ export const POST: RequestHandler = async (event) => {
     const missing: string[] = [];
     if (!resulting.client_id) missing.push('client_id');
     if (!resulting.dropoff_address) missing.push('dropoff_address');
-    if (!resulting.destination_name) missing.push('destination_name');
+    if (!resulting.dropoff_city) missing.push('dropoff_city'); // Added city as required
     if (body.hasOwnProperty('appointment_time') && !resulting.appointment_time) {
       missing.push('appointment_time');
-    }
-    if (missing.length) {
-      return json({ error: 'Missing required fields', details: missing }, { status: 400 });
     }
 
     // Perform update

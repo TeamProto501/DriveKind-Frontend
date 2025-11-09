@@ -93,7 +93,7 @@
     if (!user || createMode) {
       return {
         first_name: '', last_name: '', email: '', primary_phone: '', secondary_phone: '',
-        role: [], dob: '', gender: undefined, address: '', address2: '', city: '', state: '', zipcode: '',
+        role: [], dob: '', gender: undefined, address: '', address2: '', city: '', state: 'NY', zipcode: '',
         contact_pref_enum: 'Phone', emergency_contact: '', emergency_reln: '', emergency_phone: '',
         training_completed: false, mileage_reimbursement: false, can_accept_service_animals: true,
         destination_limitation: '', town_preference: '', allergens: '', driver_other_limitations: '',
