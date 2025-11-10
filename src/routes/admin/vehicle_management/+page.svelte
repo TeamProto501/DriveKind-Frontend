@@ -479,14 +479,14 @@
 									{#if canManage}
 										<td class="px-6 py-4 whitespace-nowrap">
 											<div class="flex items-center gap-2">
-												<Button variant="outline" size="sm" class="flex items-center gap-1" onclick={() => openEdit(v)}>
+												<button class="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors" onclick={() => openEdit(v)}>
 													<Pencil class="w-4 h-4" />
 													<span>Edit</span>
-												</Button>
-												<Button variant="destructive" size="sm" class="flex items-center gap-1" onclick={() => openDeleteModal(v)}>
+												</button>
+												<button class="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-white bg-red-500 hover:bg-red-600 rounded-md transition-colors" onclick={() => openDeleteModal(v)}>
 													<Trash2 class="w-4 h-4" />
 													<span>Delete</span>
-												</Button>
+												</button>
 											</div>
 										</td>
 									{/if}

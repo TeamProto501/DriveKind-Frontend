@@ -574,10 +574,10 @@
 									</td>
 									<td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
 										<div class="flex space-x-2">
-											<button onclick={() => openEditModal(org)} class="inline-flex items-center px-3 py-2 rounded-md text-white bg-blue-600 hover:bg-blue-700">
+											<button onclick={() => openEditModal(org)} class="inline-flex items-center px-3 py-2 rounded-md text-white bg-blue-600 hover:bg-blue-700 transition-colors">
 												<Edit class="w-4 h-4 mr-1" /> Edit
 											</button>
-											<button onclick={() => openDeleteModal(org)} class="inline-flex items-center px-3 py-2 rounded-md text-white bg-red-600 hover:bg-red-700">
+											<button onclick={() => openDeleteModal(org)} class="inline-flex items-center px-3 py-2 rounded-md text-white bg-red-500 hover:bg-red-600 transition-colors">
 												<Trash2 class="w-4 h-4 mr-1" /> Delete
 											</button>
 										</div>

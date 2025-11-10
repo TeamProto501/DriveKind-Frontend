@@ -235,7 +235,7 @@
 >
   <!-- Header -->
   <div class="px-6 py-4 border-b flex items-center justify-between">
-    <h2 class="text-lg md:text-xl font-semibold text-gray-900">
+    <h2 class="text-base md:text-lg font-semibold text-gray-900">
       {createMode
         ? "Add New Client"
         : mode === "view"
@@ -265,13 +265,13 @@
 
     {#if !createMode && mode === "view" && client}
       <!-- READ-ONLY PROFILE -->
-      <div class="space-y-4 text-[15px] leading-6">
+      <div class="space-y-4 text-sm leading-6">
         <div class="bg-gray-50 rounded-lg p-3">
-          <div class="font-semibold text-gray-900 text-lg">
+          <div class="font-semibold text-gray-900 text-base">
             {client.first_name}
             {client.last_name}
           </div>
-          <div class="text-gray-600">
+          <div class="text-gray-600 text-sm">
             {client.gender} • {client.client_status_enum}
           </div>
         </div>
@@ -288,10 +288,10 @@
             </div>
           </div>
           <div>
-            <label class="block text-base font-medium">Email <span class="text-gray-500 font-normal">(optional)</span></label>
+            <label class="block text-sm font-medium">Email <span class="text-gray-500 font-normal">(optional)</span></label>
             <input
               type="email"
-              class="mt-1 w-full border rounded px-3 py-2 text-base"
+              class="mt-1 w-full border rounded px-3 py-2 text-sm"
               bind:value={form.email}
               placeholder="client@example.com"
             />
@@ -424,35 +424,35 @@
         <!-- Basic Info -->
         <div class="space-y-3">
           <div>
-            <label class="block text-base font-medium">First Name *</label
+            <label class="block text-sm font-medium">First Name *</label
             ><input
               required
-              class="mt-1 w-full border rounded px-3 py-2 text-base"
+              class="mt-1 w-full border rounded px-3 py-2 text-sm"
               bind:value={form.first_name}
             />
           </div>
           <div>
-            <label class="block text-base font-medium">Last Name *</label><input
+            <label class="block text-sm font-medium">Last Name *</label><input
               required
-              class="mt-1 w-full border rounded px-3 py-2 text-base"
+              class="mt-1 w-full border rounded px-3 py-2 text-sm"
               bind:value={form.last_name}
             />
           </div>
           <div class="grid grid-cols-2 gap-3">
             <div>
-              <label class="block text-base font-medium">Date of Birth *</label
+              <label class="block text-sm font-medium">Date of Birth *</label
               ><input
                 required
                 type="date"
-                class="mt-1 w-full border rounded px-3 py-2 text-base"
+                class="mt-1 w-full border rounded px-3 py-2 text-sm"
                 bind:value={form.date_of_birth}
               />
             </div>
             <div>
-              <label class="block text-base font-medium">Gender *</label>
+              <label class="block text-sm font-medium">Gender *</label>
               <select
                 required
-                class="mt-1 w-full border rounded px-3 py-2 text-base"
+                class="mt-1 w-full border rounded px-3 py-2 text-sm"
                 bind:value={form.gender}
               >
                 {#each genderOptions as g}<option value={g}>{g}</option>{/each}
@@ -460,36 +460,36 @@
             </div>
           </div>
           <div>
-            <label class="block text-base font-medium">Email</label><input
+            <label class="block text-sm font-medium">Email</label><input
               type="email"
-              class="mt-1 w-full border rounded px-3 py-2 text-base"
+              class="mt-1 w-full border rounded px-3 py-2 text-sm"
               bind:value={form.email}
             />
           </div>
           <div class="grid grid-cols-2 gap-3">
             <div>
-              <label class="block text-base font-medium">Primary Phone *</label
+              <label class="block text-sm font-medium">Primary Phone *</label
               ><input
                 required
-                class="mt-1 w-full border rounded px-3 py-2 text-base"
+                class="mt-1 w-full border rounded px-3 py-2 text-sm"
                 bind:value={form.primary_phone}
               />
             </div>
             <div>
-              <label class="block text-base font-medium">Secondary Phone</label
+              <label class="block text-sm font-medium">Secondary Phone</label
               ><input
-                class="mt-1 w-full border rounded px-3 py-2 text-base"
+                class="mt-1 w-full border rounded px-3 py-2 text-sm"
                 bind:value={form.secondary_phone}
               />
             </div>
           </div>
           <div>
-            <label class="block text-base font-medium"
+            <label class="block text-sm font-medium"
               >Contact Preference *</label
             >
             <select
               required
-              class="mt-1 w-full border rounded px-3 py-2 text-base"
+              class="mt-1 w-full border rounded px-3 py-2 text-sm"
               bind:value={form.contact_pref}
             >
               {#each contactPrefOptions as p}<option value={p}
@@ -504,33 +504,33 @@
         <!-- Address -->
         <div class="space-y-3">
           <div>
-            <label class="block text-base font-medium">Street Address *</label
+            <label class="block text-sm font-medium">Street Address *</label
             ><input
               required
-              class="mt-1 w-full border rounded px-3 py-2 text-base"
+              class="mt-1 w-full border rounded px-3 py-2 text-sm"
               bind:value={form.street_address}
             />
           </div>
           <div>
-            <label class="block text-base font-medium">Address Line 2</label
+            <label class="block text-sm font-medium">Address Line 2</label
             ><input
-              class="mt-1 w-full border rounded px-3 py-2 text-base"
+              class="mt-1 w-full border rounded px-3 py-2 text-sm"
               bind:value={form.address2}
               placeholder="Apt, Suite, etc."
             />
           </div>
           <div class="grid grid-cols-2 gap-3">
             <div>
-              <label class="block text-base font-medium">City *</label><input
+              <label class="block text-sm font-medium">City *</label><input
                 required
-                class="mt-1 w-full border rounded px-3 py-2 text-base"
+                class="mt-1 w-full border rounded px-3 py-2 text-sm"
                 bind:value={form.city}
               />
             </div>
             <div>
-              <label class="block text-base font-medium">State *</label><input
+              <label class="block text-sm font-medium">State *</label><input
                 required
-                class="mt-1 w-full border rounded px-3 py-2 text-base uppercase"
+                class="mt-1 w-full border rounded px-3 py-2 text-sm uppercase"
                 maxlength="2"
                 bind:value={form.state}
                 placeholder="NY"
@@ -538,9 +538,9 @@
             </div>
           </div>
           <div>
-            <label class="block text-base font-medium">Zip Code *</label><input
+            <label class="block text-sm font-medium">Zip Code *</label><input
               required
-              class="mt-1 w-full border rounded px-3 py-2 text-base"
+              class="mt-1 w-full border rounded px-3 py-2 text-sm"
               bind:value={form.zip_code}
               maxlength="10"
             />
@@ -587,11 +587,11 @@
         <div class="space-y-3">
           <div class="grid grid-cols-2 gap-3">
             <div>
-              <label class="block text-base font-medium"
+              <label class="block text-sm font-medium"
                 >Mobility Assistance</label
               >
               <select
-                class="mt-1 w-full border rounded px-3 py-2 text-base"
+                class="mt-1 w-full border rounded px-3 py-2 text-sm"
                 bind:value={form.mobility_assistance_enum}
               >
                 {#each mobilityOptions as m}<option value={m}
@@ -600,10 +600,10 @@
               </select>
             </div>
             <div>
-              <label class="block text-base font-medium">Residence *</label>
+              <label class="block text-sm font-medium">Residence *</label>
               <select
                 required
-                class="mt-1 w-full border rounded px-3 py-2 text-base"
+                class="mt-1 w-full border rounded px-3 py-2 text-sm"
                 bind:value={form.residence_enum}
               >
                 {#each residenceOptions as r}<option value={r}>{r}</option
@@ -621,11 +621,11 @@
             >
           </div>
           <div>
-            <label class="block text-base font-medium"
+            <label class="block text-sm font-medium"
               >Service Animal Size</label
             >
             <select
-              class="mt-1 w-full border rounded px-3 py-2 text-base"
+              class="mt-1 w-full border rounded px-3 py-2 text-sm"
               bind:value={form.service_animal_size_enum}
             >
               {#each serviceAnimalSizeOptions as s}<option value={s}
@@ -636,27 +636,27 @@
 
           <div class="grid grid-cols-1 gap-3">
             <div>
-              <label class="block text-base font-medium">Allergies</label
+              <label class="block text-sm font-medium">Allergies</label
               ><textarea
                 rows="2"
-                class="mt-1 w-full border rounded px-3 py-2 text-base"
+                class="mt-1 w-full border rounded px-3 py-2 text-sm"
                 bind:value={form.allergies}
               />
             </div>
             <div>
-              <label class="block text-base font-medium">Other Allergies</label
+              <label class="block text-sm font-medium">Other Allergies</label
               ><textarea
                 rows="2"
-                class="mt-1 w-full border rounded px-3 py-2 text-base"
+                class="mt-1 w-full border rounded px-3 py-2 text-sm"
                 bind:value={form.other_allergies}
               />
             </div>
             <div>
-              <label class="block text-base font-medium"
+              <label class="block text-sm font-medium"
                 >Other Limitations</label
               ><textarea
                 rows="2"
-                class="mt-1 w-full border rounded px-3 py-2 text-base"
+                class="mt-1 w-full border rounded px-3 py-2 text-sm"
                 bind:value={form.other_limitations}
               />
             </div>
@@ -669,69 +669,69 @@
         <div class="space-y-3">
           <div class="grid grid-cols-2 gap-3">
             <div>
-              <label class="block text-base font-medium">Status *</label>
+              <label class="block text-sm font-medium">Status *</label>
               <select
                 required
-                class="mt-1 w-full border rounded px-3 py-2 text-base"
+                class="mt-1 w-full border rounded px-3 py-2 text-sm"
                 bind:value={form.client_status_enum}
               >
                 {#each statusOptions as s}<option value={s}>{s}</option>{/each}
               </select>
             </div>
             <div>
-              <label class="block text-base font-medium">Date Enrolled *</label>
+              <label class="block text-sm font-medium">Date Enrolled *</label>
               <input
                 required
                 type="date"
-                class="mt-1 w-full border rounded px-3 py-2 text-base"
+                class="mt-1 w-full border rounded px-3 py-2 text-sm"
                 bind:value={form.date_enrolled}
               />
             </div>
           </div>
           {#if form.client_status_enum === "Temporary Thru"}
             <div>
-              <label class="block text-base font-medium"
+              <label class="block text-sm font-medium"
                 >Temporary Client Date</label
               >
               <input
                 type="date"
-                class="mt-1 w-full border rounded px-3 py-2 text-base"
+                class="mt-1 w-full border rounded px-3 py-2 text-sm"
                 bind:value={form.temp_client_date}
               />
             </div>
           {/if}
           <div class="grid grid-cols-2 gap-3">
             <div>
-              <label class="block text-base font-medium">Referral Method</label
+              <label class="block text-sm font-medium">Referral Method</label
               ><input
-                class="mt-1 w-full border rounded px-3 py-2 text-base"
+                class="mt-1 w-full border rounded px-3 py-2 text-sm"
                 bind:value={form.referral_method}
               />
             </div>
             <div>
-              <label class="block text-base font-medium"
+              <label class="block text-sm font-medium"
                 >Driver Preference</label
               ><input
-                class="mt-1 w-full border rounded px-3 py-2 text-base"
+                class="mt-1 w-full border rounded px-3 py-2 text-sm"
                 bind:value={form.driver_preference}
               />
             </div>
           </div>
           <div class="grid grid-cols-1 gap-3">
             <div>
-              <label class="block text-base font-medium"
+              <label class="block text-sm font-medium"
                 >Pickup Instructions</label
               ><textarea
                 rows="2"
-                class="mt-1 w-full border rounded px-3 py-2 text-base"
+                class="mt-1 w-full border rounded px-3 py-2 text-sm"
                 bind:value={form.pick_up_instructions}
               />
             </div>
             <div>
-              <label class="block text-base font-medium">Comments</label
+              <label class="block text-sm font-medium">Comments</label
               ><textarea
                 rows="3"
-                class="mt-1 w-full border rounded px-3 py-2 text-base"
+                class="mt-1 w-full border rounded px-3 py-2 text-sm"
                 bind:value={form.comments}
               />
             </div>

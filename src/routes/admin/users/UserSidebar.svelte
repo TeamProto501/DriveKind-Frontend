@@ -239,7 +239,7 @@
 <div class="fixed top-0 right-0 w-[28rem] max-w-[92vw] h-full bg-white shadow-xl border-l border-gray-200 flex flex-col z-50">
   <!-- Header -->
   <div class="px-6 py-4 border-b flex items-center justify-between">
-    <h2 class="text-lg md:text-xl font-semibold text-gray-900">
+    <h2 class="text-base md:text-lg font-semibold text-gray-900">
       {createMode ? 'Add New User' : mode==='view' ? 'User Profile' : 'Edit User'}
     </h2>
     <button on:click={() => dispatch('close')} class="text-gray-500 hover:text-gray-700">
@@ -262,12 +262,12 @@
 
     {#if !createMode && mode==='view' && user}
       <!-- READ-ONLY PROFILE -->
-      <div class="space-y-4 text-[15px] leading-6">
-        <div class="bg-gray-50 rounded-lg p-3">
-          <div class="font-semibold text-gray-900 text-lg">{user.first_name} {user.last_name}</div>
-          <div class="text-gray-600">{Array.isArray(user.role)?user.role.join(', '):user.role}</div>
+      <div class="space-y-4 text-sm leading-6">
+        <div>
+          <div class="font-semibold text-gray-900 text-base">{user.first_name} {user.last_name}</div>
+          <div class="text-gray-600 text-sm">{Array.isArray(user.role)?user.role.join(', '):user.role}</div>
         </div>
-
+        
         <div class="grid grid-cols-1 gap-3">
           <div><div class="text-xs text-gray-500">Email</div><div class="font-medium">{user.email || '—'}</div></div>
           <div class="grid grid-cols-2 gap-3">
@@ -321,19 +321,19 @@
 
       {#if step===1}
         <div class="space-y-3">
-          <div><label class="block text-base font-medium">First Name *</label><input required class="mt-1 w-full border rounded px-3 py-2 text-base" bind:value={form.first_name} /></div>
-          <div><label class="block text-base font-medium">Last Name *</label><input required class="mt-1 w-full border rounded px-3 py-2 text-base" bind:value={form.last_name} /></div>
+          <div><label class="block text-sm font-medium">First Name *</label><input required class="mt-1 w-full border rounded px-3 py-2 text-sm" bind:value={form.first_name} /></div>
+          <div><label class="block text-sm font-medium">Last Name *</label><input required class="mt-1 w-full border rounded px-3 py-2 text-sm" bind:value={form.last_name} /></div>
           <div>
-            <label class="block text-base font-medium">Email *</label>
-            <input required class="mt-1 w-full border rounded px-3 py-2 text-base" type="email" bind:value={form.email} disabled={!createMode && !!user} />
+            <label class="block text-sm font-medium">Email *</label>
+            <input required class="mt-1 w-full border rounded px-3 py-2 text-sm" type="email" bind:value={form.email} disabled={!createMode && !!user} />
             {#if !createMode && user}<p class="text-xs text-gray-500 mt-1">Email cannot be changed after creation</p>{/if}
           </div>
           {#if createMode}
             <div>
-              <label class="block text-base font-medium">Temporary Password *</label>
+              <label class="block text-sm font-medium">Temporary Password *</label>
               <input 
                 required 
-                class="mt-1 w-full border rounded px-3 py-2 text-base" 
+                class="mt-1 w-full border rounded px-3 py-2 text-sm" 
                 type="password" 
                 bind:value={tempPassword} 
                 placeholder="Minimum 6 characters"
@@ -342,10 +342,10 @@
               <p class="text-xs text-gray-500 mt-1">User can change this after first login</p>
             </div>
             <div>
-              <label class="block text-base font-medium">Confirm Password *</label>
+              <label class="block text-sm font-medium">Confirm Password *</label>
               <input 
                 required 
-                class="mt-1 w-full border rounded px-3 py-2 text-base {tempPassword && tempPasswordConfirm && tempPassword !== tempPasswordConfirm ? 'border-red-500 ring-2 ring-red-200' : ''}" 
+                class="mt-1 w-full border rounded px-3 py-2 text-sm {tempPassword && tempPasswordConfirm && tempPassword !== tempPasswordConfirm ? 'border-red-500 ring-2 ring-red-200' : ''}" 
                 type="password" 
                 bind:value={tempPasswordConfirm} 
                 placeholder="Re-enter password"
@@ -358,14 +358,14 @@
               {/if}
             </div>
           {/if}
-          <div><label class="block text-base font-medium">Primary Phone *</label><input required class="mt-1 w-full border rounded px-3 py-2 text-base" bind:value={form.primary_phone} /></div>
-          <div><label class="block text-base font-medium">Secondary Phone</label><input class="mt-1 w-full border rounded px-3 py-2 text-base" bind:value={form.secondary_phone} /></div>
+          <div><label class="block text-sm font-medium">Primary Phone *</label><input required class="mt-1 w-full border rounded px-3 py-2 text-sm" bind:value={form.primary_phone} /></div>
+          <div><label class="block text-sm font-medium">Secondary Phone</label><input class="mt-1 w-full border rounded px-3 py-2 text-sm" bind:value={form.secondary_phone} /></div>
 
           <div>
-            <label class="block text-base font-medium">Roles *</label>
+            <label class="block text-sm font-medium">Roles *</label>
             <div class="mt-2 grid grid-cols-2 gap-2">
               {#each visibleRoles as r}
-                <label class="flex items-center gap-2 text-base">
+                <label class="flex items-center gap-2 text-sm">
                   <input type="checkbox" checked={form.role.includes(r)} on:change={()=>{
                     form.role = form.role.includes(r) ? form.role.filter(x=>x!==r) : [...form.role, r];
                   }} />
@@ -379,49 +379,49 @@
 
       {#if step===2}
         <div class="space-y-3">
-          <div><label class="block text-base font-medium">DOB *</label><input required class="mt-1 w-full border rounded px-3 py-2 text-base" type="date" bind:value={form.dob} /></div>
+          <div><label class="block text-sm font-medium">DOB *</label><input required class="mt-1 w-full border rounded px-3 py-2 text-sm" type="date" bind:value={form.dob} /></div>
           <div>
-            <label class="block text-base font-medium">Gender *</label>
-            <select required class="mt-1 w-full border rounded px-3 py-2 text-base" bind:value={form.gender}>
+            <label class="block text-sm font-medium">Gender *</label>
+            <select required class="mt-1 w-full border rounded px-3 py-2 text-sm" bind:value={form.gender}>
               <option value={undefined}>Select...</option>
               <option value="Male">Male</option>
               <option value="Female">Female</option>
               <option value="Other">Other</option>
             </select>
           </div>
-          <div><label class="block text-base font-medium">Contact Preference *</label>
-            <select required class="mt-1 w-full border rounded px-3 py-2 text-base" bind:value={form.contact_pref_enum}>
+          <div><label class="block text-sm font-medium">Contact Preference *</label>
+            <select required class="mt-1 w-full border rounded px-3 py-2 text-sm" bind:value={form.contact_pref_enum}>
               {#each contactPrefs as p}<option value={p}>{p}</option>{/each}
             </select>
           </div>
-          <div><label class="block text-base font-medium">Street Address *</label><input required class="mt-1 w-full border rounded px-3 py-2 text-base" bind:value={form.address} /></div>
-          <div><label class="block text-base font-medium">Address Line 2</label><input class="mt-1 w-full border rounded px-3 py-2 text-base" bind:value={form.address2} /></div>
+          <div><label class="block text-sm font-medium">Street Address *</label><input required class="mt-1 w-full border rounded px-3 py-2 text-sm" bind:value={form.address} /></div>
+          <div><label class="block text-sm font-medium">Address Line 2</label><input class="mt-1 w-full border rounded px-3 py-2 text-sm" bind:value={form.address2} /></div>
           <div class="grid grid-cols-2 gap-3">
-            <div><label class="block text-base font-medium">City *</label><input required class="mt-1 w-full border rounded px-3 py-2 text-base" bind:value={form.city} /></div>
-            <div><label class="block text-base font-medium">State *</label><input required class="mt-1 w-full border rounded px-3 py-2 text-base uppercase" maxlength="2" bind:value={form.state} placeholder="NY" /></div>
+            <div><label class="block text-sm font-medium">City *</label><input required class="mt-1 w-full border rounded px-3 py-2 text-sm" bind:value={form.city} /></div>
+            <div><label class="block text-sm font-medium">State *</label><input required class="mt-1 w-full border rounded px-3 py-2 text-sm uppercase" maxlength="2" bind:value={form.state} placeholder="NY" /></div>
           </div>
-          <div><label class="block text-base font-medium">ZIP *</label><input required class="mt-1 w-full border rounded px-3 py-2 text-base" bind:value={form.zipcode} /></div>
+          <div><label class="block text-sm font-medium">ZIP *</label><input required class="mt-1 w-full border rounded px-3 py-2 text-sm" bind:value={form.zipcode} /></div>
         </div>
       {/if}
 
       {#if step===3}
         <div class="space-y-3">
           <div class="grid grid-cols-1 gap-3">
-            <div><label class="block text-base font-medium">Emergency Contact</label><input class="mt-1 w-full border rounded px-3 py-2 text-base" bind:value={form.emergency_contact} /></div>
+            <div><label class="block text-sm font-medium">Emergency Contact</label><input class="mt-1 w-full border rounded px-3 py-2 text-sm" bind:value={form.emergency_contact} /></div>
             <div class="grid grid-cols-2 gap-3">
-              <div><label class="block text-base font-medium">Relationship</label><input class="mt-1 w-full border rounded px-3 py-2 text-base" bind:value={form.emergency_reln} /></div>
-              <div><label class="block text-base font-medium">Phone</label><input class="mt-1 w-full border rounded px-3 py-2 text-base" bind:value={form.emergency_phone} /></div>
+              <div><label class="block text-sm font-medium">Relationship</label><input class="mt-1 w-full border rounded px-3 py-2 text-sm" bind:value={form.emergency_reln} /></div>
+              <div><label class="block text-sm font-medium">Phone</label><input class="mt-1 w-full border rounded px-3 py-2 text-sm" bind:value={form.emergency_phone} /></div>
             </div>
           </div>
           <div class="grid grid-cols-1 gap-2">
-            <label class="flex items-center gap-2 text-base"><input type="checkbox" bind:checked={form.training_completed} /> Training Completed</label>
-            <label class="flex items-center gap-2 text-base"><input type="checkbox" bind:checked={form.mileage_reimbursement} /> Mileage Reimbursement</label>
-            <label class="flex items-center gap-2 text-base"><input type="checkbox" bind:checked={form.can_accept_service_animals} /> Can accept service animals</label>
+            <label class="flex items-center gap-2 text-sm"><input type="checkbox" bind:checked={form.training_completed} /> Training Completed</label>
+            <label class="flex items-center gap-2 text-sm"><input type="checkbox" bind:checked={form.mileage_reimbursement} /> Mileage Reimbursement</label>
+            <label class="flex items-center gap-2 text-sm"><input type="checkbox" bind:checked={form.can_accept_service_animals} /> Can accept service animals</label>
           </div>
-          <div><label class="block text-base font-medium">Destination Limitation</label><textarea rows="2" class="mt-1 w-full border rounded px-3 py-2 text-base" bind:value={form.destination_limitation} /></div>
-          <div><label class="block text-base font-medium">Town Preference</label><input class="mt-1 w-full border rounded px-3 py-2 text-base" bind:value={form.town_preference} /></div>
-          <div><label class="block text-base font-medium">Allergens</label><textarea rows="2" class="mt-1 w-full border rounded px-3 py-2 text-base" bind:value={form.allergens} /></div>
-          <div><label class="block text-base font-medium">Other Driver Limitations</label><textarea rows="2" class="mt-1 w-full border rounded px-3 py-2 text-base" bind:value={form.driver_other_limitations} /></div>
+          <div><label class="block text-sm font-medium">Destination Limitation</label><textarea rows="2" class="mt-1 w-full border rounded px-3 py-2 text-sm" bind:value={form.destination_limitation} /></div>
+          <div><label class="block text-sm font-medium">Town Preference</label><input class="mt-1 w-full border rounded px-3 py-2 text-sm" bind:value={form.town_preference} /></div>
+          <div><label class="block text-sm font-medium">Allergens</label><textarea rows="2" class="mt-1 w-full border rounded px-3 py-2 text-sm" bind:value={form.allergens} /></div>
+          <div><label class="block text-sm font-medium">Other Driver Limitations</label><textarea rows="2" class="mt-1 w-full border rounded px-3 py-2 text-sm" bind:value={form.driver_other_limitations} /></div>
         </div>
       {/if}
     {/if}

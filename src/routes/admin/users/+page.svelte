@@ -565,8 +565,7 @@
                 </thead>
                 <tbody>
                   {#each paginatedProfiles as user}
-                    <tr class="border-b hover:bg-gray-50 text-sm cursor-pointer"
-                        on:click={() => openSidebar(user)}>
+                    <tr class="border-b hover:bg-gray-50 text-sm">
                       <td class="px-4 py-2 font-medium">{user.first_name} {user.last_name}</td>
                       <td class="px-4 py-2 text-gray-600">{user.email || user.primary_phone || '-'}</td>
                       <td class="px-4 py-2">
@@ -574,16 +573,16 @@
                           {Array.isArray(user.role) ? user.role.join(', ') : (user.role || '-')}
                         </span>
                       </td>
-                      <td class="px-4 py-2" on:click|stopPropagation>
-                        <div class="flex items-center gap-3">
+                      <td class="px-4 py-2">
+                        <div class="flex items-center gap-2">
                           <button
-                            class="text-blue-600 hover:underline text-sm font-medium"
+                            class="px-3 py-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors"
                             on:click={() => openSidebar(user)}
                           >
                             Edit
                           </button>
                           <button
-                            class="text-red-600 hover:underline text-sm font-medium"
+                            class="px-3 py-1.5 text-sm font-medium text-white bg-red-500 hover:bg-red-600 rounded-md transition-colors"
                             on:click={() => openDeleteModal(user)}
                           >
                             Delete
@@ -640,8 +639,7 @@
                 </thead>
                 <tbody>
                   {#each paginatedClients as client}
-                    <tr class="border-b hover:bg-gray-50 text-sm cursor-pointer"
-                        on:click={() => openClientSidebar(client)}>
+                    <tr class="border-b hover:bg-gray-50 text-sm">
                       <td class="px-4 py-2 font-medium">{client.first_name} {client.last_name}</td>
                       <td class="px-4 py-2 text-gray-600">{client.primary_phone}</td>
                       <td class="px-4 py-2 text-gray-600">{client.city}, {client.state}</td>
@@ -651,17 +649,17 @@
                         </span>
                       </td>
                       <td class="px-4 py-2 text-gray-600">{new Date(client.date_enrolled).toLocaleDateString()}</td>
-                      <td class="px-4 py-2" on:click|stopPropagation>
-                        <div class="flex items-center gap-3">
+                      <td class="px-4 py-2">
+                        <div class="flex items-center gap-2">
                           <button
-                            class="text-blue-600 hover:underline text-sm font-medium"
+                            class="px-3 py-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors"
                             on:click={() => openClientSidebar(client)}
                           >
                             Edit
                           </button>
                           {#if client.client_status_enum !== 'Inactive'}
                             <button
-                              class="text-orange-600 hover:underline text-sm font-medium"
+                              class="px-3 py-1.5 text-sm font-medium text-white bg-orange-500 hover:bg-orange-600 rounded-md transition-colors"
                               on:click={() => openDeactivateModal(client)}
                             >
                               Deactivate
