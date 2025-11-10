@@ -119,7 +119,7 @@
     // Reports (available to all)
     platformItems.push({
       label: "Reports",
-      href: "/reports",
+      href: "/admin/reports",
       icon: "FileText",
     });
 
