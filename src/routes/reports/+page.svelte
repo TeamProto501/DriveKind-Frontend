@@ -547,7 +547,7 @@
           </div>
 
           <!-- Completed Rides Selection (Driver only) -->
-          {#if isDriverRole && filteredRides().length > 0}
+          {#if isDriverRole && filteredRides.length > 0}
             <div class="bg-purple-50 border border-purple-200 rounded-lg p-4">
               <h3 class="text-sm font-semibold text-purple-900 mb-3 flex items-center gap-2">
                 <Car class="w-4 h-4" />
@@ -558,7 +558,7 @@
               </p>
               
               <div class="space-y-2 max-h-60 overflow-y-auto">
-                {#each filteredRides() as ride}
+                {#each filteredRides as ride}
                   <label class="flex items-start gap-3 p-3 bg-white rounded-lg border border-purple-200 hover:border-purple-400 cursor-pointer transition-colors">
                     <input
                       type="checkbox"
