@@ -9,10 +9,10 @@
 
   let { data }: { data: PageData } = $props();
 
-  let startDate = getDefaultStartDate();
-  let endDate = getDefaultEndDate();
-  let manualHoursWorked: number = 0;
-  let manualMileage: number = 0;
+  let startDate = $state(getDefaultStartDate());
+  let endDate = $state(getDefaultEndDate());
+  let manualHoursWorked = $state(0);
+  let manualMileage = $state(0);
   
   // Full name fields for filename
   let reportFirstName = $state(data.userProfile?.first_name || '');
@@ -79,7 +79,7 @@
   
   // Total calculations (manual + rides) - Now ridesHours and ridesMileage are values, not functions
   let totalHours = $derived((Number(manualHoursWorked) || 0) + (ridesHours || 0));
-let totalMileage = $derived((Number(manualMileage) || 0) + (ridesMileage || 0));
+  let totalMileage = $derived((Number(manualMileage) || 0) + (ridesMileage || 0));
   
   // Display name as it will appear on the report
   let displayName = $derived(`${displayFirstName} ${displayLastName}`);
