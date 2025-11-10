@@ -575,8 +575,13 @@
                         </span>
                       </td>
                       <td class="px-4 py-2" on:click|stopPropagation>
-                        <div class="flex items-center gap-2">
-                          <!-- Edit removed (row click opens) -->
+                        <div class="flex items-center gap-3">
+                          <button
+                            class="text-blue-600 hover:underline text-sm font-medium"
+                            on:click={() => openSidebar(user)}
+                          >
+                            Edit
+                          </button>
                           <button
                             class="text-red-600 hover:underline text-sm font-medium"
                             on:click={() => openDeleteModal(user)}
@@ -647,8 +652,13 @@
                       </td>
                       <td class="px-4 py-2 text-gray-600">{new Date(client.date_enrolled).toLocaleDateString()}</td>
                       <td class="px-4 py-2" on:click|stopPropagation>
-                        <div class="flex items-center gap-2">
-                          <!-- Edit removed (row click opens) -->
+                        <div class="flex items-center gap-3">
+                          <button
+                            class="text-blue-600 hover:underline text-sm font-medium"
+                            on:click={() => openClientSidebar(client)}
+                          >
+                            Edit
+                          </button>
                           {#if client.client_status_enum !== 'Inactive'}
                             <button
                               class="text-orange-600 hover:underline text-sm font-medium"

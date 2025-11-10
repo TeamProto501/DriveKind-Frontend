@@ -120,7 +120,7 @@ export const load: PageServerLoad = async (event) => {
       console.error('Error loading drivers:', driversError);
     }
 
-    // Clients
+    // Clients (add email so we can search by it)
     const { data: clients, error: clientsError } = await supabase
       .from('clients')
       .select(`
@@ -129,6 +129,7 @@ export const load: PageServerLoad = async (event) => {
         first_name,
         last_name,
         primary_phone,
+        email,
         street_address,
         address2,
         city,
@@ -153,7 +154,7 @@ export const load: PageServerLoad = async (event) => {
       console.error('Error loading calls:', callsError);
     }
 
-    // 🔹 Destinations (saved locations) for this org
+    // Destinations (saved locations) for this org
     const { data: destinations, error: destinationsError } = await supabase
       .from('destinations')
       .select('destination_id, org_id, location_name, address, address2, city, state, zipcode')
@@ -170,7 +171,7 @@ export const load: PageServerLoad = async (event) => {
       drivers: drivers || [],
       clients: clients || [],
       calls: calls || [],
-      destinations: destinations || [],   // 👈 added
+      destinations: destinations || [],
       profile,
       error: null
     };

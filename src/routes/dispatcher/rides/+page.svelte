@@ -3,7 +3,6 @@
   import { Card } from "$lib/components/ui/card";
   import { Input } from "$lib/components/ui/input";
   import Textarea from "$lib/components/ui/textarea.svelte";
-  // import Label from "$lib/components/ui/label.svelte"; // removed
   import {
     Car, Clock, MapPin, User, Phone, Calendar, Search, Plus, Edit,
     AlertCircle, UserCheck, CheckCircle
@@ -12,7 +11,6 @@
   import { onMount } from 'svelte';
   import type { PageData } from './$types';
   import DriverMatchModal from '$lib/components/DriverMatchModal.svelte';
-  import RideCompletionModal from '$lib/components/RideCompletionModal.svelte';
   import {
     validateAddress, validateCity, validateState, validateZipCode,
     validateRequired, validateDateTime, sanitizeInput, combineValidations
@@ -28,7 +26,6 @@
   let isUpdating = $state(false);
   let showCreateModal = $state(false);
   let showEditModal   = $state(false);
-  let showConfirmModal = $state(false);
   let showDriverMatchModal = $state(false);
   let selectedRide: any = null;
   let selectedRideForMatch: any = null;
@@ -46,7 +43,7 @@
     return userOrgId ? all.filter((c: any) => c.org_id === userOrgId) : all;
   });
 
-  const STATUS_OPTIONS = ["Requested","Scheduled","In Progress","Completed","Cancelled","Reported","Pending"];
+  const STATUS_OPTIONS = ["Requested","Scheduled","Assigned","In Progress","Completed","Cancelled","Pending"];
   const COMPLETION_STATUS_OPTIONS = [
     "Completed Round Trip","Completed One Way To","Completed One Way From","Cancelled by Client","Cancelled by Driver"
   ];
@@ -70,18 +67,17 @@
       let matchesTab = false;
       if (activeTab === "requested") matchesTab = ride.status === "Requested";
       else if (activeTab === "active")   matchesTab = ["Scheduled","Assigned","In Progress"].includes(ride.status);
-      else if (activeTab === "reported") matchesTab = ride.status === "Reported";
+      // REMOVED: reported tab
       else if (activeTab === "completed")matchesTab = ["Completed","Cancelled"].includes(ride.status);
       return matches && matchesTab;
     });
   });
 
   let rideCounts = $derived(() => {
-    if (!data.rides) return { requested: 0, active: 0, reported: 0, completed: 0 };
+    if (!data.rides) return { requested: 0, active: 0, completed: 0 };
     return {
       requested: data.rides.filter((r: any) => r.status === "Requested").length,
       active:    data.rides.filter((r: any) => ["Scheduled","Assigned","In Progress"].includes(r.status)).length,
-      reported:  data.rides.filter((r: any) => r.status === "Reported").length,
       completed: data.rides.filter((r: any) => ["Completed","Cancelled"].includes(r.status)).length
     };
   });
@@ -92,7 +88,6 @@
       case "Scheduled": return "bg-blue-100 text-blue-800";
       case "Assigned":  return "bg-yellow-100 text-yellow-800";
       case "In Progress": return "bg-orange-100 text-orange-800";
-      case "Reported":  return "bg-purple-100 text-purple-800";
       case "Completed": return "bg-green-100 text-green-800";
       case "Cancelled": return "bg-red-100 text-red-800";
       default:          return "bg-gray-100 text-gray-800";
@@ -103,6 +98,152 @@
   const getClientName  = (ride: any) => ride.clients ? `${ride.clients.first_name} ${ride.clients.last_name}` : 'Unknown Client';
   const getClientPhone = (ride: any) => ride.clients?.primary_phone || 'No phone';
   const getDriverName  = (ride: any) => ride.drivers ? `${ride.drivers.first_name} ${ride.drivers.last_name}` : 'Unassigned';
+
+  /* ---------------- Searchable Client Picker ---------------- */
+  let clientQueryCreate = $state('');
+  let clientQueryEdit   = $state('');
+  let showClientListCreate = $state(false);
+  let showClientListEdit   = $state(false);
+
+  function norm(s: unknown) { return (s ?? '').toString().toLowerCase().trim(); }
+  function fullName(c: any) { return `${c.first_name ?? ''} ${c.last_name ?? ''}`.trim(); }
+
+  function formatAddress(c: any) {
+    const parts = [
+      c.street_address ?? '',
+      c.address2 ?? '',
+      c.city ?? '',
+      c.state ?? '',
+      c.zip_code ?? ''
+    ].map((p) => (p || '').toString().trim()).filter(Boolean);
+    return parts.join(', ');
+  }
+
+  function scoreClient(c: any, q: string) {
+    if (!q) return -1;
+    const nq = norm(q);
+
+    const name   = norm(fullName(c));
+    const phone  = norm(c.primary_phone);
+    const email  = norm(c.email);
+    const addr   = norm(formatAddress(c));
+    const street = norm(c.street_address);
+    const city   = norm(c.city);
+    const state  = norm(c.state);
+    const zip    = norm(c.zip_code);
+
+    // Highest weight: prefix matches
+    if (name.startsWith(nq))   return 100 - name.indexOf(nq);
+    if (phone.startsWith(nq))  return 92;
+    if (email.startsWith(nq))  return 88;
+    if (addr.startsWith(nq))   return 86;
+    if (street?.startsWith(nq))return 84;
+    if (city?.startsWith(nq))  return 82;
+    if (state?.startsWith(nq)) return 80;
+    if (zip?.startsWith(nq))   return 78;
+
+    // Contains matches (lower weight)
+    if (name.includes(nq))     return 70 - name.indexOf(nq);
+    if (phone.includes(nq))    return 64;
+    if (email.includes(nq))    return 60;
+    if (addr.includes(nq))     return 58;
+    if (street?.includes(nq))  return 56;
+    if (city?.includes(nq))    return 54;
+    if (state?.includes(nq))   return 52;
+    if (zip?.includes(nq))     return 50;
+
+    return -1;
+  }
+
+  function filteredClientList(q: string) {
+    const base = filteredClients();
+    if (!q.trim()) return base.slice(0, 25);
+    return base
+      .map((c: any) => ({ c, s: scoreClient(c, q) }))
+      .filter(x => x.s >= 0)
+      .sort((a, b) => b.s - a.s || fullName(a.c).localeCompare(fullName(b.c)))
+      .map(x => x.c)
+      .slice(0, 25);
+  }
+
+  function selectClientById(clientId: number, isEdit = false) {
+    rideForm.client_id = String(clientId);
+    if (rideForm.pickup_from_home) applyClientAddressToPickup();
+    const sel = filteredClients().find((c: any) => c.client_id === clientId);
+    const label = sel ? fullName(sel) : '';
+    if (isEdit) {
+      showClientListEdit = false;
+      clientQueryEdit = label;
+    } else {
+      showClientListCreate = false;
+      clientQueryCreate = label;
+    }
+  }
+
+  /* ---------------- Estimated length parsing/formatting ---------------- */
+  function plural(n: number, one: string, many: string) {
+    return `${n} ${n === 1 ? one : many}`;
+  }
+  function parseEstimatedLen(raw: unknown): { h: number; m: number } | null {
+    if (raw == null) return null;
+    const s = String(raw).trim().toLowerCase();
+    if (!s) return null;
+
+    // H:MM
+    let m = s.match(/^(\d+)\s*:\s*(\d{1,2})$/);
+    if (m) {
+      const h = parseInt(m[1], 10);
+      const mi = parseInt(m[2], 10);
+      if (Number.isFinite(h) && Number.isFinite(mi) && mi >= 0 && mi < 60) return { h, m: mi };
+      return null;
+    }
+    // Xh [Ym]
+    m = s.match(/^(\d+(?:\.\d+)?)\s*(h|hr|hrs|hour|hours)\s*(\d+)?\s*(m|min|mins|minute|minutes)?$/);
+    if (m) {
+      const hoursNum = parseFloat(m[1]);
+      if (!Number.isFinite(hoursNum)) return null;
+      let totalMinutes = Math.round(hoursNum * 60);
+      if (m[3]) totalMinutes += parseInt(m[3], 10);
+      return { h: Math.floor(totalMinutes / 60), m: totalMinutes % 60 };
+    }
+    // Xm
+    m = s.match(/^(\d+)\s*(m|min|mins|minute|minutes)$/);
+    if (m) {
+      const mins = parseInt(m[1], 10);
+      if (!Number.isFinite(mins)) return null;
+      return { h: Math.floor(mins / 60), m: mins % 60 };
+    }
+    // bare number = minutes
+    m = s.match(/^(\d+)$/);
+    if (m) {
+      const mins = parseInt(m[1], 10);
+      if (!Number.isFinite(mins)) return null;
+      return { h: Math.floor(mins / 60), m: mins % 60 };
+    }
+    return null;
+  }
+
+  let estHours = '';
+  let estMinutes = '';
+
+  function updateEstimatedLength() {
+    const h = parseInt(estHours || '0', 10);
+    const m = parseInt(estMinutes || '0', 10);
+    const parts = [];
+    if (h) parts.push(`${h} ${h === 1 ? 'hr' : 'hrs'}`);
+    if (m) parts.push(`${m} ${m === 1 ? 'min' : 'mins'}`);
+    rideForm.estimated_appointment_length = parts.join(' ') || '0 mins';
+  }
+
+  function canonEstimatedLen(raw: unknown): string | null {
+    const parsed = parseEstimatedLen(raw);
+    if (!parsed) return null;
+    const parts: string[] = [];
+    if (parsed.h) parts.push(plural(parsed.h, 'hr', 'hrs'));
+    if (parsed.m) parts.push(plural(parsed.m, 'min', 'mins'));
+    if (!parts.length) return '0 mins';
+    return parts.join(' ');
+  }
 
   /* ---------------- Form model ---------------- */
   type RideForm = {
@@ -161,7 +302,7 @@
     donation_amount: '',
     riders: '0',
     round_trip: false,
-    purpose: '',
+    purpose: 'Medical',
     estimated_appointment_length: '',
     destination_name: '',
     pickup_from_home: true,
@@ -169,7 +310,6 @@
     completion_status: ''
   });
 
-  /* ---------- Destinations (saved locations) ---------- */
   type Destination = {
     destination_id: number;
     org_id: number;
@@ -181,13 +321,11 @@
     zipcode: string | null;
   };
 
-  // Replace the Destination block’s derived with this:
   const filteredDestinations = $derived(() => {
     const all = (data as any)?.destinations ?? [];
     return userOrgId ? all.filter((d: any) => d.org_id === userOrgId) : all;
   });
 
-  // One selection state (only one modal is open at a time)
   let selectedDestinationId = $state<string>("");
 
   function applyDestinationToDropoff(destIdStr: string) {
@@ -236,7 +374,7 @@
       donation_amount: '',
       riders: '0',
       round_trip: false,
-      purpose: '',
+      purpose: 'Medical',
       estimated_appointment_length: '',
       destination_name: '',
       pickup_from_home: true,
@@ -246,10 +384,8 @@
     stepErrors = [];
   }
 
-  /* donation amount lock */
   $effect(() => { if (!rideForm.donation) rideForm.donation_amount = '0.00'; });
 
-  /* pickup-from-home autofill */
   function applyClientAddressToPickup() {
     const cid = parseInt(rideForm.client_id || '0', 10);
     if (!cid) return;
@@ -269,15 +405,34 @@
     if (rideForm.pickup_from_home) applyClientAddressToPickup();
   }
 
-  function openCreateModal() { resetRideForm(); resetDestinationSelection(); createStep = 1; showCreateModal = true; }
+  function openCreateModal() { 
+    resetRideForm(); 
+    resetDestinationSelection(); 
+    clientQueryCreate = '';
+    createStep = 1; 
+    showCreateModal = true; 
+  }
 
   function toLocalDateTimeInput(ts: string | null | undefined) {
     if (!ts) return '';
     const d = new Date(ts);
+    // Ensure we're working with valid date
+    if (isNaN(d.getTime())) return '';
     const pad = (n: number) => n.toString().padStart(2, '0');
+    // Return in YYYY-MM-DDTHH:mm format (no seconds)
     return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
   }
-  const toISOorNull = (v: string) => (v ? new Date(v).toISOString() : null);
+
+  const toISOorNull = (v: string) => {
+    if (!v) return null;
+    try {
+      const d = new Date(v);
+      if (isNaN(d.getTime())) return null;
+      return d.toISOString();
+    } catch {
+      return null;
+    }
+  };
 
   function openEditModal(ride: any) {
     selectedRide = ride;
@@ -316,6 +471,12 @@
     if (rideForm.pickup_from_home && rideForm.client_id) applyClientAddressToPickup();
     stepErrors = [];
     editStep = 1;
+
+    // prefill edit picker label
+    clientQueryEdit = '';
+    const sel = filteredClients().find((c: any) => String(c.client_id) === String(rideForm.client_id));
+    if (sel) clientQueryEdit = fullName(sel);
+
     showEditModal = true;
   }
 
@@ -394,9 +555,14 @@
 
       round_trip: base.round_trip ?? false,
       purpose: has(form.purpose) ? sanitizeInput(form.purpose) : (base.purpose ?? null),
-      estimated_appointment_length: has(form.estimated_appointment_length)
-        ? sanitizeInput(form.estimated_appointment_length)
-        : (base.estimated_appointment_length ?? null),
+
+      estimated_appointment_length: (() => {
+        const v = has(form.estimated_appointment_length)
+          ? form.estimated_appointment_length
+          : (base.estimated_appointment_length ?? null);
+        const c = canonEstimatedLen(v);
+        return c ?? null;
+      })(),
 
       destination_name: sanitizeInput(_dest),
       pickup_from_home: has(form.pickup_from_home) ? !!form.pickup_from_home : !!base.pickup_from_home,
@@ -412,13 +578,31 @@
     const miss: string[] = [];
     if (isBlank(payload.org_id)) miss.push('Organization');
     if (isBlank(payload.client_id)) miss.push('Client');
-    if (isBlank(payload.destination_name)) miss.push('Destination name');
     if (isBlank(payload.dropoff_address)) miss.push('Dropoff address');
     if (isBlank(payload.dropoff_city)) miss.push('Dropoff city');
-    if (isBlank(payload.dropoff_state)) miss.push('Dropoff state');
-    if (isBlank(payload.dropoff_zipcode)) miss.push('Dropoff ZIP');
     if (requireAppt && isBlank(payload.appointment_time)) miss.push('Appointment time');
     return miss;
+  }
+
+  // --- pickup vs appointment window validation ---
+  function pickupWindowErrors(apptLocal: string, pickupLocal: string): string[] {
+    const errs: string[] = [];
+    if (!pickupLocal || !pickupLocal.trim()) return errs;
+    if (!apptLocal || !apptLocal.trim()) {
+      errs.push('Appointment time is required when pickup time is set.');
+      return errs;
+    }
+    const appt = new Date(apptLocal);
+    const pick = new Date(pickupLocal);
+    if (Number.isNaN(appt.getTime())) errs.push('Appointment time is invalid.');
+    if (Number.isNaN(pick.getTime())) errs.push('Pickup time is invalid.');
+    if (errs.length) return errs;
+
+    const diffMs = appt.getTime() - pick.getTime();
+    if (diffMs <= 0) errs.push('Pickup time must be before the appointment time.');
+    const diffMin = diffMs / 60000;
+    if (diffMin > 120) errs.push('Pickup time cannot be more than 2 hours before the appointment.');
+    return errs;
   }
 
   /* ---------------- validation (per-step) ---------------- */
@@ -431,21 +615,27 @@
         validateRequired(rideForm.client_id || (isEditing() ? String(selectedRide?.client_id ?? '') : ''), 'Client'),
       ];
       if (needAppt) validators.push(validateDateTime(rideForm.appointment_time, 'Appointment time'));
+
       const v = combineValidations(...validators);
-      if (!v.valid) stepErrors = v.errors;
-      return v.valid;
+      const errs: string[] = v.valid ? [] : [...v.errors];
+
+      errs.push(...pickupWindowErrors(rideForm.appointment_time, rideForm.pickup_time));
+
+      stepErrors = errs;
+      return errs.length === 0;
     }
     if (step === 2) {
+      // REMOVED: destination_name, dropoff_state, dropoff_zipcode validations
       const v = combineValidations(
-        validateRequired(rideForm.destination_name || (isEditing() ? String(selectedRide?.destination_name ?? '') : ''), 'Destination name'),
         validateRequired(rideForm.dropoff_address  || (isEditing() ? String(selectedRide?.dropoff_address  ?? '') : ''), 'Dropoff address'),
         validateCity(rideForm.dropoff_city    || (isEditing() ? String(selectedRide?.dropoff_city    ?? '') : '')),
-        validateState(rideForm.dropoff_state  || (isEditing() ? String(selectedRide?.dropoff_state  ?? '') : '')),
-        validateZipCode(rideForm.dropoff_zipcode || (isEditing() ? String(selectedRide?.dropoff_zipcode ?? '') : '')),
+        // State and ZIP are now optional - only validate if provided
+        rideForm.dropoff_state && rideForm.dropoff_state.trim() ? validateState(rideForm.dropoff_state) : { valid: true, errors: [] },
+        rideForm.dropoff_zipcode && rideForm.dropoff_zipcode.trim() ? validateZipCode(rideForm.dropoff_zipcode) : { valid: true, errors: [] },
         !rideForm.pickup_from_home && rideForm.alt_pickup_address ? validateAddress(rideForm.alt_pickup_address, 'Alternative pickup address') : { valid: true, errors: [] },
         !rideForm.pickup_from_home && rideForm.alt_pickup_city ? validateCity(rideForm.alt_pickup_city) : { valid: true, errors: [] },
-        !rideForm.pickup_from_home && rideForm.alt_pickup_state ? validateState(rideForm.alt_pickup_state) : { valid: true, errors: [] },
-        !rideForm.pickup_from_home && rideForm.alt_pickup_zipcode ? validateZipCode(rideForm.alt_pickup_zipcode) : { valid: true, errors: [] },
+        !rideForm.pickup_from_home && rideForm.alt_pickup_state && rideForm.alt_pickup_state.trim() ? validateState(rideForm.alt_pickup_state) : { valid: true, errors: [] },
+        !rideForm.pickup_from_home && rideForm.alt_pickup_zipcode && rideForm.alt_pickup_zipcode.trim() ? validateZipCode(rideForm.alt_pickup_zipcode) : { valid: true, errors: [] },
       );
       if (!v.valid) stepErrors = v.errors;
       return v.valid;
@@ -454,6 +644,14 @@
       const errs: string[] = [];
       if (rideForm.donation && rideForm.donation_amount && isNaN(Number(rideForm.donation_amount))) {
         errs.push('Donation amount must be a number like 10 or 10.00');
+      }
+      if (rideForm.estimated_appointment_length) {
+        if (!parseEstimatedLen(rideForm.estimated_appointment_length)) {
+          errs.push("Estimated appointment length must look like '30 mins' or '2 hrs 30 mins'.");
+        } else {
+          const c = canonEstimatedLen(rideForm.estimated_appointment_length);
+          if (c) rideForm.estimated_appointment_length = c;
+        }
       }
       stepErrors = errs; return errs.length === 0;
     }
@@ -473,6 +671,13 @@
 
   /* ---------------- submit ---------------- */
   async function createRide() {
+    {
+      const errs = pickupWindowErrors(rideForm.appointment_time, rideForm.pickup_time);
+      if (errs.length) {
+        alert('Cannot create ride:\n• ' + errs.join('\n• '));
+        return;
+      }
+    }
     const payload = buildPayload(rideForm);
     const missing = listMissingRequiredFields(payload, true);
     if (missing.length) {
@@ -506,7 +711,13 @@
 
   async function updateRide() {
     if (!selectedRide) return;
-
+    {
+      const errs = pickupWindowErrors(rideForm.appointment_time, rideForm.pickup_time);
+      if (errs.length) {
+        alert('Cannot update ride:\n• ' + errs.join('\n• '));
+        return;
+      }
+    }
     const payload = buildPayload(rideForm);
     const missing = listMissingRequiredFields(payload, false);
     if (missing.length) {
@@ -540,61 +751,39 @@
     } finally { isUpdating = false; }
   }
 
-  function openConfirmModal(ride: any) { selectedRide = ride; showConfirmModal = true; }
-
-  async function confirmRideCompletion(formData: any) {
-    if (!selectedRide) return;
+  async function sendRideRequest(driverIds: string[]) {
+    if (!selectedRideForMatch || driverIds.length === 0) return;
     isUpdating = true;
+    
     try {
       const token = data.session?.access_token;
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/rides/${selectedRide.ride_id}/confirm`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json','Authorization': `Bearer ${token}` },
-        body: JSON.stringify({
-          hours: formData.hours ? parseFloat(formData.hours) : null,
-          miles_driven: formData.miles_driven ? parseFloat(formData.miles_driven) : null,
-          donation_received: formData.donation_received || false,
-          donation_amount: formData.donation_received && formData.donation_amount ? parseFloat(formData.donation_amount) : null,
-          completion_status: formData.completion_status,
-          comments: formData.comments
-        })
-      });
-      const result = await response.json();
-      if (response.ok && result.success) {
-        showConfirmModal = false;
-        selectedRide = null;
-        await invalidateAll();
-        alert('Ride confirmed as completed!');
-      } else {
-        alert(`Failed to confirm ride: ${result.error || 'Unknown error'}`);
-      }
-    } catch (e) {
-      console.error(e); alert('Error confirming ride.');
-    } finally { isUpdating = false; }
-  }
-
-  async function sendRideRequest(driverId: string) {
-    if (!selectedRideForMatch) return;
-    isUpdating = true;
-    try {
-      const token = data.session?.access_token;
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/rides/${selectedRideForMatch.ride_id}/send-request`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ driver_user_id: driverId })
-      });
-      const result = await response.json();
-      if (response.ok && result.success) {
+      const results = await Promise.allSettled(
+        driverIds.map(driverId =>
+          fetch(`${import.meta.env.VITE_API_URL}/rides/${selectedRideForMatch.ride_id}/send-request`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+            body: JSON.stringify({ driver_user_id: driverId })
+          }).then(r => r.json())
+        )
+      );
+      
+      const successful = results.filter(r => r.status === 'fulfilled').length;
+      const failed = results.filter(r => r.status === 'rejected').length;
+      
+      if (successful > 0) {
         showDriverMatchModal = false;
         selectedRideForMatch = null;
         await invalidateAll();
-        alert('Ride request sent to driver!');
+        alert(`Ride request sent to ${successful} driver${successful !== 1 ? 's' : ''}!${failed > 0 ? ` (${failed} failed)` : ''}`);
       } else {
-        alert(`Failed to send request: ${result.error || 'Unknown error'}`);
+        alert('Failed to send ride requests to any drivers');
       }
     } catch (e) {
-      console.error(e); alert('Error sending ride request.');
-    } finally { isUpdating = false; }
+      console.error(e);
+      alert('Error sending ride requests.');
+    } finally {
+      isUpdating = false;
+    }
   }
 
   onMount(() => {
@@ -605,8 +794,6 @@
         const rideToEdit = data.rides?.find(r => r.ride_id === rideId);
         if (rideToEdit) {
           openEditModal(rideToEdit);
-          
-          // Clear the URL parameter after opening
           const url = new URL(window.location.href);
           url.searchParams.delete('edit');
           window.history.replaceState({}, '', url);
@@ -655,9 +842,6 @@
           </button>
           <button onclick={() => activeTab = "active"} class="py-4 px-1 border-b-2 font-medium text-sm transition-colors {activeTab === 'active' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}">
             Scheduled/In Progress {#if rideCounts().active > 0}<span class="ml-2 py-0.5 px-2 rounded-full text-xs bg-blue-100 text-blue-600">{rideCounts().active}</span>{/if}
-          </button>
-          <button onclick={() => activeTab = "reported"} class="py-4 px-1 border-b-2 font-medium text-sm transition-colors {activeTab === 'reported' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}">
-            Reported Rides {#if rideCounts().reported > 0}<span class="ml-2 py-0.5 px-2 rounded-full text-xs bg-purple-100 text-purple-600">{rideCounts().reported}</span>{/if}
           </button>
           <button onclick={() => activeTab = "completed"} class="py-4 px-1 border-b-2 font-medium text-sm transition-colors {activeTab === 'completed' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}">
             Completed/Cancelled {#if rideCounts().completed > 0}<span class="ml-2 py-0.5 px-2 rounded-full text-xs bg-green-100 text-green-600">{rideCounts().completed}</span>{/if}
@@ -708,26 +892,12 @@
                 {#if ride.notes}
                   <div class="text-sm"><span class="font-medium">Notes:</span> {ride.notes}</div>
                 {/if}
-
-                {#if ride.status === "Reported"}
-                  <div class="bg-purple-50 border border-purple-200 rounded-lg p-3 flex items-start gap-2">
-                    <AlertCircle class="w-5 h-5 text-purple-600 flex-shrink-0 mt-0.5" />
-                    <div class="text-sm text-purple-800">
-                      <div class="font-medium">Pending Confirmation</div>
-                      <div class="text-purple-700">Driver has reported this ride as complete. Please review and confirm.</div>
-                    </div>
-                  </div>
-                {/if}
               </div>
 
               <div class="flex gap-2 ml-4">
                 {#if ride.status === "Requested"}
                   <button onclick={() => openDriverMatchModal(ride)} disabled={isUpdating} class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-sm flex items-center gap-1 transition-colors disabled:opacity-50">
                     <UserCheck class="w-4 h-4" /> Send Request
-                  </button>
-                {:else if ride.status === "Reported"}
-                  <button onclick={() => openConfirmModal(ride)} disabled={isUpdating} class="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg text-sm flex items-center gap-1 transition-colors disabled:opacity-50">
-                    <CheckCircle class="w-4 h-4" /> Confirm Complete
                   </button>
                 {/if}
                 <button onclick={() => openEditModal(ride)} disabled={isUpdating} class="bg-gray-600 hover:bg-gray-700 text-white px-3 py-1.5 rounded-lg text-sm flex items-center gap-1 transition-colors disabled:opacity-50">
@@ -786,17 +956,39 @@
         <div class="grid gap-3 md:grid-cols-3">
           <div class="md:col-span-2">
             <label for="client_id">Client *</label>
-            <select
-              id="client_id"
-              bind:value={rideForm.client_id}
-              onchange={onClientChange}
-              class="w-full px-3 py-2 border border-gray-300 rounded-lg"
-            >
-              <option value="">Select client…</option>
-              {#each filteredClients() as c}
-                <option value={String(c.client_id)}>{c.first_name} {c.last_name}</option>
-              {/each}
-            </select>
+            <div class="relative">
+              <Input
+                id="client_id"
+                placeholder="Type name, phone, email, or address…"
+                bind:value={clientQueryCreate}
+                onfocus={() => (showClientListCreate = true)}
+                oninput={() => (showClientListCreate = true)}
+                class="w-full"
+              />
+              <input type="hidden" value={rideForm.client_id} />
+              {#if showClientListCreate}
+                <div class="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow">
+                  {#each filteredClientList(clientQueryCreate) as c}
+                    <button
+                      type="button"
+                      class="w-full text-left px-3 py-2 hover:bg-gray-50"
+                      onclick={() => selectClientById(c.client_id, false)}
+                    >
+                      <div class="font-medium">{c.first_name} {c.last_name}</div>
+                        <div class="text-xs text-gray-500">
+                          {c.primary_phone || '—'}{c.email ? ` • ${c.email}` : ''}
+                        </div>
+                        <div class="text-[11px] text-gray-400">
+                          {formatAddress(c) || '—'}
+                        </div>
+                    </button>
+                  {/each}
+                  {#if filteredClientList(clientQueryCreate).length === 0}
+                    <div class="px-3 py-2 text-sm text-gray-500">No matches</div>
+                  {/if}
+                </div>
+              {/if}
+            </div>
             <p class="text-xs text-gray-500 mt-1">Only clients in your organization are shown.</p>
           </div>
 
@@ -839,11 +1031,10 @@
       {/if}
 
       {#if createStep === 2}
-      <!-- ===== CREATE • Step 2: Pickup & Dropoff ===== -->
+      <!-- CREATE • Step 2: Pickup & Dropoff -->
       <div class="border rounded-lg p-4 mb-2">
         <h3 class="font-semibold mb-3">Pickup &amp; Dropoff</h3>
 
-        <!-- Pickup controls -->
         <div class="mb-3">
           <div class="flex items-center gap-2">
             <input id="pickup_from_home" type="checkbox" bind:checked={rideForm.pickup_from_home} />
@@ -854,7 +1045,6 @@
           </p>
         </div>
 
-        <!-- PICKUP (disabled when from home) -->
         <div class="grid gap-3">
           <div>
             <label for="alt_pickup_address">Pickup Street Address</label>
@@ -912,7 +1102,6 @@
           </div>
         </div>
 
-        <!-- Saved destination (fills DROPOFF) -->
         <div class="mt-6">
           <label for="saved_destination_create">Use a saved destination</label>
           <select
@@ -932,7 +1121,6 @@
           <p class="text-xs text-gray-500 mt-1">Choosing one fills the dropoff fields below.</p>
         </div>
 
-        <!-- DROPOFF -->
         <div class="mt-6">
           <label class="text-sm font-semibold text-gray-700">Dropoff Location</label>
           <p class="text-xs text-gray-500">Where the client will be dropped off.</p>
@@ -940,7 +1128,7 @@
 
         <div class="mt-3 grid gap-3">
           <div>
-            <label for="destination_name">Destination Name *</label>
+            <label for="destination_name">Destination Name <span class="text-gray-500 font-normal">(optional)</span></label>
             <Input id="destination_name" bind:value={rideForm.destination_name} placeholder="e.g., RGH Medical Center" />
           </div>
 
@@ -957,15 +1145,14 @@
 
           <div class="grid gap-3 md:grid-cols-3">
             <div><label for="dropoff_city">Dropoff City *</label><Input id="dropoff_city" bind:value={rideForm.dropoff_city} placeholder="e.g., Rochester" /></div>
-            <div><label for="dropoff_state">Dropoff State *</label><Input id="dropoff_state" bind:value={rideForm.dropoff_state} placeholder="e.g., NY" /></div>
-            <div><label for="dropoff_zipcode">Dropoff ZIP *</label><Input id="dropoff_zipcode" bind:value={rideForm.dropoff_zipcode} placeholder="e.g., 14620" /></div>
+            <div><label for="dropoff_state">Dropoff State <span class="text-gray-500 font-normal">(optional)</span></label><Input id="dropoff_state" bind:value={rideForm.dropoff_state} placeholder="e.g., NY" /></div>
+            <div><label for="dropoff_zipcode">Dropoff ZIP <span class="text-gray-500 font-normal">(optional)</span></label><Input id="dropoff_zipcode" bind:value={rideForm.dropoff_zipcode} placeholder="e.g., 14620" /></div>
           </div>
         </div>
       </div>
       {/if}
 
       {#if createStep === 3}
-      <!-- Ride Details -->
       <div class="border rounded-lg p-4 mb-2">
         <h3 class="font-semibold mb-3">Ride Details</h3>
 
@@ -976,15 +1163,37 @@
           </div>
           <div>
             <label for="estimated_appointment_length" class="block text-sm font-medium text-gray-700">Estimated appointment length</label>
-            <Input id="estimated_appointment_length" bind:value={rideForm.estimated_appointment_length} placeholder="e.g., 30 min" />
+            <div class="flex gap-2 items-end">
+              <div class="flex-1">
+                <label for="est_hours">Hours</label>
+                <Input
+                  id="est_hours"
+                  type="number"
+                  min="0"
+                  bindvalue={estHours}
+                  placeholder="0"
+                  oninput={() => updateEstimatedLength()}
+                />
+              </div>
+              <div class="flex-1">
+                <label for="est_minutes">Minutes</label>
+                <Input
+                  id="est_minutes"
+                  type="number"
+                  min="0"
+                  max="59"
+                  bind:value={estMinutes}
+                  placeholder="0"
+                  oninput={() => updateEstimatedLength()}
+                />
+              </div>
+            </div>
           </div>
           <div>
             <label for="riders" class="block text-sm font-medium text-gray-700"># of additional passengers (excluding client)</label>
             <Input id="riders" type="number" min="0" bind:value={rideForm.riders} />
           </div>
         </div>
-
-        <!-- REMOVED: round_trip, donation, donation_amount, status -->
 
         <div class="mt-3">
           <label for="notes" class="block text-sm font-medium text-gray-700">Notes for driver</label>
@@ -1051,17 +1260,39 @@
         <div class="grid gap-3 md:grid-cols-3">
           <div class="md:col-span-2">
             <label for="e_client_id">Client *</label>
-            <select
-              id="e_client_id"
-              bind:value={rideForm.client_id}
-              onchange={onClientChange}
-              class="w-full px-3 py-2 border border-gray-300 rounded-lg"
-            >
-              <option value="">Select client…</option>
-              {#each filteredClients() as c}
-                <option value={String(c.client_id)}>{c.first_name} {c.last_name}</option>
-              {/each}
-            </select>
+            <div class="relative">
+              <Input
+                id="e_client_id"
+                placeholder="Type name, phone, email, or address…"
+                bind:value={clientQueryEdit}
+                onfocus={() => (showClientListEdit = true)}
+                oninput={() => (showClientListEdit = true)}
+                class="w-full"
+              />
+              <input type="hidden" value={rideForm.client_id} />
+              {#if showClientListEdit}
+                <div class="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow">
+                  {#each filteredClientList(clientQueryEdit) as c}
+                    <button
+                      type="button"
+                      class="w-full text-left px-3 py-2 hover:bg-gray-50"
+                      onclick={() => selectClientById(c.client_id, true)}
+                    >
+                      <div class="font-medium">{c.first_name} {c.last_name}</div>
+                        <div class="text-xs text-gray-500">
+                          {c.primary_phone || '—'}{c.email ? ` • ${c.email}` : ''}
+                        </div>
+                        <div class="text-[11px] text-gray-400">
+                          {formatAddress(c) || '—'}
+                        </div>
+                    </button>
+                  {/each}
+                  {#if filteredClientList(clientQueryEdit).length === 0}
+                    <div class="px-3 py-2 text-sm text-gray-500">No matches</div>
+                  {/if}
+                </div>
+              {/if}
+            </div>
           </div>
 
           <div>
@@ -1102,11 +1333,10 @@
       {/if}
 
       {#if editStep === 2}
-        <!-- ===== EDIT • Step 2: Pickup & Dropoff ===== -->
+        <!-- EDIT • Step 2: Pickup & Dropoff -->
         <div class="border rounded-lg p-4 mb-2">
           <h3 class="font-semibold mb-3">Pickup &amp; Dropoff</h3>
 
-          <!-- Pickup controls -->
           <div class="mb-3">
             <div class="flex items-center gap-2">
               <input id="e_pickup_from_home" type="checkbox" bind:checked={rideForm.pickup_from_home} />
@@ -1117,7 +1347,6 @@
             </p>
           </div>
 
-          <!-- PICKUP (disabled when from home) -->
           <div class="grid gap-3">
             <div>
               <label for="e_alt_pickup_address">Pickup Street Address</label>
@@ -1175,7 +1404,6 @@
             </div>
           </div>
 
-          <!-- Saved destination (fills DROPOFF) -->
           <div class="mt-6">
             <label for="saved_destination_edit">Use a saved destination</label>
             <select
@@ -1195,7 +1423,6 @@
             <p class="text-xs text-gray-500 mt-1">Choosing one fills the dropoff fields below.</p>
           </div>
 
-          <!-- DROPOFF -->
           <div class="mt-6">
             <label class="text-sm font-semibold text-gray-700">Dropoff Location</label>
             <p class="text-xs text-gray-500">Where the client will be dropped off.</p>
@@ -1227,16 +1454,37 @@
           </div>
           <div>
             <label for="e_est_len" class="block text-sm font-medium text-gray-700">Estimated appointment length</label>
-            <Input id="e_est_len" bind:value={rideForm.estimated_appointment_length} placeholder="e.g., 30 min" />
+            <div class="flex gap-2 items-end">
+              <div class="flex-1">
+                <label for="est_hours">Hours</label>
+                <Input
+                  id="est_hours"
+                  type="number"
+                  min="0"
+                  bind:value={estHours}
+                  placeholder="0"
+                  oninput={() => updateEstimatedLength()}
+                />
+              </div>
+              <div class="flex-1">
+                <label for="est_minutes">Minutes</label>
+                <Input
+                  id="est_minutes"
+                  type="number"
+                  min="0"
+                  max="59"
+                  bind:value={estMinutes}
+                  placeholder="0"
+                  oninput={() => updateEstimatedLength()}
+                />
+              </div>
+            </div>
           </div>
           <div>
             <label for="e_riders" class="block text-sm font-medium text-gray-700"># of additional passengers (excluding client)</label>
             <Input id="e_riders" type="number" min="0" bind:value={rideForm.riders} />
           </div>
         </div>
-
-        <!-- REMOVED: round_trip, donation, donation_amount -->
-        <!-- KEPT: status (for editing existing rides), completion_status -->
 
         <div class="mt-3 grid gap-3 md:grid-cols-2">
           <div>
@@ -1252,6 +1500,7 @@
               <option value="">—</option>
               {#each COMPLETION_STATUS_OPTIONS as s}<option value={s}>{s}</option>{/each}
             </select>
+            <p class="text-xs text-gray-500 mt-1">Type of completion (round trip, one-way, etc.)</p>
           </div>
         </div>
 
@@ -1277,6 +1526,33 @@
             <label for="e_hours" class="block text-sm font-medium text-gray-700">Hours worked</label>
             <Input id="e_hours" type="number" step="0.1" bind:value={rideForm.hours} placeholder="e.g., 1.5" />
             <p class="text-xs text-gray-500 mt-1">Driving and waiting time combined.</p>
+          </div>
+
+          <div class="mt-4">
+            <label for="e_completion_status_step4" class="block text-sm font-medium text-gray-700">Completion Status</label>
+            <select 
+              id="e_completion_status_step4" 
+              bind:value={rideForm.completion_status} 
+              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            >
+              <option value="">— Select completion type —</option>
+              {#each COMPLETION_STATUS_OPTIONS as s}
+                <option value={s}>{s}</option>
+              {/each}
+            </select>
+            <p class="text-xs text-gray-500 mt-1">Type of completion (round trip, one-way, etc.)</p>
+          </div>
+
+          <!-- ✅ ADD NOTES FIELD FOR COMPLETION COMMENTS -->
+          <div class="mt-4">
+            <label for="e_completion_notes" class="block text-sm font-medium text-gray-700">Completion Notes</label>
+            <Textarea 
+              id="e_completion_notes" 
+              bindvalue={rideForm.notes} 
+              placeholder="Any notes about the ride completion..."
+              rows="3"
+            />
+            <p class="text-xs text-gray-500 mt-1">Additional details about how the ride was completed.</p>
           </div>
         </div>
       </div>
@@ -1304,15 +1580,6 @@
     </div>
   </div>
 {/if}
-
-<!-- Existing modals -->
-<RideCompletionModal
-  bind:show={showConfirmModal}
-  ride={selectedRide}
-  isDriver={false}
-  onSubmit={confirmRideCompletion}
-  isSubmitting={isUpdating}
-/>
 <DriverMatchModal
   bind:show={showDriverMatchModal}
   ride={selectedRideForMatch}
