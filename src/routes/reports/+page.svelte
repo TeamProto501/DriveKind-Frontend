@@ -78,8 +78,8 @@
   });
   
   // Total calculations (manual + rides) - Now ridesHours and ridesMileage are values, not functions
-  let totalHours = $derived(manualHoursWorked + ridesHours);
-  let totalMileage = $derived(manualMileage + ridesMileage);
+  let totalHours = $derived((Number(manualHoursWorked) || 0) + (ridesHours || 0));
+let totalMileage = $derived((Number(manualMileage) || 0) + (ridesMileage || 0));
   
   // Display name as it will appear on the report
   let displayName = $derived(`${displayFirstName} ${displayLastName}`);
