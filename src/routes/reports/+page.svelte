@@ -9,12 +9,6 @@
 
   let { data }: { data: PageData } = $props();
 
-  type RideStats = {
-    scheduled: number;
-    completed: number;
-    total: number;
-  };
-
   let startDate = getDefaultStartDate();
   let endDate = getDefaultEndDate();
   let manualHoursWorked: number = 0;
@@ -23,6 +17,9 @@
   // Full name fields for display on report
   let reportFirstName = $state(data.userProfile?.first_name || '');
   let reportLastName = $state(data.userProfile?.last_name || '');
+  
+  // Format selection
+  let selectedFormats = $state<Set<'pdf' | 'csv'>>(new Set(['pdf']));
   
   // Role selection
   const userRoles = Array.isArray(data.userProfile?.role) 
@@ -52,16 +49,10 @@
       .reduce((sum, r) => sum + (r!.miles_driven || 0), 0);
   });
   
-  // Calculate unique clients from selected rides
-  let uniqueClientsCount = $derived(() => {
+  // Count total clients served (not unique - same client on 2 rides = 2)
+  let totalClientsServed = $derived(() => {
     if (!isDriverRole || selectedRideIds.size === 0) return 0;
-    const clientIds = new Set(
-      Array.from(selectedRideIds)
-        .map(id => data.completedRides.find(r => r.ride_id === id))
-        .filter(r => r && r.client_id)
-        .map(r => r!.client_id)
-    );
-    return clientIds.size;
+    return selectedRideIds.size; // Each selected ride = 1 client served
   });
   
   // Calculate one-way trips (round trips count as 2)
@@ -85,6 +76,9 @@
   let totalHours = $derived(manualHoursWorked + ridesHours());
   let totalMileage = $derived(manualMileage + ridesMileage());
   
+  // Preview name as it will appear
+  let displayName = $derived(`${reportFirstName} ${reportLastName}`);
+  
   // Filter rides by date range
   let filteredRides = $derived(() => {
     if (!data.completedRides) return [];
@@ -106,11 +100,9 @@
     return `${month}${day}${year}`;
   }
   
-  let reportName = `${reportLastName}${reportFirstName} Report_${getCurrentDateString()}`;
+  let reportName = $derived(`${reportLastName}${reportFirstName} ${selectedRole} Report_${getCurrentDateString()}`);
   
   let isGenerating = false;
-  let isFetchingRides = false;
-  let rideStats: RideStats | null = null;
 
   let showHoursWarning = false;
   let showMileageWarning = false;
@@ -125,35 +117,6 @@
 
   function getDefaultEndDate(): string {
     return new Date().toISOString().split('T')[0];
-  }
-
-  async function fetchRideStats() {
-    if (!isDriverRole) return;
-
-    try {
-      isFetchingRides = true;
-
-      const response = await fetch(
-        `${API_BASE_URL}/reports/rides/stats?start_date=${startDate}&end_date=${endDate}`,
-        {
-          headers: {
-            'Authorization': `Bearer ${data.session.access_token}`
-          }
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch ride statistics');
-      }
-
-      rideStats = await response.json();
-    } catch (error) {
-      console.error('Error fetching ride stats:', error);
-      toastStore.error('Failed to load ride statistics');
-      rideStats = null;
-    } finally {
-      isFetchingRides = false;
-    }
   }
 
   function validateForm(): boolean {
@@ -194,14 +157,14 @@
       toastStore.error('Mileage cannot be negative');
       isValid = false;
     }
-
-    if (!reportName.trim()) {
-      toastStore.error('Please enter a report name');
-      isValid = false;
-    }
     
     if (!reportFirstName.trim() || !reportLastName.trim()) {
       toastStore.error('Please enter your full name');
+      isValid = false;
+    }
+    
+    if (selectedFormats.size === 0) {
+      toastStore.error('Please select at least one report format');
       isValid = false;
     }
 
@@ -216,25 +179,35 @@
     }
     selectedRideIds = new Set(selectedRideIds); // Trigger reactivity
   }
-
-  async function generateReport(format: 'pdf' | 'csv') {
-    if (!validateForm()) return;
-
-    if (isDriverRole && !rideStats) {
-      await fetchRideStats();
-    }
-
-    if (format === 'pdf') {
-      generatePDF();
+  
+  function toggleFormat(format: 'pdf' | 'csv') {
+    if (selectedFormats.has(format)) {
+      selectedFormats.delete(format);
     } else {
-      generateCSV();
+      selectedFormats.add(format);
+    }
+    selectedFormats = new Set(selectedFormats); // Trigger reactivity
+  }
+
+  async function generateReports() {
+    if (!validateForm()) return;
+    
+    isGenerating = true;
+    
+    try {
+      if (selectedFormats.has('pdf')) {
+        generatePDF();
+      }
+      if (selectedFormats.has('csv')) {
+        generateCSV();
+      }
+    } finally {
+      isGenerating = false;
     }
   }
 
   function generateCSV() {
     try {
-      isGenerating = true;
-
       // CSV Headers matching sponsor's format
       const headers = [
         'Volunteer Name',
@@ -246,11 +219,10 @@
       ];
 
       // Data row
-      const fullName = `${reportFirstName} ${reportLastName}`;
       const row = [
-        fullName,
+        displayName,
         totalHours.toFixed(2),
-        uniqueClientsCount().toString(),
+        totalClientsServed().toString(),
         oneWayTripsCount().toString(),
         totalMileage.toFixed(1),
         selectedRole
@@ -284,15 +256,11 @@
     } catch (error) {
       console.error('Error generating CSV:', error);
       toastStore.error('Failed to generate CSV');
-    } finally {
-      isGenerating = false;
     }
   }
 
   function generatePDF() {
     try {
-      isGenerating = true;
-
       const doc = new jsPDF();
       const pageWidth = doc.internal.pageSize.getWidth();
       const pageHeight = doc.internal.pageSize.getHeight();
@@ -306,7 +274,7 @@
       yPosition += 12;
       doc.setFontSize(14);
       doc.setFont('helvetica', 'normal');
-      doc.text(`${reportFirstName} ${reportLastName}`, pageWidth / 2, yPosition, { align: 'center' });
+      doc.text(displayName, pageWidth / 2, yPosition, { align: 'center' });
       
       yPosition += 7;
       doc.setFontSize(10);
@@ -387,16 +355,16 @@
       if (isDriverRole) {
         yPosition += boxHeight + boxSpacing;
 
-        // Unique Clients Box
+        // Total Clients Box
         doc.setFillColor(236, 72, 153);
         doc.roundedRect(xPosition, yPosition, boxWidth, boxHeight, 3, 3, 'F');
         doc.setTextColor(255);
         doc.setFontSize(10);
         doc.setFont('helvetica', 'normal');
-        doc.text('Unique Clients Served', xPosition + boxWidth / 2, yPosition + 8, { align: 'center' });
+        doc.text('Total Clients Served', xPosition + boxWidth / 2, yPosition + 8, { align: 'center' });
         doc.setFontSize(18);
         doc.setFont('helvetica', 'bold');
-        doc.text(uniqueClientsCount().toString(), xPosition + boxWidth / 2, yPosition + 18, { align: 'center' });
+        doc.text(totalClientsServed().toString(), xPosition + boxWidth / 2, yPosition + 18, { align: 'center' });
 
         yPosition += boxHeight + boxSpacing;
 
@@ -410,20 +378,6 @@
         doc.setFontSize(18);
         doc.setFont('helvetica', 'bold');
         doc.text(oneWayTripsCount().toString(), xPosition + boxWidth / 2, yPosition + 18, { align: 'center' });
-
-        if (rideStats) {
-          yPosition += boxHeight + boxSpacing;
-
-          doc.setFillColor(234, 88, 12);
-          doc.roundedRect(xPosition, yPosition, boxWidth, boxHeight, 3, 3, 'F');
-          doc.setTextColor(255);
-          doc.setFontSize(10);
-          doc.setFont('helvetica', 'normal');
-          doc.text('Completed Rides', xPosition + boxWidth / 2, yPosition + 8, { align: 'center' });
-          doc.setFontSize(18);
-          doc.setFont('helvetica', 'bold');
-          doc.text(rideStats.completed.toString(), xPosition + boxWidth / 2, yPosition + 18, { align: 'center' });
-        }
       }
 
       yPosition += boxHeight + 20;
@@ -459,8 +413,6 @@
     } catch (error) {
       console.error('Error generating PDF:', error);
       toastStore.error('Failed to generate PDF');
-    } finally {
-      isGenerating = false;
     }
   }
 
@@ -471,12 +423,6 @@
       day: 'numeric'
     });
   }
-
-  $effect(() => {
-    if (isDriverRole && startDate && endDate) {
-      fetchRideStats();
-    }
-  });
 
   $effect(() => {
     if (manualHoursWorked >= 0) showHoursWarning = false;
@@ -499,11 +445,6 @@
     if (!isDriverRole) {
       selectedRideIds = new Set();
     }
-  });
-  
-  // Update report name when name fields change
-  $effect(() => {
-    reportName = `${reportLastName}${reportFirstName} Report_${getCurrentDateString()}`;
   });
 </script>
 
@@ -702,65 +643,98 @@
             </div>
           </div>
 
-          <!-- Driver Ride Stats -->
-          {#if isDriverRole}
-            <div class="bg-gray-50 rounded-lg p-4 border border-gray-200">
-              <h3 class="text-sm font-medium text-gray-900 mb-3 flex items-center gap-2">
-                <Car class="w-4 h-4" />
-                Your Ride Statistics
-                {#if isFetchingRides}
-                  <span class="text-xs text-gray-500">(Loading...)</span>
-                {/if}
-              </h3>
+          <!-- Report Name and Full Name Section -->
+          <div class="space-y-4">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">
+                  First Name *
+                </label>
+                <input
+                  type="text"
+                  bind:value={reportFirstName}
+                  placeholder="Enter first name"
+                  class="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  required
+                />
+              </div>
               
-              {#if rideStats}
-                <div class="grid grid-cols-2 gap-4">
-                  <div class="bg-white rounded-lg p-3 border border-gray-200">
-                    <p class="text-xs text-gray-600 mb-1">Scheduled Rides</p>
-                    <p class="text-2xl font-bold text-purple-600">{rideStats.scheduled}</p>
-                  </div>
-                  <div class="bg-white rounded-lg p-3 border border-gray-200">
-                    <p class="text-xs text-gray-600 mb-1">Completed Rides</p>
-                    <p class="text-2xl font-bold text-orange-600">{rideStats.completed}</p>
-                  </div>
-                </div>
-                <p class="text-xs text-gray-500 mt-2">
-                  Statistics automatically calculated for {formatDate(startDate)} - {formatDate(endDate)}
-                </p>
-              {:else if !isFetchingRides}
-                <p class="text-sm text-gray-500">Select a date range to view ride statistics</p>
-              {/if}
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">
+                  Last Name *
+                </label>
+                <input
+                  type="text"
+                  bind:value={reportLastName}
+                  placeholder="Enter last name"
+                  class="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  required
+                />
+              </div>
             </div>
-          {/if}
+            
+            <!-- Name Preview -->
+            <div class="bg-gray-50 border border-gray-200 rounded-lg p-3">
+              <p class="text-xs text-gray-600 mb-1">Name as it will appear on report:</p>
+              <p class="text-sm font-semibold text-gray-900">{displayName || '(Enter your name above)'}</p>
+            </div>
+            
+            <!-- Report Filename Preview -->
+            <div class="bg-blue-50 border border-blue-200 rounded-lg p-3">
+              <p class="text-xs text-blue-700 mb-1">Report filename:</p>
+              <p class="text-sm font-mono text-blue-900">{reportName}.pdf / .csv</p>
+            </div>
+          </div>
 
-          <!-- Report Name -->
+          <!-- Format Selection -->
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-2">
-              Report File Name *
+              Report Format *
             </label>
-            <input
-              type="text"
-              bind:value={reportName}
-              placeholder="Enter report name"
-              class="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              required
-            />
-            <p class="text-xs text-gray-500 mt-1">This will be the name of your downloaded PDF file</p>
+            <div class="flex gap-4">
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={selectedFormats.has('pdf')}
+                  onchange={() => toggleFormat('pdf')}
+                  class="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                />
+                <span class="text-sm font-medium text-gray-700">PDF</span>
+              </label>
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={selectedFormats.has('csv')}
+                  onchange={() => toggleFormat('csv')}
+                  class="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                />
+                <span class="text-sm font-medium text-gray-700">CSV</span>
+              </label>
+            </div>
+            <p class="text-xs text-gray-500 mt-1">Select one or both formats to generate</p>
           </div>
 
           <!-- Generate Button -->
           <div class="pt-4">
             <button
-              onclick={generateReport}
-              disabled={isGenerating || (isDriverRole && isFetchingRides)}
+              onclick={generateReports}
+              disabled={isGenerating}
               class="w-full px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200 flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
             >
               <Download class="w-5 h-5" />
-              <span>{isGenerating ? 'Generating PDF...' : 'Generate & Download Report'}</span>
+              <span>
+                {#if isGenerating}
+                  Generating Report{selectedFormats.size > 1 ? 's' : ''}...
+                {:else if selectedFormats.size > 1}
+                  Generate & Download Reports (PDF & CSV)
+                {:else if selectedFormats.has('pdf')}
+                  Generate & Download PDF Report
+                {:else}
+                  Generate & Download CSV Report
+                {/if}
+              </span>
             </button>
           </div>
-        </div>
-      </div>
 
       <!-- Preview Summary -->
       {#if totalHours >= 0 && totalMileage >= 0}
@@ -774,6 +748,9 @@
                 <span class="text-sm font-medium text-blue-900">Total Hours</span>
               </div>
               <p class="text-2xl font-bold text-blue-600">{totalHours.toFixed(2)}</p>
+              {#if isDriverRole && ridesHours() > 0}
+                <p class="text-xs text-blue-700 mt-1">{ridesHours().toFixed(2)}h rides + {manualHoursWorked}h manual</p>
+              {/if}
             </div>
 
             <div class="bg-green-50 rounded-lg p-4 border border-green-200">
@@ -782,15 +759,19 @@
                 <span class="text-sm font-medium text-green-900">Total Mileage</span>
               </div>
               <p class="text-2xl font-bold text-green-600">{totalMileage.toFixed(1)} mi</p>
+              {#if isDriverRole && ridesMileage() > 0}
+                <p class="text-xs text-green-700 mt-1">{ridesMileage().toFixed(1)}mi rides + {manualMileage}mi manual</p>
+              {/if}
             </div>
 
             {#if isDriverRole}
               <div class="bg-pink-50 rounded-lg p-4 border border-pink-200">
                 <div class="flex items-center gap-2 mb-2">
                   <Car class="w-5 h-5 text-pink-600" />
-                  <span class="text-sm font-medium text-pink-900">Unique Clients</span>
+                  <span class="text-sm font-medium text-pink-900">Clients Served</span>
                 </div>
-                <p class="text-2xl font-bold text-pink-600">{uniqueClientsCount()}</p>
+                <p class="text-2xl font-bold text-pink-600">{totalClientsServed()}</p>
+                <p class="text-xs text-pink-700 mt-1">{selectedRideIds.size} ride{selectedRideIds.size !== 1 ? 's' : ''} selected</p>
               </div>
 
               <div class="bg-purple-50 rounded-lg p-4 border border-purple-200">
@@ -799,6 +780,7 @@
                   <span class="text-sm font-medium text-purple-900">One-Way Trips</span>
                 </div>
                 <p class="text-2xl font-bold text-purple-600">{oneWayTripsCount()}</p>
+                <p class="text-xs text-purple-700 mt-1">Round trips count as 2</p>
               </div>
             {/if}
           </div>
