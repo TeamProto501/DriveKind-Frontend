@@ -319,7 +319,7 @@
           <div class="px-2 pb-4">
             <Button
               onclick={() => navigateTo("/dispatcher/rides")}
-              class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium flex items-center justify-center gap-2"
+              class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium flex items-center justify-center gap-2 cursor-pointer"
             >
               <Plus class="w-4 h-4" />
               Create Ride
@@ -354,7 +354,7 @@
                         chevron.classList.toggle("rotate-90");
                       }
                     }}
-                    class="w-full justify-start text-slate-700 hover:text-slate-900 hover:bg-slate-100"
+                    class="w-full justify-start text-slate-700 hover:text-slate-900 hover:bg-slate-100 cursor-pointer"
                   >
                     {@const IconComponent = getIconComponent(
                       group.icon || "Home"
@@ -374,7 +374,7 @@
                         <Sidebar.MenuSubItem>
                           <Sidebar.MenuSubButton
                             onclick={() => navigateTo(item.href)}
-                            class="text-slate-700 hover:text-slate-900 hover:bg-slate-100 {isActiveRoute(
+                            class="text-slate-700 hover:text-slate-900 hover:bg-slate-100 cursor-pointer {isActiveRoute(
                               item.href
                             )
                               ? 'bg-blue-50 text-blue-700'
@@ -393,7 +393,7 @@
                   <Sidebar.MenuItem>
                     <Sidebar.MenuButton
                       onclick={() => navigateTo(item.href)}
-                      class="w-full justify-start text-slate-700 hover:text-slate-900 hover:bg-slate-100 {isActiveRoute(
+                      class="w-full justify-start text-slate-700 hover:text-slate-900 hover:bg-slate-100 cursor-pointer {isActiveRoute(
                         item.href
                       )
                         ? 'bg-blue-50 text-blue-700 border-l-2 border-blue-600'
@@ -419,7 +419,7 @@
       <Sidebar.Menu>
         <Sidebar.MenuItem>
           <Sidebar.MenuButton
-            class="h-12 text-sm hover:bg-slate-100 data-[state=open]:bg-slate-100"
+            class="h-12 text-sm hover:bg-slate-100 data-[state=open]:bg-slate-100 cursor-pointer"
             onclick={() => {
               const dropdown = document.getElementById("profile-dropdown");
               if (dropdown) {
@@ -475,7 +475,7 @@
                 .getElementById("profile-dropdown")
                 ?.classList.add("hidden");
             }}
-            class="w-full flex items-center gap-2 px-2 py-2 text-sm text-slate-700 hover:bg-slate-100 rounded-md transition-colors"
+            class="w-full flex items-center gap-2 px-2 py-2 text-sm text-slate-700 hover:bg-slate-100 rounded-md transition-colors cursor-pointer"
           >
             <User class="w-4 h-4" />
             <span>Profile</span>
@@ -491,7 +491,7 @@
                 .getElementById("profile-dropdown")
                 ?.classList.add("hidden");
             }}
-            class="w-full flex items-center gap-2 px-2 py-2 text-sm text-red-600 hover:bg-red-50 rounded-md transition-colors"
+            class="w-full flex items-center gap-2 px-2 py-2 text-sm text-red-600 hover:bg-red-50 rounded-md transition-colors cursor-pointer"
           >
             <LogOut class="w-4 h-4" />
             <span>Sign Out</span>
