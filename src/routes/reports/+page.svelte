@@ -1,7 +1,7 @@
 <script lang="ts">
   import RoleGuard from '$lib/components/RoleGuard.svelte';
   import Breadcrumbs from '$lib/components/Breadcrumbs.svelte';
-  import { Download, Calendar, FileText, Clock, MapPin, Car, AlertCircle, AlertTriangle, ChevronDown } from '@lucide/svelte';
+  import { Download, Calendar, FileText, Clock, MapPin, Car, AlertCircle, AlertTriangle, FileSpreadsheet } from '@lucide/svelte';
   import { API_BASE_URL } from '$lib/api';
   import { toastStore } from '$lib/toast';
   import type { PageData } from './$types';
@@ -19,6 +19,10 @@
   let endDate = getDefaultEndDate();
   let manualHoursWorked: number = 0;
   let manualMileage: number = 0;
+  
+  // Full name fields for display on report
+  let reportFirstName = $state(data.userProfile?.first_name || '');
+  let reportLastName = $state(data.userProfile?.last_name || '');
   
   // Role selection
   const userRoles = Array.isArray(data.userProfile?.role) 
@@ -48,6 +52,35 @@
       .reduce((sum, r) => sum + (r!.miles_driven || 0), 0);
   });
   
+  // Calculate unique clients from selected rides
+  let uniqueClientsCount = $derived(() => {
+    if (!isDriverRole || selectedRideIds.size === 0) return 0;
+    const clientIds = new Set(
+      Array.from(selectedRideIds)
+        .map(id => data.completedRides.find(r => r.ride_id === id))
+        .filter(r => r && r.client_id)
+        .map(r => r!.client_id)
+    );
+    return clientIds.size;
+  });
+  
+  // Calculate one-way trips (round trips count as 2)
+  let oneWayTripsCount = $derived(() => {
+    if (!isDriverRole || selectedRideIds.size === 0) return 0;
+    return Array.from(selectedRideIds)
+      .map(id => data.completedRides.find(r => r.ride_id === id))
+      .filter(r => r && r.completion_status)
+      .reduce((count, r) => {
+        const status = r!.completion_status;
+        if (status === 'Completed Round Trip') {
+          return count + 2;
+        } else if (status === 'Completed One Way To' || status === 'Completed One Way From') {
+          return count + 1;
+        }
+        return count;
+      }, 0);
+  });
+  
   // Total calculations (manual + rides)
   let totalHours = $derived(manualHoursWorked + ridesHours());
   let totalMileage = $derived(manualMileage + ridesMileage());
@@ -63,8 +96,6 @@
     });
   });
   
-  const firstName = data.userProfile?.first_name || 'User';
-  const lastName = data.userProfile?.last_name || 'Report';
   const organizationName = data.organization?.name || 'Organization';
   
   function getCurrentDateString(): string {
@@ -75,7 +106,7 @@
     return `${month}${day}${year}`;
   }
   
-  let reportName = `${lastName}${firstName} Report_${getCurrentDateString()}`;
+  let reportName = `${reportLastName}${reportFirstName} Report_${getCurrentDateString()}`;
   
   let isGenerating = false;
   let isFetchingRides = false;
@@ -168,6 +199,11 @@
       toastStore.error('Please enter a report name');
       isValid = false;
     }
+    
+    if (!reportFirstName.trim() || !reportLastName.trim()) {
+      toastStore.error('Please enter your full name');
+      isValid = false;
+    }
 
     return isValid;
   }
@@ -181,14 +217,76 @@
     selectedRideIds = new Set(selectedRideIds); // Trigger reactivity
   }
 
-  async function generateReport() {
+  async function generateReport(format: 'pdf' | 'csv') {
     if (!validateForm()) return;
 
     if (isDriverRole && !rideStats) {
       await fetchRideStats();
     }
 
-    generatePDF();
+    if (format === 'pdf') {
+      generatePDF();
+    } else {
+      generateCSV();
+    }
+  }
+
+  function generateCSV() {
+    try {
+      isGenerating = true;
+
+      // CSV Headers matching sponsor's format
+      const headers = [
+        'Volunteer Name',
+        '# Hours',
+        '# Clients',
+        '# one-way rides',
+        'Total # of miles',
+        'Position'
+      ];
+
+      // Data row
+      const fullName = `${reportFirstName} ${reportLastName}`;
+      const row = [
+        fullName,
+        totalHours.toFixed(2),
+        uniqueClientsCount().toString(),
+        oneWayTripsCount().toString(),
+        totalMileage.toFixed(1),
+        selectedRole
+      ];
+
+      // Create CSV content
+      const csvContent = [
+        headers.join(','),
+        row.map(cell => {
+          // Escape cells that contain commas
+          if (cell.includes(',')) {
+            return `"${cell}"`;
+          }
+          return cell;
+        }).join(',')
+      ].join('\n');
+
+      // Create and download file
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      
+      link.setAttribute('href', url);
+      link.setAttribute('download', `${reportName.replace(/\s+/g, '_')}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      toastStore.success('CSV report generated successfully');
+    } catch (error) {
+      console.error('Error generating CSV:', error);
+      toastStore.error('Failed to generate CSV');
+    } finally {
+      isGenerating = false;
+    }
   }
 
   function generatePDF() {
@@ -208,7 +306,7 @@
       yPosition += 12;
       doc.setFontSize(14);
       doc.setFont('helvetica', 'normal');
-      doc.text(`${firstName} ${lastName}`, pageWidth / 2, yPosition, { align: 'center' });
+      doc.text(`${reportFirstName} ${reportLastName}`, pageWidth / 2, yPosition, { align: 'center' });
       
       yPosition += 7;
       doc.setFontSize(10);
@@ -286,30 +384,46 @@
       doc.setFont('helvetica', 'bold');
       doc.text(`${totalMileage.toFixed(1)} mi`, xPosition + boxWidth / 2, yPosition + 18, { align: 'center' });
 
-      if (isDriverRole && rideStats) {
+      if (isDriverRole) {
         yPosition += boxHeight + boxSpacing;
 
+        // Unique Clients Box
+        doc.setFillColor(236, 72, 153);
+        doc.roundedRect(xPosition, yPosition, boxWidth, boxHeight, 3, 3, 'F');
+        doc.setTextColor(255);
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'normal');
+        doc.text('Unique Clients Served', xPosition + boxWidth / 2, yPosition + 8, { align: 'center' });
+        doc.setFontSize(18);
+        doc.setFont('helvetica', 'bold');
+        doc.text(uniqueClientsCount().toString(), xPosition + boxWidth / 2, yPosition + 18, { align: 'center' });
+
+        yPosition += boxHeight + boxSpacing;
+
+        // One-Way Trips Box
         doc.setFillColor(168, 85, 247);
         doc.roundedRect(xPosition, yPosition, boxWidth, boxHeight, 3, 3, 'F');
         doc.setTextColor(255);
         doc.setFontSize(10);
         doc.setFont('helvetica', 'normal');
-        doc.text('Scheduled Rides', xPosition + boxWidth / 2, yPosition + 8, { align: 'center' });
+        doc.text('One-Way Trips', xPosition + boxWidth / 2, yPosition + 8, { align: 'center' });
         doc.setFontSize(18);
         doc.setFont('helvetica', 'bold');
-        doc.text(rideStats.scheduled.toString(), xPosition + boxWidth / 2, yPosition + 18, { align: 'center' });
+        doc.text(oneWayTripsCount().toString(), xPosition + boxWidth / 2, yPosition + 18, { align: 'center' });
 
-        yPosition += boxHeight + boxSpacing;
+        if (rideStats) {
+          yPosition += boxHeight + boxSpacing;
 
-        doc.setFillColor(234, 88, 12);
-        doc.roundedRect(xPosition, yPosition, boxWidth, boxHeight, 3, 3, 'F');
-        doc.setTextColor(255);
-        doc.setFontSize(10);
-        doc.setFont('helvetica', 'normal');
-        doc.text('Completed Rides', xPosition + boxWidth / 2, yPosition + 8, { align: 'center' });
-        doc.setFontSize(18);
-        doc.setFont('helvetica', 'bold');
-        doc.text(rideStats.completed.toString(), xPosition + boxWidth / 2, yPosition + 18, { align: 'center' });
+          doc.setFillColor(234, 88, 12);
+          doc.roundedRect(xPosition, yPosition, boxWidth, boxHeight, 3, 3, 'F');
+          doc.setTextColor(255);
+          doc.setFontSize(10);
+          doc.setFont('helvetica', 'normal');
+          doc.text('Completed Rides', xPosition + boxWidth / 2, yPosition + 8, { align: 'center' });
+          doc.setFontSize(18);
+          doc.setFont('helvetica', 'bold');
+          doc.text(rideStats.completed.toString(), xPosition + boxWidth / 2, yPosition + 18, { align: 'center' });
+        }
       }
 
       yPosition += boxHeight + 20;
@@ -341,7 +455,7 @@
       const fileName = `${reportName.replace(/\s+/g, '_')}.pdf`;
       doc.save(fileName);
       
-      toastStore.success('Report generated successfully');
+      toastStore.success('PDF report generated successfully');
     } catch (error) {
       console.error('Error generating PDF:', error);
       toastStore.error('Failed to generate PDF');
@@ -385,6 +499,11 @@
     if (!isDriverRole) {
       selectedRideIds = new Set();
     }
+  });
+  
+  // Update report name when name fields change
+  $effect(() => {
+    reportName = `${reportLastName}${reportFirstName} Report_${getCurrentDateString()}`;
   });
 </script>
 
@@ -665,26 +784,24 @@
               <p class="text-2xl font-bold text-green-600">{totalMileage.toFixed(1)} mi</p>
             </div>
 
-            {#if isDriverRole && rideStats}
+            {#if isDriverRole}
+              <div class="bg-pink-50 rounded-lg p-4 border border-pink-200">
+                <div class="flex items-center gap-2 mb-2">
+                  <Car class="w-5 h-5 text-pink-600" />
+                  <span class="text-sm font-medium text-pink-900">Unique Clients</span>
+                </div>
+                <p class="text-2xl font-bold text-pink-600">{uniqueClientsCount()}</p>
+              </div>
+
               <div class="bg-purple-50 rounded-lg p-4 border border-purple-200">
                 <div class="flex items-center gap-2 mb-2">
                   <Car class="w-5 h-5 text-purple-600" />
-                  <span class="text-sm font-medium text-purple-900">Scheduled</span>
+                  <span class="text-sm font-medium text-purple-900">One-Way Trips</span>
                 </div>
-                <p class="text-2xl font-bold text-purple-600">{rideStats.scheduled}</p>
-              </div>
-
-              <div class="bg-orange-50 rounded-lg p-4 border border-orange-200">
-                <div class="flex items-center gap-2 mb-2">
-                  <Car class="w-5 h-5 text-orange-600" />
-                  <span class="text-sm font-medium text-orange-900">Completed</span>
-                </div>
-                <p class="text-2xl font-bold text-orange-600">{rideStats.completed}</p>
+                <p class="text-2xl font-bold text-purple-600">{oneWayTripsCount()}</p>
               </div>
             {/if}
           </div>
         </div>
       {/if}
-    </div>
-  </div>
 </RoleGuard>

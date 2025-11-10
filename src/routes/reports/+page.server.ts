@@ -51,13 +51,16 @@ export const load: PageServerLoad = async (event) => {
       hours,
       destination_name,
       status,
+      completion_status,
+      client_id,
       clients:client_id (
         first_name,
-        last_name
+        last_name,
+        client_id
       )
     `)
     .eq('driver_user_id', session.user.id)
-    .in('status', ['Completed', 'Reported'])
+    .eq('status', 'Completed')
     .gte('appointment_time', twelveMonthsAgo.toISOString())
     .order('appointment_time', { ascending: false });
 
