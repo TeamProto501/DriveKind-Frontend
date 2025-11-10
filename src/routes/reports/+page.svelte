@@ -593,7 +593,7 @@
           {/if}
 
           <!-- Manual Hours and Mileage Input -->
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="grid gap-3 md:grid-cols-2 mt-3">
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-2">
                 <Clock class="w-4 h-4 inline mr-1" />
@@ -609,7 +609,7 @@
               />
               {#if isDriverRole && selectedRideIds.size > 0}
                 <p class="text-xs text-gray-500 mt-1">
-                  {ridesHours().toFixed(2)}h from rides + {manualHoursWorked}h manual = <strong>{totalHours.toFixed(2)}h total</strong>
+                  {ridesHours.toFixed(2)}h from rides + {manualHoursWorked}h manual = <strong>{totalHours.toFixed(2)}h total</strong>
                 </p>
               {/if}
               {#if showHoursWarning}
@@ -635,7 +635,7 @@
               />
               {#if isDriverRole && selectedRideIds.size > 0}
                 <p class="text-xs text-gray-500 mt-1">
-                  {ridesMileage().toFixed(1)}mi from rides + {manualMileage}mi manual = <strong>{totalMileage.toFixed(1)}mi total</strong>
+                  {ridesMileage.toFixed(1)}mi from rides + {manualMileage}mi manual = <strong>{totalMileage.toFixed(1)}mi total</strong>
                 </p>
               {/if}
               {#if showMileageWarning}
