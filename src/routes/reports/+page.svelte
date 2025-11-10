@@ -584,8 +584,8 @@
                 <div class="mt-3 pt-3 border-t border-purple-200">
                   <div class="text-sm text-purple-900">
                     <strong>{selectedRideIds.size}</strong> ride{selectedRideIds.size !== 1 ? 's' : ''} selected • 
-                    <strong>{ridesHours().toFixed(2)}h</strong> • 
-                    <strong>{ridesMileage().toFixed(1)}mi</strong>
+                    <strong>{ridesHours.toFixed(2)}h</strong> • 
+                    <strong>{ridesMileage.toFixed(1)}mi</strong>
                   </div>
                 </div>
               {/if}
