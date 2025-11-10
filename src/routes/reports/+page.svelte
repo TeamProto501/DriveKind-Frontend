@@ -1,7 +1,7 @@
 <script lang="ts">
   import RoleGuard from '$lib/components/RoleGuard.svelte';
   import Breadcrumbs from '$lib/components/Breadcrumbs.svelte';
-  import { Download, Calendar, FileText, Clock, MapPin, Car, AlertCircle, AlertTriangle, FileSpreadsheet } from '@lucide/svelte';
+  import { Download, Calendar, FileText, Clock, MapPin, Car, AlertCircle, AlertTriangle, FileSpreadsheet, Edit2 } from '@lucide/svelte';
   import { API_BASE_URL } from '$lib/api';
   import { toastStore } from '$lib/toast';
   import type { PageData } from './$types';
@@ -14,9 +14,14 @@
   let manualHoursWorked: number = 0;
   let manualMileage: number = 0;
   
-  // Full name fields for display on report
+  // Full name fields for filename
   let reportFirstName = $state(data.userProfile?.first_name || '');
   let reportLastName = $state(data.userProfile?.last_name || '');
+  
+  // Display name fields (editable for report content)
+  let displayFirstName = $state(data.userProfile?.first_name || '');
+  let displayLastName = $state(data.userProfile?.last_name || '');
+  let isEditingName = $state(false);
   
   // Format selection
   let selectedFormats = $state<Set<'pdf' | 'csv'>>(new Set(['pdf']));
@@ -32,8 +37,8 @@
   // Selected rides for drivers
   let selectedRideIds = $state<Set<number>>(new Set());
   
-  // Calculate totals from selected rides
-  let ridesHours = $derived(() => {
+  // Calculate totals from selected rides - FIX: Remove arrow function syntax
+  let ridesHours = $derived.by(() => {
     if (!isDriverRole || selectedRideIds.size === 0) return 0;
     return Array.from(selectedRideIds)
       .map(id => data.completedRides.find(r => r.ride_id === id))
@@ -41,7 +46,7 @@
       .reduce((sum, r) => sum + (r!.hours || 0), 0);
   });
   
-  let ridesMileage = $derived(() => {
+  let ridesMileage = $derived.by(() => {
     if (!isDriverRole || selectedRideIds.size === 0) return 0;
     return Array.from(selectedRideIds)
       .map(id => data.completedRides.find(r => r.ride_id === id))
@@ -50,13 +55,13 @@
   });
   
   // Count total clients served (not unique - same client on 2 rides = 2)
-  let totalClientsServed = $derived(() => {
+  let totalClientsServed = $derived.by(() => {
     if (!isDriverRole || selectedRideIds.size === 0) return 0;
     return selectedRideIds.size; // Each selected ride = 1 client served
   });
   
   // Calculate one-way trips (round trips count as 2)
-  let oneWayTripsCount = $derived(() => {
+  let oneWayTripsCount = $derived.by(() => {
     if (!isDriverRole || selectedRideIds.size === 0) return 0;
     return Array.from(selectedRideIds)
       .map(id => data.completedRides.find(r => r.ride_id === id))
@@ -72,15 +77,15 @@
       }, 0);
   });
   
-  // Total calculations (manual + rides)
-  let totalHours = $derived(manualHoursWorked + ridesHours());
-  let totalMileage = $derived(manualMileage + ridesMileage());
+  // Total calculations (manual + rides) - Now ridesHours and ridesMileage are values, not functions
+  let totalHours = $derived(manualHoursWorked + ridesHours);
+  let totalMileage = $derived(manualMileage + ridesMileage);
   
-  // Preview name as it will appear
-  let displayName = $derived(`${reportFirstName} ${reportLastName}`);
+  // Display name as it will appear on the report
+  let displayName = $derived(`${displayFirstName} ${displayLastName}`);
   
   // Filter rides by date range
-  let filteredRides = $derived(() => {
+  let filteredRides = $derived.by(() => {
     if (!data.completedRides) return [];
     return data.completedRides.filter(ride => {
       const rideDate = new Date(ride.appointment_time);
@@ -158,7 +163,7 @@
       isValid = false;
     }
     
-    if (!reportFirstName.trim() || !reportLastName.trim()) {
+    if (!displayFirstName.trim() || !displayLastName.trim()) {
       toastStore.error('Please enter your full name');
       isValid = false;
     }
@@ -177,7 +182,7 @@
     } else {
       selectedRideIds.add(rideId);
     }
-    selectedRideIds = new Set(selectedRideIds); // Trigger reactivity
+    selectedRideIds = new Set(selectedRideIds);
   }
   
   function toggleFormat(format: 'pdf' | 'csv') {
@@ -186,7 +191,7 @@
     } else {
       selectedFormats.add(format);
     }
-    selectedFormats = new Set(selectedFormats); // Trigger reactivity
+    selectedFormats = new Set(selectedFormats);
   }
 
   async function generateReports() {
@@ -222,8 +227,8 @@
       const row = [
         displayName,
         totalHours.toFixed(2),
-        totalClientsServed().toString(),
-        oneWayTripsCount().toString(),
+        totalClientsServed.toString(),
+        oneWayTripsCount.toString(),
         totalMileage.toFixed(1),
         selectedRole
       ];
@@ -232,7 +237,6 @@
       const csvContent = [
         headers.join(','),
         row.map(cell => {
-          // Escape cells that contain commas
           if (cell.includes(',')) {
             return `"${cell}"`;
           }
@@ -364,7 +368,7 @@
         doc.text('Total Clients Served', xPosition + boxWidth / 2, yPosition + 8, { align: 'center' });
         doc.setFontSize(18);
         doc.setFont('helvetica', 'bold');
-        doc.text(totalClientsServed().toString(), xPosition + boxWidth / 2, yPosition + 18, { align: 'center' });
+        doc.text(totalClientsServed.toString(), xPosition + boxWidth / 2, yPosition + 18, { align: 'center' });
 
         yPosition += boxHeight + boxSpacing;
 
@@ -377,7 +381,7 @@
         doc.text('One-Way Trips', xPosition + boxWidth / 2, yPosition + 8, { align: 'center' });
         doc.setFontSize(18);
         doc.setFont('helvetica', 'bold');
-        doc.text(oneWayTripsCount().toString(), xPosition + boxWidth / 2, yPosition + 18, { align: 'center' });
+        doc.text(oneWayTripsCount.toString(), xPosition + boxWidth / 2, yPosition + 18, { align: 'center' });
       }
 
       yPosition += boxHeight + 20;
@@ -673,10 +677,47 @@
               </div>
             </div>
             
-            <!-- Name Preview -->
-            <div class="bg-gray-50 border border-gray-200 rounded-lg p-3">
-              <p class="text-xs text-gray-600 mb-1">Name as it will appear on report:</p>
-              <p class="text-sm font-semibold text-gray-900">{displayName || '(Enter your name above)'}</p>
+            <!-- Name Preview Section (Editable) -->
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-2">
+                Name as it will appear on report *
+              </label>
+              
+              {#if isEditingName}
+                <div class="space-y-2">
+                  <div class="grid grid-cols-2 gap-2">
+                    <input
+                      type="text"
+                      bind:value={displayFirstName}
+                      placeholder="First name"
+                      class="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                    <input
+                      type="text"
+                      bind:value={displayLastName}
+                      placeholder="Last name"
+                      class="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                  <button
+                    onclick={() => isEditingName = false}
+                    class="text-sm text-blue-600 hover:text-blue-700 font-medium"
+                  >
+                    Done
+                  </button>
+                </div>
+              {:else}
+                <button
+                  onclick={() => isEditingName = true}
+                  class="w-full bg-gray-50 hover:bg-gray-100 border border-gray-300 rounded-lg p-3 text-left transition-colors group"
+                >
+                  <div class="flex items-center justify-between">
+                    <p class="text-base font-semibold text-gray-900">{displayName || '(Click to enter name)'}</p>
+                    <Edit2 class="w-4 h-4 text-gray-400 group-hover:text-gray-600" />
+                  </div>
+                  <p class="text-xs text-gray-500 mt-1">Click to edit how your name appears on the report</p>
+                </button>
+              {/if}
             </div>
             
             <!-- Report Filename Preview -->
@@ -748,8 +789,8 @@
                 <span class="text-sm font-medium text-blue-900">Total Hours</span>
               </div>
               <p class="text-2xl font-bold text-blue-600">{totalHours.toFixed(2)}</p>
-              {#if isDriverRole && ridesHours() > 0}
-                <p class="text-xs text-blue-700 mt-1">{ridesHours().toFixed(2)}h rides + {manualHoursWorked}h manual</p>
+              {#if isDriverRole && ridesHours > 0}
+                <p class="text-xs text-blue-700 mt-1">{ridesHours.toFixed(2)}h rides + {manualHoursWorked}h manual</p>
               {/if}
             </div>
 
@@ -759,8 +800,8 @@
                 <span class="text-sm font-medium text-green-900">Total Mileage</span>
               </div>
               <p class="text-2xl font-bold text-green-600">{totalMileage.toFixed(1)} mi</p>
-              {#if isDriverRole && ridesMileage() > 0}
-                <p class="text-xs text-green-700 mt-1">{ridesMileage().toFixed(1)}mi rides + {manualMileage}mi manual</p>
+              {#if isDriverRole && ridesMileage > 0}
+                <p class="text-xs text-green-700 mt-1">{ridesMileage.toFixed(1)}mi rides + {manualMileage}mi manual</p>
               {/if}
             </div>
 
@@ -770,7 +811,7 @@
                   <Car class="w-5 h-5 text-pink-600" />
                   <span class="text-sm font-medium text-pink-900">Clients Served</span>
                 </div>
-                <p class="text-2xl font-bold text-pink-600">{totalClientsServed()}</p>
+                <p class="text-2xl font-bold text-pink-600">{totalClientsServed}</p>
                 <p class="text-xs text-pink-700 mt-1">{selectedRideIds.size} ride{selectedRideIds.size !== 1 ? 's' : ''} selected</p>
               </div>
 
@@ -779,7 +820,7 @@
                   <Car class="w-5 h-5 text-purple-600" />
                   <span class="text-sm font-medium text-purple-900">One-Way Trips</span>
                 </div>
-                <p class="text-2xl font-bold text-purple-600">{oneWayTripsCount()}</p>
+                <p class="text-2xl font-bold text-purple-600">{oneWayTripsCount}</p>
                 <p class="text-xs text-purple-700 mt-1">Round trips count as 2</p>
               </div>
             {/if}
