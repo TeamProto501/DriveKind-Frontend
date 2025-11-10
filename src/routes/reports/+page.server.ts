@@ -26,7 +26,8 @@ export const load: PageServerLoad = async (event) => {
     return {
       session,
       userProfile: null,
-      organization: null
+      organization: null,
+      completedRides: []
     };
   }
 
@@ -37,9 +38,36 @@ export const load: PageServerLoad = async (event) => {
     .eq('org_id', userProfile.org_id)
     .single();
 
+  // Fetch completed rides for the user (for the last 12 months)
+  const twelveMonthsAgo = new Date();
+  twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 12);
+
+  const { data: completedRides } = await supabase
+    .from('rides')
+    .select(`
+      ride_id,
+      appointment_time,
+      miles_driven,
+      hours,
+      destination_name,
+      status,
+      completion_status,
+      client_id,
+      clients:client_id (
+        first_name,
+        last_name,
+        client_id
+      )
+    `)
+    .eq('driver_user_id', session.user.id)
+    .eq('status', 'Completed')
+    .gte('appointment_time', twelveMonthsAgo.toISOString())
+    .order('appointment_time', { ascending: false });
+
   return {
     session,
     userProfile,
-    organization
+    organization,
+    completedRides: completedRides || []
   };
 };
