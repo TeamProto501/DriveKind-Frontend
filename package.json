@@ -44,6 +44,7 @@
 		"flowbite-svelte": "^1.13.7",
 		"install": "^0.13.0",
 		"jspdf": "^3.0.3",
+		"jspdf-autotable": "^5.0.2",
 		"npm": "^11.5.2"
 	}
 }
