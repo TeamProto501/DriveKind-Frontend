@@ -253,11 +253,13 @@
   <!-- Body -->
   <div class="flex-1 overflow-y-auto p-6 space-y-4">
     {#if errorMessage}
-      <div class="rounded-md bg-red-50 border border-red-200 p-3 text-sm text-red-700">
+      <div
+        class="rounded-md bg-red-50 border border-red-200 p-3 text-base text-red-700"
+      >
         <p class="font-medium mb-2">Please fix the following errors:</p>
         <ul class="list-disc list-inside space-y-1">
-          {#each errorMessage.split('. ').filter(e => e.trim()) as err}
-            <li>{err}{err.endsWith('.') ? '' : '.'}</li>
+          {#each errorMessage.split(". ").filter((e) => e.trim()) as err}
+            <li>{err}{err.endsWith(".") ? "" : "."}</li>
           {/each}
         </ul>
       </div>
@@ -288,7 +290,10 @@
             </div>
           </div>
           <div>
-            <label class="block text-base font-medium">Email <span class="text-gray-500 font-normal">(optional)</span></label>
+            <label class="block text-base font-medium"
+              >Email <span class="text-gray-500 font-normal">(optional)</span
+              ></label
+            >
             <input
               type="email"
               class="mt-1 w-full border rounded px-3 py-2 text-base"
