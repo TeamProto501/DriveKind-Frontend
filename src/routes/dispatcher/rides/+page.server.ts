@@ -52,7 +52,7 @@ export const load: PageServerLoad = async (event) => {
       };
     }
 
-    // Rides for this org (⚠️ add other_limitations inside nested clients)
+    // Rides (notes included; nested clients include other_limitations)
     const { data: rides, error: ridesError } = await supabase
       .from('rides')
       .select(`
@@ -110,7 +110,7 @@ export const load: PageServerLoad = async (event) => {
       console.error('Error loading rides:', ridesError);
     }
 
-    // Available drivers (for assignment modal)
+    // Drivers
     const { data: drivers, error: driversError } = await supabase
       .from('staff_profiles')
       .select('user_id, first_name, last_name, role')
@@ -121,7 +121,7 @@ export const load: PageServerLoad = async (event) => {
       console.error('Error loading drivers:', driversError);
     }
 
-    // Clients (⚠️ add other_limitations so the picker can show it)
+    // Clients
     const { data: clients, error: clientsError } = await supabase
       .from('clients')
       .select(`
@@ -145,7 +145,7 @@ export const load: PageServerLoad = async (event) => {
       console.error('Error loading clients:', clientsError);
     }
 
-    // Calls for "Linked call" dropdown
+    // Calls
     const { data: calls, error: callsError } = await supabase
       .from('calls')
       .select('call_id, org_id, call_time, call_type, caller_first_name, caller_last_name')
@@ -156,7 +156,7 @@ export const load: PageServerLoad = async (event) => {
       console.error('Error loading calls:', callsError);
     }
 
-    // Destinations (saved locations) for this org
+    // Destinations
     const { data: destinations, error: destinationsError } = await supabase
       .from('destinations')
       .select('destination_id, org_id, location_name, address, address2, city, state, zipcode')

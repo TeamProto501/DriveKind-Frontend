@@ -16,6 +16,7 @@
     AlertCircle,
     UserCheck,
     CheckCircle,
+    FileText
   } from "@lucide/svelte";
   import { invalidateAll } from "$app/navigation";
   import { onMount } from "svelte";
@@ -31,7 +32,7 @@
     sanitizeInput,
     combineValidations,
   } from "$lib/utils/validation";
-  import { page } from "$app/stores";
+  import { page } from "$app/stores"; 
 
   let { data }: { data: PageData } = $props();
 
@@ -106,7 +107,6 @@
         matchesTab = ["Scheduled", "Assigned", "In Progress"].includes(
           ride.status
         );
-      // REMOVED: reported tab
       else if (activeTab === "completed")
         matchesTab = ["Completed", "Cancelled"].includes(ride.status);
       return matches && matchesTab;
@@ -197,7 +197,6 @@
     const state = norm(c.state);
     const zip = norm(c.zip_code);
 
-    // Highest weight: prefix matches
     if (name.startsWith(nq)) return 100 - name.indexOf(nq);
     if (phone.startsWith(nq)) return 92;
     if (email.startsWith(nq)) return 88;
@@ -207,7 +206,6 @@
     if (state?.startsWith(nq)) return 80;
     if (zip?.startsWith(nq)) return 78;
 
-    // Contains matches (lower weight)
     if (name.includes(nq)) return 70 - name.indexOf(nq);
     if (phone.includes(nq)) return 64;
     if (email.includes(nq)) return 60;
@@ -254,7 +252,6 @@
     const s = String(raw).trim().toLowerCase();
     if (!s) return null;
 
-    // H:MM
     let m = s.match(/^(\d+)\s*:\s*(\d{1,2})$/);
     if (m) {
       const h = parseInt(m[1], 10);
@@ -263,7 +260,6 @@
         return { h, m: mi };
       return null;
     }
-    // Xh [Ym]
     m = s.match(
       /^(\d+(?:\.\d+)?)\s*(h|hr|hrs|hour|hours)\s*(\d+)?\s*(m|min|mins|minute|minutes)?$/
     );
@@ -274,14 +270,12 @@
       if (m[3]) totalMinutes += parseInt(m[3], 10);
       return { h: Math.floor(totalMinutes / 60), m: totalMinutes % 60 };
     }
-    // Xm
     m = s.match(/^(\d+)\s*(m|min|mins|minute|minutes)$/);
     if (m) {
       const mins = parseInt(m[1], 10);
       if (!Number.isFinite(mins)) return null;
       return { h: Math.floor(mins / 60), m: mins % 60 };
     }
-    // bare number = minutes
     m = s.match(/^(\d+)$/);
     if (m) {
       const mins = parseInt(m[1], 10);
@@ -491,10 +485,8 @@
   function toLocalDateTimeInput(ts: string | null | undefined) {
     if (!ts) return "";
     const d = new Date(ts);
-    // Ensure we're working with valid date
     if (isNaN(d.getTime())) return "";
     const pad = (n: number) => n.toString().padStart(2, "0");
-    // Return in YYYY-MM-DDTHH:mm format (no seconds)
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
   }
 
@@ -549,7 +541,6 @@
     stepErrors = [];
     editStep = 1;
 
-    // prefill edit picker label
     clientQueryEdit = "";
     const sel = filteredClients().find(
       (c: any) => String(c.client_id) === String(rideForm.client_id)
@@ -709,7 +700,6 @@
     return miss;
   }
 
-  // --- pickup vs appointment window validation ---
   function pickupWindowErrors(
     apptLocal: string,
     pickupLocal: string
@@ -737,7 +727,6 @@
     return errs;
   }
 
-  /* ---------------- validation (per-step) ---------------- */
   function validateStep(step: number): boolean {
     stepErrors = [];
     if (step === 1) {
@@ -770,7 +759,6 @@
       return errs.length === 0;
     }
     if (step === 2) {
-      // REMOVED: destination_name, dropoff_state, dropoff_zipcode validations
       const v = combineValidations(
         validateRequired(
           rideForm.dropoff_address ||
@@ -781,7 +769,6 @@
           rideForm.dropoff_city ||
             (isEditing() ? String(selectedRide?.dropoff_city ?? "") : "")
         ),
-        // State and ZIP are now optional - only validate if provided
         rideForm.dropoff_state && rideForm.dropoff_state.trim()
           ? validateState(rideForm.dropoff_state)
           : { valid: true, errors: [] },
@@ -1138,41 +1125,52 @@
                   >
                 </div>
 
-                <div
-                  class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-600"
-                ></div>
-                  <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-600">
-                    <div class="flex items-center gap-2">
-                      <Phone class="w-4 h-4 text-gray-400" />
-                      {getClientPhone(ride)}
-                    </div>
-                    <div class="flex items-center gap-2">
-                      <Calendar class="w-4 h-4 text-gray-400" />
-                      {formatDate(ride.appointment_time)} at {formatTime(ride.appointment_time)}
-                    </div>
-                    <div class="flex items-center gap-2">
-                      <User class="w-4 h-4 text-gray-400" /> Driver: {getDriverName(ride)}
-                    </div>
-                    <div class="flex items-center gap-2">
-                      <MapPin class="w-4 h-4 text-gray-400" /> Destination: {ride.destination_name}
-                    </div>
-
-                    <!-- ✅ NEW: Limitations from clients.other_limitations -->
-                    <div class="flex items-start gap-2 md:col-span-2">
-                      <AlertCircle class="w-4 h-4 text-gray-400 mt-0.5" />
-                      <div>
-                        <span class="font-medium">Limitations:</span>
-                        <span class="ml-1">{ride.clients?.other_limitations || 'None'}</span>
-                      </div>
+                <!-- 2 columns × 3 rows (Notes on the right) -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-600">
+                  <!-- Row 1 -->
+                  <div class="flex items-center gap-2">
+                    <Phone class="w-4 h-4 text-gray-400" />
+                    {getClientPhone(ride)}
+                  </div>
+                  <div class="flex items-start gap-2">
+                    <FileText class="w-4 h-4 text-gray-400 mt-0.5" />
+                    <div class="min-w-0">
+                      <span class="font-medium">Notes:</span>
+                      <span class="ml-1 whitespace-pre-wrap break-words">
+                        {ride.notes && ride.notes.trim() ? ride.notes : 'None'}
+                      </span>
                     </div>
                   </div>
 
-                {#if ride.notes}
-                  <div class="text-sm">
-                    <span class="font-medium">Notes:</span>
-                    {ride.notes}
+                  <!-- Row 2 -->
+                  <div class="flex items-center gap-2">
+                    <Calendar class="w-4 h-4 text-gray-400" />
+                    {formatDate(ride.appointment_time)} at {formatTime(ride.appointment_time)}
                   </div>
-                {/if}
+                  <div class="flex items-center gap-2">
+                    <MapPin class="w-4 h-4 text-gray-400" />
+                    <div>
+                      <span class="font-medium">Destination:</span>
+                      <span class="ml-1">{ride.destination_name || '—'}</span>
+                    </div>
+                  </div>
+
+                  <!-- Row 3 -->
+                  <div class="flex items-center gap-2">
+                    <User class="w-4 h-4 text-gray-400" />
+                    <div>
+                      <span class="font-medium">Driver:</span>
+                      <span class="ml-1">{getDriverName(ride)}</span>
+                    </div>
+                  </div>
+                  <div class="flex items-start gap-2">
+                    <AlertCircle class="w-4 h-4 text-gray-400 mt-0.5" />
+                    <div>
+                      <span class="font-medium">Limitations:</span>
+                      <span class="ml-1">{ride.clients?.other_limitations || 'None'}</span>
+                    </div>
+                  </div>
+                </div>
               </div>
 
               <div class="flex gap-2 ml-4">
@@ -1582,7 +1580,7 @@
                     id="est_hours"
                     type="number"
                     min="0"
-                    bindvalue={estHours}
+                    bind:value={estHours}
                     placeholder="0"
                     oninput={() => updateEstimatedLength()}
                   />
@@ -1620,10 +1618,13 @@
             <label for="notes" class="block text-sm font-medium text-gray-700"
               >Notes for driver</label
             >
-            <Textarea
+            <!-- svelte-ignore element_invalid_self_closing_tag -->
+            <textarea
               id="notes"
-              bindvalue={rideForm.notes}
+              bind:value={rideForm.notes}
               placeholder="Anything special the driver should know"
+              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              rows="3"
             />
           </div>
         </div>
@@ -2092,10 +2093,13 @@
             <label for="e_notes" class="block text-sm font-medium text-gray-700"
               >Notes for driver</label
             >
-            <Textarea
+            <!-- svelte-ignore element_invalid_self_closing_tag -->
+            <textarea
               id="e_notes"
-              bindvalue={rideForm.notes}
+              bind:value={rideForm.notes}
               placeholder="Anything special the driver should know"
+              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              rows="3"
             />
           </div>
         </div>
@@ -2163,19 +2167,20 @@
               </p>
             </div>
 
-            <!-- ✅ ADD NOTES FIELD FOR COMPLETION COMMENTS -->
+            <!-- svelte-ignore element_invalid_self_closing_tag -->
             <div class="mt-4">
               <label
                 for="e_completion_notes"
                 class="block text-sm font-medium text-gray-700"
                 >Completion Notes</label
               >
-              <Textarea
-                id="e_completion_notes"
-                bindvalue={rideForm.notes}
-                placeholder="Any notes about the ride completion..."
-                rows="3"
-              />
+                <textarea
+                  id="e_completion_notes"
+                  bind:value={rideForm.notes}
+                  placeholder="Any notes about the ride completion..."
+                  class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  rows="3"
+                />
               <p class="text-xs text-gray-500 mt-1">
                 Additional details about how the ride was completed.
               </p>
