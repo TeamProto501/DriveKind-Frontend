@@ -190,7 +190,7 @@
     secondary_contact_state: "",
     secondary_contact_zipcode: "",
     // Login / username
-    username_format: "",
+    //username_format: "",
     user_initial_password: "",
     // Meta (read only)
     org_creation_date: "",
@@ -262,7 +262,7 @@
     secondary_contact_city: "Secondary Contact City",
     secondary_contact_state: "Secondary Contact State",
     secondary_contact_zipcode: "Secondary Contact Zip",
-    username_format: "Username Format",
+    //username_format: "Username Format",
     user_initial_password: "Initial Password",
   };
   let fieldErrors = $state<Record<string, string>>({});
@@ -287,7 +287,7 @@
         "primary_contact_zipcode",
       ],
       4: [], // secondary optional
-      5: ["username_format", "user_initial_password"],
+      5: ["user_initial_password"],
       6: [], // review
     };
     const keys = requiredByStep[stepIdx] ?? [];
@@ -1461,7 +1461,7 @@
           <!-- STEP 5: Login -->
           {#if addStep === 5}
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
+              <!--  <div>
                 <label class="block text-sm font-medium"
                   >{labelWithRequired(
                     "Username Format",
@@ -1479,7 +1479,7 @@
                 <p class="mt-1 text-xs text-gray-500">
                   {usernameExample(form.username_format, "John", "Doe")}
                 </p>
-              </div>
+              </div> -->
               <div>
                 <label class="block text-sm font-medium"
                   >{labelWithRequired(
@@ -1542,10 +1542,10 @@
                 <span class="font-medium">Primary Contact:</span>
                 {form.primary_contact_name} ({form.primary_contact_email})
               </p>
-              <p>
+              <!--  <p>
                 <span class="font-medium">Username Format:</span>
                 {form.username_format}
-              </p>
+              </p> -->
             </div>
           {/if}
 
@@ -2042,7 +2042,7 @@
 
           {#if editStep === 5}
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
+              <!-- <div>
                 <label class="block text-sm font-medium"
                   >{labelWithRequired(
                     "Username Format",
@@ -2060,7 +2060,7 @@
                 <p class="mt-1 text-xs text-gray-500">
                   {usernameExample(form.username_format, "John", "Doe")}
                 </p>
-              </div>
+              </div> -->
               <div>
                 <label class="block text-sm font-medium"
                   >{labelWithRequired(
@@ -2120,10 +2120,10 @@
                 <span class="font-medium">Primary Contact:</span>
                 {form.primary_contact_name} ({form.primary_contact_email})
               </p>
-              <p>
+              <!-- <p>
                 <span class="font-medium">Username Format:</span>
                 {form.username_format}
-              </p>
+              </p> -->
             </div>
           {/if}
 
