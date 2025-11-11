@@ -1,3 +1,4 @@
+// +page.server.ts
 import type { PageServerLoad } from './$types';
 import { createSupabaseServerClient } from '$lib/supabase.server';
 import { redirect } from '@sveltejs/kit';
@@ -82,7 +83,8 @@ export const load: PageServerLoad = async (event) => {
       clients:client_id (
         first_name,
         last_name,
-        primary_phone
+        primary_phone,
+        other_limitations
       )
     `)
     .eq('driver_user_id', session.user.id)
@@ -159,7 +161,8 @@ export const load: PageServerLoad = async (event) => {
         clients:client_id (
           first_name,
           last_name,
-          primary_phone
+          primary_phone,
+          other_limitations
         )
       `)
       .in('ride_id', freshPendingIds);

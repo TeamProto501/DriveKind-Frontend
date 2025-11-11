@@ -1,9 +1,22 @@
+<!-- +page.svelte -->
 <script lang="ts">
   import { Button } from "$lib/components/ui/button";
   import { Badge } from "$lib/components/ui/badge";
   import { Card, CardContent } from "$lib/components/ui/card";
   import { Input } from "$lib/components/ui/input";
-  import { Calendar, Car, CheckCircle, Clock, MapPin, Phone, Play, Search, XCircle, Edit } from "@lucide/svelte";
+  import {
+    Calendar,
+    Car,
+    CheckCircle,
+    Clock,
+    MapPin,
+    Phone,
+    Play,
+    Search,
+    XCircle,
+    Edit,
+    AlertCircle
+  } from "@lucide/svelte";
   import { invalidateAll } from '$app/navigation';
   import type { PageData } from './$types';
   import RideCompletionModal from '$lib/components/RideCompletionModal.svelte';
@@ -433,6 +446,19 @@
                 {/if}
               </div>
 
+              <!-- Limitations: now shown on ALL rides, not just Pending -->
+              <div class="flex items-start gap-2 text-sm text-gray-700">
+                <AlertCircle class="w-4 h-4 mt-0.5" />
+                <div>
+                  <span class="font-medium">Limitations:</span>
+                  <span class="ml-1">
+                    {ride.clients?.other_limitations && ride.clients.other_limitations.trim().length > 0
+                      ? ride.clients.other_limitations
+                      : 'None'}
+                  </span>
+                </div>
+              </div>
+
               {#if ride.notes}
                 <div class="text-sm">
                   <span class="font-medium">Notes:</span> {ride.notes}
@@ -499,6 +525,7 @@
       </CardContent>
     </Card>
   {/if}
+
   <!-- ======= DRIVER EDIT MODAL ======= -->
   {#if showEditModal && selectedRideForEdit}
     <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
