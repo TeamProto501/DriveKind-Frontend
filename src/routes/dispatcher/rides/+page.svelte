@@ -106,7 +106,6 @@
         matchesTab = ["Scheduled", "Assigned", "In Progress"].includes(
           ride.status
         );
-      // REMOVED: reported tab
       else if (activeTab === "completed")
         matchesTab = ["Completed", "Cancelled"].includes(ride.status);
       return matches && matchesTab;
@@ -197,7 +196,6 @@
     const state = norm(c.state);
     const zip = norm(c.zip_code);
 
-    // Highest weight: prefix matches
     if (name.startsWith(nq)) return 100 - name.indexOf(nq);
     if (phone.startsWith(nq)) return 92;
     if (email.startsWith(nq)) return 88;
@@ -207,7 +205,6 @@
     if (state?.startsWith(nq)) return 80;
     if (zip?.startsWith(nq)) return 78;
 
-    // Contains matches (lower weight)
     if (name.includes(nq)) return 70 - name.indexOf(nq);
     if (phone.includes(nq)) return 64;
     if (email.includes(nq)) return 60;
@@ -254,7 +251,6 @@
     const s = String(raw).trim().toLowerCase();
     if (!s) return null;
 
-    // H:MM
     let m = s.match(/^(\d+)\s*:\s*(\d{1,2})$/);
     if (m) {
       const h = parseInt(m[1], 10);
@@ -263,7 +259,6 @@
         return { h, m: mi };
       return null;
     }
-    // Xh [Ym]
     m = s.match(
       /^(\d+(?:\.\d+)?)\s*(h|hr|hrs|hour|hours)\s*(\d+)?\s*(m|min|mins|minute|minutes)?$/
     );
@@ -274,14 +269,12 @@
       if (m[3]) totalMinutes += parseInt(m[3], 10);
       return { h: Math.floor(totalMinutes / 60), m: totalMinutes % 60 };
     }
-    // Xm
     m = s.match(/^(\d+)\s*(m|min|mins|minute|minutes)$/);
     if (m) {
       const mins = parseInt(m[1], 10);
       if (!Number.isFinite(mins)) return null;
       return { h: Math.floor(mins / 60), m: mins % 60 };
     }
-    // bare number = minutes
     m = s.match(/^(\d+)$/);
     if (m) {
       const mins = parseInt(m[1], 10);
@@ -491,10 +484,8 @@
   function toLocalDateTimeInput(ts: string | null | undefined) {
     if (!ts) return "";
     const d = new Date(ts);
-    // Ensure we're working with valid date
     if (isNaN(d.getTime())) return "";
     const pad = (n: number) => n.toString().padStart(2, "0");
-    // Return in YYYY-MM-DDTHH:mm format (no seconds)
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
   }
 
@@ -549,7 +540,6 @@
     stepErrors = [];
     editStep = 1;
 
-    // prefill edit picker label
     clientQueryEdit = "";
     const sel = filteredClients().find(
       (c: any) => String(c.client_id) === String(rideForm.client_id)
@@ -709,7 +699,6 @@
     return miss;
   }
 
-  // --- pickup vs appointment window validation ---
   function pickupWindowErrors(
     apptLocal: string,
     pickupLocal: string
@@ -737,7 +726,6 @@
     return errs;
   }
 
-  /* ---------------- validation (per-step) ---------------- */
   function validateStep(step: number): boolean {
     stepErrors = [];
     if (step === 1) {
@@ -770,7 +758,6 @@
       return errs.length === 0;
     }
     if (step === 2) {
-      // REMOVED: destination_name, dropoff_state, dropoff_zipcode validations
       const v = combineValidations(
         validateRequired(
           rideForm.dropoff_address ||
@@ -781,7 +768,6 @@
           rideForm.dropoff_city ||
             (isEditing() ? String(selectedRide?.dropoff_city ?? "") : "")
         ),
-        // State and ZIP are now optional - only validate if provided
         rideForm.dropoff_state && rideForm.dropoff_state.trim()
           ? validateState(rideForm.dropoff_state)
           : { valid: true, errors: [] },
@@ -860,7 +846,6 @@
     stepErrors = [];
   }
 
-  /* ---------------- submit ---------------- */
   async function createRide() {
     {
       const errs = pickupWindowErrors(
@@ -1138,34 +1123,35 @@
                   >
                 </div>
 
-                <div
-                  class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-600"
-                ></div>
-                  <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-600">
-                    <div class="flex items-center gap-2">
-                      <Phone class="w-4 h-4 text-gray-400" />
-                      {getClientPhone(ride)}
-                    </div>
-                    <div class="flex items-center gap-2">
-                      <Calendar class="w-4 h-4 text-gray-400" />
-                      {formatDate(ride.appointment_time)} at {formatTime(ride.appointment_time)}
-                    </div>
-                    <div class="flex items-center gap-2">
-                      <User class="w-4 h-4 text-gray-400" /> Driver: {getDriverName(ride)}
-                    </div>
-                    <div class="flex items-center gap-2">
-                      <MapPin class="w-4 h-4 text-gray-400" /> Destination: {ride.destination_name}
-                    </div>
-
-                    <!-- ✅ NEW: Limitations from clients.other_limitations -->
-                    <div class="flex items-start gap-2 md:col-span-2">
-                      <AlertCircle class="w-4 h-4 text-gray-400 mt-0.5" />
-                      <div>
-                        <span class="font-medium">Limitations:</span>
-                        <span class="ml-1">{ride.clients?.other_limitations || 'None'}</span>
-                      </div>
+                <!-- details grid + limitations -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-600">
+                  <div class="flex items-center gap-2">
+                    <Phone class="w-4 h-4 text-gray-400" />
+                    {getClientPhone(ride)}
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <Calendar class="w-4 h-4 text-gray-400" />
+                    {formatDate(ride.appointment_time)} at {formatTime(
+                      ride.appointment_time
+                    )}
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <User class="w-4 h-4 text-gray-400" /> Driver: {getDriverName(
+                      ride
+                    )}
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <MapPin class="w-4 h-4 text-gray-400" /> Destination: {ride.destination_name}
+                  </div>
+                  <!-- NEW: Limitations -->
+                  <div class="flex items-start gap-2 md:col-span-2">
+                    <AlertCircle class="w-4 h-4 text-gray-400 mt-0.5" />
+                    <div>
+                      <span class="font-medium">Limitations:</span>
+                      <span class="ml-1">{ride.clients?.other_limitations || 'None'}</span>
                     </div>
                   </div>
+                </div>
 
                 {#if ride.notes}
                   <div class="text-sm">
@@ -1297,6 +1283,11 @@
                         </div>
                         <div class="text-[11px] text-gray-400">
                           {formatAddress(c) || "—"}
+                        </div>
+                        <!-- NEW: Limitations -->
+                        <div class="text-[11px] text-gray-600 mt-0.5">
+                          <span class="font-medium">Limitations:</span>
+                          <span class="ml-1">{c.other_limitations || 'None'}</span>
                         </div>
                       </button>
                     {/each}
@@ -1751,6 +1742,11 @@
                         <div class="text-[11px] text-gray-400">
                           {formatAddress(c) || "—"}
                         </div>
+                        <!-- NEW: Limitations -->
+                        <div class="text-[11px] text-gray-600 mt-0.5">
+                          <span class="font-medium">Limitations:</span>
+                          <span class="ml-1">{c.other_limitations || 'None'}</span>
+                        </div>
                       </button>
                     {/each}
                     {#if filteredClientList(clientQueryEdit).length === 0}
@@ -2031,62 +2027,9 @@
                     oninput={() => updateEstimatedLength()}
                   />
                 </div>
-              </div>
-            </div>
-            <div>
-              <label
-                for="e_riders"
-                class="block text-sm font-medium text-gray-700"
-                ># of additional passengers (excluding client)</label
-              >
-              <Input
-                id="e_riders"
-                type="number"
-                min="0"
-                bind:value={rideForm.riders}
-              />
-            </div>
-          </div>
-
-          <div class="mt-3 grid gap-3 md:grid-cols-2">
-            <div>
-              <label
-                for="e_status"
-                class="block text-sm font-medium text-gray-700">Status</label
-              >
-              <select
-                id="e_status"
-                bind:value={rideForm.status}
-                class="w-full px-3 py-2 border border-gray-300 rounded-lg"
-              >
-                {#each STATUS_OPTIONS as s}<option value={s}>{s}</option>{/each}
-              </select>
-              <p class="text-xs text-gray-500 mt-1">
-                Status is automatically managed but can be manually adjusted if
-                needed.
-              </p>
-            </div>
-            <div>
-              <label
-                for="e_completion_status"
-                class="block text-sm font-medium text-gray-700"
-                >Completion status</label
-              >
-              <select
-                id="e_completion_status"
-                bind:value={rideForm.completion_status}
-                class="w-full px-3 py-2 border border-gray-300 rounded-lg"
-              >
-                <option value="">—</option>
-                {#each COMPLETION_STATUS_OPTIONS as s}<option value={s}
-                    >{s}</option
-                  >{/each}
-              </select>
-              <p class="text-xs text-gray-500 mt-1">
-                Type of completion (round trip, one-way, etc.)
-              </p>
-            </div>
-          </div>
+             </div>
+           </div>
+         </div>
 
           <div class="mt-3">
             <label for="e_notes" class="block text-sm font-medium text-gray-700"
@@ -2094,7 +2037,7 @@
             >
             <Textarea
               id="e_notes"
-              bindvalue={rideForm.notes}
+              bind:value={rideForm.notes}
               placeholder="Anything special the driver should know"
             />
           </div>
@@ -2103,82 +2046,60 @@
 
       {#if editStep === 4}
         <div class="border rounded-lg p-4 mb-2">
-          <h3 class="font-semibold mb-3">Completion / Metrics (Optional)</h3>
+          <h3 class="font-semibold mb-3">Trip Totals &amp; Donations</h3>
 
-          <div class="grid gap-4 md:grid-cols-2">
+          <div class="grid gap-3 md:grid-cols-3">
             <div>
-              <label
-                for="e_miles"
-                class="block text-sm font-medium text-gray-700"
+              <label for="e_miles" class="block text-sm font-medium text-gray-700"
                 >Miles driven</label
               >
               <Input
                 id="e_miles"
                 type="number"
+                min="0"
                 step="0.1"
                 bind:value={rideForm.miles_driven}
                 placeholder="e.g., 12.5"
               />
-              <p class="text-xs text-gray-500 mt-1">
-                Total miles for this ride.
-              </p>
             </div>
 
             <div>
-              <label
-                for="e_hours"
-                class="block text-sm font-medium text-gray-700"
-                >Hours worked</label
+              <label for="e_hours" class="block text-sm font-medium text-gray-700"
+                >Hours</label
               >
               <Input
                 id="e_hours"
                 type="number"
+                min="0"
                 step="0.1"
                 bind:value={rideForm.hours}
                 placeholder="e.g., 1.5"
               />
-              <p class="text-xs text-gray-500 mt-1">
-                Driving and waiting time combined.
-              </p>
             </div>
 
-            <div class="mt-4">
-              <label
-                for="e_completion_status_step4"
-                class="block text-sm font-medium text-gray-700"
-                >Completion Status</label
-              >
-              <select
-                id="e_completion_status_step4"
-                bind:value={rideForm.completion_status}
-                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              >
-                <option value="">— Select completion type —</option>
-                {#each COMPLETION_STATUS_OPTIONS as s}
-                  <option value={s}>{s}</option>
-                {/each}
-              </select>
-              <p class="text-xs text-gray-500 mt-1">
-                Type of completion (round trip, one-way, etc.)
-              </p>
-            </div>
-
-            <!-- ✅ ADD NOTES FIELD FOR COMPLETION COMMENTS -->
-            <div class="mt-4">
-              <label
-                for="e_completion_notes"
-                class="block text-sm font-medium text-gray-700"
-                >Completion Notes</label
-              >
-              <Textarea
-                id="e_completion_notes"
-                bindvalue={rideForm.notes}
-                placeholder="Any notes about the ride completion..."
-                rows="3"
-              />
-              <p class="text-xs text-gray-500 mt-1">
-                Additional details about how the ride was completed.
-              </p>
+            <div>
+              <label class="block text-sm font-medium text-gray-700">Donation</label>
+              <div class="flex items-center gap-3">
+                <input
+                  id="e_donation"
+                  type="checkbox"
+                  bind:checked={rideForm.donation}
+                />
+                <label for="e_donation">Client donated</label>
+              </div>
+              <div class="mt-2">
+                <label for="e_donation_amount" class="text-sm text-gray-700"
+                  >Amount <span class="text-gray-500">(optional)</span></label
+                >
+                <Input
+                  id="e_donation_amount"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  bind:value={rideForm.donation_amount}
+                  placeholder="0.00"
+                />
+              </div>
             </div>
           </div>
         </div>
@@ -2213,7 +2134,7 @@
               disabled={isUpdating}
               class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50"
             >
-              {isUpdating ? "Updating..." : "Update Ride"}
+              {isUpdating ? "Saving..." : "Save Changes"}
             </button>
           {/if}
         </div>
@@ -2221,10 +2142,19 @@
     </div>
   </div>
 {/if}
-<DriverMatchModal
-  bind:show={showDriverMatchModal}
-  ride={selectedRideForMatch}
-  token={data.session?.access_token}
-  onSelectDriver={sendRideRequest}
-  isLoading={isUpdating}
-/>
+
+<!-- ======= DRIVER MATCH MODAL ======= -->
+{#if showDriverMatchModal && selectedRideForMatch}
+  <!--
+    DriverMatchModal must read from `ride` for display.
+    `selectedRideForMatch` contains:
+      - ride.notes
+      - ride.clients?.other_limitations
+    The modal should emit `send` with { driverIds: string[] } and `close`.
+  -->
+  <DriverMatchModal
+    ride={selectedRideForMatch}
+    on:close={() => { showDriverMatchModal = false; selectedRideForMatch = null; }}
+    on:send={(e) => sendRideRequest(e.detail.driverIds)}
+  />
+{/if}
