@@ -644,7 +644,7 @@
           ? form.status
           : (base.status ?? "Requested")
         : "Requested",
-      notes: has(form.notes) ? sanitizeInput(form.notes) : (base.notes ?? null),
+        notes: has(form.notes) ? sanitizeInput(form.notes) : (base.notes ?? null),
 
       miles_driven: numFromStr(form.miles_driven, base.miles_driven ?? null),
       hours: numFromStr(form.hours, base.hours ?? null),
@@ -1132,15 +1132,15 @@
                     <Phone class="w-4 h-4 text-gray-400" />
                     {getClientPhone(ride)}
                   </div>
-                  <div class="flex items-start gap-2">
-                    <FileText class="w-4 h-4 text-gray-400 mt-0.5" />
-                    <div class="min-w-0">
-                      <span class="font-medium">Notes:</span>
-                      <span class="ml-1 whitespace-pre-wrap break-words">
-                        {ride.notes && ride.notes.trim() ? ride.notes : 'None'}
-                      </span>
+                  {#if ride.status === "Completed" && ride.notes && ride.notes.trim()}
+                    <div class="flex items-start gap-2">
+                      <FileText class="w-4 h-4 text-gray-400 mt-0.5" />
+                      <div class="min-w-0">
+                        <span class="font-medium">Notes:</span>
+                        <span class="ml-1 whitespace-pre-wrap break-words">{ride.notes}</span>
+                      </div>
                     </div>
-                  </div>
+                  {/if}
 
                   <!-- Row 2 -->
                   <div class="flex items-center gap-2">
@@ -1620,21 +1620,21 @@
             </div>
           </div>
 
+          <!-- Notes (create) -->
           <div class="mt-3">
-            <label for="notes" class="block text-sm font-medium text-gray-700"
-              >Notes for driver</label
-            >
-            <!-- svelte-ignore element_invalid_self_closing_tag -->
-            <textarea
+            <label for="notes" class="block text-sm font-medium text-gray-700">Notes for driver</label>
+            <Textarea
               id="notes"
               bind:value={rideForm.notes}
               placeholder="Anything special the driver should know"
+              rows={3}
               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              rows="3"
             />
+            <p class="text-xs text-gray-500 mt-1">These notes will show on the ride and on completed rides.</p>
           </div>
         </div>
       {/if}
+
 
       <div class="flex items-center justify-between mt-6">
         <div>
@@ -2100,20 +2100,6 @@
               </p>
             </div>
           </div>
-
-          <div class="mt-3">
-            <label for="e_notes" class="block text-sm font-medium text-gray-700"
-              >Notes for driver</label
-            >
-            <!-- svelte-ignore element_invalid_self_closing_tag -->
-            <textarea
-              id="e_notes"
-              bind:value={rideForm.notes}
-              placeholder="Anything special the driver should know"
-              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              rows="3"
-            />
-          </div>
         </div>
       {/if}
 
@@ -2179,23 +2165,17 @@
               </p>
             </div>
 
-            <!-- svelte-ignore element_invalid_self_closing_tag -->
-            <div class="mt-4">
-              <label
-                for="e_completion_notes"
-                class="block text-sm font-medium text-gray-700"
-                >Completion Notes</label
-              >
-                <textarea
-                  id="e_completion_notes"
-                  bind:value={rideForm.notes}
-                  placeholder="Any notes about the ride completion..."
-                  class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  rows="3"
-                />
-              <p class="text-xs text-gray-500 mt-1">
-                Additional details about how the ride was completed.
-              </p>
+            <!-- Notes (edit/completion) -->
+            <div class="mt-4 md:col-span-2">
+              <label for="e_completion_notes" class="block text-sm font-medium text-gray-700">Completion Notes</label>
+              <Textarea
+                id="e_completion_notes"
+                bind:value={rideForm.notes}
+                placeholder="Any notes about the ride completion..."
+                rows={3}
+                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+              <p class="text-xs text-gray-500 mt-1">These notes will appear on completed rides.</p>
             </div>
           </div>
         </div>
