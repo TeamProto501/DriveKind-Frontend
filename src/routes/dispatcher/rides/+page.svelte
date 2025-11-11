@@ -1285,16 +1285,22 @@
                         onclick={() => selectClientById(c.client_id, false)}
                       >
                         <div class="font-medium">
-                          {c.first_name}
-                          {c.last_name}
+                          {c.first_name} {c.last_name}
                         </div>
                         <div class="text-xs text-gray-500">
-                          {c.primary_phone || "—"}{c.email
-                            ? ` • ${c.email}`
-                            : ""}
+                          {c.primary_phone || "—"}{c.email ? ` • ${c.email}` : ""}
                         </div>
                         <div class="text-[11px] text-gray-400">
                           {formatAddress(c) || "—"}
+                        </div>
+
+                        <!-- NEW: Limitations line -->
+                        <div class="mt-1 text-[11px] text-gray-600 flex items-start gap-1">
+                          <AlertCircle class="w-3 h-3 mt-0.5 text-gray-400" />
+                          <span>
+                            <span class="font-medium">Limitations:</span>
+                            {c.other_limitations || 'None'}
+                          </span>
                         </div>
                       </button>
                     {/each}
@@ -1741,16 +1747,22 @@
                         onclick={() => selectClientById(c.client_id, true)}
                       >
                         <div class="font-medium">
-                          {c.first_name}
-                          {c.last_name}
+                          {c.first_name} {c.last_name}
                         </div>
                         <div class="text-xs text-gray-500">
-                          {c.primary_phone || "—"}{c.email
-                            ? ` • ${c.email}`
-                            : ""}
+                          {c.primary_phone || "—"}{c.email ? ` • ${c.email}` : ""}
                         </div>
                         <div class="text-[11px] text-gray-400">
                           {formatAddress(c) || "—"}
+                        </div>
+
+                        <!-- NEW: Limitations line -->
+                        <div class="mt-1 text-[11px] text-gray-600 flex items-start gap-1">
+                          <AlertCircle class="w-3 h-3 mt-0.5 text-gray-400" />
+                          <span>
+                            <span class="font-medium">Limitations:</span>
+                            {c.other_limitations || 'None'}
+                          </span>
                         </div>
                       </button>
                     {/each}
