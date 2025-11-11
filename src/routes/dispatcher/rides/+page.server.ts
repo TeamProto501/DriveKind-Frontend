@@ -7,10 +7,7 @@ export const load: PageServerLoad = async (event) => {
 
   try {
     // Session
-    const {
-      data: { session },
-      error: sessionError
-    } = await supabase.auth.getSession();
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
     if (sessionError || !session) {
       throw redirect(302, '/login');
     }
@@ -39,8 +36,8 @@ export const load: PageServerLoad = async (event) => {
     const hasDispatcherRole =
       profile.role &&
       (Array.isArray(profile.role)
-        ? profile.role.includes('Dispatcher') || profile.role.includes('Admin')
-        : profile.role === 'Dispatcher' || profile.role === 'Admin');
+        ? (profile.role.includes('Dispatcher') || profile.role.includes('Admin'))
+        : (profile.role === 'Dispatcher' || profile.role === 'Admin'));
 
     if (!hasDispatcherRole) {
       return {
@@ -55,7 +52,7 @@ export const load: PageServerLoad = async (event) => {
       };
     }
 
-    // Rides (include client's other_limitations)
+    // Rides for this org (⚠️ add other_limitations inside nested clients)
     const { data: rides, error: ridesError } = await supabase
       .from('rides')
       .select(`
@@ -109,17 +106,22 @@ export const load: PageServerLoad = async (event) => {
       .eq('org_id', profile.org_id)
       .order('appointment_time', { ascending: true });
 
-    if (ridesError) console.error('Error loading rides:', ridesError);
+    if (ridesError) {
+      console.error('Error loading rides:', ridesError);
+    }
 
-    // Drivers (for assignment)
+    // Available drivers (for assignment modal)
     const { data: drivers, error: driversError } = await supabase
       .from('staff_profiles')
       .select('user_id, first_name, last_name, role')
       .eq('org_id', profile.org_id)
       .contains('role', ['Driver']);
-    if (driversError) console.error('Error loading drivers:', driversError);
 
-    // Clients (include other_limitations for picker)
+    if (driversError) {
+      console.error('Error loading drivers:', driversError);
+    }
+
+    // Clients (⚠️ add other_limitations so the picker can show it)
     const { data: clients, error: clientsError } = await supabase
       .from('clients')
       .select(`
@@ -138,23 +140,32 @@ export const load: PageServerLoad = async (event) => {
       `)
       .eq('org_id', profile.org_id)
       .order('first_name', { ascending: true });
-    if (clientsError) console.error('Error loading clients:', clientsError);
 
-    // Calls
+    if (clientsError) {
+      console.error('Error loading clients:', clientsError);
+    }
+
+    // Calls for "Linked call" dropdown
     const { data: calls, error: callsError } = await supabase
       .from('calls')
       .select('call_id, org_id, call_time, call_type, caller_first_name, caller_last_name')
       .eq('org_id', profile.org_id)
       .order('call_time', { ascending: false });
-    if (callsError) console.error('Error loading calls:', callsError);
 
-    // Destinations
+    if (callsError) {
+      console.error('Error loading calls:', callsError);
+    }
+
+    // Destinations (saved locations) for this org
     const { data: destinations, error: destinationsError } = await supabase
       .from('destinations')
       .select('destination_id, org_id, location_name, address, address2, city, state, zipcode')
       .eq('org_id', profile.org_id)
       .order('location_name', { ascending: true });
-    if (destinationsError) console.error('Error loading destinations:', destinationsError);
+
+    if (destinationsError) {
+      console.error('Error loading destinations:', destinationsError);
+    }
 
     return {
       session,
