@@ -78,7 +78,7 @@
       })
       .filter(Boolean);
   }
-  function usernameExample(
+  /* function usernameExample(
     code: string | null | undefined,
     first = "John",
     last = "Doe"
@@ -98,8 +98,8 @@
       const ex = `${firstPart}${lastPart}`;
       return `Format “F${n}L${k}”: first ${n} of first + first ${k} of last. Example: ${first} ${last} → ${ex}`;
     }
-    return "";
-  }
+    return "";  
+  } */
 
   // Working hours UI <-> compact string
   type DayHours = { open: boolean; start: string; end: string }; // '07'..'18'
