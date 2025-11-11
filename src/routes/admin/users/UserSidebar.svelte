@@ -12,9 +12,8 @@
   export let createMode: boolean = false;
   export let session: any = undefined;
   export let orgId: number;
-
+  export let dPassword: any;
   const dispatch = createEventDispatcher();
-
   type StaffForm = {
     first_name: string;
     last_name: string;
@@ -100,8 +99,8 @@
   let form: StaffForm = initForm();
   let saving = false;
   let errorMessage: string | null = null;
-  let tempPassword = "";
-  let tempPasswordConfirm = "";
+  let tempPassword = dPassword;
+  let tempPasswordConfirm = dPassword;
 
   function initForm(): StaffForm {
     if (!user || createMode) {

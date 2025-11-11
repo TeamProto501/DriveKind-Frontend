@@ -98,9 +98,6 @@ export const load = async (event) => {
         .select("client_min_age")
         .eq("org_id", userProfile.org_id)
         .single();
-      console.log("🔍 org_id:", userProfile.org_id); // 디버깅
-      console.log("🔍 ageData:", ageData); // 디버깅
-      console.log("🔍 ageError:", ageError); // 디버깅
       if (ageError) {
         console.error(ageError);
       } else {
@@ -111,6 +108,25 @@ export const load = async (event) => {
       console.error(err);
       minimumAge = 0;
     }
+    //default password
+    let dPassword: "";
+    try {
+      const { data: uData, error: uError } = await supabase
+        .from("organization")
+        .select("user_initial_password")
+        .eq("org_id", userProfile.org_id)
+        .single();
+      if (uError) {
+        console.error(uError);
+      } else {
+        dPassword = uData?.user_initial_password ?? "";
+        console.log("🔍 default Password:", dPassword);
+      }
+    } catch (err) {
+      console.error(err);
+      dPassword = "";
+    }
+
     return {
       tab,
       staffProfiles: staffData,
@@ -118,6 +134,7 @@ export const load = async (event) => {
       userProfile,
       session,
       minimumAge,
+      dPassword,
     };
   } catch (err: any) {
     console.error("Error in users page load:", err);

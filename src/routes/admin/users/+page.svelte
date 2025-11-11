@@ -475,7 +475,6 @@
     pageSize = size;
     currentPage = 1;
   }
-
   applyFilters();
 </script>
 
@@ -878,6 +877,7 @@
         {orgId}
         on:close={closeSidebar}
         on:updated={handleUserUpdated}
+        dPassword={data.dPassword}
       />
     {/if}
 
