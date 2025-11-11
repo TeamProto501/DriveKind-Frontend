@@ -1140,26 +1140,32 @@
 
                 <div
                   class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-600"
-                >
-                  <div class="flex items-center gap-2">
-                    <Phone class="w-4 h-4 text-gray-400" />
-                    {getClientPhone(ride)}
+                ></div>
+                  <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-600">
+                    <div class="flex items-center gap-2">
+                      <Phone class="w-4 h-4 text-gray-400" />
+                      {getClientPhone(ride)}
+                    </div>
+                    <div class="flex items-center gap-2">
+                      <Calendar class="w-4 h-4 text-gray-400" />
+                      {formatDate(ride.appointment_time)} at {formatTime(ride.appointment_time)}
+                    </div>
+                    <div class="flex items-center gap-2">
+                      <User class="w-4 h-4 text-gray-400" /> Driver: {getDriverName(ride)}
+                    </div>
+                    <div class="flex items-center gap-2">
+                      <MapPin class="w-4 h-4 text-gray-400" /> Destination: {ride.destination_name}
+                    </div>
+
+                    <!-- ✅ NEW: Limitations from clients.other_limitations -->
+                    <div class="flex items-start gap-2 md:col-span-2">
+                      <AlertCircle class="w-4 h-4 text-gray-400 mt-0.5" />
+                      <div>
+                        <span class="font-medium">Limitations:</span>
+                        <span class="ml-1">{ride.clients?.other_limitations || 'None'}</span>
+                      </div>
+                    </div>
                   </div>
-                  <div class="flex items-center gap-2">
-                    <Calendar class="w-4 h-4 text-gray-400" />
-                    {formatDate(ride.appointment_time)} at {formatTime(
-                      ride.appointment_time
-                    )}
-                  </div>
-                  <div class="flex items-center gap-2">
-                    <User class="w-4 h-4 text-gray-400" /> Driver: {getDriverName(
-                      ride
-                    )}
-                  </div>
-                  <div class="flex items-center gap-2">
-                    <MapPin class="w-4 h-4 text-gray-400" /> Destination: {ride.destination_name}
-                  </div>
-                </div>
 
                 {#if ride.notes}
                   <div class="text-sm">
