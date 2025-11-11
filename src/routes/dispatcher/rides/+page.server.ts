@@ -52,7 +52,7 @@ export const load: PageServerLoad = async (event) => {
       };
     }
 
-    // Rides for this org
+    // Rides for this org (⚠️ add other_limitations inside nested clients)
     const { data: rides, error: ridesError } = await supabase
       .from('rides')
       .select(`
@@ -95,7 +95,8 @@ export const load: PageServerLoad = async (event) => {
           address2,
           city,
           state,
-          zip_code
+          zip_code,
+          other_limitations
         ),
         drivers:driver_user_id (
           first_name,
@@ -120,7 +121,7 @@ export const load: PageServerLoad = async (event) => {
       console.error('Error loading drivers:', driversError);
     }
 
-    // Clients (add email so we can search by it)
+    // Clients (⚠️ add other_limitations so the picker can show it)
     const { data: clients, error: clientsError } = await supabase
       .from('clients')
       .select(`
@@ -134,7 +135,8 @@ export const load: PageServerLoad = async (event) => {
         address2,
         city,
         state,
-        zip_code
+        zip_code,
+        other_limitations
       `)
       .eq('org_id', profile.org_id)
       .order('first_name', { ascending: true });
