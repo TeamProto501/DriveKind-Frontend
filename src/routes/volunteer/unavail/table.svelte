@@ -16,9 +16,9 @@
     currentPage * pageSize
   );
   
-  // Filter out id and user_id columns
-  $: keys = items[0]
-    ? Object.keys(items[0]).filter((key) => key !== "user_id" && key !== "id")
+  // CRITICAL: Filter out BOTH id and user_id
+  $: displayKeys = items[0]
+    ? Object.keys(items[0]).filter((key) => !['user_id', 'id'].includes(key))
     : [];
   
   const formatLabel = (k: string) =>
@@ -28,84 +28,89 @@
   function formatValue(key: string, value: any): string {
     if (value === null || value === undefined) return "-";
     
-    // Check if it's a date field
-    if (key === "created_at" || key === "updated_at" || key === "unavailable_date") {
+    // Date fields - show local date/time
+    if (key === "created_at" || key === "updated_at") {
       try {
         const date = new Date(value);
-        // Format to local date and time
         return date.toLocaleString('en-US', {
-          year: 'numeric',
           month: 'short',
           day: 'numeric',
-          hour: key !== "unavailable_date" ? '2-digit' : undefined,
-          minute: key !== "unavailable_date" ? '2-digit' : undefined,
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
           hour12: true
         });
       } catch {
-        return value;
+        return String(value);
       }
     }
     
-    // Format time fields
+    // Unavailable date - show only date
+    if (key === "unavailable_date") {
+      try {
+        const date = new Date(value + 'T00:00:00');
+        return date.toLocaleDateString('en-US', {
+          weekday: 'short',
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric'
+        });
+      } catch {
+        return String(value);
+      }
+    }
+    
+    // Time fields - convert to 12-hour format
     if (key === "start_time" || key === "end_time") {
       if (!value) return "-";
       try {
-        // Convert HH:MM:SS to 12-hour format
         const [hours, minutes] = value.split(':');
         const hour = parseInt(hours);
         const ampm = hour >= 12 ? 'PM' : 'AM';
         const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
         return `${displayHour}:${minutes} ${ampm}`;
       } catch {
-        return value;
+        return String(value);
       }
     }
     
-    // Format boolean fields
+    // Boolean fields
     if (typeof value === 'boolean') {
       return value ? 'Yes' : 'No';
     }
     
-    return value;
-  }
-  
-  function handlePageChange(page: number) {
-    currentPage = page;
+    return String(value);
   }
 </script>
 
 <div class="space-y-4">
-  <div class="overflow-x-auto border-1 border-gray-100 rounded-md">
+  <div class="overflow-x-auto border rounded-md">
     <Table.Root class="min-w-full divide-y-2 divide-gray-200 bg-white text-sm">
-      <Table.Header class="ltr:text-left rtl:text-right bg-gray-100">
+      <Table.Header class="bg-gray-100">
         <Table.Row>
-          <Table.Head class="sticky inset-y-0 start-0 px-4 py-4">#</Table.Head>
-          {#each keys as key}
-            <Table.Head class="px-4 py-2 font-medium whitespace-nowrap">
+          <Table.Head class="px-4 py-4 text-left">#</Table.Head>
+          {#each displayKeys as key}
+            <Table.Head class="px-4 py-2 font-medium text-left whitespace-nowrap">
               {formatLabel(key)}
             </Table.Head>
           {/each}
-          <Table.Head class="px-4 py-2 font-medium">Actions</Table.Head>
+          <Table.Head class="px-4 py-2 font-medium text-left">Actions</Table.Head>
         </Table.Row>
       </Table.Header>
       <Table.Body class="divide-y divide-gray-200">
         {#if pagedData.length > 0}
           {#each pagedData as row, i}
-            <Table.Row class="px-4 py-2">
-              <Table.Cell>{(currentPage - 1) * pageSize + i + 1}</Table.Cell>
-              {#each keys as key}
-                <Table.Cell>{formatValue(key, row[key])}</Table.Cell>
+            <Table.Row>
+              <Table.Cell class="px-4 py-2">{(currentPage - 1) * pageSize + i + 1}</Table.Cell>
+              {#each displayKeys as key}
+                <Table.Cell class="px-4 py-2">{formatValue(key, row[key])}</Table.Cell>
               {/each}
-              <Table.Cell>
+              <Table.Cell class="px-4 py-2">
                 <form
                   method="POST"
                   action="?/deleteUnavailability"
                   use:enhance={({ cancel }) => {
-                    if (
-                      !confirm(
-                        "Are you sure you want to delete this unavailability?"
-                      )
-                    ) {
+                    if (!confirm("Are you sure you want to delete this unavailability?")) {
                       cancel();
                     }
                     return async ({ update }) => {
@@ -116,8 +121,8 @@
                   <input type="hidden" name="id" value={row.id} />
                   <button
                     type="submit"
-                    class="text-red-600 hover:text-red-800 transition-colors"
-                    title="Delete"
+                    class="text-red-600 hover:text-red-800 transition-colors p-1 hover:bg-red-50 rounded"
+                    title="Delete unavailability"
                   >
                     <Trash2 class="w-4 h-4" />
                   </button>
@@ -127,7 +132,7 @@
           {/each}
         {:else}
           <Table.Row>
-            <Table.Cell colspan={keys.length + 2} class="text-center py-8 text-gray-500">
+            <Table.Cell colspan={displayKeys.length + 2} class="text-center py-8 text-gray-500">
               No unavailability records found
             </Table.Cell>
           </Table.Row>
@@ -136,13 +141,13 @@
     </Table.Root>
 
     {#if items.length > pageSize}
-      <div class="mt-4 flex justify-end pb-2">
+      <div class="mt-4 flex justify-end pb-2 px-4">
         <Pagination.Root
           count={items.length}
           perPage={pageSize}
           bind:page={currentPage}
         >
-          {#snippet children({ pages, currentPage: paginationCurrentPage })}
+          {#snippet children({ pages })}
             <Pagination.Content>
               <Pagination.Item>
                 <Pagination.PrevButton />
