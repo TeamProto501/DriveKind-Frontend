@@ -25,6 +25,29 @@
     )
   );
   
+  function minutesFromEstimated(len?: string | null): number {
+    if (!len) return 0;
+    const s = String(len).toLowerCase();
+
+    // hours
+    const hMatch = s.match(/(\d+)\s*(?:h|hr|hrs|hour|hours)/);
+    // minutes
+    const mMatch = s.match(/(\d+)\s*(?:m|min|mins|minute|minutes)/);
+
+    const h = hMatch ? parseInt(hMatch[1], 10) : 0;
+    const m = mMatch ? parseInt(mMatch[1], 10) : 0;
+
+    return (Number.isFinite(h) ? h : 0) * 60 + (Number.isFinite(m) ? m : 0);
+  }
+
+  function addMinutesISO(startISO: string, mins: number): string | undefined {
+    if (!startISO || !Number.isFinite(mins)) return undefined;
+    const d = new Date(startISO);
+    if (Number.isNaN(d.getTime())) return undefined;
+    d.setMinutes(d.getMinutes() + mins);
+    return d.toISOString();
+  }
+
   function groupRidesByDate(rides: any[]) {
     const grouped = new Map<string, any[]>();
     rides.forEach(ride => {
@@ -202,6 +225,7 @@
         const endTime = new Date(startTime.getTime() + 60 * 60 * 1000); // Add 1 hour
         
         if (timeRides.length === 1) {
+          const mins = minutesFromEstimated(firstRide.estimated_appointment_length);
           events.push({
             id: `ride-${firstRide.ride_id}`,
             title: `🚗 ${clientName} → ${firstRide.destination_name}`,
@@ -259,6 +283,7 @@
         const startTime = new Date(ride.appointment_time);
         const endTime = new Date(startTime.getTime() + 60 * 60 * 1000);
         
+        const mins = minutesFromEstimated(ride.estimated_appointment_length);
         return {
           id: `ride-${ride.ride_id}`,
           title: `🚗 ${clientName}`,
@@ -301,9 +326,12 @@
     return summaryEvents;
   }
   
-  let myRideEvents = $derived(transformRidesToEvents(data.myRides, currentCalendarView === 'timeGridDay'));
+  const isTimedView = $derived(currentCalendarView !== 'dayGridMonth');
+
+  let myRideEvents = $derived(transformRidesToEvents(data.myRides, isTimedView));
+  let allRidesDetailEvents = $derived(transformRidesToEvents(data.allRides || [], isTimedView));
+
   let allRidesSummaryEvents = $derived(createDailySummaryEvents(data.allRides || []));
-  let allRidesDetailEvents = $derived(transformRidesToEvents(data.allRides || [], currentCalendarView === 'timeGridDay'));
   
   let displayEvents = $derived.by(() => {
     if (activeView === 'myUnavailability') return myUnavailabilityEvents;
@@ -530,7 +558,17 @@
                   <div class="space-y-2 text-sm">
                     <div class="flex items-center gap-2 text-gray-600">
                       <Clock class="w-4 h-4 flex-shrink-0" />
-                      <span class="font-medium">{formatTime(ride.appointment_time)}</span>
+                      {#if ride.estimated_appointment_length}
+                        {#key ride.ride_id}
+                          <span class="font-medium">
+                            {formatTime(ride.appointment_time)} – 
+                            {formatTime(addMinutesISO(ride.appointment_time, minutesFromEstimated(ride.estimated_appointment_length))!)}
+                          </span>
+                          <span class="text-xs text-gray-500 ml-2">({ride.estimated_appointment_length})</span>
+                        {/key}
+                      {:else}
+                        <span class="font-medium">{formatTime(ride.appointment_time)}</span>
+                      {/if}
                     </div>
 
                     <div class="flex items-start gap-2 text-gray-600">

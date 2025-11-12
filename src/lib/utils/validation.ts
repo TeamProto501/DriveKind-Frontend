@@ -127,9 +127,12 @@ export function validateState(state: string): ValidationResult {
 /**
  * Validates zip code
  */
-export function validateZipCode(zipcode: string): ValidationResult {
+export function validateZipCode(zipcode: string | number | null | undefined): ValidationResult {
   const errors: string[] = [];
-  const sanitized = sanitizeInput(zipcode);
+  
+  // Convert to string if it's a number or handle null/undefined
+  const zipcodeStr = zipcode === null || zipcode === undefined ? '' : String(zipcode);
+  const sanitized = sanitizeInput(zipcodeStr);
   
   // US zip code format: 12345 or 12345-6789
   const zipRegex = /^\d{5}(-\d{4})?$/;

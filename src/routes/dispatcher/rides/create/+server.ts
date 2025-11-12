@@ -3,6 +3,62 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { createSupabaseServerClient } from '$lib/supabase.server';
 
+function canonEstimatedLen(raw: unknown): string | null {
+  const s = (raw ?? '').toString().trim().toLowerCase();
+  if (!s) return null;
+
+  // H:MM
+  let m = s.match(/^(\d+)\s*:\s*(\d{1,2})$/);
+  if (m) {
+    const h = parseInt(m[1], 10), mi = parseInt(m[2], 10);
+    if (!Number.isFinite(h) || !Number.isFinite(mi) || mi < 0 || mi >= 60) return null;
+    const parts = [];
+    if (h) parts.push(`${h} ${h === 1 ? 'hr' : 'hrs'}`);
+    if (mi) parts.push(`${mi} ${mi === 1 ? 'min' : 'mins'}`);
+    return parts.join(' ') || '0 mins';
+  }
+
+  // Xh [Ym]
+  m = s.match(/^(\d+(?:\.\d+)?)\s*(h|hr|hrs|hour|hours)\s*(\d+)?\s*(m|min|mins|minute|minutes)?$/);
+  if (m) {
+    const hoursNum = parseFloat(m[1]);
+    if (!Number.isFinite(hoursNum)) return null;
+    let total = Math.round(hoursNum * 60);
+    if (m[3]) total += parseInt(m[3], 10);
+    const H = Math.floor(total / 60), M = total % 60;
+    const parts = [];
+    if (H) parts.push(`${H} ${H === 1 ? 'hr' : 'hrs'}`);
+    if (M) parts.push(`${M} ${M === 1 ? 'min' : 'mins'}`);
+    return parts.join(' ') || '0 mins';
+  }
+
+  // Xm
+  m = s.match(/^(\d+)\s*(m|min|mins|minute|minutes)$/);
+  if (m) {
+    const mins = parseInt(m[1], 10);
+    if (!Number.isFinite(mins)) return null;
+    const H = Math.floor(mins / 60), M = mins % 60;
+    const parts = [];
+    if (H) parts.push(`${H} ${H === 1 ? 'hr' : 'hrs'}`);
+    if (M) parts.push(`${M} ${M === 1 ? 'min' : 'mins'}`);
+    return parts.join(' ') || '0 mins';
+  }
+
+  // bare number = minutes
+  m = s.match(/^(\d+)$/);
+  if (m) {
+    const mins = parseInt(m[1], 10);
+    if (!Number.isFinite(mins)) return null;
+    const H = Math.floor(mins / 60), M = mins % 60;
+    const parts = [];
+    if (H) parts.push(`${H} ${H === 1 ? 'hr' : 'hrs'}`);
+    if (M) parts.push(`${M} ${M === 1 ? 'min' : 'mins'}`);
+    return parts.join(' ') || '0 mins';
+  }
+
+  return null;
+}
+
 export const POST: RequestHandler = async (event) => {
   try {
     const body = await event.request.json();
@@ -29,11 +85,16 @@ export const POST: RequestHandler = async (event) => {
 
     if (!hasDispatcherRole) return json({ error: 'Access denied. Dispatcher or Admin role required.' }, { status: 403 });
 
+    // (optional) reject bad len explicitly
+    if (body.estimated_appointment_length && !canonEstimatedLen(body.estimated_appointment_length)) {
+      return json({ error: "Invalid estimated appointment length. Use '30 mins' or '2 hrs 30 mins'." }, { status: 400 });
+    }
+
     // Build payload (NO vehicle_id, NO driver_user_id)
     const payload = {
-      org_id: profile.org_id,                                 // always from active user
+      org_id: profile.org_id,
       client_id: body.client_id ?? null,
-      dispatcher_user_id: user.id,                            // always current user
+      dispatcher_user_id: user.id,
       alt_pickup_address: body.alt_pickup_address ?? null,
       alt_pickup_address2: body.alt_pickup_address2 ?? null,
       alt_pickup_city: body.alt_pickup_city ?? null,
@@ -55,12 +116,11 @@ export const POST: RequestHandler = async (event) => {
       riders: body.riders ?? 1,
       round_trip: body.round_trip ?? false,
       purpose: body.purpose ?? null,
-      estimated_appointment_length: body.estimated_appointment_length ?? null,
+      estimated_appointment_length: canonEstimatedLen(body.estimated_appointment_length) ?? null,
       destination_name: body.destination_name ?? null,
       pickup_from_home: body.pickup_from_home ?? true,
       call_id: body.call_id ?? null,
       completion_status: body.completion_status ?? null
-      // created_at defaults to now(); ride_id auto-increments
     };
 
     // Enforce pickup vs appointment window if pickup_time provided
@@ -84,8 +144,8 @@ export const POST: RequestHandler = async (event) => {
     }
 
     // Basic required fields
-    if (!payload.client_id || !payload.dropoff_address || !payload.destination_name || !payload.appointment_time) {
-      return json({ error: 'Missing required fields (client_id, dropoff_address, destination_name, appointment_time).' }, { status: 400 });
+    if (!payload.client_id || !payload.dropoff_address || !payload.dropoff_city || !payload.appointment_time) {
+      return json({ error: 'Missing required fields (client_id, dropoff_address, dropoff_city, appointment_time).' }, { status: 400 });
     }
 
     const { data: ride, error: rideError } = await supabase
