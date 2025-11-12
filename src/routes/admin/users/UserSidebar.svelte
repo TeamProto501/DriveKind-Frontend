@@ -334,7 +334,7 @@
           : "Edit User"}
     </h2>
     <button
-      on:click={() => dispatch("close")}
+      onclick={() => dispatch("close")}
       class="text-gray-500 hover:text-gray-700"
     >
       <X class="w-5 h-5" />
