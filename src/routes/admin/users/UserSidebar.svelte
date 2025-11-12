@@ -205,8 +205,8 @@
       if (!form.state || !form.state.trim()) errs.push("State is required.");
       if (form.state && form.state.length > 2)
         errs.push("Use 2-letter state code.");
-      if (!form.zipcode || !form.zipcode.trim()) errs.push("ZIP is required.");
-      if (form.zipcode && !/^\d{5}(-\d{4})?$/.test(form.zipcode))
+      if (!form.zipcode || !String(form.zipcode).trim()) errs.push("ZIP is required.");
+      if (form.zipcode && !/^\d{5}(-\d{4})?$/.test(String(form.zipcode)))
         errs.push("ZIP code looks invalid.");
     }
     return errs;
