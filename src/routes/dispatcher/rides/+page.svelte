@@ -772,7 +772,7 @@
         rideForm.dropoff_state && rideForm.dropoff_state.trim()
           ? validateState(rideForm.dropoff_state)
           : { valid: true, errors: [] },
-        rideForm.dropoff_zipcode && rideForm.dropoff_zipcode.trim()
+        rideForm.dropoff_zipcode && String(rideForm.dropoff_zipcode).trim()
           ? validateZipCode(rideForm.dropoff_zipcode)
           : { valid: true, errors: [] },
         !rideForm.pickup_from_home && rideForm.alt_pickup_address
@@ -791,7 +791,7 @@
           : { valid: true, errors: [] },
         !rideForm.pickup_from_home &&
           rideForm.alt_pickup_zipcode &&
-          rideForm.alt_pickup_zipcode.trim()
+          String(rideForm.alt_pickup_zipcode).trim()
           ? validateZipCode(rideForm.alt_pickup_zipcode)
           : { valid: true, errors: [] }
       );
