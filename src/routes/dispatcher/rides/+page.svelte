@@ -846,6 +846,31 @@
     editStep = Math.max(1, editStep - 1);
     stepErrors = [];
   }
+  function goToCreateStep(target: number) {
+    // allow free backward navigation
+    if (target <= createStep) {
+      createStep = Math.max(1, Math.min(3, target));
+      stepErrors = [];
+      return;
+    }
+    // block forward navigation unless current step validates
+    if (validateStep(createStep)) {
+      createStep = Math.max(1, Math.min(3, target));
+    }
+  }
+
+  function goToEditStep(target: number) {
+    // allow free backward navigation
+    if (target <= editStep) {
+      editStep = Math.max(1, Math.min(4, target));
+      stepErrors = [];
+      return;
+    }
+    // block forward navigation unless current step validates
+    if (validateStep(editStep)) {
+      editStep = Math.max(1, Math.min(4, target));
+    }
+  }
 
   /* ---------------- submit ---------------- */
   async function createRide() {
@@ -1224,26 +1249,34 @@
         </p>
       </div>
 
-      <!-- Stepper -->
-      <div class="flex items-center justify-center gap-3 mb-4">
-        {#each [1, 2, 3] as s}
-          <div class="flex items-center gap-2">
-            <div
-              class="w-8 h-8 rounded-full flex items-center justify-center text-sm {createStep ===
-              s
-                ? 'bg-blue-600 text-white'
-                : 'bg-gray-200 text-gray-700'}"
-            >
-              {s}
-            </div>
-            {#if s < 3}<div
-                class="w-8 h-[2px] {createStep > s
-                  ? 'bg-blue-600'
-                  : 'bg-gray-200'}"
-              ></div>{/if}
-          </div>
-        {/each}
-      </div>
+     <!-- Stepper (CREATE) -->
+    <div class="flex items-center justify-center gap-3 mb-4 select-none">
+      {#each [1, 2, 3] as s}
+        <div class="flex items-center gap-2">
+          <button
+            type="button"
+            title={`Go to step ${s}`}
+            onclick={() => goToCreateStep(s)}
+            class="w-8 h-8 rounded-full flex items-center justify-center text-sm
+                  transition-colors cursor-pointer
+                  {createStep === s ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}"
+            aria-current={createStep === s ? 'step' : undefined}
+            aria-label={`Step ${s}`}
+          >
+            {s}
+          </button>
+          {#if s < 3}
+            <!-- svelte-ignore element_invalid_self_closing_tag -->
+            <button
+              type="button"
+              aria-label={`Jump toward step ${s + 1}`}
+              onclick={() => goToCreateStep(s + 1)}
+              class="w-8 h-[2px] rounded {createStep > s ? 'bg-blue-600' : 'bg-gray-200 hover:bg-gray-300'}"
+            />
+          {/if}
+        </div>
+      {/each}
+    </div>
 
       {#if stepErrors.length}
         <div
@@ -1687,23 +1720,31 @@
         </p>
       </div>
 
-      <!-- Stepper -->
-      <div class="flex items-center justify-center gap-3 mb-4">
+      <!-- Stepper (EDIT) -->
+      <div class="flex items-center justify-center gap-3 mb-4 select-none">
         {#each [1, 2, 3, 4] as s}
           <div class="flex items-center gap-2">
-            <div
-              class="w-8 h-8 rounded-full flex items-center justify-center text-sm {editStep ===
-              s
-                ? 'bg-blue-600 text-white'
-                : 'bg-gray-200 text-gray-700'}"
+            <button
+              type="button"
+              title={`Go to step ${s}`}
+              onclick={() => goToEditStep(s)}
+              class="w-8 h-8 rounded-full flex items-center justify-center text-sm
+                    transition-colors cursor-pointer
+                    {editStep === s ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}"
+              aria-current={editStep === s ? 'step' : undefined}
+              aria-label={`Step ${s}`}
             >
               {s}
-            </div>
-            {#if s < 4}<div
-                class="w-8 h-[2px] {editStep > s
-                  ? 'bg-blue-600'
-                  : 'bg-gray-200'}"
-              ></div>{/if}
+            </button>
+            {#if s < 4}
+              <!-- svelte-ignore element_invalid_self_closing_tag -->
+              <button
+                type="button"
+                aria-label={`Jump toward step ${s + 1}`}
+                onclick={() => goToEditStep(s + 1)}
+                class="w-8 h-[2px] rounded {editStep > s ? 'bg-blue-600' : 'bg-gray-200 hover:bg-gray-300'}"
+              />
+            {/if}
           </div>
         {/each}
       </div>
