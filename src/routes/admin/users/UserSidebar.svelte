@@ -602,7 +602,7 @@
                   <input
                     type="checkbox"
                     checked={form.role.includes(r)}
-                    on:change={() => {
+                    onchange={() => {
                       form.role = form.role.includes(r)
                         ? form.role.filter((x) => x !== r)
                         : [...form.role, r];
