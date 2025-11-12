@@ -46,6 +46,13 @@
 		user_id: string;
 		first_name: string | null;
 		last_name: string | null;
+		phone: string | null;
+		email: string | null;
+		address: string | null;
+		address2: string | null;
+		city: string | null;
+		state: string | null;
+		zipcode: string | null;
 	}
 
 	interface VehicleRow {
@@ -65,22 +72,23 @@
 	let driverSearchEdit = $state('');
 	let showDriverDropdownEdit = $state(false);
 
-	// Filtered driver options
 	let filteredDriversAdd = $derived.by(() => {
 		if (!driverSearchAdd.trim()) return driverOptions;
 		const q = driverSearchAdd.toLowerCase();
 		return driverOptions.filter(d => {
 			const name = `${d.first_name ?? ''} ${d.last_name ?? ''}`.trim().toLowerCase();
-			return name.includes(q) || d.user_id.toLowerCase().includes(q);
+			const contact = getDriverContact(d).toLowerCase();
+			return name.includes(q) || contact.includes(q);
 		});
 	});
 
-	let filteredDriversEdit = $derived.by(() => {
+		let filteredDriversEdit = $derived.by(() => {
 		if (!driverSearchEdit.trim()) return driverOptions;
 		const q = driverSearchEdit.toLowerCase();
 		return driverOptions.filter(d => {
 			const name = `${d.first_name ?? ''} ${d.last_name ?? ''}`.trim().toLowerCase();
-			return name.includes(q) || d.user_id.toLowerCase().includes(q);
+			const contact = getDriverContact(d).toLowerCase();
+			return name.includes(q) || contact.includes(q);
 		});
 	});
 
@@ -89,6 +97,25 @@
 		const driver = driverOptions.find(d => d.user_id === userId);
 		if (!driver) return '';
 		return `${driver.first_name ?? ''} ${driver.last_name ?? ''}`.trim() || driver.user_id;
+	}
+
+	function getDriverContact(driver: StaffLite): string {
+		const contacts = [];
+		
+		if (driver.phone) contacts.push(driver.phone);
+		if (driver.email) contacts.push(driver.email);
+		
+		if (contacts.length > 0) return contacts.join(' • ');
+		
+		// Fallback to address if no phone/email
+		const addressParts = [
+			driver.address,
+			driver.city,
+			driver.state,
+			driver.zipcode
+		].filter(Boolean);
+  
+  		return addressParts.join(', ') || 'No contact info';
 	}
 
 	// Select driver functions
@@ -548,16 +575,16 @@
 							{#if showDriverDropdownAdd && filteredDriversAdd.length > 0}
 								<div class="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto">
 									{#each filteredDriversAdd as d (d.user_id)}
-										<button
-											type="button"
-											class="w-full text-left px-3 py-2 hover:bg-blue-50 cursor-pointer border-b border-gray-100 last:border-b-0"
-											onmousedown={() => selectDriverAdd(d.user_id)}
-										>
-											<div class="text-sm font-medium text-gray-900">
-												{`${d.first_name ?? ''} ${d.last_name ?? ''}`.trim() || d.user_id}
-											</div>
-											<div class="text-xs text-gray-500">{d.user_id}</div>
-										</button>
+									<button
+										type="button"
+										class="w-full text-left px-3 py-2 hover:bg-blue-50 cursor-pointer border-b border-gray-100 last:border-b-0"
+										onmousedown={() => selectDriverAdd(d.user_id)}
+									>
+										<div class="text-sm font-medium text-gray-900">
+										{`${d.first_name ?? ''} ${d.last_name ?? ''}`.trim() || 'Unknown Driver'}
+										</div>
+										<div class="text-xs text-gray-500">{getDriverContact(d)}</div>
+									</button>
 									{/each}
 								</div>
 							{/if}

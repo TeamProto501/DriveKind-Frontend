@@ -30,10 +30,10 @@ export const load: PageServerLoad = async (event) => {
 
   // Get all vehicles in org
   const { data: vehicles } = await supabase
-    .from('vehicles')
-    .select('*')
+    .from('staff_profiles')
+    .select('user_id, first_name, last_name, phone, email, address, address2, city, state, zipcode')
     .eq('org_id', profile.org_id)
-    .order('vehicle_id', { ascending: true });
+    .contains('role', ['Driver']);
 
   // Get driver names separately
   const userIds = [...new Set((vehicles || []).map(v => v.user_id).filter(Boolean))];
