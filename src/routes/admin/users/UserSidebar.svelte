@@ -1,8 +1,5 @@
 <script lang="ts">
   import { createEventDispatcher } from "svelte";
-  import { updateStaffProfile } from "$lib/api";
-  import type { AuthInfo } from "$lib/types";
-  import { browser } from "$app/environment";
   import { supabase } from "$lib/supabase";
   import { X } from "@lucide/svelte";
   import { toastStore } from "$lib/toast";
@@ -277,37 +274,26 @@
         dispatch("updated");
         dispatch("close");
       } else if (user) {
-        // update existing user
-        let auth: AuthInfo;
-        if (session) {
-          auth = {
-            token: session.access_token,
-            access_token: session.access_token,
-            refresh_token: session.refresh_token,
-            user: session.user,
-            userId: session.user?.id,
-          };
-        } else if (browser) {
-          const {
-            data: { session: s },
-          } = await supabase.auth.getSession();
-          if (!s) throw new Error("No session");
-          auth = {
-            token: s.access_token,
-            access_token: s.access_token,
-            refresh_token: s.refresh_token,
-            user: s.user,
-            userId: s.user?.id,
-          };
-        } else {
-          throw new Error("No session");
+        // update existing user - use server endpoint
+        const res = await fetch(`/admin/users/update/${user.user_id}`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ ...form, role: form.role }),
+        });
+
+        if (!res.ok) {
+          const errorData = await res
+            .json()
+            .catch(() => ({ error: "Failed to update user" }));
+          throw new Error(errorData.error || "Failed to update user");
         }
 
-        await updateStaffProfile(
-          user.user_id,
-          { ...form, role: form.role },
-          auth
-        );
+        const data = await res.json();
+        if (!data.success)
+          throw new Error(data.error || "Failed to update user");
+
         toastStore.success("User updated successfully");
         dispatch("updated");
         dispatch("close");
