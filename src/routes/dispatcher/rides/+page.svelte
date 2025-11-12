@@ -720,9 +720,9 @@
     if (diffMs <= 0)
       errs.push("Pickup time must be before the appointment time.");
     const diffMin = diffMs / 60000;
-    if (diffMin > 240)
+    if (diffMin > 120)
       errs.push(
-        "Pickup time cannot be more than 4 hours before the appointment."
+        "Pickup time cannot be more than 2 hours before the appointment."
       );
     return errs;
   }

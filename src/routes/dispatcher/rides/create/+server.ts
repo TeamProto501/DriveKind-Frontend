@@ -138,8 +138,8 @@ export const POST: RequestHandler = async (event) => {
         return json({ error: 'Pickup time must be before the appointment time.' }, { status: 400 });
       }
       const diffMin = diffMs / 60000;
-      if (diffMin > 240) { // 4 hours instead of 2
-        return json({ error: 'Pickup time cannot be more than 4 hours before the appointment.' }, { status: 400 });
+      if (diffMin > 120) {
+        return json({ error: 'Pickup time cannot be more than 2 hours before the appointment.' }, { status: 400 });
       }
     }
 
