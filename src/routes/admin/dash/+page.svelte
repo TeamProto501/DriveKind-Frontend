@@ -11,7 +11,6 @@
     Search,
     Filter,
     Plus,
-    Download,
     BarChart3,
     Settings,
     Database,
@@ -189,12 +188,6 @@
                 title="Add New"
               >
                 <Plus class="w-4 h-4" />
-              </button>
-              <button
-                class="px-3 py-2 text-sm font-medium bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors duration-200 flex items-center space-x-2"
-              >
-                <Download class="w-4 h-4" />
-                <span>Export</span>
               </button>
             </div>
           </div>
