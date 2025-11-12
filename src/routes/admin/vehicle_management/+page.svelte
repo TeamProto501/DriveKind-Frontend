@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { Car, Search, Trash2, Pencil, Plus } from '@lucide/svelte';
 	import { invalidateAll } from '$app/navigation';
-	import { supabase } from '$lib/supabase';
 
 	// shadcn/ui
 	import * as Dialog from '$lib/components/ui/dialog/index.js';
@@ -116,26 +115,6 @@
 	let isDeleting = $state(false);
 	let toDelete = $state<VehicleRow | null>(null);
 
-	// ---- Viewer org lookup ----
-	async function loadViewerIdentity() {
-		viewerUid = data?.session?.user?.id ?? null;
-		if (!viewerUid) {
-			const { data: auth, error } = await supabase.auth.getUser();
-			if (error) throw error;
-			viewerUid = auth?.user?.id ?? null;
-		}
-		if (!viewerUid) throw new Error('No user session.');
-
-		const { data: sp, error: spErr } = await supabase
-			.from('staff_profiles')
-			.select('org_id')
-			.eq('user_id', viewerUid)
-			.single();
-
-		if (spErr) throw spErr;
-		viewerOrgId = (sp?.org_id ?? null) as number | null;
-	}
-
 	async function loadVehicles() {
 		await invalidateAll();
 	}
@@ -145,35 +124,6 @@
 		if (!canManage) return;
 		toDelete = row;
 		showDeleteModal = true;
-	}
-
-	async function confirmDelete() {
-		if (!canManage) {
-			setToast('You do not have permission to delete vehicles.', false);
-			return;
-		}
-		if (!toDelete || !viewerOrgId) return;
-
-		isDeleting = true;
-		try {
-			const { error } = await supabase
-				.from('vehicles')
-				.delete()
-				.eq('vehicle_id', toDelete.vehicle_id)
-				.eq('org_id', viewerOrgId);
-
-			if (error) throw error;
-
-			setToast('Vehicle deleted.', true);
-			showDeleteModal = false;
-			toDelete = null;
-			await loadVehicles();
-		} catch (err: any) {
-			console.error('Delete error:', err?.message ?? err);
-			setToast(err?.message ?? 'Failed to delete vehicle.', false);
-		} finally {
-			isDeleting = false;
-		}
 	}
 
 	// ------- FILTER (client-side) -------
@@ -259,27 +209,23 @@
 
 		isSaving = true;
 		try {
-			// If creating as Active, first deactivate all other vehicles for this user in this org
-			if (addForm.active) {
-				const { error: offErr } = await supabase
-					.from('vehicles')
-					.update({ active: false })
-					.eq('org_id', viewerOrgId)
-					.eq('user_id', addForm.user_id as string);
-				if (offErr) throw offErr;
+			const formData = new FormData();
+			formData.append('user_id', addForm.user_id as string);
+			formData.append('type_of_vehicle_enum', addForm.type_of_vehicle_enum as string);
+			formData.append('vehicle_color', addForm.vehicle_color.trim());
+			formData.append('nondriver_seats', seats!.toString());
+			formData.append('active', addForm.active.toString());
+
+			const response = await fetch('?/create', {
+			method: 'POST',
+			body: formData
+			});
+
+			const result = await response.json();
+			
+			if (result.type === 'failure') {
+			throw new Error(result.data?.error || 'Failed to add vehicle');
 			}
-
-			const payload = {
-				org_id: viewerOrgId,
-				user_id: addForm.user_id as string,
-				type_of_vehicle_enum: addForm.type_of_vehicle_enum as VehicleType,
-				vehicle_color: addForm.vehicle_color.trim(),
-				nondriver_seats: seats,
-				active: !!addForm.active
-			};
-
-			const { error } = await supabase.from('vehicles').insert(payload);
-			if (error) throw error;
 
 			setToast('Vehicle created.', true);
 			showAddModal = false;
@@ -292,7 +238,7 @@
 		}
 	}
 
-	// ------- UPDATE (owner not changed here) -------
+	// ------- UPDATE -------
 	function onEditSubmit(e: Event) {
 		e.preventDefault();
 		void saveEdits();
@@ -315,31 +261,24 @@
 
 		isSaving = true;
 		try {
-			// If setting this vehicle to Active, first deactivate other vehicles for same user in this org
-			if (editForm.active && editOwnerUserId) {
-				const { error: offErr } = await supabase
-					.from('vehicles')
-					.update({ active: false })
-					.eq('org_id', viewerOrgId)
-					.eq('user_id', editOwnerUserId)
-					.neq('vehicle_id', editForm.vehicle_id);
-				if (offErr) throw offErr;
+			const formData = new FormData();
+			formData.append('vehicle_id', editForm.vehicle_id.toString());
+			formData.append('owner_user_id', editOwnerUserId || '');
+			formData.append('type_of_vehicle_enum', editForm.type_of_vehicle_enum as string);
+			formData.append('vehicle_color', editForm.vehicle_color.trim());
+			formData.append('nondriver_seats', seats!.toString());
+			formData.append('active', editForm.active.toString());
+
+			const response = await fetch('?/update', {
+			method: 'POST',
+			body: formData
+			});
+
+			const result = await response.json();
+			
+			if (result.type === 'failure') {
+			throw new Error(result.data?.error || 'Failed to update vehicle');
 			}
-
-			const payload = {
-				type_of_vehicle_enum: editForm.type_of_vehicle_enum as VehicleType,
-				vehicle_color: editForm.vehicle_color.trim(),
-				nondriver_seats: seats,
-				active: !!editForm.active
-			};
-
-			const { error } = await supabase
-				.from('vehicles')
-				.update(payload)
-				.eq('vehicle_id', editForm.vehicle_id)
-				.eq('org_id', viewerOrgId);
-
-			if (error) throw error;
 
 			setToast('Vehicle updated.', true);
 			showEditModal = false;
@@ -349,6 +288,42 @@
 			setToast(err?.message ?? 'Failed to update vehicle.', false);
 		} finally {
 			isSaving = false;
+		}
+	}
+
+	// ------- DELETE -------
+	async function confirmDelete() {
+		if (!canManage) {
+			setToast('You do not have permission to delete vehicles.', false);
+			return;
+		}
+		if (!toDelete || !viewerOrgId) return;
+
+		isDeleting = true;
+		try {
+			const formData = new FormData();
+			formData.append('vehicle_id', toDelete.vehicle_id.toString());
+
+			const response = await fetch('?/delete', {
+			method: 'POST',
+			body: formData
+			});
+
+			const result = await response.json();
+			
+			if (result.type === 'failure') {
+			throw new Error(result.data?.error || 'Failed to delete vehicle');
+			}
+
+			setToast('Vehicle deleted.', true);
+			showDeleteModal = false;
+			toDelete = null;
+			await loadVehicles();
+		} catch (err: any) {
+			console.error('Delete error:', err?.message ?? err);
+			setToast(err?.message ?? 'Failed to delete vehicle.', false);
+		} finally {
+			isDeleting = false;
 		}
 	}
 </script>
