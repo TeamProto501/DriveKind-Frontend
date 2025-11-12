@@ -8,6 +8,12 @@
   
   $: items = Array.isArray(data) ? data : (data?.data ?? []);
   
+  // Debug: Log the first item to see what fields we have
+  $: if (items[0]) {
+    console.log('First item keys:', Object.keys(items[0]));
+    console.log('First item:', items[0]);
+  }
+  
   const pageSize = 15;
   let currentPage = 1;
   
@@ -16,13 +22,17 @@
     currentPage * pageSize
   );
   
-  // CRITICAL: Filter out BOTH id and user_id
-  $: displayKeys = items[0]
-    ? Object.keys(items[0]).filter((key) => !['user_id', 'id'].includes(key))
-    : [];
+  // Get all keys except id and user_id
+  $: allKeys = items[0] ? Object.keys(items[0]) : [];
+  $: displayKeys = allKeys.filter(key => key !== 'id' && key !== 'user_id');
   
-  const formatLabel = (k: string) =>
-    k.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  // Debug: Log what keys we're displaying
+  $: console.log('All keys:', allKeys);
+  $: console.log('Display keys:', displayKeys);
+  
+  function formatLabel(k: string): string {
+    return k.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  }
   
   // Format dates to local time
   function formatValue(key: string, value: any): string {
@@ -32,7 +42,7 @@
     if (key === "created_at" || key === "updated_at") {
       try {
         const date = new Date(value);
-        return date.toLocaleString('en-US', {
+        const formatted = date.toLocaleString('en-US', {
           month: 'short',
           day: 'numeric',
           year: 'numeric',
@@ -40,24 +50,36 @@
           minute: '2-digit',
           hour12: true
         });
-      } catch {
+        console.log(`Formatted ${key}:`, value, '->', formatted);
+        return formatted;
+      } catch (e) {
+        console.error(`Error formatting ${key}:`, e);
         return String(value);
       }
     }
     
     // Unavailable date - show only date
     if (key === "unavailable_date") {
+      if (!value) return "-";
       try {
         const date = new Date(value + 'T00:00:00');
-        return date.toLocaleDateString('en-US', {
+        const formatted = date.toLocaleDateString('en-US', {
           weekday: 'short',
           month: 'short',
           day: 'numeric',
           year: 'numeric'
         });
-      } catch {
+        console.log(`Formatted ${key}:`, value, '->', formatted);
+        return formatted;
+      } catch (e) {
+        console.error(`Error formatting ${key}:`, e);
         return String(value);
       }
+    }
+    
+    // Repeating day - just display as is
+    if (key === "repeating_day") {
+      return value || "-";
     }
     
     // Time fields - convert to 12-hour format
@@ -69,7 +91,8 @@
         const ampm = hour >= 12 ? 'PM' : 'AM';
         const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
         return `${displayHour}:${minutes} ${ampm}`;
-      } catch {
+      } catch (e) {
+        console.error(`Error formatting time ${key}:`, e);
         return String(value);
       }
     }
