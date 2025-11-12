@@ -772,7 +772,7 @@
         rideForm.dropoff_state && rideForm.dropoff_state.trim()
           ? validateState(rideForm.dropoff_state)
           : { valid: true, errors: [] },
-        rideForm.dropoff_zipcode && rideForm.dropoff_zipcode.trim()
+        rideForm.dropoff_zipcode && String(rideForm.dropoff_zipcode).trim()
           ? validateZipCode(rideForm.dropoff_zipcode)
           : { valid: true, errors: [] },
         !rideForm.pickup_from_home && rideForm.alt_pickup_address
@@ -791,7 +791,7 @@
           : { valid: true, errors: [] },
         !rideForm.pickup_from_home &&
           rideForm.alt_pickup_zipcode &&
-          rideForm.alt_pickup_zipcode.trim()
+          String(rideForm.alt_pickup_zipcode).trim()
           ? validateZipCode(rideForm.alt_pickup_zipcode)
           : { valid: true, errors: [] }
       );
@@ -1327,6 +1327,45 @@
                           {formatAddress(c) || "—"}
                         </div>
 
+
+                        <!-- Mobility Device -->
+                        {#if c.mobility_assistance_enum}
+                          <div class="mt-1 text-[11px] text-blue-600 flex items-start gap-1">
+                            <span class="font-medium">Mobility Device:</span>
+                            <span class="capitalize">{c.mobility_assistance_enum}</span>
+                          </div>
+                        {/if}
+                        <!-- Mobility Device -->
+                        {#if c.mobility_assistance_enum}
+                          <div class="mt-1 text-[11px] text-blue-600 flex items-start gap-1">
+                            <span class="font-medium">Mobility Device:</span>
+                            <span class="capitalize">{c.mobility_assistance_enum}</span>
+                          </div>
+                        {/if}
+
+                        <!-- Mobility Device -->
+                        {#if c.mobility_assistance_enum}
+                          <div class="mt-1 text-[11px] text-blue-600 flex items-start gap-1">
+                            <span class="font-medium">Mobility Device:</span>
+                            <span class="capitalize">{c.mobility_assistance_enum}</span>
+                          </div>
+                        {/if}
+
+                        <!-- Mobility Device -->
+                        {#if c.mobility_assistance_enum}
+                          <div class="mt-1 text-[11px] text-blue-600 flex items-start gap-1">
+                            <span class="font-medium">Mobility Device:</span>
+                            <span class="capitalize">{c.mobility_assistance_enum}</span>
+                          </div>
+                        {/if}
+
+                        <!-- Mobility Device -->
+                        {#if c.mobility_assistance_enum}
+                          <div class="mt-1 text-[11px] text-blue-600 flex items-start gap-1">
+                            <span class="font-medium">Mobility Device:</span>
+                            <span class="capitalize">{c.mobility_assistance_enum}</span>
+                          </div>
+                        {/if}
                         <!-- NEW: Limitations line -->
                         <div class="mt-1 text-[11px] text-gray-600 flex items-start gap-1">
                           <AlertCircle class="w-3 h-3 mt-0.5 text-gray-400" />
@@ -1758,6 +1797,14 @@
             {#each stepErrors as e}<li>{e}</li>{/each}
           </ul>
         </div>
+
+                        <!-- Mobility Device -->
+                        {#if c.mobility_assistance_enum}
+                          <div class="mt-1 text-[11px] text-blue-600 flex items-start gap-1">
+                            <span class="font-medium">Mobility Device:</span>
+                            <span class="capitalize">{c.mobility_assistance_enum}</span>
+                          </div>
+                        {/if}
       {/if}
 
       {#if editStep === 1}
@@ -1796,7 +1843,13 @@
                         <div class="text-[11px] text-gray-400">
                           {formatAddress(c) || "—"}
                         </div>
-
+                        <!-- Mobility Device -->
+                        {#if c.mobility_assistance_enum}
+                          <div class="mt-1 text-[11px] text-blue-600 flex items-start gap-1">
+                            <span class="font-medium">Mobility Device:</span>
+                            <span class="capitalize">{c.mobility_assistance_enum}</span>
+                          </div>
+                        {/if}
                         <!-- NEW: Limitations line -->
                         <div class="mt-1 text-[11px] text-gray-600 flex items-start gap-1">
                           <AlertCircle class="w-3 h-3 mt-0.5 text-gray-400" />

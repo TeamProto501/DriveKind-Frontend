@@ -136,7 +136,8 @@ export const load: PageServerLoad = async (event) => {
         city,
         state,
         zip_code,
-        other_limitations
+        other_limitations,
+        mobility_assistance_enum
       `)
       .eq('org_id', profile.org_id)
       .order('first_name', { ascending: true });
