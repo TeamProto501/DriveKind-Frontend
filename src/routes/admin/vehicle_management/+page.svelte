@@ -59,6 +59,51 @@
 		staff_profile?: { first_name: string | null; last_name: string | null } | null;
 	}
 
+	// Searchable driver dropdown state
+	let driverSearchAdd = $state('');
+	let showDriverDropdownAdd = $state(false);
+	let driverSearchEdit = $state('');
+	let showDriverDropdownEdit = $state(false);
+
+	// Filtered driver options
+	let filteredDriversAdd = $derived.by(() => {
+		if (!driverSearchAdd.trim()) return driverOptions;
+		const q = driverSearchAdd.toLowerCase();
+		return driverOptions.filter(d => {
+			const name = `${d.first_name ?? ''} ${d.last_name ?? ''}`.trim().toLowerCase();
+			return name.includes(q) || d.user_id.toLowerCase().includes(q);
+		});
+	});
+
+	let filteredDriversEdit = $derived.by(() => {
+		if (!driverSearchEdit.trim()) return driverOptions;
+		const q = driverSearchEdit.toLowerCase();
+		return driverOptions.filter(d => {
+			const name = `${d.first_name ?? ''} ${d.last_name ?? ''}`.trim().toLowerCase();
+			return name.includes(q) || d.user_id.toLowerCase().includes(q);
+		});
+	});
+
+	// Helper to get driver name by ID
+	function getDriverName(userId: string): string {
+		const driver = driverOptions.find(d => d.user_id === userId);
+		if (!driver) return '';
+		return `${driver.first_name ?? ''} ${driver.last_name ?? ''}`.trim() || driver.user_id;
+	}
+
+	// Select driver functions
+	function selectDriverAdd(userId: string) {
+		addForm.user_id = userId;
+		driverSearchAdd = getDriverName(userId);
+		showDriverDropdownAdd = false;
+	}
+
+	function selectDriverEdit(userId: string) {
+		// For edit modal if you want to change driver in future
+		driverSearchEdit = getDriverName(userId);
+		showDriverDropdownEdit = false;
+	}
+
 	// toast
 	let toast = $state('');
 	let toastOk = $state(true);
@@ -165,12 +210,14 @@
 		if (!canManage) return;
 		addForm = { user_id: '', type_of_vehicle_enum: '', vehicle_color: '', nondriver_seats: '', active: false };
 		addErrors = {};
+		driverSearchAdd = '';
+		showDriverDropdownAdd = false;
 		showAddModal = true;
 	}
 
 	function openEdit(row: VehicleRow) {
 		if (!canManage) return;
-		editOwnerUserId = row.user_id ?? null; // keep owner for one-active-per-user logic
+		editOwnerUserId = row.user_id ?? null;
 		editForm = {
 			vehicle_id: row.vehicle_id,
 			type_of_vehicle_enum: (row.type_of_vehicle_enum ?? '') as VehicleType | '',
@@ -179,6 +226,8 @@
 			active: !!row.active
 		};
 		editErrors = {};
+		driverSearchEdit = '';
+		showDriverDropdownEdit = false;
 		showEditModal = true;
 	}
 
@@ -486,18 +535,39 @@
 				<form class="space-y-4" onsubmit={onAddSubmit}>
 					<div>
 						<label class="block text-sm font-medium text-gray-700">Driver <span class="text-red-600">*</span></label>
-						<select
-							class={"mt-1 block w-full border rounded-md px-3 py-2 " + (addErrors.user ? 'border-red-300 bg-red-50' : 'border-gray-300')}
-							bind:value={addForm.user_id}
-							disabled={driversLoading}>
-							<option value="">{driversLoading ? 'Loading…' : '— Select Driver —'}</option>
-							{#if driversError}
-								<option value="" disabled>{driversError}</option>
+						<div class="relative">
+							<input
+								type="text"
+								placeholder="Search for a driver..."
+								bind:value={driverSearchAdd}
+								onfocus={() => showDriverDropdownAdd = true}
+								onblur={() => setTimeout(() => showDriverDropdownAdd = false, 200)}
+								class={"mt-1 block w-full border rounded-md px-3 py-2 " + (addErrors.user ? 'border-red-300 bg-red-50' : 'border-gray-300')}
+							/>
+							
+							{#if showDriverDropdownAdd && filteredDriversAdd.length > 0}
+								<div class="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto">
+									{#each filteredDriversAdd as d (d.user_id)}
+										<button
+											type="button"
+											class="w-full text-left px-3 py-2 hover:bg-blue-50 cursor-pointer border-b border-gray-100 last:border-b-0"
+											onmousedown={() => selectDriverAdd(d.user_id)}
+										>
+											<div class="text-sm font-medium text-gray-900">
+												{`${d.first_name ?? ''} ${d.last_name ?? ''}`.trim() || d.user_id}
+											</div>
+											<div class="text-xs text-gray-500">{d.user_id}</div>
+										</button>
+									{/each}
+								</div>
 							{/if}
-							{#each driverOptions as d (d.user_id)}
-								<option value={d.user_id}>{`${d.first_name ?? ''} ${d.last_name ?? ''}`.trim() || d.user_id}</option>
-							{/each}
-						</select>
+							
+							{#if showDriverDropdownAdd && filteredDriversAdd.length === 0 && driverSearchAdd.trim()}
+								<div class="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg p-3">
+									<p class="text-sm text-gray-500">No drivers found</p>
+								</div>
+							{/if}
+						</div>
 						{#if addErrors.user}<p class="text-xs text-red-600 mt-1">{addErrors.user}</p>{/if}
 					</div>
 
