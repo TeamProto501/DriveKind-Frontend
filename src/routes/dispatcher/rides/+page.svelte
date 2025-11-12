@@ -16,6 +16,7 @@
     AlertCircle,
     UserCheck,
     CheckCircle,
+    FileText
   } from "@lucide/svelte";
   import { invalidateAll } from "$app/navigation";
   import { onMount } from "svelte";
@@ -31,7 +32,7 @@
     sanitizeInput,
     combineValidations,
   } from "$lib/utils/validation";
-  import { page } from "$app/stores";
+  import { page } from "$app/stores"; 
 
   let { data }: { data: PageData } = $props();
 
@@ -106,7 +107,6 @@
         matchesTab = ["Scheduled", "Assigned", "In Progress"].includes(
           ride.status
         );
-      // REMOVED: reported tab
       else if (activeTab === "completed")
         matchesTab = ["Completed", "Cancelled"].includes(ride.status);
       return matches && matchesTab;
@@ -197,7 +197,6 @@
     const state = norm(c.state);
     const zip = norm(c.zip_code);
 
-    // Highest weight: prefix matches
     if (name.startsWith(nq)) return 100 - name.indexOf(nq);
     if (phone.startsWith(nq)) return 92;
     if (email.startsWith(nq)) return 88;
@@ -207,7 +206,6 @@
     if (state?.startsWith(nq)) return 80;
     if (zip?.startsWith(nq)) return 78;
 
-    // Contains matches (lower weight)
     if (name.includes(nq)) return 70 - name.indexOf(nq);
     if (phone.includes(nq)) return 64;
     if (email.includes(nq)) return 60;
@@ -254,7 +252,6 @@
     const s = String(raw).trim().toLowerCase();
     if (!s) return null;
 
-    // H:MM
     let m = s.match(/^(\d+)\s*:\s*(\d{1,2})$/);
     if (m) {
       const h = parseInt(m[1], 10);
@@ -263,7 +260,6 @@
         return { h, m: mi };
       return null;
     }
-    // Xh [Ym]
     m = s.match(
       /^(\d+(?:\.\d+)?)\s*(h|hr|hrs|hour|hours)\s*(\d+)?\s*(m|min|mins|minute|minutes)?$/
     );
@@ -274,14 +270,12 @@
       if (m[3]) totalMinutes += parseInt(m[3], 10);
       return { h: Math.floor(totalMinutes / 60), m: totalMinutes % 60 };
     }
-    // Xm
     m = s.match(/^(\d+)\s*(m|min|mins|minute|minutes)$/);
     if (m) {
       const mins = parseInt(m[1], 10);
       if (!Number.isFinite(mins)) return null;
       return { h: Math.floor(mins / 60), m: mins % 60 };
     }
-    // bare number = minutes
     m = s.match(/^(\d+)$/);
     if (m) {
       const mins = parseInt(m[1], 10);
@@ -491,10 +485,8 @@
   function toLocalDateTimeInput(ts: string | null | undefined) {
     if (!ts) return "";
     const d = new Date(ts);
-    // Ensure we're working with valid date
     if (isNaN(d.getTime())) return "";
     const pad = (n: number) => n.toString().padStart(2, "0");
-    // Return in YYYY-MM-DDTHH:mm format (no seconds)
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
   }
 
@@ -549,7 +541,6 @@
     stepErrors = [];
     editStep = 1;
 
-    // prefill edit picker label
     clientQueryEdit = "";
     const sel = filteredClients().find(
       (c: any) => String(c.client_id) === String(rideForm.client_id)
@@ -653,7 +644,7 @@
           ? form.status
           : (base.status ?? "Requested")
         : "Requested",
-      notes: has(form.notes) ? sanitizeInput(form.notes) : (base.notes ?? null),
+        notes: has(form.notes) ? sanitizeInput(form.notes) : (base.notes ?? null),
 
       miles_driven: numFromStr(form.miles_driven, base.miles_driven ?? null),
       hours: numFromStr(form.hours, base.hours ?? null),
@@ -709,7 +700,6 @@
     return miss;
   }
 
-  // --- pickup vs appointment window validation ---
   function pickupWindowErrors(
     apptLocal: string,
     pickupLocal: string
@@ -737,7 +727,6 @@
     return errs;
   }
 
-  /* ---------------- validation (per-step) ---------------- */
   function validateStep(step: number): boolean {
     stepErrors = [];
     if (step === 1) {
@@ -770,7 +759,6 @@
       return errs.length === 0;
     }
     if (step === 2) {
-      // REMOVED: destination_name, dropoff_state, dropoff_zipcode validations
       const v = combineValidations(
         validateRequired(
           rideForm.dropoff_address ||
@@ -781,11 +769,10 @@
           rideForm.dropoff_city ||
             (isEditing() ? String(selectedRide?.dropoff_city ?? "") : "")
         ),
-        // State and ZIP are now optional - only validate if provided
         rideForm.dropoff_state && rideForm.dropoff_state.trim()
           ? validateState(rideForm.dropoff_state)
           : { valid: true, errors: [] },
-        rideForm.dropoff_zipcode && rideForm.dropoff_zipcode.trim()
+        rideForm.dropoff_zipcode && String(rideForm.dropoff_zipcode).trim()
           ? validateZipCode(rideForm.dropoff_zipcode)
           : { valid: true, errors: [] },
         !rideForm.pickup_from_home && rideForm.alt_pickup_address
@@ -804,7 +791,7 @@
           : { valid: true, errors: [] },
         !rideForm.pickup_from_home &&
           rideForm.alt_pickup_zipcode &&
-          rideForm.alt_pickup_zipcode.trim()
+          String(rideForm.alt_pickup_zipcode).trim()
           ? validateZipCode(rideForm.alt_pickup_zipcode)
           : { valid: true, errors: [] }
       );
@@ -858,6 +845,31 @@
   function prevEdit() {
     editStep = Math.max(1, editStep - 1);
     stepErrors = [];
+  }
+  function goToCreateStep(target: number) {
+    // allow free backward navigation
+    if (target <= createStep) {
+      createStep = Math.max(1, Math.min(3, target));
+      stepErrors = [];
+      return;
+    }
+    // block forward navigation unless current step validates
+    if (validateStep(createStep)) {
+      createStep = Math.max(1, Math.min(3, target));
+    }
+  }
+
+  function goToEditStep(target: number) {
+    // allow free backward navigation
+    if (target <= editStep) {
+      editStep = Math.max(1, Math.min(4, target));
+      stepErrors = [];
+      return;
+    }
+    // block forward navigation unless current step validates
+    if (validateStep(editStep)) {
+      editStep = Math.max(1, Math.min(4, target));
+    }
   }
 
   /* ---------------- submit ---------------- */
@@ -1047,7 +1059,7 @@
           class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors"
         >
           <Plus class="w-4 h-4" />
-          New Ride
+          New Ride Request
         </button>
       </div>
     </div>
@@ -1138,41 +1150,52 @@
                   >
                 </div>
 
-                <div
-                  class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-600"
-                ></div>
-                  <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-600">
-                    <div class="flex items-center gap-2">
-                      <Phone class="w-4 h-4 text-gray-400" />
-                      {getClientPhone(ride)}
-                    </div>
-                    <div class="flex items-center gap-2">
-                      <Calendar class="w-4 h-4 text-gray-400" />
-                      {formatDate(ride.appointment_time)} at {formatTime(ride.appointment_time)}
-                    </div>
-                    <div class="flex items-center gap-2">
-                      <User class="w-4 h-4 text-gray-400" /> Driver: {getDriverName(ride)}
-                    </div>
-                    <div class="flex items-center gap-2">
-                      <MapPin class="w-4 h-4 text-gray-400" /> Destination: {ride.destination_name}
-                    </div>
-
-                    <!-- ✅ NEW: Limitations from clients.other_limitations -->
-                    <div class="flex items-start gap-2 md:col-span-2">
-                      <AlertCircle class="w-4 h-4 text-gray-400 mt-0.5" />
-                      <div>
-                        <span class="font-medium">Limitations:</span>
-                        <span class="ml-1">{ride.clients?.other_limitations || 'None'}</span>
+                <!-- 2 columns × 3 rows (Notes on the right) -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-600">
+                  <!-- Row 1 -->
+                  <div class="flex items-center gap-2">
+                    <Phone class="w-4 h-4 text-gray-400" />
+                    {getClientPhone(ride)}
+                  </div>
+                  {#if ride.status === "Completed" && ride.notes && ride.notes.trim()}
+                    <div class="flex items-start gap-2">
+                      <FileText class="w-4 h-4 text-gray-400 mt-0.5" />
+                      <div class="min-w-0">
+                        <span class="font-medium">Notes:</span>
+                        <span class="ml-1 whitespace-pre-wrap break-words">{ride.notes}</span>
                       </div>
                     </div>
+                  {/if}
+
+                  <!-- Row 2 -->
+                  <div class="flex items-center gap-2">
+                    <Calendar class="w-4 h-4 text-gray-400" />
+                    {formatDate(ride.appointment_time)} at {formatTime(ride.appointment_time)}
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <MapPin class="w-4 h-4 text-gray-400" />
+                    <div>
+                      <span class="font-medium">Destination:</span>
+                      <span class="ml-1">{ride.destination_name || '—'}</span>
+                    </div>
                   </div>
 
-                {#if ride.notes}
-                  <div class="text-sm">
-                    <span class="font-medium">Notes:</span>
-                    {ride.notes}
+                  <!-- Row 3 -->
+                  <div class="flex items-center gap-2">
+                    <User class="w-4 h-4 text-gray-400" />
+                    <div>
+                      <span class="font-medium">Driver:</span>
+                      <span class="ml-1">{getDriverName(ride)}</span>
+                    </div>
                   </div>
-                {/if}
+                  <div class="flex items-start gap-2">
+                    <AlertCircle class="w-4 h-4 text-gray-400 mt-0.5" />
+                    <div>
+                      <span class="font-medium">Limitations:</span>
+                      <span class="ml-1">{ride.clients?.other_limitations || 'None'}</span>
+                    </div>
+                  </div>
+                </div>
               </div>
 
               <div class="flex gap-2 ml-4">
@@ -1220,32 +1243,40 @@
       class="bg-white rounded-lg p-6 max-w-3xl max-h-[90vh] overflow-y-auto w-full mx-4"
     >
       <div class="mb-4">
-        <h2 class="text-xl font-semibold">Create New Ride</h2>
+        <h2 class="text-xl font-semibold">Create New Ride Request</h2>
         <p class="text-sm text-gray-600">
           Fill in the details below. Items marked * are required.
         </p>
       </div>
 
-      <!-- Stepper -->
-      <div class="flex items-center justify-center gap-3 mb-4">
-        {#each [1, 2, 3] as s}
-          <div class="flex items-center gap-2">
-            <div
-              class="w-8 h-8 rounded-full flex items-center justify-center text-sm {createStep ===
-              s
-                ? 'bg-blue-600 text-white'
-                : 'bg-gray-200 text-gray-700'}"
-            >
-              {s}
-            </div>
-            {#if s < 3}<div
-                class="w-8 h-[2px] {createStep > s
-                  ? 'bg-blue-600'
-                  : 'bg-gray-200'}"
-              ></div>{/if}
-          </div>
-        {/each}
-      </div>
+     <!-- Stepper (CREATE) -->
+    <div class="flex items-center justify-center gap-3 mb-4 select-none">
+      {#each [1, 2, 3] as s}
+        <div class="flex items-center gap-2">
+          <button
+            type="button"
+            title={`Go to step ${s}`}
+            onclick={() => goToCreateStep(s)}
+            class="w-8 h-8 rounded-full flex items-center justify-center text-sm
+                  transition-colors cursor-pointer
+                  {createStep === s ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}"
+            aria-current={createStep === s ? 'step' : undefined}
+            aria-label={`Step ${s}`}
+          >
+            {s}
+          </button>
+          {#if s < 3}
+            <!-- svelte-ignore element_invalid_self_closing_tag -->
+            <button
+              type="button"
+              aria-label={`Jump toward step ${s + 1}`}
+              onclick={() => goToCreateStep(s + 1)}
+              class="w-8 h-[2px] rounded {createStep > s ? 'bg-blue-600' : 'bg-gray-200 hover:bg-gray-300'}"
+            />
+          {/if}
+        </div>
+      {/each}
+    </div>
 
       {#if stepErrors.length}
         <div
@@ -1287,16 +1318,61 @@
                         onclick={() => selectClientById(c.client_id, false)}
                       >
                         <div class="font-medium">
-                          {c.first_name}
-                          {c.last_name}
+                          {c.first_name} {c.last_name}
                         </div>
                         <div class="text-xs text-gray-500">
-                          {c.primary_phone || "—"}{c.email
-                            ? ` • ${c.email}`
-                            : ""}
+                          {c.primary_phone || "—"}{c.email ? ` • ${c.email}` : ""}
                         </div>
                         <div class="text-[11px] text-gray-400">
                           {formatAddress(c) || "—"}
+                        </div>
+
+
+                        <!-- Mobility Device -->
+                        {#if c.mobility_assistance_enum}
+                          <div class="mt-1 text-[11px] text-blue-600 flex items-start gap-1">
+                            <span class="font-medium">Mobility Device:</span>
+                            <span class="capitalize">{c.mobility_assistance_enum}</span>
+                          </div>
+                        {/if}
+                        <!-- Mobility Device -->
+                        {#if c.mobility_assistance_enum}
+                          <div class="mt-1 text-[11px] text-blue-600 flex items-start gap-1">
+                            <span class="font-medium">Mobility Device:</span>
+                            <span class="capitalize">{c.mobility_assistance_enum}</span>
+                          </div>
+                        {/if}
+
+                        <!-- Mobility Device -->
+                        {#if c.mobility_assistance_enum}
+                          <div class="mt-1 text-[11px] text-blue-600 flex items-start gap-1">
+                            <span class="font-medium">Mobility Device:</span>
+                            <span class="capitalize">{c.mobility_assistance_enum}</span>
+                          </div>
+                        {/if}
+
+                        <!-- Mobility Device -->
+                        {#if c.mobility_assistance_enum}
+                          <div class="mt-1 text-[11px] text-blue-600 flex items-start gap-1">
+                            <span class="font-medium">Mobility Device:</span>
+                            <span class="capitalize">{c.mobility_assistance_enum}</span>
+                          </div>
+                        {/if}
+
+                        <!-- Mobility Device -->
+                        {#if c.mobility_assistance_enum}
+                          <div class="mt-1 text-[11px] text-blue-600 flex items-start gap-1">
+                            <span class="font-medium">Mobility Device:</span>
+                            <span class="capitalize">{c.mobility_assistance_enum}</span>
+                          </div>
+                        {/if}
+                        <!-- NEW: Limitations line -->
+                        <div class="mt-1 text-[11px] text-gray-600 flex items-start gap-1">
+                          <AlertCircle class="w-3 h-3 mt-0.5 text-gray-400" />
+                          <span>
+                            <span class="font-medium">Limitations:</span>
+                            {c.other_limitations || 'None'}
+                          </span>
                         </div>
                       </button>
                     {/each}
@@ -1582,7 +1658,7 @@
                     id="est_hours"
                     type="number"
                     min="0"
-                    bindvalue={estHours}
+                    bind:value={estHours}
                     placeholder="0"
                     oninput={() => updateEstimatedLength()}
                   />
@@ -1616,18 +1692,21 @@
             </div>
           </div>
 
+          <!-- Notes (create) -->
           <div class="mt-3">
-            <label for="notes" class="block text-sm font-medium text-gray-700"
-              >Notes for driver</label
-            >
+            <label for="notes" class="block text-sm font-medium text-gray-700">Notes for driver</label>
             <Textarea
               id="notes"
-              bindvalue={rideForm.notes}
+              bind:value={rideForm.notes}
               placeholder="Anything special the driver should know"
+              rows={3}
+              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
+            <p class="text-xs text-gray-500 mt-1">These notes will show on the ride and on completed rides.</p>
           </div>
         </div>
       {/if}
+
 
       <div class="flex items-center justify-between mt-6">
         <div>
@@ -1680,23 +1759,31 @@
         </p>
       </div>
 
-      <!-- Stepper -->
-      <div class="flex items-center justify-center gap-3 mb-4">
+      <!-- Stepper (EDIT) -->
+      <div class="flex items-center justify-center gap-3 mb-4 select-none">
         {#each [1, 2, 3, 4] as s}
           <div class="flex items-center gap-2">
-            <div
-              class="w-8 h-8 rounded-full flex items-center justify-center text-sm {editStep ===
-              s
-                ? 'bg-blue-600 text-white'
-                : 'bg-gray-200 text-gray-700'}"
+            <button
+              type="button"
+              title={`Go to step ${s}`}
+              onclick={() => goToEditStep(s)}
+              class="w-8 h-8 rounded-full flex items-center justify-center text-sm
+                    transition-colors cursor-pointer
+                    {editStep === s ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}"
+              aria-current={editStep === s ? 'step' : undefined}
+              aria-label={`Step ${s}`}
             >
               {s}
-            </div>
-            {#if s < 4}<div
-                class="w-8 h-[2px] {editStep > s
-                  ? 'bg-blue-600'
-                  : 'bg-gray-200'}"
-              ></div>{/if}
+            </button>
+            {#if s < 4}
+              <!-- svelte-ignore element_invalid_self_closing_tag -->
+              <button
+                type="button"
+                aria-label={`Jump toward step ${s + 1}`}
+                onclick={() => goToEditStep(s + 1)}
+                class="w-8 h-[2px] rounded {editStep > s ? 'bg-blue-600' : 'bg-gray-200 hover:bg-gray-300'}"
+              />
+            {/if}
           </div>
         {/each}
       </div>
@@ -1710,6 +1797,14 @@
             {#each stepErrors as e}<li>{e}</li>{/each}
           </ul>
         </div>
+
+                        <!-- Mobility Device -->
+                        {#if c.mobility_assistance_enum}
+                          <div class="mt-1 text-[11px] text-blue-600 flex items-start gap-1">
+                            <span class="font-medium">Mobility Device:</span>
+                            <span class="capitalize">{c.mobility_assistance_enum}</span>
+                          </div>
+                        {/if}
       {/if}
 
       {#if editStep === 1}
@@ -1740,16 +1835,28 @@
                         onclick={() => selectClientById(c.client_id, true)}
                       >
                         <div class="font-medium">
-                          {c.first_name}
-                          {c.last_name}
+                          {c.first_name} {c.last_name}
                         </div>
                         <div class="text-xs text-gray-500">
-                          {c.primary_phone || "—"}{c.email
-                            ? ` • ${c.email}`
-                            : ""}
+                          {c.primary_phone || "—"}{c.email ? ` • ${c.email}` : ""}
                         </div>
                         <div class="text-[11px] text-gray-400">
                           {formatAddress(c) || "—"}
+                        </div>
+                        <!-- Mobility Device -->
+                        {#if c.mobility_assistance_enum}
+                          <div class="mt-1 text-[11px] text-blue-600 flex items-start gap-1">
+                            <span class="font-medium">Mobility Device:</span>
+                            <span class="capitalize">{c.mobility_assistance_enum}</span>
+                          </div>
+                        {/if}
+                        <!-- NEW: Limitations line -->
+                        <div class="mt-1 text-[11px] text-gray-600 flex items-start gap-1">
+                          <AlertCircle class="w-3 h-3 mt-0.5 text-gray-400" />
+                          <span>
+                            <span class="font-medium">Limitations:</span>
+                            {c.other_limitations || 'None'}
+                          </span>
                         </div>
                       </button>
                     {/each}
@@ -2087,17 +2194,6 @@
               </p>
             </div>
           </div>
-
-          <div class="mt-3">
-            <label for="e_notes" class="block text-sm font-medium text-gray-700"
-              >Notes for driver</label
-            >
-            <Textarea
-              id="e_notes"
-              bindvalue={rideForm.notes}
-              placeholder="Anything special the driver should know"
-            />
-          </div>
         </div>
       {/if}
 
@@ -2163,22 +2259,17 @@
               </p>
             </div>
 
-            <!-- ✅ ADD NOTES FIELD FOR COMPLETION COMMENTS -->
-            <div class="mt-4">
-              <label
-                for="e_completion_notes"
-                class="block text-sm font-medium text-gray-700"
-                >Completion Notes</label
-              >
+            <!-- Notes (edit/completion) -->
+            <div class="mt-4 md:col-span-2">
+              <label for="e_completion_notes" class="block text-sm font-medium text-gray-700">Completion Notes</label>
               <Textarea
                 id="e_completion_notes"
-                bindvalue={rideForm.notes}
+                bind:value={rideForm.notes}
                 placeholder="Any notes about the ride completion..."
-                rows="3"
+                rows={3}
+                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               />
-              <p class="text-xs text-gray-500 mt-1">
-                Additional details about how the ride was completed.
-              </p>
+              <p class="text-xs text-gray-500 mt-1">These notes will appear on completed rides.</p>
             </div>
           </div>
         </div>
