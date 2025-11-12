@@ -68,6 +68,14 @@
         </div>
       </div>
 
+      {#if data.passwordResetSuccess}
+        <div class="rounded-md bg-green-50 p-4">
+          <div class="text-sm text-green-800">
+            Password reset successfully! You can now log in with your new password.
+          </div>
+        </div>
+      {/if}
+
       {#if form?.error}
         <div class="rounded-md bg-red-50 p-4">
           <div class="text-sm text-red-800">
@@ -88,9 +96,12 @@
     </form>
     
     <div class="text-center space-y-2">
-      <p class="text-sm text-gray-600">
+      <a
+        href="/forgot-password"
+        class="text-sm text-blue-600 hover:text-blue-500 hover:underline"
+      >
         Forgot your Password?
-      </p>
+      </a>
     </div>
   </div>
 </div>

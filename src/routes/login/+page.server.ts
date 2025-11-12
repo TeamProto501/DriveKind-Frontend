@@ -14,7 +14,12 @@ export const load: PageServerLoad = async (event) => {
     throw redirect(302, "/admin/dash"); // or wherever you want to redirect
   }
 
-  return {};
+  // Check for password reset success message
+  const passwordReset = event.url.searchParams.get('passwordReset');
+  
+  return {
+    passwordResetSuccess: passwordReset === 'success',
+  };
 };
 
 export const actions: Actions = {
