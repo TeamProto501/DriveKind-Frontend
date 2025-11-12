@@ -54,9 +54,17 @@
           />
         </div>
         <div>
-          <label for="password" class="block text-sm font-medium text-gray-700">
-            Password
-          </label>
+          <div class="flex items-center justify-between">
+            <label for="password" class="block text-sm font-medium text-gray-700">
+              Password
+            </label>
+            <a
+              href="/forgot-password"
+              class="text-sm text-blue-600 hover:text-blue-500 hover:underline"
+            >
+              Forgot your Password?
+            </a>
+          </div>
           <input
             id="password"
             name="password"
@@ -94,14 +102,5 @@
         </button>
       </div>
     </form>
-    
-    <div class="text-center space-y-2">
-      <a
-        href="/forgot-password"
-        class="text-sm text-blue-600 hover:text-blue-500 hover:underline"
-      >
-        Forgot your Password?
-      </a>
-    </div>
   </div>
 </div>
