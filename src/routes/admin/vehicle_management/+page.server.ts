@@ -49,19 +49,28 @@ export const load: PageServerLoad = async (event) => {
     staff_profile: v.user_id ? profileMap.get(v.user_id) : null
   }));
 
-  // Get all drivers in org for dropdown (with contact info)
-  const { data: drivers } = await supabase
+  // Get all staff in org with contact info and role
+  const { data: allStaff, error: staffError } = await supabase
     .from('staff_profiles')
-    .select('user_id, first_name, last_name, phone, email, address, address2, city, state, zipcode')
-    .eq('org_id', profile.org_id)
-    .contains('role', ['Driver']);
+    .select('user_id, first_name, last_name, phone, email, address, address2, city, state, zipcode, role')
+    .eq('org_id', profile.org_id);
+
+  // Filter to only drivers on server side
+  const filteredDrivers = (allStaff || []).filter(staff => {
+    const roles = Array.isArray(staff.role) ? staff.role : [];
+    return roles.includes('Driver');
+  });
+
+  console.log('Staff query error:', staffError);
+  console.log('Total staff:', allStaff?.length);
+  console.log('Filtered drivers:', filteredDrivers.length, filteredDrivers);
 
   return {
     session,
     profile,
     roles: Array.isArray(profile.role) ? profile.role : [],
     vehicles: vehiclesWithProfiles,
-    driverOptions: drivers || []
+    driverOptions: filteredDrivers
   };
 };
 
