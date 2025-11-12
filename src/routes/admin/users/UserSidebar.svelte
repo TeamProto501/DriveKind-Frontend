@@ -499,7 +499,7 @@
             <button
               type="button"
               title={`Go to step ${s}`}
-              on:click={() => goToUserStep(s)}
+              onclick={() => goToUserStep(s)}
               class="w-8 h-8 rounded-full flex items-center justify-center text-sm transition-colors
                     {step === s ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}"
               aria-current={step === s ? 'step' : undefined}
@@ -512,7 +512,7 @@
               <button
                 type="button"
                 aria-label={`Jump toward step ${s + 1}`}
-                on:click={() => goToUserStep(s + 1)}
+                onclick={() => goToUserStep(s + 1)}
                 class="w-8 h-[2px] rounded {step > s ? 'bg-blue-600' : 'bg-gray-200 hover:bg-gray-300'}"
               />
             {/if}
