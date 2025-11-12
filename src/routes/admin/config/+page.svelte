@@ -577,14 +577,13 @@
       delete payload.org_creation_date;
       delete payload.first_ride_date;
       delete payload.last_activity_in_portal;
-
+      console.log(payload);
       const { error } = await supabase
         .from("organization")
         .update(payload)
         .eq("org_id", orgId);
-      if (error) throw error;
 
-      await loadOrg();
+      if (error) throw error;
       showEditModal = false;
     } catch (e: any) {
       console.error("Save error:", e?.message ?? e);
