@@ -131,6 +131,10 @@
 		showDriverDropdownEdit = false;
 	}
 
+	$effect(() => {
+		console.log('Driver options loaded:', driverOptions.length, driverOptions);
+	});
+
 	// toast
 	let toast = $state('');
 	let toastOk = $state(true);
@@ -568,6 +572,7 @@
 								placeholder="Search for a driver..."
 								bind:value={driverSearchAdd}
 								onfocus={() => showDriverDropdownAdd = true}
+								oninput={() => showDriverDropdownAdd = true}
 								onblur={() => setTimeout(() => showDriverDropdownAdd = false, 200)}
 								class={"mt-1 block w-full border rounded-md px-3 py-2 " + (addErrors.user ? 'border-red-300 bg-red-50' : 'border-gray-300')}
 							/>
@@ -589,7 +594,7 @@
 								</div>
 							{/if}
 							
-							{#if showDriverDropdownAdd && filteredDriversAdd.length === 0 && driverSearchAdd.trim()}
+							{#if showDriverDropdownAdd && filteredDriversAdd.length === 0}
 								<div class="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg p-3">
 									<p class="text-sm text-gray-500">No drivers found</p>
 								</div>
