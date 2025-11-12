@@ -42,6 +42,7 @@
     town_preference?: string;
     allergens?: string;
     driver_other_limitations?: string;
+    cannot_handle_mobility_devices?: string[]; // Array of mobility_assistance_enum values
   };
 
   type StaffProfile = StaffForm & {
@@ -130,6 +131,7 @@
         town_preference: "",
         allergens: "",
         driver_other_limitations: "",
+        cannot_handle_mobility_devices: [],
         primary_is_cell: true,
         primary_can_text: true,
       };
@@ -164,6 +166,9 @@
       town_preference: user.town_preference || "",
       allergens: user.allergens || "",
       driver_other_limitations: user.driver_other_limitations || "",
+      cannot_handle_mobility_devices: Array.isArray((user as any).cannot_handle_mobility_devices) 
+        ? (user as any).cannot_handle_mobility_devices 
+        : [],
       primary_is_cell: user.primary_is_cell,
       primary_can_text: user.primary_can_text,
     };
@@ -179,7 +184,7 @@
       if (!form.email || !form.email.trim()) errs.push("Email is required.");
       if (!form.primary_phone || !form.primary_phone.trim())
         errs.push("Primary phone is required.");
-      if (createMode && !tempPassword)
+    if (createMode && !tempPassword) 
         errs.push("Temporary password is required for new users.");
       if (createMode && tempPassword && tempPassword.length < 6)
         errs.push("Password must be at least 6 characters.");
@@ -230,7 +235,7 @@
 
     saving = true;
     errorMessage = null;
-
+    
     try {
       if (createMode) {
         const payload = {
@@ -458,6 +463,16 @@
                 {user.driver_other_limitations || "—"}
               </div>
             </div>
+            {#if normalizeRoles(user.role).includes("Driver")}
+              <div>
+                <div class="text-xs text-gray-500">Cannot Handle Mobility Devices</div>
+                <div class="font-medium">
+                  {Array.isArray((user as any).cannot_handle_mobility_devices) && (user as any).cannot_handle_mobility_devices.length > 0
+                    ? (user as any).cannot_handle_mobility_devices.map((d: string) => d.charAt(0).toUpperCase() + d.slice(1)).join(", ")
+                    : "None"}
+                </div>
+              </div>
+            {/if}
           </div>
         </div>
       </div>
@@ -495,44 +510,44 @@
 
       {#if step === 1}
         <div class="space-y-3">
-          <div>
+    <div>
             <label class="block text-base font-medium">First Name *</label
             ><input
               required
               class="mt-1 w-full border rounded px-3 py-2 text-base"
               bind:value={form.first_name}
             />
-          </div>
-          <div>
+    </div>
+    <div>
             <label class="block text-base font-medium">Last Name *</label><input
               required
               class="mt-1 w-full border rounded px-3 py-2 text-base"
               bind:value={form.last_name}
             />
-          </div>
-          <div>
+    </div>
+    <div>
             <label class="block text-base font-medium">Email *</label>
-            <input
+      <input 
               required
               class="mt-1 w-full border rounded px-3 py-2 text-base"
-              type="email"
-              bind:value={form.email}
-              disabled={!createMode && !!user}
+        type="email" 
+        bind:value={form.email} 
+        disabled={!createMode && !!user}
             />
             {#if !createMode && user}<p class="text-xs text-gray-500 mt-1">
                 Email cannot be changed after creation
               </p>{/if}
-          </div>
-          {#if createMode}
-            <div>
+    </div>
+    {#if createMode}
+      <div>
               <label class="block text-base font-medium"
                 >Temporary Password *</label
               >
-              <input
+        <input 
                 required
                 class="mt-1 w-full border rounded px-3 py-2 text-base"
-                type="password"
-                bind:value={tempPassword}
+          type="password" 
+          bind:value={tempPassword} 
                 placeholder="Minimum 6 characters"
                 autocomplete="new-password"
               />
@@ -561,8 +576,8 @@
               {:else if tempPassword && tempPasswordConfirm && tempPassword === tempPasswordConfirm}
                 <p class="text-xs text-green-600 mt-1">✓ Passwords match</p>
               {/if}
-            </div>
-          {/if}
+      </div>
+    {/if}
           <div>
             <label class="block text-base font-medium">Primary Phone *</label
             ><input
@@ -571,15 +586,15 @@
               bind:value={form.primary_phone}
             />
           </div>
-          <div>
+    <div>
             <label class="block text-base font-medium">Secondary Phone</label
             ><input
               class="mt-1 w-full border rounded px-3 py-2 text-base"
               bind:value={form.secondary_phone}
             />
-          </div>
+    </div>
 
-          <div>
+    <div>
             <label class="block text-base font-medium">Roles *</label>
             <div class="mt-2 grid grid-cols-2 gap-2">
               {#each visibleRoles as r}
@@ -594,10 +609,10 @@
                     }}
                   />
                   <span>{r}</span>
-                </label>
-              {/each}
-            </div>
-          </div>
+          </label>
+        {/each}
+      </div>
+    </div>
         </div>
       {/if}
 
@@ -623,7 +638,7 @@
               <option value="Female">Female</option>
               <option value="Other">Other</option>
             </select>
-          </div>
+    </div>
           <div>
             <label class="block text-base font-medium"
               >Contact Preference *</label
@@ -732,7 +747,7 @@
               class="mt-1 w-full border rounded px-3 py-2 text-base"
               bind:value={form.destination_limitation}
             />
-          </div>
+      </div>
           <div>
             <label class="block text-base font-medium">Town Preference</label
             ><input
@@ -747,7 +762,7 @@
               class="mt-1 w-full border rounded px-3 py-2 text-base"
               bind:value={form.allergens}
             />
-          </div>
+      </div>
           <div>
             <label class="block text-base font-medium"
               >Other Driver Limitations</label
@@ -757,6 +772,42 @@
               bind:value={form.driver_other_limitations}
             />
           </div>
+          {#if form.role && (Array.isArray(form.role) ? form.role.includes("Driver") : form.role === "Driver")}
+            <div>
+              <label class="block text-base font-medium mb-2"
+                >Cannot Handle Mobility Devices</label
+              >
+              <p class="text-xs text-gray-500 mb-2">
+                Select mobility devices this driver cannot handle. These drivers will be excluded from rides with clients using these devices.
+              </p>
+              <div class="space-y-2">
+                {#each ["cane", "light walker", "roll-leader"] as device}
+                  {@const isSelected = form.cannot_handle_mobility_devices?.includes(device) || false}
+                  <label class="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onchange={(e) => {
+                        if (!form.cannot_handle_mobility_devices) {
+                          form.cannot_handle_mobility_devices = [];
+                        }
+                        if (e.currentTarget.checked) {
+                          if (!form.cannot_handle_mobility_devices.includes(device)) {
+                            form.cannot_handle_mobility_devices = [...form.cannot_handle_mobility_devices, device];
+                          }
+                        } else {
+                          form.cannot_handle_mobility_devices = form.cannot_handle_mobility_devices.filter((d: string) => d !== device);
+                        }
+                        form = form; // Trigger reactivity
+                      }}
+                      class="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                    />
+                    <span class="text-sm text-gray-700 capitalize">{device}</span>
+                  </label>
+                {/each}
+              </div>
+            </div>
+          {/if}
         </div>
       {/if}
     {/if}
@@ -777,20 +828,20 @@
           class="px-4 py-2 rounded-lg border">Cancel</button
         >
         {#if step < 3}
-          <button
+    <button 
             on:click={next}
             class="px-4 py-2 rounded-lg bg-blue-600 text-white">Next</button
-          >
+    >
         {:else}
-          <button
-            on:click={saveUser}
-            disabled={saving}
+    <button 
+      on:click={saveUser} 
+      disabled={saving} 
             class="px-4 py-2 rounded-lg bg-blue-600 text-white disabled:opacity-50"
-          >
+    >
             {saving ? "Saving..." : createMode ? "Create User" : "Save Changes"}
-          </button>
+    </button>
         {/if}
       </div>
-    </div>
+  </div>
   {/if}
 </div>
