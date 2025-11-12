@@ -223,3 +223,4 @@ export const actions = {
 
     return { success: true };
   }
+} satisfies Actions;
