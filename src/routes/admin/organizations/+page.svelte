@@ -714,13 +714,13 @@
       delete payload.org_creation_date;
       delete payload.first_ride_date;
       delete payload.last_activity_in_portal;
-
+      console.log("Updating org_id:", editingOrg.org_id);
+      console.log("Payload:", payload);
       const { error } = await supabase
         .from("organization")
         .update(payload)
         .eq("org_id", editingOrg.org_id)
-        .select()
-        .single();
+        .select();
 
       if (error) {
         showEditMessage(
@@ -1314,6 +1314,12 @@
                               <select
                                 class="border rounded px-2 py-1"
                                 bind:value={whAdd[d.code].endHour}
+                                onchange={() => {
+                                  whAdd[d.code].end = hourTo24(
+                                    whAdd[d.code].endHour,
+                                    whAdd[d.code].endPeriod
+                                  );
+                                }}
                                 disabled={!whAdd[d.code].open}
                               >
                                 {#each HOUR_OPTS_12 as h}<option value={h}
@@ -1904,13 +1910,13 @@
                               <select
                                 class="border rounded px-2 py-1"
                                 bind:value={whEdit[d.code].startHour}
-                                disabled={!whEdit[d.code].open}
                                 onchange={() => {
                                   whEdit[d.code].start = hourTo24(
                                     whEdit[d.code].startHour,
                                     whEdit[d.code].startPeriod
                                   );
                                 }}
+                                disabled={!whEdit[d.code].open}
                               >
                                 {#each HOUR_OPTS_12 as h}<option value={h}
                                     >{h}</option
@@ -1938,6 +1944,12 @@
                               <select
                                 class="border rounded px-2 py-1"
                                 bind:value={whEdit[d.code].endHour}
+                                onchange={() => {
+                                  whEdit[d.code].end = hourTo24(
+                                    whEdit[d.code].endHour,
+                                    whEdit[d.code].endPeriod
+                                  );
+                                }}
                                 disabled={!whEdit[d.code].open}
                               >
                                 {#each HOUR_OPTS_12 as h}<option value={h}

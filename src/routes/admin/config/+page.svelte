@@ -217,8 +217,34 @@
 
   // Elder-friendly working hours picker
   type DayCode = "Su" | "Mo" | "Tu" | "We" | "Th" | "Fr" | "Sa";
-  type DayHours = { open: boolean; start: string; end: string }; // '00'..'23'
+  type DayHours = {
+    open: boolean;
+    start: string;
+    end: string;
+    startHour: string;
+    startPeriod: string;
+    endHour: string;
+    endPeriod: string;
+  }; // '00'..'23'
   type WorkingHoursUI = Record<DayCode, DayHours>;
+  function militaryTo12Hour(military: string): {
+    hour: string;
+    period: string;
+  } {
+    const h = parseInt(military, 10);
+    if (h === 0) return { hour: "12", period: "AM" };
+    if (h < 12) return { hour: String(h).padStart(2, "0"), period: "AM" };
+    if (h === 12) return { hour: "12", period: "PM" };
+    return { hour: String(h - 12).padStart(2, "0"), period: "PM" };
+  }
+  function hourTo24(hour: string, period: string): string {
+    const h = parseInt(hour, 10);
+    if (period === "AM") {
+      return h === 12 ? "00" : String(h).padStart(2, "0");
+    } else {
+      return h === 12 ? "12" : String(h + 12).padStart(2, "0");
+    }
+  }
   const DAYS: Array<{ code: DayCode; label: string }> = [
     { code: "Su", label: "Sunday" },
     { code: "Mo", label: "Monday" },
@@ -231,16 +257,75 @@
   const HOUR_OPTS = Array.from({ length: 24 }, (_, i) =>
     String(i).padStart(2, "0")
   );
-
+  const HOUR_OPTS_12 = Array.from({ length: 12 }, (_, i) =>
+    String(i === 0 ? 12 : i).padStart(2, "0")
+  ); // '12', '01'..'11'
+  const PERIOD_OPTS = ["AM", "PM"];
   function defaultWorkingHoursUI(): WorkingHoursUI {
     return {
-      Su: { open: false, start: "09", end: "17" },
-      Mo: { open: true, start: "09", end: "17" },
-      Tu: { open: true, start: "09", end: "17" },
-      We: { open: true, start: "09", end: "17" },
-      Th: { open: true, start: "09", end: "17" },
-      Fr: { open: true, start: "09", end: "17" },
-      Sa: { open: false, start: "09", end: "17" },
+      Su: {
+        open: false,
+        start: "09",
+        end: "17",
+        startHour: "09",
+        startPeriod: "AM",
+        endHour: "05",
+        endPeriod: "PM",
+      },
+      Mo: {
+        open: true,
+        start: "09",
+        end: "17",
+        startHour: "09",
+        startPeriod: "AM",
+        endHour: "05",
+        endPeriod: "PM",
+      },
+      Tu: {
+        open: true,
+        start: "09",
+        end: "17",
+        startHour: "09",
+        startPeriod: "AM",
+        endHour: "05",
+        endPeriod: "PM",
+      },
+      We: {
+        open: true,
+        start: "09",
+        end: "17",
+        startHour: "09",
+        startPeriod: "AM",
+        endHour: "05",
+        endPeriod: "PM",
+      },
+      Th: {
+        open: true,
+        start: "09",
+        end: "17",
+        startHour: "09",
+        startPeriod: "AM",
+        endHour: "05",
+        endPeriod: "PM",
+      },
+      Fr: {
+        open: true,
+        start: "09",
+        end: "17",
+        startHour: "09",
+        startPeriod: "AM",
+        endHour: "05",
+        endPeriod: "PM",
+      },
+      Sa: {
+        open: false,
+        start: "09",
+        end: "17",
+        startHour: "09",
+        startPeriod: "AM",
+        endHour: "05",
+        endPeriod: "PM",
+      },
     };
   }
   function parseWorkingHoursToUI(input?: string | null): WorkingHoursUI {
@@ -258,7 +343,19 @@
         string,
         string,
       ];
-      if (ui[code]) ui[code] = { open: true, start, end };
+      if (ui[code]) {
+        const startTime = militaryTo12Hour(start);
+        const endTime = militaryTo12Hour(end);
+        ui[code] = {
+          open: true,
+          start,
+          end,
+          startHour: startTime.hour,
+          startPeriod: startTime.period,
+          endHour: endTime.hour,
+          endPeriod: endTime.period,
+        };
+      }
     }
     return ui;
   }
@@ -521,7 +618,7 @@
 
         {#if org}
           <button
-            on:click={openEdit}
+            onclick={openEdit}
             class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
           >
             <Edit class="w-4 h-4 mr-2" /> Edit Organization
@@ -943,7 +1040,7 @@
       >
         <div class="flex items-center justify-between mb-2">
           <h3 class="text-xl font-semibold">Edit Organization</h3>
-          <button on:click={closeEdit} class="text-gray-400 hover:text-gray-600"
+          <button onclick={closeEdit} class="text-gray-400 hover:text-gray-600"
             ><X class="w-5 h-5" /></button
           >
         </div>
@@ -956,7 +1053,7 @@
           <span class="font-medium">{STEP_LABELS[editStep]}</span>
         </div>
 
-        <form on:submit={saveOrg} class="space-y-6">
+        <form onsubmit={saveOrg} class="space-y-6">
           <!-- STEP 0: Overview -->
           {#if editStep === 0}
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -1129,7 +1226,8 @@
                             /></td
                           >
                           <td class="px-3 py-2">
-                            <select
+                            <div class="flex gap-1">
+                              <!-- <select
                               class="border rounded px-2 py-1"
                               bind:value={whEdit[d.code].start}
                               disabled={!whEdit[d.code].open}
@@ -1137,10 +1235,41 @@
                               {#each HOUR_OPTS as h}<option value={h}
                                   >{h}:00</option
                                 >{/each}
-                            </select>
+                            </select> -->
+                              <select
+                                class="border rounded px-2 py-1"
+                                bind:value={whEdit[d.code].startHour}
+                                onchange={() => {
+                                  whEdit[d.code].start = hourTo24(
+                                    whEdit[d.code].startHour,
+                                    whEdit[d.code].startPeriod
+                                  );
+                                }}
+                                disabled={!whEdit[d.code].open}
+                              >
+                                {#each HOUR_OPTS_12 as h}<option value={h}
+                                    >{h}</option
+                                  >{/each}
+                              </select>
+                              <select
+                                class="border rounded px-2 py-1"
+                                bind:value={whEdit[d.code].startPeriod}
+                                onchange={() => {
+                                  whEdit[d.code].start = hourTo24(
+                                    whEdit[d.code].startHour,
+                                    whEdit[d.code].startPeriod
+                                  );
+                                }}
+                                disabled={!whEdit[d.code].open}
+                              >
+                                {#each PERIOD_OPTS as p}<option value={p}
+                                    >{p}</option
+                                  >{/each}
+                              </select>
+                            </div>
                           </td>
                           <td class="px-3 py-2">
-                            <select
+                            <!-- <select
                               class="border rounded px-2 py-1"
                               bind:value={whEdit[d.code].end}
                               disabled={!whEdit[d.code].open}
@@ -1148,7 +1277,39 @@
                               {#each HOUR_OPTS as h}<option value={h}
                                   >{h}:00</option
                                 >{/each}
-                            </select>
+                            </select> -->
+                            <div class="flex gap-1">
+                              <select
+                                class="border rounded px-2 py-1"
+                                bind:value={whEdit[d.code].endHour}
+                                onchange={() => {
+                                  whEdit[d.code].end = hourTo24(
+                                    whEdit[d.code].endHour,
+                                    whEdit[d.code].endPeriod
+                                  );
+                                }}
+                                disabled={!whEdit[d.code].open}
+                              >
+                                {#each HOUR_OPTS_12 as h}<option value={h}
+                                    >{h}</option
+                                  >{/each}
+                              </select>
+                              <select
+                                class="border rounded px-2 py-1"
+                                bind:value={whEdit[d.code].endPeriod}
+                                onchange={() => {
+                                  whEdit[d.code].end = hourTo24(
+                                    whEdit[d.code].endHour,
+                                    whEdit[d.code].endPeriod
+                                  );
+                                }}
+                                disabled={!whEdit[d.code].open}
+                              >
+                                {#each PERIOD_OPTS as p}<option value={p}
+                                    >{p}</option
+                                  >{/each}
+                              </select>
+                            </div>
                           </td>
                         </tr>
                       {/each}
@@ -1486,7 +1647,7 @@
           <div class="flex justify-between pt-2">
             <button
               type="button"
-              on:click={editStep === 0 ? closeEdit : prevStep}
+              onclick={editStep === 0 ? closeEdit : prevStep}
               class="px-4 py-2 border border-gray-300 rounded-md"
             >
               {editStep === 0 ? "Cancel" : "Back"}
@@ -1494,7 +1655,7 @@
             {#if editStep < STEP_LABELS.length - 1}
               <button
                 type="button"
-                on:click={nextStep}
+                onclick={nextStep}
                 class="px-4 py-2 bg-blue-600 text-white rounded-md">Next</button
               >
             {:else}
