@@ -479,7 +479,7 @@
 
       <div class="px-6 pb-6 pt-2">
         <button
-          on:click={() => {
+          onclick={() => {
             mode = "edit";
             step = 1;
           }}
@@ -818,23 +818,23 @@
     <div class="px-6 py-4 border-t flex items-center justify-between">
       <div>
         {#if step > 1}<button
-            on:click={back}
+            onclick={back}
             class="px-4 py-2 rounded-lg border">Back</button
           >{/if}
       </div>
       <div class="flex gap-2">
         <button
-          on:click={() => dispatch("close")}
+          onclick={() => dispatch("close")}
           class="px-4 py-2 rounded-lg border">Cancel</button
         >
         {#if step < 3}
     <button 
-            on:click={next}
+            onclick={next}
             class="px-4 py-2 rounded-lg bg-blue-600 text-white">Next</button
     >
         {:else}
     <button 
-      on:click={saveUser} 
+      onclick={saveUser} 
       disabled={saving} 
             class="px-4 py-2 rounded-lg bg-blue-600 text-white disabled:opacity-50"
     >
