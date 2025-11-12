@@ -3,63 +3,127 @@
   import * as Pagination from "$lib/components/ui/pagination/index.js";
   import { Trash2 } from "@lucide/svelte";
   import { enhance } from "$app/forms";
+  
   export let data: any = [];
+  
   $: items = Array.isArray(data) ? data : (data?.data ?? []);
+  
   const pageSize = 15;
   let currentPage = 1;
+  
   $: pagedData = items.slice(
     (currentPage - 1) * pageSize,
     currentPage * pageSize
   );
+  
+  // Filter out id and user_id columns
   $: keys = items[0]
-    ? Object.keys(items[0]).filter((key) => key !== "user_id")
+    ? Object.keys(items[0]).filter((key) => key !== "user_id" && key !== "id")
     : [];
+  
   const formatLabel = (k: string) =>
     k.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-  function handlePageChange(page: number) {
-    currentPage = page;
+  
+  // Format values based on key type
+  function formatValue(key: string, value: any): string {
+    if (value === null || value === undefined) return "-";
+    
+    // Format timestamp fields to local time
+    if (key === "created_at" || key === "updated_at") {
+      try {
+        const date = new Date(value);
+        return date.toLocaleString('en-US', {
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: true
+        });
+      } catch {
+        return String(value);
+      }
+    }
+    
+    // Format date-only fields
+    if (key === "unavailable_date") {
+      if (!value) return "-";
+      try {
+        const date = new Date(value + 'T00:00:00');
+        return date.toLocaleDateString('en-US', {
+          weekday: 'short',
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric'
+        });
+      } catch {
+        return String(value);
+      }
+    }
+    
+    // Format time fields to 12-hour format
+    if (key === "start_time" || key === "end_time") {
+      if (!value) return "-";
+      try {
+        const [hours, minutes] = value.split(':');
+        const hour = parseInt(hours);
+        const ampm = hour >= 12 ? 'PM' : 'AM';
+        const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
+        return `${displayHour}:${minutes} ${ampm}`;
+      } catch {
+        return String(value);
+      }
+    }
+    
+    // Format boolean fields
+    if (typeof value === 'boolean') {
+      return value ? 'Yes' : 'No';
+    }
+    
+    return String(value);
   }
 </script>
 
 <div class="space-y-4">
-  <div class="overflow-x-auto border-1 border-gray-100 rounded-md">
+  <div class="overflow-x-auto border rounded-md">
     <Table.Root class="min-w-full divide-y-2 divide-gray-200 bg-white text-sm">
-      <Table.Header class="ltr:text-left rtl:text-right bg-gray-100">
+      <Table.Header class="bg-gray-100">
         <Table.Row>
-          <Table.Head class="sticky inset-y-0 start-0 px-4 py-4">#</Table.Head>
+          <Table.Head class="px-4 py-4 text-left">#</Table.Head>
           {#each keys as key}
-            <Table.Head class="px-4 py-2 font-medium whitespace-nowrap"
-              >{formatLabel(key)}</Table.Head
-            >
+            <Table.Head class="px-4 py-2 font-medium text-left whitespace-nowrap">
+              {formatLabel(key)}
+            </Table.Head>
           {/each}
+          <Table.Head class="px-4 py-2 font-medium text-left">Actions</Table.Head>
         </Table.Row>
       </Table.Header>
       <Table.Body class="divide-y divide-gray-200">
         {#if pagedData.length > 0}
           {#each pagedData as row, i}
-            <Table.Row class="px-4 py-2">
-              <Table.Cell>{(currentPage - 1) * pageSize + i + 1}</Table.Cell>
+            <Table.Row>
+              <Table.Cell class="px-4 py-2">{(currentPage - 1) * pageSize + i + 1}</Table.Cell>
               {#each keys as key}
-                <Table.Cell>{row[key] ?? "-"}</Table.Cell>
+                <Table.Cell class="px-4 py-2">{formatValue(key, row[key])}</Table.Cell>
               {/each}
-              <Table.Cell>
+              <Table.Cell class="px-4 py-2">
                 <form
                   method="POST"
                   action="?/deleteUnavailability"
                   use:enhance={({ cancel }) => {
-                    if (
-                      !confirm(
-                        "Are you sure you want to delete this unavailability?"
-                      )
-                    ) {
+                    if (!confirm("Are you sure you want to delete this unavailability?")) {
                       cancel();
                     }
+                    return async ({ update }) => {
+                      await update();
+                    };
                   }}
                 >
                   <input type="hidden" name="id" value={row.id} />
                   <button
                     type="submit"
-                    class="text-red-600 hover:text-red-800 transition-colors"
+                    class="text-red-600 hover:text-red-800 transition-colors p-1 hover:bg-red-50 rounded"
+                    title="Delete"
                   >
                     <Trash2 class="w-4 h-4" />
                   </button>
@@ -67,18 +131,10 @@
               </Table.Cell>
             </Table.Row>
           {/each}
-
-          {#if pagedData.length === 0}
-            <Table.Row>
-              <Table.Cell colspan={keys.length + 1} class="text-center"
-                >No data</Table.Cell
-              >
-            </Table.Row>
-          {/if}
         {:else}
           <Table.Row>
-            <Table.Cell class="text-center py-8 text-gray-500 col-span-6">
-              No Data
+            <Table.Cell colspan={keys.length + 2} class="text-center py-8 text-gray-500">
+              No unavailability records found
             </Table.Cell>
           </Table.Row>
         {/if}
