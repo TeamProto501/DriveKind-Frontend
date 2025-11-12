@@ -159,6 +159,23 @@
     errorMessage = null;
   }
 
+  function goToClientStep(target: number) {
+    // free backward navigation
+    if (target <= step) {
+      step = Math.max(1, Math.min(4, target));
+      errorMessage = null;
+      return;
+    }
+    // block forward unless current step validates
+    const e = errsStep(step);
+    if (e.length) {
+      errorMessage = e.join(" ");
+      return;
+    }
+    errorMessage = null;
+    step = Math.max(1, Math.min(4, target));
+  }
+
   async function saveClient() {
     const e = [...errsStep(1), ...errsStep(2)];
     if (e.length) {
@@ -406,21 +423,30 @@
         </button>
       </div>
     {:else}
-      <!-- EDIT / CREATE WIZARD -->
-      <div class="flex items-center justify-center gap-3 mb-2">
+      <!-- CLICKABLE STEPPER -->
+      <div class="flex items-center justify-center gap-3 mb-2 select-none">
         {#each [1, 2, 3, 4] as s}
           <div class="flex items-center gap-2">
-            <div
-              class="w-8 h-8 rounded-full flex items-center justify-center text-sm {step ===
-              s
-                ? 'bg-blue-600 text-white'
-                : 'bg-gray-200 text-gray-700'}"
+            <button
+              type="button"
+              title={`Go to step ${s}`}
+              on:click={() => goToClientStep(s)}
+              class="w-8 h-8 rounded-full flex items-center justify-center text-sm transition-colors
+                    {step === s ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}"
+              aria-current={step === s ? 'step' : undefined}
+              aria-label={`Step ${s}`}
             >
               {s}
-            </div>
-            {#if s < 4}<div
-                class="w-8 h-[2px] {step > s ? 'bg-blue-600' : 'bg-gray-200'}"
-              ></div>{/if}
+            </button>
+            {#if s < 4}
+              <!-- svelte-ignore element_invalid_self_closing_tag -->
+              <button
+                type="button"
+                aria-label={`Jump toward step ${s + 1}`}
+                on:click={() => goToClientStep(s + 1)}
+                class="w-8 h-[2px] rounded {step > s ? 'bg-blue-600' : 'bg-gray-200 hover:bg-gray-300'}"
+              />
+            {/if}
           </div>
         {/each}
       </div>
