@@ -1059,7 +1059,7 @@
           class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors"
         >
           <Plus class="w-4 h-4" />
-          New Ride
+          New Ride Request
         </button>
       </div>
     </div>
@@ -1243,7 +1243,7 @@
       class="bg-white rounded-lg p-6 max-w-3xl max-h-[90vh] overflow-y-auto w-full mx-4"
     >
       <div class="mb-4">
-        <h2 class="text-xl font-semibold">Create New Ride</h2>
+        <h2 class="text-xl font-semibold">Create New Ride Request</h2>
         <p class="text-sm text-gray-600">
           Fill in the details below. Items marked * are required.
         </p>

@@ -8,16 +8,16 @@ function getRoleBasedHomePage(roles: string[]): string {
   
   // Priority order: Admin > Dispatcher > Driver > Client
   if (roles.includes('Super Admin') || roles.includes('Admin')) {
-    return '/admin/dashboard';
+    return '/admin/dash';
   }
   if (roles.includes('Dispatcher')) {
-    return '/dispatcher/rides';
+    return '/dispatcher/dashboard';
   }
   if (roles.includes('Driver')) {
     return '/driver/rides';
   }
-  if (roles.includes('Client')) {
-    return '/client/rides';
+  if (roles.includes('Volunteer')) {
+    return '/calendar';
   }
   
   return '/';
