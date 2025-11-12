@@ -30,10 +30,10 @@ export const load: PageServerLoad = async (event) => {
 
   // Get all vehicles in org
   const { data: vehicles } = await supabase
-    .from('staff_profiles')
-    .select('user_id, first_name, last_name, phone, email, address, address2, city, state, zipcode')
+    .from('vehicles')
+    .select('*')
     .eq('org_id', profile.org_id)
-    .contains('role', ['Driver']);
+    .order('vehicle_id', { ascending: true });
 
   // Get driver names separately
   const userIds = [...new Set((vehicles || []).map(v => v.user_id).filter(Boolean))];
@@ -49,10 +49,10 @@ export const load: PageServerLoad = async (event) => {
     staff_profile: v.user_id ? profileMap.get(v.user_id) : null
   }));
 
-  // Get all drivers in org for dropdown
+  // Get all drivers in org for dropdown (with contact info)
   const { data: drivers } = await supabase
     .from('staff_profiles')
-    .select('user_id, first_name, last_name')
+    .select('user_id, first_name, last_name, phone, email, address, address2, city, state, zipcode')
     .eq('org_id', profile.org_id)
     .contains('role', ['Driver']);
 
