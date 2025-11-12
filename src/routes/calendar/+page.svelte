@@ -219,14 +219,19 @@
           backgroundColor = '#8b5cf6';
           borderColor = '#7c3aed';
         }
+
+        // Calculate end time (start + 1 hour default)
+        const startTime = new Date(firstRide.appointment_time);
+        const endTime = new Date(startTime.getTime() + 60 * 60 * 1000); // Add 1 hour
         
         if (timeRides.length === 1) {
           const mins = minutesFromEstimated(firstRide.estimated_appointment_length);
           events.push({
             id: `ride-${firstRide.ride_id}`,
             title: `🚗 ${clientName} → ${firstRide.destination_name}`,
-            start: firstRide.appointment_time,
-            end: mins ? addMinutesISO(firstRide.appointment_time, mins) : undefined,
+            start: startTime.toISOString(),
+            end: endTime.toISOString(),
+            allDay: false, // CRITICAL: must be false
             backgroundColor,
             borderColor,
             extendedProps: {
@@ -238,7 +243,9 @@
           events.push({
             id: `ride-group-${timeKey}`,
             title: `🚗 ${timeRides.length} Rides`,
-            start: firstRide.appointment_time,
+            start: startTime.toISOString(),
+            end: endTime.toISOString(),
+            allDay: false, // CRITICAL: must be false
             backgroundColor,
             borderColor,
             extendedProps: {
@@ -252,7 +259,7 @@
       
       return events;
     } else {
-      // For month/week view, continue using daily summaries
+      // For month/week view, show at specific times
       return rides.map((ride: any) => {
         const clientName = ride.clients 
           ? `${ride.clients.first_name} ${ride.clients.last_name}`
@@ -271,13 +278,18 @@
           backgroundColor = '#8b5cf6';
           borderColor = '#7c3aed';
         }
+
+        // Calculate end time (start + 1 hour default)
+        const startTime = new Date(ride.appointment_time);
+        const endTime = new Date(startTime.getTime() + 60 * 60 * 1000);
         
         const mins = minutesFromEstimated(ride.estimated_appointment_length);
         return {
           id: `ride-${ride.ride_id}`,
-          title: `🚗 ${clientName} → ${ride.destination_name}`,
-          start: ride.appointment_time,
-          end: mins ? addMinutesISO(ride.appointment_time, mins) : undefined,
+          title: `🚗 ${clientName}`,
+          start: startTime.toISOString(),
+          end: endTime.toISOString(),
+          allDay: false, // CRITICAL: must be false
           backgroundColor,
           borderColor,
           extendedProps: {

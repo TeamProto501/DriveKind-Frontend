@@ -2,16 +2,42 @@ import { fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { createSupabaseServerClient } from '$lib/supabase.server';
 
-// Add the missing load function
+// Helper function to get role-based home page
+function getRoleBasedHomePage(roles: string[]): string {
+  if (!roles || roles.length === 0) return '/';
+  
+  // Priority order: Admin > Dispatcher > Driver > Client
+  if (roles.includes('Super Admin') || roles.includes('Admin')) {
+    return '/admin/dashboard';
+  }
+  if (roles.includes('Dispatcher')) {
+    return '/dispatcher/rides';
+  }
+  if (roles.includes('Driver')) {
+    return '/driver/rides';
+  }
+  if (roles.includes('Client')) {
+    return '/client/rides';
+  }
+  
+  return '/';
+}
+
 export const load: PageServerLoad = async (event) => {
   const supabase = createSupabaseServerClient(event);
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
+  const { data: { session } } = await supabase.auth.getSession();
 
-  // Redirect if already logged in
+  // If already logged in, redirect to role-based home
   if (session) {
-    throw redirect(302, "/admin/dash"); // or wherever you want to redirect
+    const { data: profile } = await supabase
+      .from('staff_profiles')
+      .select('role')
+      .eq('user_id', session.user.id)
+      .single();
+
+    const roles = Array.isArray(profile?.role) ? profile.role : [];
+    const homePage = getRoleBasedHomePage(roles);
+    throw redirect(302, homePage);
   }
 
   return {};
@@ -40,20 +66,30 @@ export const actions: Actions = {
       return fail(400, { error: 'No session returned from Supabase' });
     }
 
-    // ✅ Supabase sets cookies automatically here
-    throw redirect(302, '/admin/dash');
+    // Fetch user's role to determine redirect
+    const { data: profile } = await supabase
+      .from('staff_profiles')
+      .select('role')
+      .eq('user_id', data.session.user.id)
+      .single();
+
+    const roles = Array.isArray(profile?.role) ? profile.role : [];
+    const homePage = getRoleBasedHomePage(roles);
+
+    // Redirect to role-based home page
+    throw redirect(302, homePage);
   },
 
   logout: async (event) => {
-		const supabase = createSupabaseServerClient(event);
-		const { error } = await supabase.auth.signOut();
+    const supabase = createSupabaseServerClient(event);
+    const { error } = await supabase.auth.signOut();
 
-		if (error) {
-			return fail(500, {
-				error: 'Error logging out'
-			});
-		}
+    if (error) {
+      return fail(500, {
+        error: 'Error logging out'
+      });
+    }
 
-		throw redirect(302, '/login');
-	}
+    throw redirect(302, '/login');
+  }
 };
