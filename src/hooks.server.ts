@@ -8,12 +8,32 @@ const PUBLIC_ROUTES = [
 	'/register',
 	'/auth/callback',
 	'/auth/logout',
-	// Add other public routes here as needed
 ];
 
 // Check if a route is public (doesn't require authentication)
 function isPublicRoute(pathname: string): boolean {
 	return PUBLIC_ROUTES.some(route => pathname === route || pathname.startsWith(route + '/'));
+}
+
+// Get user's home page based on their role
+function getRoleBasedHomePage(roles: string[]): string {
+	if (!roles || roles.length === 0) return '/';
+	
+	// Priority order: Admin > Dispatcher > Driver > Client
+	if (roles.includes('Super Admin') || roles.includes('Admin')) {
+		return '/admin/dashboard';
+	}
+	if (roles.includes('Dispatcher')) {
+		return '/dispatcher/rides';
+	}
+	if (roles.includes('Driver')) {
+		return '/driver/rides';
+	}
+	if (roles.includes('Client')) {
+		return '/client/rides';
+	}
+	
+	return '/';
 }
 
 export const handle: Handle = async ({ event, resolve }) => {
@@ -26,16 +46,11 @@ export const handle: Handle = async ({ event, resolve }) => {
 	
 	// If user is not authenticated and trying to access a protected route
 	if (!user && !isPublicRoute(pathname)) {
-		// Redirect to login page
 		throw redirect(303, '/login');
 	}
 	
-	// If user is authenticated and trying to access login page, redirect to home
-	if (user && pathname === '/login') {
-		throw redirect(303, '/');
-	}
-	
 	// Fetch user roles if authenticated
+	let userRoles: string[] = [];
 	if (user) {
 		const { data: profile } = await supabase
 			.from('staff_profiles')
@@ -43,20 +58,21 @@ export const handle: Handle = async ({ event, resolve }) => {
 			.eq('user_id', user.id)
 			.single();
 
-		// Attach roles to the event.locals for use in the frontend
-		event.locals.userRoles = profile?.role || [];
+		userRoles = Array.isArray(profile?.role) ? profile.role : [];
+		event.locals.userRoles = userRoles;
+	}
+	
+	// If user is authenticated and trying to access login page, redirect to role-based home
+	if (user && pathname === '/login') {
+		const homePage = getRoleBasedHomePage(userRoles);
+		throw redirect(303, homePage);
+	}
+	
+	// If user is authenticated and trying to access root, redirect to role-based home
+	if (user && pathname === '/') {
+		const homePage = getRoleBasedHomePage(userRoles);
+		throw redirect(303, homePage);
 	}
 
-	return resolve(event, {
-		transformPageChunk: ({ html }) => {
-			// Inject roles into the HTML for client-side use
-			if (event.locals.userRoles) {
-				html = html.replace(
-					'</head>',
-					`<script>window.userRoles = ${JSON.stringify(event.locals.userRoles)};</script></head>`
-				);
-			}
-			return html;
-		}
-	});
+	return resolve(event);
 };
