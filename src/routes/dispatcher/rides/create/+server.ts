@@ -105,7 +105,7 @@ export const POST: RequestHandler = async (event) => {
       dropoff_city: body.dropoff_city ?? null,
       dropoff_state: body.dropoff_state ?? null,
       dropoff_zipcode: body.dropoff_zipcode ?? null,
-       appointment_time: body.appointment_time ? `${body.appointment_time}:00` : null,
+      appointment_time: body.appointment_time ?? null,
       pickup_time: body.pickup_time ?? null,
       status: body.status ?? 'Requested',
       notes: body.notes ?? null,

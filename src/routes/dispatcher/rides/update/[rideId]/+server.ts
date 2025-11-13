@@ -131,7 +131,7 @@ function normalize(update: Record<string, unknown>) {
         } else {
           // Input is already in format "YYYY-MM-DDTHH:MM" from datetime-local
           // Append seconds and treat as UTC for storage
-          out[k] = s.includes(':') && s.split(':').length === 2 ? `${s}:00` : s;
+          out[k] = s;
         }
         break;
       }

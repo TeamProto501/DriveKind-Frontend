@@ -151,9 +151,18 @@
     }
   }
   
-  const formatDate = (ts: string) => new Date(ts).toLocaleDateString();
-  const formatTime = (ts: string) =>
-    new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const formatDate = (ts: string) => {
+    if (!ts) return '';
+    // Strip 'Z' to prevent UTC interpretation
+    const cleaned = ts.replace(/Z$/, '');
+    return new Date(cleaned).toLocaleDateString();
+  };
+  const formatTime = (ts: string) => {
+    if (!ts) return '';
+    // Strip 'Z' to prevent UTC interpretation
+    const cleaned = ts.replace(/Z$/, '');
+    return new Date(cleaned).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  };
   const getClientName = (ride: any) =>
     ride.clients
       ? `${ride.clients.first_name} ${ride.clients.last_name}`
@@ -499,10 +508,14 @@
 
   function toLocalDateTimeInput(ts: string | null | undefined) {
     if (!ts) return "";
-    const d = new Date(ts);
+    
+    // Strip 'Z' to treat as local time, not UTC
+    const cleaned = ts.replace(/Z$/, '');
+    const d = new Date(cleaned);
+    
     if (isNaN(d.getTime())) return "";
     
-    // Get local time components WITHOUT timezone conversion
+    // Get local time components
     const year = d.getFullYear();
     const month = String(d.getMonth() + 1).padStart(2, "0");
     const day = String(d.getDate()).padStart(2, "0");
@@ -511,6 +524,13 @@
     
     return `${year}-${month}-${day}T${hours}:${minutes}`;
   }
+
+  const toTimestampOrNull = (v: string) => {
+    if (!v) return null;
+    // Datetime-local gives us "YYYY-MM-DDTHH:MM"
+    // Just append :00 for seconds (NO 'Z'!)
+    return v.includes(':') && v.split(':').length === 2 ? `${v}:00` : v;
+  };
 
   const toISOorNull = (v: string) => {
     if (!v) return null;
@@ -663,8 +683,9 @@
       dropoff_state: sanitizeInput(_state),
       dropoff_zipcode: sanitizeInput(_zip),
 
-      appointment_time: toISOorNull(apptLocal),
-      pickup_time: toISOorNull(form.pickup_time),
+      // FIX: Don't convert to ISO, just append :00 for seconds
+      appointment_time: toTimestampOrNull(apptLocal),
+      pickup_time: toTimestampOrNull(form.pickup_time),
 
       status: isEditing()
         ? has(form.status)
