@@ -603,6 +603,19 @@
     showDriverMatchModal = true;
   }
 
+  function openForceAcceptModal(ride: any) {
+    console.log('Opening force accept modal for ride:', ride.ride_id);
+    
+    if (!data.session?.access_token) {
+      alert('Session expired. Please refresh the page and try again.');
+      return;
+    }
+    
+    selectedRideForForceAccept = ride;
+    driverSearchForForce = '';
+    showForceAcceptModal = true;
+  }
+
   /* ---------------- diagnostics + payload helpers ---------------- */
   const DEBUG = true;
   
@@ -1104,6 +1117,52 @@
       window.history.replaceState({}, '', url.toString());
     }
   });
+
+  async function forceAcceptRide(driverId: string) {
+    if (!selectedRideForForceAccept) return;
+    
+    console.log('Force accepting ride:', selectedRideForForceAccept.ride_id, 'for driver:', driverId);
+    
+    isUpdating = true;
+    try {
+      const response = await fetch(`/dispatcher/rides/force-accept/${selectedRideForForceAccept.ride_id}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ driver_user_id: driverId })
+      });
+
+      const result = await response.json();
+      
+      if (response.ok && result.success) {
+        showForceAcceptModal = false;
+        selectedRideForForceAccept = null;
+        driverSearchForForce = '';
+        await invalidateAll();
+        alert('Ride force accepted successfully! The driver has been assigned and the ride is now scheduled.');
+      } else {
+        console.error('Failed to force accept ride:', result);
+        alert(`Failed to force accept ride: ${result.error || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('Error force accepting ride:', error);
+      alert('Error force accepting ride. Please try again.');
+    } finally {
+      isUpdating = false;
+    }
+  }
+
+  let showForceAcceptModal = $state(false);
+  let selectedRideForForceAccept: any = null;
+  let driverSearchForForce = $state('');
+
+  let filteredDriversForForce = $derived(() => {
+    if (!driverSearchForForce) return data.drivers || [];
+    return (data.drivers || []).filter(driver => 
+      `${driver.first_name} ${driver.last_name}`.toLowerCase().includes(driverSearchForForce.toLowerCase())
+    );
+  });
 </script>
 
 <svelte:head>
@@ -1295,7 +1354,25 @@
                   >
                     <UserCheck class="w-4 h-4" /> Send Request
                   </button>
+                  <button
+                    onclick={() => openForceAcceptModal(ride)}
+                    disabled={isUpdating}
+                    class="bg-orange-600 hover:bg-orange-700 text-white px-3 py-1.5 rounded-lg text-sm flex items-center gap-1 transition-colors disabled:opacity-50"
+                    title="Force accept ride for a driver (bypasses driver acceptance)"
+                  >
+                    <CheckCircle class="w-4 h-4" /> Force Accept
+                  </button>
+                {:else if ride.status === "Assigned"}
+                  <button
+                    onclick={() => openForceAcceptModal(ride)}
+                    disabled={isUpdating}
+                    class="bg-orange-600 hover:bg-orange-700 text-white px-3 py-1.5 rounded-lg text-sm flex items-center gap-1 transition-colors disabled:opacity-50"
+                    title="Force accept ride for a different driver"
+                  >
+                    <CheckCircle class="w-4 h-4" /> Force Accept
+                  </button>
                 {/if}
+
                 <button
                   onclick={() => openEditModal(ride)}
                   disabled={isUpdating}
@@ -2268,3 +2345,75 @@
   onSelectDriver={sendRideRequest}
   isLoading={isUpdating}
 />
+
+{#if showForceAcceptModal}
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+      <div class="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+        <div class="mb-4">
+          <h2 class="text-xl font-semibold">Force Accept Ride</h2>
+          <p class="text-sm text-gray-600">
+            Select a driver to force accept this ride. This will bypass the driver's acceptance and immediately schedule the ride.
+          </p>
+        </div>
+        
+        <!-- Driver Search -->
+        <div class="mb-4">
+          <div class="relative">
+            <Search class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+            <input
+              type="text"
+              bind:value={driverSearchForForce}
+              placeholder="Search drivers..."
+              class="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+            />
+          </div>
+        </div>
+        
+        <!-- Driver List -->
+        <div class="space-y-2 mb-6 max-h-64 overflow-y-auto">
+          {#each filteredDriversForForce() as driver}
+            <div class="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50 transition-colors">
+              <div>
+                <div class="font-medium text-gray-900">
+                  {driver.first_name} {driver.last_name}
+                </div>
+                <div class="text-sm text-gray-500">Driver</div>
+              </div>
+              <button
+                onclick={() => forceAcceptRide(driver.user_id)}
+                disabled={isUpdating}
+                class="px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-white rounded-lg text-sm transition-colors disabled:opacity-50 flex items-center gap-1"
+              >
+                <CheckCircle class="w-4 h-4" />
+                Force Accept
+              </button>
+            </div>
+          {/each}
+          
+          {#if filteredDriversForForce().length === 0}
+            <div class="text-center py-8 text-gray-500">
+              <User class="w-12 h-12 mx-auto mb-2 text-gray-400" />
+              <p>No drivers found</p>
+              {#if driverSearchForForce}
+                <p class="text-sm">Try adjusting your search</p>
+              {/if}
+            </div>
+          {/if}
+        </div>
+
+        <!-- Actions -->
+        <div class="flex justify-end gap-2">
+          <button
+            onclick={() => {
+              showForceAcceptModal = false;
+              selectedRideForForceAccept = null;
+              driverSearchForForce = '';
+            }}
+            class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  {/if}
