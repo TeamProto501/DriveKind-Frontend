@@ -1,6 +1,123 @@
-import { createSupabaseServerClient } from "$lib/supabase.server";
-import { error, redirect, fail } from "@sveltejs/kit";
-import type { Actions } from "./$types";
+// src/routes/schedule/+page.server.ts
+import { createSupabaseServerClient } from '$lib/supabase.server';
+import { error, redirect } from '@sveltejs/kit';
+
+// Helper function to expand recurring unavailability
+function expandRecurringUnavailability(unavail: any[]): any[] {
+  const expanded: any[] = [];
+  const today = new Date();
+  today.setHours(0, 0, 0, 0); // Normalize to start of day
+  
+  unavail.forEach(item => {
+    // For OLD schema (repeating_day)
+    if (item.repeating_day && !item.recurring) {
+      const dayMap: Record<string, number> = {
+        'Sunday': 0, 'Monday': 1, 'Tuesday': 2, 'Wednesday': 3,
+        'Thursday': 4, 'Friday': 5, 'Saturday': 6
+      };
+      
+      const targetDayOfWeek = dayMap[item.repeating_day];
+      
+      // CRITICAL: Start from TODAY, not from old unavailable_date
+      const startDate = new Date(today);
+      
+      // End 1 year from today
+      const endDate = new Date(today);
+      endDate.setFullYear(endDate.getFullYear() + 1);
+      
+      let currentDate = new Date(startDate);
+      const maxIterations = 365;
+      let iterations = 0;
+
+      while (currentDate <= endDate && iterations < maxIterations) {
+        iterations++;
+        
+        if (currentDate.getDay() === targetDayOfWeek) {
+          expanded.push({
+            ...item,
+            id: `${item.id}-${currentDate.toISOString().split('T')[0]}`,
+            unavailable_date: currentDate.toISOString().split('T')[0],
+            is_recurring_instance: true,
+            original_id: item.id
+          });
+        }
+        
+        currentDate.setDate(currentDate.getDate() + 1);
+      }
+      return;
+    }
+    
+    // For NEW schema (recurring = true)
+    if (item.recurring) {
+      // Use the later of today or stored unavailable_date
+      const recordStartDate = new Date(item.unavailable_date);
+      const startDate = recordStartDate > today ? recordStartDate : today;
+      
+      const endDate = item.recurrence_end_date 
+        ? new Date(item.recurrence_end_date)
+        : new Date(startDate.getTime() + 365 * 24 * 60 * 60 * 1000);
+      
+      // Don't expand if recurrence already ended
+      if (endDate < today) {
+        return; // Skip expired recurring events
+      }
+      
+      const pattern = item.recurrence_pattern || 'weekly';
+      const daysOfWeek = item.days_of_week || [startDate.getDay()];
+      
+      let currentDate = new Date(startDate);
+      const maxIterations = 365;
+      let iterations = 0;
+
+      while (currentDate <= endDate && iterations < maxIterations) {
+        iterations++;
+        
+        if (pattern === 'daily') {
+          expanded.push({
+            ...item,
+            id: `${item.id}-${currentDate.toISOString().split('T')[0]}`,
+            unavailable_date: currentDate.toISOString().split('T')[0],
+            is_recurring_instance: true,
+            original_id: item.id
+          });
+          currentDate.setDate(currentDate.getDate() + 1);
+        } else if (pattern === 'weekly') {
+          const dayOfWeek = currentDate.getDay();
+          if (daysOfWeek.includes(dayOfWeek)) {
+            expanded.push({
+              ...item,
+              id: `${item.id}-${currentDate.toISOString().split('T')[0]}`,
+              unavailable_date: currentDate.toISOString().split('T')[0],
+              is_recurring_instance: true,
+              original_id: item.id
+            });
+          }
+          currentDate.setDate(currentDate.getDate() + 1);
+        } else if (pattern === 'monthly') {
+          if (currentDate.getDate() === startDate.getDate()) {
+            expanded.push({
+              ...item,
+              id: `${item.id}-${currentDate.toISOString().split('T')[0]}`,
+              unavailable_date: currentDate.toISOString().split('T')[0],
+              is_recurring_instance: true,
+              original_id: item.id
+            });
+          }
+          currentDate.setDate(currentDate.getDate() + 1);
+        }
+      }
+      return;
+    }
+    
+    // Non-recurring events: only show if not in the past
+    const eventDate = new Date(item.unavailable_date);
+    if (eventDate >= today) {
+      expanded.push(item);
+    }
+  });
+
+  return expanded;
+}
 
 export const load = async (event) => {
   const supabase = createSupabaseServerClient(event);
@@ -10,245 +127,175 @@ export const load = async (event) => {
     throw redirect(302, '/login');
   }
 
-  // Fetch user's unavailability
-  const { data: unavailabilityData, error: unavailError } = await supabase
+  const { data: userProfile, error: profileError } = await supabase
+    .from('staff_profiles')
+    .select('org_id, role')
+    .eq('user_id', session.user.id)
+    .single();
+
+  if (profileError || !userProfile) {
+    throw error(403, 'User profile not found');
+  }
+
+  const isAdminOrDispatcher = userProfile.role && (
+    Array.isArray(userProfile.role)
+      ? (userProfile.role.includes('Admin') || userProfile.role.includes('Dispatcher') || userProfile.role.includes('Super Admin'))
+      : (userProfile.role === 'Admin' || userProfile.role === 'Dispatcher' || userProfile.role === 'Super Admin')
+  );
+
+  // Fetch MY unavailability
+  const { data: myUnavailabilityRaw } = await supabase
     .from('driver_unavailability')
     .select('*')
     .eq('user_id', session.user.id)
-    .order('created_at', { ascending: false });
+    .order('unavailable_date', { ascending: true });
 
-  if (unavailError) {
-    console.error('Error fetching unavailability:', unavailError);
-    return { data: [] };
+  console.log('My unavailability raw:', myUnavailabilityRaw);
+
+  // Fetch staff profile for current user
+  const { data: myStaffProfile } = await supabase
+    .from('staff_profiles')
+    .select('user_id, first_name, last_name')
+    .eq('user_id', session.user.id)
+    .single();
+
+  // Expand recurring unavailability
+  const myUnavailabilityExpanded = expandRecurringUnavailability(myUnavailabilityRaw || []);
+  
+  const myUnavailabilityData = myUnavailabilityExpanded.map(item => ({
+    ...item,
+    staff_profiles: myStaffProfile
+  }));
+
+  console.log('My unavailability expanded:', myUnavailabilityData.length);
+
+  // Fetch ALL driver unavailability (admin/dispatcher only)
+  let allUnavailabilityData = [];
+  if (isAdminOrDispatcher) {
+    const { data: allUnavailRaw } = await supabase
+      .from('driver_unavailability')
+      .select('*')
+      .order('unavailable_date', { ascending: true });
+
+    console.log('All unavail raw:', allUnavailRaw?.length || 0);
+
+    if (allUnavailRaw && allUnavailRaw.length > 0) {
+      // Expand recurring unavailability
+      const allUnavailExpanded = expandRecurringUnavailability(allUnavailRaw);
+      
+      // Get unique user_ids
+      const userIds = [...new Set(allUnavailExpanded.map(u => u.user_id).filter(Boolean))];
+      
+      // Fetch staff profiles for these users in the org
+      const { data: staffProfiles } = await supabase
+        .from('staff_profiles')
+        .select('user_id, first_name, last_name, org_id')
+        .in('user_id', userIds)
+        .eq('org_id', userProfile.org_id);
+
+      console.log('Staff profiles fetched:', staffProfiles?.length || 0);
+
+      const staffMap = new Map(staffProfiles?.map(s => [s.user_id, s]) || []);
+
+      // Only include unavailability for users in this org
+      allUnavailabilityData = allUnavailExpanded
+        .filter(item => staffMap.has(item.user_id))
+        .map(item => ({
+          ...item,
+          staff_profiles: staffMap.get(item.user_id)
+        }));
+
+      console.log('All unavail expanded with profiles:', allUnavailabilityData.length);
+    }
   }
 
-  return { data: unavailabilityData || [] };
-};
+  // Fetch my rides
+  const { data: myRidesData } = await supabase
+    .from('rides')
+    .select('*')
+    .eq('driver_user_id', session.user.id)
+    .order('appointment_time', { ascending: true });
 
-function formatDate(calendarDateString: string): string {
-  return calendarDateString;
-}
+  // Fetch clients and staff for my rides
+  let myRidesWithDetails = [];
+  if (myRidesData && myRidesData.length > 0) {
+    const clientIds = [...new Set(myRidesData.map(r => r.client_id).filter(Boolean))];
+    const driverIds = [...new Set(myRidesData.map(r => r.driver_user_id).filter(Boolean))];
+    const dispatcherIds = [...new Set(myRidesData.map(r => r.dispatcher_user_id).filter(Boolean))];
+    const allUserIds = [...new Set([...driverIds, ...dispatcherIds])];
+    
+    const { data: clientsData } = await supabase
+      .from('clients')
+      .select('client_id, first_name, last_name, primary_phone')
+      .in('client_id', clientIds);
+    
+    const { data: staffData } = await supabase
+      .from('staff_profiles')
+      .select('user_id, first_name, last_name')
+      .in('user_id', allUserIds);
+    
+    const clientsMap = new Map(clientsData?.map(c => [c.client_id, c]) || []);
+    const staffMap = new Map(staffData?.map(s => [s.user_id, s]) || []);
+    
+    myRidesWithDetails = myRidesData.map(ride => ({
+      ...ride,
+      clients: clientsMap.get(ride.client_id) || null,
+      driver: staffMap.get(ride.driver_user_id) || null,
+      dispatcher: staffMap.get(ride.dispatcher_user_id) || null
+    }));
+  }
 
-function formatTime(time: string): string {
-  if (!time) return "";
-  return time.includes(":") && time.split(":").length === 2
-    ? `${time}:00`
-    : time;
-}
-
-export const actions: Actions = {
-  createSpecificUnavailability: async (event) => {
-    try {
-      const supabase = createSupabaseServerClient(event);
-      const { data: { session } } = await supabase.auth.getSession();
-
-      if (!session) {
-        return fail(401, { error: 'Unauthorized' });
-      }
-
-      const formData = await event.request.formData();
-      const date = formData.get("date") as string;
-      const startTime = formData.get("startTime") as string;
-      const endTime = formData.get("endTime") as string;
-      const allDay = formData.get("allDay-specific") === "true";
-      const reason = formData.get("reason") as string;
-
-      if (!date) {
-        return fail(400, { error: "Please select a date" });
-      }
-
-      if (!allDay && (!startTime || !endTime)) {
-        return fail(400, { error: "Please provide start and end times" });
-      }
-
-      if (!reason) {
-        return fail(400, { error: "Please select a reason" });
-      }
-
-      const unavailabilityData = {
-        user_id: session.user.id,
-        unavailable_date: formatDate(date),
-        start_time: allDay ? null : formatTime(startTime),
-        end_time: allDay ? null : formatTime(endTime),
-        all_day: allDay,
-        reason: reason,
-        recurring: false,
-        recurrence_pattern: null,
-        days_of_week: null,
-        recurrence_end_date: null,
-        repeating_day: null
-      };
-
-      const { error: insertError } = await supabase
-        .from('driver_unavailability')
-        .insert(unavailabilityData);
-
-      if (insertError) {
-        console.error('Error inserting unavailability:', insertError);
-        return fail(500, { error: insertError.message });
-      }
-
-      return { success: true };
-    } catch (err) {
-      console.error("Error creating specific unavailability:", err);
-      return fail(500, {
-        error: `Failed to create unavailability: ${
-          err instanceof Error ? err.message : "Unknown error"
-        }`,
-      });
+  // Fetch ALL rides for organization (admin/dispatcher only)
+  let allRidesWithDetails = [];
+  if (isAdminOrDispatcher) {
+    const { data: allRidesData } = await supabase
+      .from('rides')
+      .select('*')
+      .eq('org_id', userProfile.org_id)
+      .order('appointment_time', { ascending: true});
+    
+    if (allRidesData && allRidesData.length > 0) {
+      const allClientIds = [...new Set(allRidesData.map(r => r.client_id).filter(Boolean))];
+      const allDriverIds = [...new Set(allRidesData.map(r => r.driver_user_id).filter(Boolean))];
+      const allDispatcherIds = [...new Set(allRidesData.map(r => r.dispatcher_user_id).filter(Boolean))];
+      const allStaffIds = [...new Set([...allDriverIds, ...allDispatcherIds])];
+      
+      const { data: allClientsData } = await supabase
+        .from('clients')
+        .select('client_id, first_name, last_name, primary_phone')
+        .in('client_id', allClientIds);
+      
+      const { data: allStaffData } = await supabase
+        .from('staff_profiles')
+        .select('user_id, first_name, last_name')
+        .in('user_id', allStaffIds);
+      
+      const allClientsMap = new Map(allClientsData?.map(c => [c.client_id, c]) || []);
+      const allStaffMap = new Map(allStaffData?.map(s => [s.user_id, s]) || []);
+      
+      allRidesWithDetails = allRidesData.map(ride => ({
+        ...ride,
+        clients: allClientsMap.get(ride.client_id) || null,
+        driver: allStaffMap.get(ride.driver_user_id) || null,
+        dispatcher: allStaffMap.get(ride.dispatcher_user_id) || null
+      }));
     }
-  },
+  }
 
-  createRegularUnavailability: async (event) => {
-    try {
-      const supabase = createSupabaseServerClient(event);
-      const { data: { session } } = await supabase.auth.getSession();
+  console.log('Returning data:', {
+    myUnavail: myUnavailabilityData.length,
+    allUnavail: allUnavailabilityData.length,
+    myRides: myRidesWithDetails.length,
+    allRides: allRidesWithDetails.length
+  });
 
-      if (!session) {
-        return fail(401, { error: 'Unauthorized' });
-      }
-
-      const formData = await event.request.formData();
-      const numberOfDates = parseInt(formData.get("numberOfDate") as string);
-
-      if (!numberOfDates || numberOfDates < 1) {
-        return fail(400, { error: "Invalid number of dates" });
-      }
-
-      // Parse dates from FormData
-      const dates = [];
-      for (let i = 0; i < numberOfDates; i++) {
-        const selectedDay = formData.get(`dates[${i}][selectedDay]`) as string;
-        const allDay = formData.get(`dates[${i}][allDay]`) === "true";
-        const startTime = formData.get(`dates[${i}][startTime]`) as string;
-        const endTime = formData.get(`dates[${i}][endTime]`) as string;
-        const reason = formData.get(`dates[${i}][reason]`) as string;
-
-        if (!selectedDay) {
-          return fail(400, { error: `Please select a day for date #${i + 1}` });
-        }
-
-        if (!allDay && (!startTime || !endTime)) {
-          return fail(400, {
-            error: `Please provide times for date #${i + 1}`,
-          });
-        }
-
-        if (!reason) {
-          return fail(400, {
-            error: `Please select a reason for date #${i + 1}`,
-          });
-        }
-
-        dates.push({
-          selectedDay,
-          allDay,
-          startTime: allDay ? null : startTime,
-          endTime: allDay ? null : endTime,
-          reason,
-        });
-      }
-
-      // Convert day name to day number (0 = Sunday, 6 = Saturday)
-      function dayNameToDayNumber(dayName: string): number {
-        const dayMap: Record<string, number> = {
-          'Sunday': 0,
-          'Monday': 1,
-          'Tuesday': 2,
-          'Wednesday': 3,
-          'Thursday': 4,
-          'Friday': 5,
-          'Saturday': 6
-        };
-        return dayMap[dayName] ?? 1; // Default to Monday
-      }
-
-      // Calculate start and end dates
-      const today = new Date();
-      const startDate = today.toISOString().split('T')[0];
-      const endDate = new Date(today);
-      endDate.setFullYear(endDate.getFullYear() + 1);
-      const endDateStr = endDate.toISOString().split('T')[0];
-
-      // Insert recurring unavailability records
-      const results = [];
-      for (const dateData of dates) {
-        const dayNumber = dayNameToDayNumber(dateData.selectedDay);
-        
-        const unavailabilityData = {
-          user_id: session.user.id,
-          unavailable_date: startDate,
-          recurring: true,
-          recurrence_pattern: 'weekly',
-          days_of_week: [dayNumber],
-          recurrence_end_date: endDateStr,
-          start_time: dateData.startTime ? formatTime(dateData.startTime) : null,
-          end_time: dateData.endTime ? formatTime(dateData.endTime) : null,
-          all_day: dateData.allDay,
-          reason: dateData.reason,
-          repeating_day: dateData.selectedDay // Keep for backward compatibility
-        };
-
-        const { error: insertError } = await supabase
-          .from('driver_unavailability')
-          .insert(unavailabilityData);
-
-        if (insertError) {
-          console.error('Error inserting unavailability:', insertError);
-          return fail(500, {
-            error: `Failed to create unavailability for ${dateData.selectedDay}: ${insertError.message}`
-          });
-        }
-
-        results.push(unavailabilityData);
-      }
-
-      return { success: true, results };
-    } catch (err) {
-      console.error("Error creating regular unavailability:", err);
-      return fail(500, {
-        error: `Failed to create unavailability: ${
-          err instanceof Error ? err.message : "Unknown error"
-        }`,
-      });
-    }
-  },
-
-  deleteUnavailability: async (event) => {
-    try {
-      const supabase = createSupabaseServerClient(event);
-      const { data: { session } } = await supabase.auth.getSession();
-
-      if (!session) {
-        return fail(401, { error: 'Unauthorized' });
-      }
-
-      const formData = await event.request.formData();
-      const id = formData.get("id") as string;
-
-      if (!id) {
-        return fail(400, { error: "Unavailability ID is required" });
-      }
-
-      const { error: deleteError } = await supabase
-        .from('driver_unavailability')
-        .delete()
-        .eq('id', parseInt(id))
-        .eq('user_id', session.user.id); // Security: only delete own records
-
-      if (deleteError) {
-        console.error('Error deleting unavailability:', deleteError);
-        return fail(500, { error: deleteError.message });
-      }
-
-      return { success: true };
-    } catch (err) {
-      console.error("Error deleting unavailability:", err);
-      return fail(500, {
-        error: `Failed to delete unavailability: ${
-          err instanceof Error ? err.message : "Unknown error"
-        }`,
-      });
-    }
-  },
+  return {
+    myUnavailability: myUnavailabilityData,
+    allUnavailability: allUnavailabilityData,
+    myRides: myRidesWithDetails,
+    allRides: allRidesWithDetails,
+    userOrgId: userProfile.org_id,
+    isAdminOrDispatcher,
+    session
+  };
 };
