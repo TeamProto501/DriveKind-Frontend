@@ -35,7 +35,7 @@
     service_animal: boolean;
     oxygen: boolean;
     client_status_enum: "Active" | "Inactive" | "Temporary Thru";
-    mobility_assistance_enum?: "cane" | "crutches" | "light walker" | "roll-leader" | null;
+    mobility_assistance_enum?: "cane" | "crutches" | "light walker" | "rollator" | null;
     residence_enum:
       | "house"
       | "apartment"
@@ -58,7 +58,7 @@
   };
 
   const statusOptions = ["Active", "Inactive", "Temporary Thru"] as const;
-  const mobilityOptions = ["", "cane", "crutches", "light walker", "roll-leader"] as const;
+  const mobilityOptions = ["", "cane", "crutches", "light walker", "rollator"] as const;
   const genderOptions = ["Male", "Female", "Other"] as const;
   const residenceOptions = [
     "house",

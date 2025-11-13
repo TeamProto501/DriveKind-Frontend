@@ -778,7 +778,7 @@
                 Select mobility devices this driver cannot handle. These drivers will be excluded from rides with clients using these devices.
               </p>
               <div class="space-y-2">
-                {#each ["cane", "crutches", "light walker", "roll-leader"] as device}
+                {#each ["cane", "crutches", "light walker", "rollator"] as device}
                   {@const isSelected = form.cannot_handle_mobility_devices?.includes(device) || false}
                   <label class="flex items-center gap-2 cursor-pointer">
                     <input
