@@ -1,7 +1,7 @@
 <script lang="ts">
   import * as Table from "$lib/components/ui/table/index.js";
   import * as Pagination from "$lib/components/ui/pagination/index.js";
-  import { Trash2 } from "@lucide/svelte";
+  import { Trash2, Repeat } from "@lucide/svelte";
   import { enhance } from "$app/forms";
   
   export let data: any = [];
@@ -16,16 +16,29 @@
     currentPage * pageSize
   );
   
-  // Filter out id and user_id columns
+  // Filter out id and user_id columns, and recurring-specific fields
   $: keys = items[0]
-    ? Object.keys(items[0]).filter((key) => key !== "user_id" && key !== "id")
+    ? Object.keys(items[0]).filter((key) => 
+        key !== "user_id" && 
+        key !== "id" &&
+        key !== "recurring" &&
+        key !== "recurrence_pattern" &&
+        key !== "days_of_week" &&
+        key !== "recurrence_end_date"
+      )
     : [];
   
   const formatLabel = (k: string) =>
     k.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
   
+  // Convert day number to name
+  function dayNumberToName(dayNum: number): string {
+    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    return days[dayNum] || '';
+  }
+  
   // Format values based on key type
-  function formatValue(key: string, value: any): string {
+  function formatValue(key: string, value: any, row: any): string {
     if (value === null || value === undefined) return "-";
     
     // Format timestamp fields to local time
@@ -48,6 +61,23 @@
     // Format date-only fields
     if (key === "unavailable_date") {
       if (!value) return "-";
+      
+      // If recurring, show pattern instead of date
+      if (row.recurring) {
+        const pattern = row.recurrence_pattern || 'weekly';
+        const daysOfWeek = row.days_of_week || [];
+        
+        if (pattern === 'weekly' && daysOfWeek.length > 0) {
+          const dayNames = daysOfWeek.map((d: number) => dayNumberToName(d)).join(', ');
+          return `Every ${dayNames}`;
+        } else if (pattern === 'daily') {
+          return 'Every day';
+        } else if (pattern === 'monthly') {
+          return 'Monthly';
+        }
+        return 'Recurring';
+      }
+      
       try {
         const date = new Date(value + 'T00:00:00');
         return date.toLocaleDateString('en-US', {
@@ -90,6 +120,7 @@
       <Table.Header class="bg-gray-100">
         <Table.Row>
           <Table.Head class="px-4 py-4 text-left">#</Table.Head>
+          <Table.Head class="px-4 py-2 font-medium text-left">Type</Table.Head>
           {#each keys as key}
             <Table.Head class="px-4 py-2 font-medium text-left whitespace-nowrap">
               {formatLabel(key)}
@@ -103,8 +134,18 @@
           {#each pagedData as row, i}
             <Table.Row>
               <Table.Cell class="px-4 py-2">{(currentPage - 1) * pageSize + i + 1}</Table.Cell>
+              <Table.Cell class="px-4 py-2">
+                {#if row.recurring}
+                  <div class="flex items-center gap-1 text-blue-600">
+                    <Repeat class="w-4 h-4" />
+                    <span class="text-xs font-medium">Recurring</span>
+                  </div>
+                {:else}
+                  <span class="text-xs text-gray-600">One-time</span>
+                {/if}
+              </Table.Cell>
               {#each keys as key}
-                <Table.Cell class="px-4 py-2">{formatValue(key, row[key])}</Table.Cell>
+                <Table.Cell class="px-4 py-2">{formatValue(key, row[key], row)}</Table.Cell>
               {/each}
               <Table.Cell class="px-4 py-2">
                 <form
@@ -133,7 +174,7 @@
           {/each}
         {:else}
           <Table.Row>
-            <Table.Cell colspan={keys.length + 2} class="text-center py-8 text-gray-500">
+            <Table.Cell colspan={keys.length + 3} class="text-center py-8 text-gray-500">
               No unavailability records found
             </Table.Cell>
           </Table.Row>
