@@ -460,12 +460,6 @@
               <div class="text-xs text-gray-500">Allergens</div>
               <div class="font-medium">{user.allergens || "—"}</div>
             </div>
-            <div>
-              <div class="text-xs text-gray-500">Other Driver Limitations</div>
-              <div class="font-medium">
-                {user.driver_other_limitations || "—"}
-              </div>
-            </div>
             {#if normalizeRoles(user.role).includes("Driver")}
               <div>
                 <div class="text-xs text-gray-500">Cannot Handle Mobility Devices</div>
@@ -775,15 +769,6 @@
               bind:value={form.allergens}
             />
       </div>
-          <div>
-            <label class="block text-base font-medium"
-              >Other Driver Limitations</label
-            ><textarea
-              rows="2"
-              class="mt-1 w-full border rounded px-3 py-2 text-base"
-              bind:value={form.driver_other_limitations}
-            />
-          </div>
           {#if form.role && (Array.isArray(form.role) ? form.role.includes("Driver") : form.role === "Driver")}
             <div>
               <label class="block text-base font-medium mb-2"
