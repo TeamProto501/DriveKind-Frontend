@@ -314,15 +314,15 @@
       {#if isLoading}
         <div class="p-4 text-center text-gray-500">Loading navigation...</div>
       {:else}
-        <!-- Create Ride Request Button (for Dispatchers and Admins) -->
+        <!-- Create Ride Button (for Dispatchers and Admins) -->
         {#if hasRole(["Dispatcher", "Admin", "Super Admin"])}
           <div class="px-2 pb-4">
             <Button
-              onclick={() => navigateTo("/dispatcher/rides?create=true")}
+              onclick={() => navigateTo("/dispatcher/rides")}
               class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium flex items-center justify-center gap-2"
             >
               <Plus class="w-4 h-4" />
-              Create Ride Request
+              Create Ride
             </Button>
           </div>
         {/if}
