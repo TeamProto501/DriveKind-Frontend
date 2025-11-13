@@ -161,10 +161,14 @@
   }
 </script>
 
+<!-- Make breadcrumbs non-interactive -->
+<div class="static-breadcrumbs">
+  <Breadcrumbs />
+</div>
+
 <RoleGuard requiredRoles={["Admin"]}>
   <div class="min-h-screen bg-gray-50">
-    <!-- Breadcrumbs -->
-    <Breadcrumbs />
+    <!-- (Breadcrumbs moved above with static behavior) -->
 
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <!-- Header Section -->
