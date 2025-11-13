@@ -618,6 +618,7 @@
         <div class="space-y-3">
           <div class="grid grid-cols-2 gap-3">
             <div>
+              <!-- svelte-ignore a11y_label_has_associated_control -->
               <label class="block text-base font-medium"
                 >Mobility Assistance</label
               >
@@ -631,6 +632,7 @@
               </select>
             </div>
             <div>
+              <!-- svelte-ignore a11y_label_has_associated_control -->
               <label class="block text-base font-medium">Residence *</label>
               <select
                 required
@@ -652,6 +654,7 @@
             >
           </div>
           <div>
+            <!-- svelte-ignore a11y_label_has_associated_control -->
             <label class="block text-base font-medium"
               >Service Animal Size</label
             >
@@ -690,6 +693,39 @@
                 class="mt-1 w-full border rounded px-3 py-2 text-base"
                 bind:value={form.other_limitations}
               />
+            </div>
+          </div>
+
+          <!-- Emergency Contact (optional) -->
+          <div class="border-t pt-3 space-y-3">
+            <h3 class="text-base font-semibold">Emergency Contact</h3>
+            <div class="grid grid-cols-1 gap-3">
+              <div>
+                <label class="block text-base font-medium">Name</label>
+                <input
+                  class="mt-1 w-full border rounded px-3 py-2 text-base"
+                  bind:value={form.emergency_contact_name}
+                  placeholder="e.g., Jane Doe"
+                />
+              </div>
+              <div class="grid grid-cols-2 gap-3">
+                <div>
+                  <label class="block text-base font-medium">Relationship</label>
+                  <input
+                    class="mt-1 w-full border rounded px-3 py-2 text-base"
+                    bind:value={form.emergency_contact_relationship}
+                    placeholder="e.g., Daughter, Neighbor"
+                  />
+                </div>
+                <div>
+                  <label class="block text-base font-medium">Phone</label>
+                  <input
+                    class="mt-1 w-full border rounded px-3 py-2 text-base"
+                    bind:value={form.emergency_contact_phone}
+                    placeholder="e.g., 555-123-4567"
+                  />
+                </div>
+              </div>
             </div>
           </div>
         </div>
