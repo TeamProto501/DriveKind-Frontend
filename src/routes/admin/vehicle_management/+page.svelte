@@ -293,30 +293,28 @@
 
     isSaving = true;
     try {
-      if (addForm.active) {
-        const { error: offErr } = await supabase
-          .from("vehicles")
-          .update({ active: false })
-          .eq("org_id", viewerOrgId)
-          .eq("user_id", addForm.user_id as string);
-        if (offErr) throw offErr;
+      // Use form action instead of direct Supabase call
+      const formData = new FormData();
+      formData.append('user_id', addForm.user_id as string);
+      formData.append('type_of_vehicle_enum', addForm.type_of_vehicle_enum as string);
+      formData.append('vehicle_color', addForm.vehicle_color.trim());
+      formData.append('nondriver_seats', String(seats));
+      formData.append('active', String(addForm.active));
+
+      const response = await fetch('?/create', {
+        method: 'POST',
+        body: formData
+      });
+
+      const result = await response.json();
+      
+      if (result.type === 'success') {
+        setToast("Vehicle created.", true);
+        showAddModal = false;
+        await loadVehicles();
+      } else {
+        throw new Error(result.data?.error || 'Failed to create vehicle');
       }
-
-      const payload = {
-        org_id: viewerOrgId,
-        user_id: addForm.user_id as string,
-        type_of_vehicle_enum: addForm.type_of_vehicle_enum as VehicleType,
-        vehicle_color: addForm.vehicle_color.trim(),
-        nondriver_seats: seats,
-        active: !!addForm.active,
-      };
-
-      const { error } = await supabase.from("vehicles").insert(payload);
-      if (error) throw error;
-
-      setToast("Vehicle created.", true);
-      showAddModal = false;
-      await loadVehicles();
     } catch (err: any) {
       console.error("Create error:", err?.message ?? err);
       setToast(err?.message ?? "Failed to add vehicle.", false);
@@ -359,34 +357,29 @@
 
     isSaving = true;
     try {
-      if (editForm.active && editOwnerUserId) {
-        const { error: offErr } = await supabase
-          .from("vehicles")
-          .update({ active: false })
-          .eq("org_id", viewerOrgId)
-          .eq("user_id", editOwnerUserId)
-          .neq("vehicle_id", editForm.vehicle_id);
-        if (offErr) throw offErr;
+      // Use form action instead of direct Supabase call
+      const formData = new FormData();
+      formData.append('vehicle_id', String(editForm.vehicle_id));
+      formData.append('owner_user_id', editOwnerUserId || '');
+      formData.append('type_of_vehicle_enum', editForm.type_of_vehicle_enum as string);
+      formData.append('vehicle_color', editForm.vehicle_color.trim());
+      formData.append('nondriver_seats', String(seats));
+      formData.append('active', String(editForm.active));
+
+      const response = await fetch('?/update', {
+        method: 'POST',
+        body: formData
+      });
+
+      const result = await response.json();
+      
+      if (result.type === 'success') {
+        setToast("Vehicle updated.", true);
+        showEditModal = false;
+        await loadVehicles();
+      } else {
+        throw new Error(result.data?.error || 'Failed to update vehicle');
       }
-
-      const payload = {
-        type_of_vehicle_enum: editForm.type_of_vehicle_enum as VehicleType,
-        vehicle_color: editForm.vehicle_color.trim(),
-        nondriver_seats: seats,
-        active: !!editForm.active,
-      };
-
-      const { error } = await supabase
-        .from("vehicles")
-        .update(payload)
-        .eq("vehicle_id", editForm.vehicle_id)
-        .eq("org_id", viewerOrgId);
-
-      if (error) throw error;
-
-      setToast("Vehicle updated.", true);
-      showEditModal = false;
-      await loadVehicles();
     } catch (err: any) {
       console.error("Update error:", err?.message ?? err);
       setToast(err?.message ?? "Failed to update vehicle.", false);
