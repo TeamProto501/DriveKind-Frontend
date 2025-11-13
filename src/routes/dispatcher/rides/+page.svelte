@@ -39,6 +39,20 @@
     if (tabParam && ['requested', 'active', 'reported', 'completed'].includes(tabParam)) {
       activeTab = tabParam;
     }
+    
+    // Check if create parameter is present (from navbar button)
+    const createParam = $page.url.searchParams.get('create');
+    if (createParam === 'true') {
+      // Small delay to ensure page is fully loaded
+      setTimeout(() => {
+        openCreateModal();
+      }, 100);
+      
+      // Clean up URL by removing the parameter
+      const url = new URL(window.location.href);
+      url.searchParams.delete('create');
+      window.history.replaceState({}, '', url.toString());
+    }
   });
   let isUpdating = $state(false);
   let showCreateModal = $state(false);
