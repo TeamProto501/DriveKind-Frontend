@@ -85,6 +85,11 @@
   let filteredRides = $derived(() => {
     if (!data.rides) return [];
     return data.rides.filter((ride: any) => {
+      // Dispatcher filter (My Rides vs All Rides)
+      if (showOnlyMyRides && ride.dispatcher_user_id !== data.profile?.user_id) {
+        return false;
+      }
+      
       const clientName = ride.clients
         ? `${ride.clients.first_name} ${ride.clients.last_name}`
         : "Unknown Client";
@@ -496,8 +501,15 @@
     if (!ts) return "";
     const d = new Date(ts);
     if (isNaN(d.getTime())) return "";
-    const pad = (n: number) => n.toString().padStart(2, "0");
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    
+    // Get local time components WITHOUT timezone conversion
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    const hours = String(d.getHours()).padStart(2, "0");
+    const minutes = String(d.getMinutes()).padStart(2, "0");
+    
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
   }
 
   const toISOorNull = (v: string) => {
@@ -1040,6 +1052,9 @@
     }
   }
 
+  let showOnlyMyRides = $state(true); // Filter toggle for My Rides vs All Rides
+
+  // Watch for create parameter from navbar
   onMount(() => {
     const editParam = $page.url.searchParams.get("edit");
     if (editParam) {
@@ -1053,6 +1068,19 @@
           window.history.replaceState({}, "", url);
         }
       }
+    }
+    
+    // Check if create parameter is present (from navbar button)
+    const createParam = $page.url.searchParams.get('create');
+    if (createParam === 'true') {
+      setTimeout(() => {
+        openCreateModal();
+      }, 100);
+      
+      // Clean up URL by removing the parameter
+      const url = new URL(window.location.href);
+      url.searchParams.delete('create');
+      window.history.replaceState({}, '', url.toString());
     }
   });
 </script>
@@ -1137,8 +1165,27 @@
         </div>
       </div>
 
-      <!-- Search -->
+      <!-- Search & Filter -->
       <div class="p-6 border-b border-gray-200">
+        <!-- My Rides vs All Rides Toggle -->
+        <div class="flex items-center gap-4 mb-4">
+          <div class="flex items-center gap-2">
+            <button
+              onclick={() => showOnlyMyRides = true}
+              class="px-4 py-2 rounded-lg text-sm font-medium transition-colors {showOnlyMyRides ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}"
+            >
+              My Ride Requests
+            </button>
+            <button
+              onclick={() => showOnlyMyRides = false}
+              class="px-4 py-2 rounded-lg text-sm font-medium transition-colors {!showOnlyMyRides ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}"
+            >
+              All Ride Requests
+            </button>
+          </div>
+        </div>
+        
+        <!-- Search Bar -->
         <div class="relative">
           <Search class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
           <input
