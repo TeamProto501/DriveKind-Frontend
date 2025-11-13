@@ -1,14 +1,24 @@
-// src/routes/schedule/+page.server.ts
+// src/routes/calendar/+page.server.ts
 import { createSupabaseServerClient } from '$lib/supabase.server';
 import { error, redirect } from '@sveltejs/kit';
 
 // Helper function to expand recurring unavailability
 function expandRecurringUnavailability(unavail: any[]): any[] {
+  if (!unavail || !Array.isArray(unavail)) {
+    console.warn('expandRecurringUnavailability received invalid input:', unavail);
+    return [];
+  }
+
   const expanded: any[] = [];
   const today = new Date();
-  today.setHours(0, 0, 0, 0); // Normalize to start of day
+  today.setHours(0, 0, 0, 0);
   
   unavail.forEach(item => {
+    if (!item) {
+      console.warn('Skipping null/undefined item in unavailability');
+      return;
+    }
+
     // For OLD schema (repeating_day)
     if (item.repeating_day && !item.recurring) {
       const dayMap: Record<string, number> = {
@@ -18,10 +28,12 @@ function expandRecurringUnavailability(unavail: any[]): any[] {
       
       const targetDayOfWeek = dayMap[item.repeating_day];
       
-      // CRITICAL: Start from TODAY, not from old unavailable_date
-      const startDate = new Date(today);
+      if (targetDayOfWeek === undefined) {
+        console.warn('Invalid repeating_day:', item.repeating_day);
+        return;
+      }
       
-      // End 1 year from today
+      const startDate = new Date(today);
       const endDate = new Date(today);
       endDate.setFullYear(endDate.getFullYear() + 1);
       
@@ -49,7 +61,11 @@ function expandRecurringUnavailability(unavail: any[]): any[] {
     
     // For NEW schema (recurring = true)
     if (item.recurring) {
-      // Use the later of today or stored unavailable_date
+      if (!item.unavailable_date) {
+        console.warn('Recurring item missing unavailable_date:', item);
+        return;
+      }
+
       const recordStartDate = new Date(item.unavailable_date);
       const startDate = recordStartDate > today ? recordStartDate : today;
       
@@ -57,9 +73,8 @@ function expandRecurringUnavailability(unavail: any[]): any[] {
         ? new Date(item.recurrence_end_date)
         : new Date(startDate.getTime() + 365 * 24 * 60 * 60 * 1000);
       
-      // Don't expand if recurrence already ended
       if (endDate < today) {
-        return; // Skip expired recurring events
+        return;
       }
       
       const pattern = item.recurrence_pattern || 'weekly';
@@ -109,13 +124,16 @@ function expandRecurringUnavailability(unavail: any[]): any[] {
       return;
     }
     
-    // Non-recurring events: only show if not in the past
-    const eventDate = new Date(item.unavailable_date);
-    if (eventDate >= today) {
-      expanded.push(item);
+    // Non-recurring events: only show if not in the past and has valid date
+    if (item.unavailable_date) {
+      const eventDate = new Date(item.unavailable_date);
+      if (eventDate >= today) {
+        expanded.push(item);
+      }
     }
   });
 
+  console.log(`Expanded ${unavail.length} items to ${expanded.length} events`);
   return expanded;
 }
 
@@ -144,22 +162,22 @@ export const load = async (event) => {
   );
 
   // Fetch MY unavailability
-  const { data: myUnavailabilityRaw } = await supabase
+  const { data: myUnavailabilityRaw, error: myUnavailError } = await supabase
     .from('driver_unavailability')
     .select('*')
     .eq('user_id', session.user.id)
     .order('unavailable_date', { ascending: true });
 
-  console.log('My unavailability raw:', myUnavailabilityRaw);
+  if (myUnavailError) {
+    console.error('Error fetching my unavailability:', myUnavailError);
+  }
 
-  // Fetch staff profile for current user
   const { data: myStaffProfile } = await supabase
     .from('staff_profiles')
     .select('user_id, first_name, last_name')
     .eq('user_id', session.user.id)
     .single();
 
-  // Expand recurring unavailability
   const myUnavailabilityExpanded = expandRecurringUnavailability(myUnavailabilityRaw || []);
   
   const myUnavailabilityData = myUnavailabilityExpanded.map(item => ({
@@ -167,45 +185,37 @@ export const load = async (event) => {
     staff_profiles: myStaffProfile
   }));
 
-  console.log('My unavailability expanded:', myUnavailabilityData.length);
-
-  // Fetch ALL driver unavailability (admin/dispatcher only)
-  let allUnavailabilityData = [];
+  // Fetch ALL driver unavailability
+  let allUnavailabilityData: any[] = [];
   if (isAdminOrDispatcher) {
-    const { data: allUnavailRaw } = await supabase
+    const { data: allUnavailRaw, error: allUnavailError } = await supabase
       .from('driver_unavailability')
       .select('*')
       .order('unavailable_date', { ascending: true });
 
-    console.log('All unavail raw:', allUnavailRaw?.length || 0);
+    if (allUnavailError) {
+      console.error('Error fetching all unavailability:', allUnavailError);
+    }
 
     if (allUnavailRaw && allUnavailRaw.length > 0) {
-      // Expand recurring unavailability
       const allUnavailExpanded = expandRecurringUnavailability(allUnavailRaw);
       
-      // Get unique user_ids
       const userIds = [...new Set(allUnavailExpanded.map(u => u.user_id).filter(Boolean))];
       
-      // Fetch staff profiles for these users in the org
       const { data: staffProfiles } = await supabase
         .from('staff_profiles')
         .select('user_id, first_name, last_name, org_id')
         .in('user_id', userIds)
         .eq('org_id', userProfile.org_id);
 
-      console.log('Staff profiles fetched:', staffProfiles?.length || 0);
-
       const staffMap = new Map(staffProfiles?.map(s => [s.user_id, s]) || []);
 
-      // Only include unavailability for users in this org
       allUnavailabilityData = allUnavailExpanded
         .filter(item => staffMap.has(item.user_id))
         .map(item => ({
           ...item,
           staff_profiles: staffMap.get(item.user_id)
         }));
-
-      console.log('All unavail expanded with profiles:', allUnavailabilityData.length);
     }
   }
 
@@ -216,8 +226,7 @@ export const load = async (event) => {
     .eq('driver_user_id', session.user.id)
     .order('appointment_time', { ascending: true });
 
-  // Fetch clients and staff for my rides
-  let myRidesWithDetails = [];
+  let myRidesWithDetails: any[] = [];
   if (myRidesData && myRidesData.length > 0) {
     const clientIds = [...new Set(myRidesData.map(r => r.client_id).filter(Boolean))];
     const driverIds = [...new Set(myRidesData.map(r => r.driver_user_id).filter(Boolean))];
@@ -245,8 +254,8 @@ export const load = async (event) => {
     }));
   }
 
-  // Fetch ALL rides for organization (admin/dispatcher only)
-  let allRidesWithDetails = [];
+  // Fetch ALL rides for organization
+  let allRidesWithDetails: any[] = [];
   if (isAdminOrDispatcher) {
     const { data: allRidesData } = await supabase
       .from('rides')
@@ -282,18 +291,11 @@ export const load = async (event) => {
     }
   }
 
-  console.log('Returning data:', {
-    myUnavail: myUnavailabilityData.length,
-    allUnavail: allUnavailabilityData.length,
-    myRides: myRidesWithDetails.length,
-    allRides: allRidesWithDetails.length
-  });
-
   return {
-    myUnavailability: myUnavailabilityData,
-    allUnavailability: allUnavailabilityData,
-    myRides: myRidesWithDetails,
-    allRides: allRidesWithDetails,
+    myUnavailability: myUnavailabilityData || [],
+    allUnavailability: allUnavailabilityData || [],
+    myRides: myRidesWithDetails || [],
+    allRides: allRidesWithDetails || [],
     userOrgId: userProfile.org_id,
     isAdminOrDispatcher,
     session

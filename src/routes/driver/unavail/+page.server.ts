@@ -1,28 +1,40 @@
-import { authenticatedFetchServer, API_BASE_URL } from "$lib/api.server";
+import { createSupabaseServerClient } from "$lib/supabase.server";
 import { error, redirect, fail } from "@sveltejs/kit";
 import type { Actions } from "./$types";
-import { createSupabaseServerClient } from "$lib/supabase.server";
 
 export const load = async (event) => {
-  const res = await authenticatedFetchServer(
-    API_BASE_URL + "/driver-unavailability/by-user",
-    {},
-    event
-  );
-  const text = await res.text();
-  const data = JSON.parse(text);
-  console.log(data);
-  return { data };
+  const supabase = createSupabaseServerClient(event);
+  const { data: { session } } = await supabase.auth.getSession();
+
+  if (!session) {
+    throw redirect(302, '/login');
+  }
+
+  const { data: unavailabilityData, error: unavailError } = await supabase
+    .from('driver_unavailability')
+    .select('*')
+    .eq('user_id', session.user.id)
+    .order('created_at', { ascending: false});
+
+  if (unavailError) {
+    console.error('Error fetching unavailability:', unavailError);
+    return { data: [] };
+  }
+
+  return { data: unavailabilityData || [] };
 };
+
 function formatDate(calendarDateString: string): string {
   return calendarDateString;
 }
+
 function formatTime(time: string): string {
   if (!time) return "";
   return time.includes(":") && time.split(":").length === 2
     ? `${time}:00`
     : time;
 }
+
 export const actions: Actions = {
   createSpecificUnavailability: async (event) => {
     try {
@@ -59,20 +71,20 @@ export const actions: Actions = {
         end_time: allDay ? null : formatTime(endTime),
         all_day: allDay,
         reason: reason,
-        recurring: false, // NOT recurring
+        recurring: false,
         recurrence_pattern: null,
         days_of_week: null,
         recurrence_end_date: null,
         repeating_day: null
       };
 
-      const { error } = await supabase
+      const { error: insertError } = await supabase
         .from('driver_unavailability')
         .insert(unavailabilityData);
 
-      if (error) {
-        console.error('Error inserting unavailability:', error);
-        return fail(500, { error: error.message });
+      if (insertError) {
+        console.error('Error inserting unavailability:', insertError);
+        return fail(500, { error: insertError.message });
       }
 
       return { success: true };
@@ -102,7 +114,6 @@ export const actions: Actions = {
         return fail(400, { error: "Invalid number of dates" });
       }
 
-      // Parse dates from FormData
       const dates = [];
       for (let i = 0; i < numberOfDates; i++) {
         const selectedDay = formData.get(`dates[${i}][selectedDay]`) as string;
@@ -136,7 +147,6 @@ export const actions: Actions = {
         });
       }
 
-      // Convert day name to day number (0 = Sunday, 6 = Saturday)
       function dayNameToDayNumber(dayName: string): number {
         const dayMap: Record<string, number> = {
           'Sunday': 0,
@@ -147,41 +157,41 @@ export const actions: Actions = {
           'Friday': 5,
           'Saturday': 6
         };
-        return dayMap[dayName] ?? 1; // Default to Monday
+        return dayMap[dayName] ?? 1;
       }
 
-      // Calculate end date (1 year from now)
-      const startDate = new Date();
-      const endDate = new Date(startDate);
+      const today = new Date();
+      const startDate = today.toISOString().split('T')[0];
+      const endDate = new Date(today);
       endDate.setFullYear(endDate.getFullYear() + 1);
+      const endDateStr = endDate.toISOString().split('T')[0];
 
-      // Insert recurring unavailability records
       const results = [];
       for (const dateData of dates) {
         const dayNumber = dayNameToDayNumber(dateData.selectedDay);
         
         const unavailabilityData = {
           user_id: session.user.id,
-          unavailable_date: startDate.toISOString().split('T')[0], // YYYY-MM-DD
+          unavailable_date: startDate,
           recurring: true,
           recurrence_pattern: 'weekly',
-          days_of_week: [dayNumber], // Array of day numbers
-          recurrence_end_date: endDate.toISOString().split('T')[0],
+          days_of_week: [dayNumber],
+          recurrence_end_date: endDateStr,
           start_time: dateData.startTime ? formatTime(dateData.startTime) : null,
           end_time: dateData.endTime ? formatTime(dateData.endTime) : null,
           all_day: dateData.allDay,
           reason: dateData.reason,
-          repeating_day: null // Deprecated field, set to null
+          repeating_day: dateData.selectedDay
         };
 
-        const { error } = await supabase
+        const { error: insertError } = await supabase
           .from('driver_unavailability')
           .insert(unavailabilityData);
 
-        if (error) {
-          console.error('Error inserting unavailability:', error);
+        if (insertError) {
+          console.error('Error inserting unavailability:', insertError);
           return fail(500, {
-            error: `Failed to create unavailability for ${dateData.selectedDay}: ${error.message}`
+            error: `Failed to create unavailability for ${dateData.selectedDay}: ${insertError.message}`
           });
         }
 
@@ -201,6 +211,13 @@ export const actions: Actions = {
 
   deleteUnavailability: async (event) => {
     try {
+      const supabase = createSupabaseServerClient(event);
+      const { data: { session } } = await supabase.auth.getSession();
+
+      if (!session) {
+        return fail(401, { error: 'Unauthorized' });
+      }
+
       const formData = await event.request.formData();
       const id = formData.get("id") as string;
 
@@ -208,19 +225,15 @@ export const actions: Actions = {
         return fail(400, { error: "Unavailability ID is required" });
       }
 
-      const response = await authenticatedFetchServer(
-        `${API_BASE_URL}/driver-unavailability/${id}`,
-        {
-          method: "DELETE",
-        },
-        event
-      );
+      const { error: deleteError } = await supabase
+        .from('driver_unavailability')
+        .delete()
+        .eq('id', parseInt(id))
+        .eq('user_id', session.user.id);
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        return fail(response.status, {
-          error: errorData.error || "Failed to delete unavailability",
-        });
+      if (deleteError) {
+        console.error('Error deleting unavailability:', deleteError);
+        return fail(500, { error: deleteError.message });
       }
 
       return { success: true };
