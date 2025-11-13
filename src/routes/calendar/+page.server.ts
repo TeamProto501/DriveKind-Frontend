@@ -5,43 +5,34 @@ import { error, redirect } from '@sveltejs/kit';
 // Helper function to expand recurring unavailability
 function expandRecurringUnavailability(unavail: any[]): any[] {
   const expanded: any[] = [];
+  const today = new Date();
+  today.setHours(0, 0, 0, 0); // Normalize to start of day
   
   unavail.forEach(item => {
-    if (!item.recurring) {
-      // Non-recurring, add as-is
-      expanded.push(item);
-      return;
-    }
-
-    // Expand recurring unavailability
-    const startDate = new Date(item.unavailable_date);
-    const endDate = item.recurrence_end_date 
-      ? new Date(item.recurrence_end_date)
-      : new Date(startDate.getTime() + 365 * 24 * 60 * 60 * 1000); // Default 1 year
-    
-    const pattern = item.recurrence_pattern || 'weekly';
-    const daysOfWeek = item.days_of_week || [startDate.getDay()];
-    
-    let currentDate = new Date(startDate);
-    const maxIterations = 365; // Safety limit
-    let iterations = 0;
-
-    while (currentDate <= endDate && iterations < maxIterations) {
-      iterations++;
+    // For OLD schema (repeating_day)
+    if (item.repeating_day && !item.recurring) {
+      const dayMap: Record<string, number> = {
+        'Sunday': 0, 'Monday': 1, 'Tuesday': 2, 'Wednesday': 3,
+        'Thursday': 4, 'Friday': 5, 'Saturday': 6
+      };
       
-      // Check if current day matches pattern
-      if (pattern === 'daily') {
-        expanded.push({
-          ...item,
-          id: `${item.id}-${currentDate.toISOString().split('T')[0]}`,
-          unavailable_date: currentDate.toISOString().split('T')[0],
-          is_recurring_instance: true,
-          original_id: item.id
-        });
-        currentDate.setDate(currentDate.getDate() + 1);
-      } else if (pattern === 'weekly') {
-        const dayOfWeek = currentDate.getDay();
-        if (daysOfWeek.includes(dayOfWeek)) {
+      const targetDayOfWeek = dayMap[item.repeating_day];
+      
+      // CRITICAL: Start from TODAY, not from old unavailable_date
+      const startDate = new Date(today);
+      
+      // End 1 year from today
+      const endDate = new Date(today);
+      endDate.setFullYear(endDate.getFullYear() + 1);
+      
+      let currentDate = new Date(startDate);
+      const maxIterations = 365;
+      let iterations = 0;
+
+      while (currentDate <= endDate && iterations < maxIterations) {
+        iterations++;
+        
+        if (currentDate.getDay() === targetDayOfWeek) {
           expanded.push({
             ...item,
             id: `${item.id}-${currentDate.toISOString().split('T')[0]}`,
@@ -50,19 +41,78 @@ function expandRecurringUnavailability(unavail: any[]): any[] {
             original_id: item.id
           });
         }
-        currentDate.setDate(currentDate.getDate() + 1);
-      } else if (pattern === 'monthly') {
-        if (currentDate.getDate() === startDate.getDate()) {
-          expanded.push({
-            ...item,
-            id: `${item.id}-${currentDate.toISOString().split('T')[0]}`,
-            unavailable_date: currentDate.toISOString().split('T')[0],
-            is_recurring_instance: true,
-            original_id: item.id
-          });
-        }
+        
         currentDate.setDate(currentDate.getDate() + 1);
       }
+      return;
+    }
+    
+    // For NEW schema (recurring = true)
+    if (item.recurring) {
+      // Use the later of today or stored unavailable_date
+      const recordStartDate = new Date(item.unavailable_date);
+      const startDate = recordStartDate > today ? recordStartDate : today;
+      
+      const endDate = item.recurrence_end_date 
+        ? new Date(item.recurrence_end_date)
+        : new Date(startDate.getTime() + 365 * 24 * 60 * 60 * 1000);
+      
+      // Don't expand if recurrence already ended
+      if (endDate < today) {
+        return; // Skip expired recurring events
+      }
+      
+      const pattern = item.recurrence_pattern || 'weekly';
+      const daysOfWeek = item.days_of_week || [startDate.getDay()];
+      
+      let currentDate = new Date(startDate);
+      const maxIterations = 365;
+      let iterations = 0;
+
+      while (currentDate <= endDate && iterations < maxIterations) {
+        iterations++;
+        
+        if (pattern === 'daily') {
+          expanded.push({
+            ...item,
+            id: `${item.id}-${currentDate.toISOString().split('T')[0]}`,
+            unavailable_date: currentDate.toISOString().split('T')[0],
+            is_recurring_instance: true,
+            original_id: item.id
+          });
+          currentDate.setDate(currentDate.getDate() + 1);
+        } else if (pattern === 'weekly') {
+          const dayOfWeek = currentDate.getDay();
+          if (daysOfWeek.includes(dayOfWeek)) {
+            expanded.push({
+              ...item,
+              id: `${item.id}-${currentDate.toISOString().split('T')[0]}`,
+              unavailable_date: currentDate.toISOString().split('T')[0],
+              is_recurring_instance: true,
+              original_id: item.id
+            });
+          }
+          currentDate.setDate(currentDate.getDate() + 1);
+        } else if (pattern === 'monthly') {
+          if (currentDate.getDate() === startDate.getDate()) {
+            expanded.push({
+              ...item,
+              id: `${item.id}-${currentDate.toISOString().split('T')[0]}`,
+              unavailable_date: currentDate.toISOString().split('T')[0],
+              is_recurring_instance: true,
+              original_id: item.id
+            });
+          }
+          currentDate.setDate(currentDate.getDate() + 1);
+        }
+      }
+      return;
+    }
+    
+    // Non-recurring events: only show if not in the past
+    const eventDate = new Date(item.unavailable_date);
+    if (eventDate >= today) {
+      expanded.push(item);
     }
   });
 
