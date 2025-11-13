@@ -39,20 +39,6 @@
     if (tabParam && ['requested', 'active', 'reported', 'completed'].includes(tabParam)) {
       activeTab = tabParam;
     }
-    
-    // Check if create parameter is present (from navbar button)
-    const createParam = $page.url.searchParams.get('create');
-    if (createParam === 'true') {
-      // Small delay to ensure page is fully loaded
-      setTimeout(() => {
-        openCreateModal();
-      }, 100);
-      
-      // Clean up URL by removing the parameter
-      const url = new URL(window.location.href);
-      url.searchParams.delete('create');
-      window.history.replaceState({}, '', url.toString());
-    }
   });
   let isUpdating = $state(false);
   let showCreateModal = $state(false);
@@ -119,24 +105,16 @@
   });
 
   // Filter rides based on tab and search
-  let showOnlyMyRides = $state(true); // Default to showing only dispatcher's rides
-
-  // Update filtered rides to include dispatcher filter
   let filteredRides = $derived(() => {
     if (!data.rides) return [];
     
     return data.rides.filter(ride => {
-      // Dispatcher filter
-      if (showOnlyMyRides && ride.dispatcher_user_id !== data.profile?.user_id) {
-        return false;
-      }
-      
       const clientName = ride.clients ? `${ride.clients.first_name} ${ride.clients.last_name}` : 'Unknown Client';
       const driverName = ride.drivers ? `${ride.drivers.first_name} ${ride.drivers.last_name}` : '';
       const matchesSearch = clientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          ride.destination_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          (ride.alt_pickup_address && ride.alt_pickup_address.toLowerCase().includes(searchTerm.toLowerCase())) ||
-                          driverName.toLowerCase().includes(searchTerm.toLowerCase());
+                           ride.destination_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                           (ride.alt_pickup_address && ride.alt_pickup_address.toLowerCase().includes(searchTerm.toLowerCase())) ||
+                           driverName.toLowerCase().includes(searchTerm.toLowerCase());
       
       // Filter by tab
       let matchesTab = false;
@@ -278,20 +256,6 @@
 
   function openEditModal(ride: any) {
     selectedRide = ride;
-    
-    // Convert UTC timestamp to local datetime-local format
-    let localAppointmentTime = '';
-    if (ride.appointment_time) {
-      const date = new Date(ride.appointment_time);
-      // Format as YYYY-MM-DDTHH:MM for datetime-local input
-      const year = date.getFullYear();
-      const month = String(date.getMonth() + 1).padStart(2, '0');
-      const day = String(date.getDate()).padStart(2, '0');
-      const hours = String(date.getHours()).padStart(2, '0');
-      const minutes = String(date.getMinutes()).padStart(2, '0');
-      localAppointmentTime = `${year}-${month}-${day}T${hours}:${minutes}`;
-    }
-    
     rideForm = {
       client_id: ride.client_id?.toString() || '',
       purpose: ride.purpose || '',
@@ -301,7 +265,7 @@
       dropoff_city: ride.dropoff_city || '',
       dropoff_state: ride.dropoff_state || '',
       dropoff_zipcode: ride.dropoff_zipcode || '',
-      appointment_time: localAppointmentTime, // Use local time
+      appointment_time: ride.appointment_time ? new Date(ride.appointment_time).toISOString().slice(0, 16) : '',
       pickup_from_home: ride.pickup_from_home || false,
       alt_pickup_address: ride.alt_pickup_address || '',
       alt_pickup_address2: ride.alt_pickup_address2 || '',
@@ -715,6 +679,16 @@
           </button>
           
           <button
+            onclick={() => activeTab = "reported"}
+            class="py-4 px-1 border-b-2 font-medium text-sm transition-colors {activeTab === 'reported' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}"
+          >
+            Reported Rides
+            {#if rideCounts().reported > 0}
+              <span class="ml-2 py-0.5 px-2 rounded-full text-xs bg-purple-100 text-purple-600">{rideCounts().reported}</span>
+            {/if}
+          </button>
+          
+          <button
             onclick={() => activeTab = "completed"}
             class="py-4 px-1 border-b-2 font-medium text-sm transition-colors {activeTab === 'completed' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}"
           >
@@ -728,29 +702,12 @@
 
       <!-- Search Bar -->
       <div class="p-6 border-b border-gray-200">
-        <div class="flex items-center gap-4 mb-4">
-          <div class="flex items-center gap-2">
-            <button
-              onclick={() => showOnlyMyRides = true}
-              class="px-4 py-2 rounded-lg text-sm font-medium transition-colors {showOnlyMyRides ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}"
-            >
-              My Ride Requests
-            </button>
-            <button
-              onclick={() => showOnlyMyRides = false}
-              class="px-4 py-2 rounded-lg text-sm font-medium transition-colors {!showOnlyMyRides ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}"
-            >
-              All Ride Requests
-            </button>
-          </div>
-        </div>
-        
-        <div class="relative">
+          <div class="relative">
           <Search class="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
           <input 
             type="text"
-            placeholder="Search rides..." 
-            bind:value={searchTerm}
+              placeholder="Search rides..." 
+              bind:value={searchTerm}
             class="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
         </div>
@@ -922,13 +879,12 @@
               {#each filteredClients() as client}
                 <button
                   onclick={() => selectClient(client)}
-                  class="w-full px-3 py-2 text-left hover:bg-gray-100"
+                  class="w-full px-3 py-2 text-left hover:bg-gray-100 flex items-center justify-between"
                 >
-                  <div class="font-medium">{client.first_name} {client.last_name}</div>
-                  <div class="text-sm text-gray-500">{client.primary_phone}</div>
-                  {#if client.mobility_assistance_enum}
-                    <div class="text-xs text-blue-600">Mobility: {client.mobility_assistance_enum}</div>
-                  {/if}
+                  <div>
+                    <div class="font-medium">{client.first_name} {client.last_name}</div>
+                    <div class="text-sm text-gray-500">{client.primary_phone}</div>
+                  </div>
                 </button>
               {/each}
             </div>
