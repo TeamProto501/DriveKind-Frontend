@@ -20,14 +20,15 @@
     TrendingUp,
     Truck,
     AlertCircle,
-    Calendar
+    Calendar,
+    Building2
   } from "@lucide/svelte";
   import { goto } from "$app/navigation";
   import { navigating } from "$app/stores";
   
   export let data: any;
 
-  // Metric cards with real data and links
+  // Metric cards with real data and links - UPDATED
   const metricCards = [
     {
       label: "User Management",
@@ -70,14 +71,14 @@
       iconColor: "text-orange-600"
     },
     {
-      label: "Scheduled Rides",
-      value: data.metrics?.scheduledRides || 0,
-      subtitle: "Active & assigned",
-      href: "/dispatcher/rides?tab=active",
-      icon: Calendar,
-      color: "bg-indigo-500",
-      iconBg: "bg-indigo-100",
-      iconColor: "text-indigo-600"
+      label: "Database",
+      value: "Manage",
+      subtitle: "Database operations",
+      href: "/admin/database",
+      icon: Database,
+      color: "bg-cyan-500",
+      iconBg: "bg-cyan-100",
+      iconColor: "text-cyan-600"
     },
     {
       label: "Completed This Month",
@@ -95,27 +96,27 @@
       subtitle: "Fleet vehicles",
       href: "/admin/vehicle_management",
       icon: Truck,
-      color: "bg-cyan-500",
-      iconBg: "bg-cyan-100",
-      iconColor: "text-cyan-600"
+      color: "bg-indigo-500",
+      iconBg: "bg-indigo-100",
+      iconColor: "text-indigo-600"
     },
     {
-      label: "Reports",
-      value: "View All",
-      subtitle: "Analytics & insights",
-      href: "/admin/reports",
-      icon: BarChart3,
-      color: "bg-pink-500",
-      iconBg: "bg-pink-100",
-      iconColor: "text-pink-600"
+      label: "Configuration",
+      value: "Settings",
+      subtitle: "Organization settings",
+      href: "/admin/config",
+      icon: Settings,
+      color: "bg-slate-500",
+      iconBg: "bg-slate-100",
+      iconColor: "text-slate-600"
     }
   ];
 
-  // Tab configuration
+  // Tab configuration - UPDATED
   const tabs = [
     {
-      id: "que",
-      label: "Queue",
+      id: "riderequests",
+      label: "Ride Requests",
       icon: AlertCircle,
       description: "Current ride requests and assignments"
     },
@@ -188,7 +189,7 @@
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         {#each metricCards as card}
           
-            <a href={card.href}
+            href={card.href}
             class="group relative bg-white rounded-lg border border-gray-200 hover:border-gray-300 hover:shadow-lg transition-all duration-200 p-6 overflow-hidden"
           >
             <!-- Gradient Background Effect -->
@@ -273,7 +274,7 @@
                   <a href="/admin/users?tab=dispatcher" class="text-sm text-blue-600 hover:text-blue-700 font-medium">
                     View all →
                   </a>
-                {:else if t.id === 'que'}
+                {:else if t.id === 'riderequests'}
                   <a href="/dispatcher/rides" class="text-sm text-blue-600 hover:text-blue-700 font-medium">
                     View all →
                   </a>

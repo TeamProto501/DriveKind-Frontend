@@ -40,7 +40,6 @@ export const load: PageServerLoad = async (event) => {
     volunteers: 0,
     dispatchers: 0,
     pendingRides: 0,
-    scheduledRides: 0,
     completedRidesThisMonth: 0,
     totalVehicles: 0
   };
@@ -86,13 +85,6 @@ export const load: PageServerLoad = async (event) => {
       .eq('org_id', orgId)
       .eq('status', 'Requested');
     
-    // Get scheduled rides
-    const { count: scheduledCount } = await supabase
-      .from('rides')
-      .select('*', { count: 'exact', head: true })
-      .eq('org_id', orgId)
-      .in('status', ['Scheduled', 'Assigned', 'In Progress']);
-    
     // Get completed rides this month
     const startOfMonth = new Date();
     startOfMonth.setDate(1);
@@ -117,7 +109,6 @@ export const load: PageServerLoad = async (event) => {
     metrics.volunteers = (volunteerCount || 0);
     metrics.dispatchers = (dispatcherCount || 0);
     metrics.pendingRides = (pendingCount || 0);
-    metrics.scheduledRides = (scheduledCount || 0);
     metrics.completedRidesThisMonth = (completedCount || 0);
     metrics.totalVehicles = (vehicleCount || 0);
 
@@ -130,7 +121,7 @@ export const load: PageServerLoad = async (event) => {
     if (tab === 'clients') {
       const { data, error } = await supabase
         .from('clients')
-        .select('client_id, first_name, last_name, primary_phone, city, state, zip_code, org_id')
+        .select('first_name, last_name, primary_phone, city, state, zip_code')
         .eq('org_id', orgId)
         .order('last_name', { ascending: true });
       if (error) throw error;
@@ -140,9 +131,10 @@ export const load: PageServerLoad = async (event) => {
     if (tab === 'drivers') {
       const { data, error } = await supabase
         .from('staff_profiles')
-        .select('user_id, first_name, last_name, role, org_id')
+        .select('first_name, last_name, primary_phone, role')
         .eq('org_id', orgId)
-        .contains('role', ['Driver']);
+        .contains('role', ['Driver'])
+        .order('last_name', { ascending: true });
       if (error) throw error;
       return { tab, data: data ?? [], roles, metrics };
     }
@@ -150,9 +142,10 @@ export const load: PageServerLoad = async (event) => {
     if (tab === 'volunteer') {
       const { data, error } = await supabase
         .from('staff_profiles')
-        .select('user_id, first_name, last_name, role, org_id')
+        .select('first_name, last_name, primary_phone, role')
         .eq('org_id', orgId)
-        .contains('role', ['Volunteer']);
+        .contains('role', ['Volunteer'])
+        .order('last_name', { ascending: true });
       if (error) throw error;
       return { tab, data: data ?? [], roles, metrics };
     }
@@ -160,26 +153,57 @@ export const load: PageServerLoad = async (event) => {
     if (tab === 'dispatcher') {
       const { data, error } = await supabase
         .from('staff_profiles')
-        .select('user_id, first_name, last_name, role, org_id')
+        .select('first_name, last_name, primary_phone, role')
         .eq('org_id', orgId)
-        .contains('role', ['Dispatcher']);
+        .contains('role', ['Dispatcher'])
+        .order('last_name', { ascending: true });
       if (error) throw error;
       return { tab, data: data ?? [], roles, metrics };
     }
 
-    // Default / "Queue" tab -> show rides in org
-    const { data, error } = await supabase
+    // Default / "Ride Requests" tab -> show rides with client and driver names
+    const { data: ridesData, error } = await supabase
       .from('rides')
       .select(`
-        ride_id, org_id, client_id, driver_user_id, destination_name,
-        dropoff_city, dropoff_state, dropoff_zipcode,
-        appointment_time, pickup_time, status, purpose, riders
+        destination_name,
+        dropoff_city,
+        dropoff_state,
+        appointment_time,
+        status,
+        purpose,
+        riders,
+        clients:client_id (
+          first_name,
+          last_name
+        ),
+        drivers:driver_user_id (
+          first_name,
+          last_name
+        )
       `)
       .eq('org_id', orgId)
       .order('appointment_time', { ascending: true });
+    
     if (error) throw error;
 
-    return { tab: 'que', data: data ?? [], roles, metrics };
+    // Transform the data to flatten client and driver names
+    const transformedData = (ridesData ?? []).map(ride => ({
+      client_name: ride.clients 
+        ? `${ride.clients.first_name} ${ride.clients.last_name}` 
+        : 'Unknown Client',
+      driver_name: ride.drivers 
+        ? `${ride.drivers.first_name} ${ride.drivers.last_name}` 
+        : 'Unassigned',
+      destination_name: ride.destination_name,
+      dropoff_city: ride.dropoff_city,
+      dropoff_state: ride.dropoff_state,
+      appointment_time: ride.appointment_time,
+      status: ride.status,
+      purpose: ride.purpose,
+      riders: ride.riders
+    }));
+
+    return { tab: 'riderequests', data: transformedData, roles, metrics };
   } catch (err) {
     console.error('Admin dashboard scoped load error:', err);
     return { tab, data: [], roles, metrics, error: 'Failed to load dashboard data.' };
