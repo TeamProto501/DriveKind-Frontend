@@ -68,52 +68,51 @@
       : []
   );
 
-  // ==== STAFF (FOR STAFF DROPDOWN) ===============================
-  let staff = $derived(
-    Array.isArray((data as any)?.staff) ? (data as any).staff : []
-  );
+// ==== STAFF (FOR STAFF DROPDOWN) ===============================
+let staff = $derived(
+  Array.isArray((data as any)?.staff) ? (data as any).staff : []
+);
 
-function hasDispatcherOrAdminRole(roles: any): boolean {
-    if (!roles) return false;
+// Convert role enums into usable string array
+function normalizeRoles(r: any): string[] {
+  if (!r) return [];
 
-    let roleList: string[] = [];
+  if (Array.isArray(r)) return r.map((x) => String(x).toLowerCase());
 
-    // roles is usually a text[] / array
-    if (Array.isArray(roles)) {
-      roleList = roles;
-    } else if (typeof roles === "string") {
-      // handle stringified JSON or comma-separated strings
-      try {
-        const parsed = JSON.parse(roles);
-        if (Array.isArray(parsed)) {
-          roleList = parsed;
-        } else {
-          roleList = roles.split(",").map((r) => r.trim());
-        }
-      } catch {
-        roleList = roles.split(",").map((r) => r.trim());
-      }
+  if (typeof r === "string") {
+    try {
+      const parsed = JSON.parse(r);
+      if (Array.isArray(parsed)) return parsed.map((x) => String(x).toLowerCase());
+    } catch {
+      return r.split(",").map((x) => x.trim().toLowerCase());
     }
-
-    const ALLOWED = ["admin", "super admin", "dispatcher"];
-
-    return roleList.some((r) => ALLOWED.includes(String(r).toLowerCase()));
   }
 
-  let visibleStaff = $derived(
-    Array.isArray(staff)
-      ? staff.filter((s: any) => {
-          if (orgId != null) {
-            const sOrg = s.org_id ?? s.organization_id ?? null;
-            if (sOrg != null && sOrg !== orgId) {
-              return false;
-            }
-          }
-          const roles = s.roles ?? s.role ?? [];
-          return hasDispatcherOrAdminRole(roles);
-        })
-      : []
-  );
+  return [];
+}
+
+const ALLOWED = ["dispatcher", "admin", "super admin"];
+
+function hasAllowedRole(roles: any) {
+  const normalized = normalizeRoles(roles);
+  return normalized.some((r) => ALLOWED.includes(r));
+}
+
+let visibleStaff = $derived(
+  Array.isArray(staff)
+    ? staff.filter((s: any) => {
+        // ORG ISOLATION
+        if (orgId != null) {
+          const sOrg = s.org_id ?? s.organization_id ?? null;
+          if (sOrg != null && sOrg !== orgId) return false;
+        }
+
+        // ROLE CHECK
+        const roles = s.role ?? s.roles ?? [];
+        return hasAllowedRole(roles);
+      })
+    : []
+);
 
   const currentStaffName = $derived(
     data?.profile

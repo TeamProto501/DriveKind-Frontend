@@ -5,20 +5,22 @@ export const load = async (event) => {
   const tab = event.url.searchParams.get("tab") ?? "audits";
   const endpoint = tab === "calls" ? "/log/calls" : "/audit-log/dash";
 
-  // Fetch logs and clients in parallel, both already org-isolated by the API
-  const [logsRes, clientsRes] = await Promise.all([
+  // Fetch logs, clients, and staff in parallel
+  const [logsRes, clientsRes, staffRes] = await Promise.all([
     authenticatedFetchServer(API_BASE_URL + endpoint, {}, event),
     authenticatedFetchServer(API_BASE_URL + "/clients", {}, event),
+    authenticatedFetchServer(API_BASE_URL + "/staff-profiles", {}, event),
   ]);
 
+  // ----- Logs -----
   const logsText = await logsRes.text();
   const logsData = JSON.parse(logsText);
 
+  // ----- Clients -----
   let clients: any[] = [];
   try {
     const clientsText = await clientsRes.text();
     const parsed = JSON.parse(clientsText);
-    // Support either { data: [...] } or raw array
     if (Array.isArray(parsed?.data)) {
       clients = parsed.data;
     } else if (Array.isArray(parsed)) {
@@ -28,7 +30,21 @@ export const load = async (event) => {
     clients = [];
   }
 
-  return { data: logsData, tab, clients };
+  // ----- Staff -----
+  let staff: any[] = [];
+  try {
+    const staffText = await staffRes.text();
+    const parsed = JSON.parse(staffText);
+    if (Array.isArray(parsed?.data)) {
+      staff = parsed.data;
+    } else if (Array.isArray(parsed)) {
+      staff = parsed;
+    }
+  } catch {
+    staff = [];
+  }
+
+  return { data: logsData, tab, clients, staff };
 };
 
 function flattenData(data: any[]) {
@@ -99,7 +115,7 @@ export const actions = {
         },
         body: JSON.stringify({
           startTime: startSQL,
-          endTime: endSQL,
+          endTime: endTime,
         }),
       },
       event
@@ -113,46 +129,73 @@ export const actions = {
 
   // Create / update a call entry
   saveCall: async (event) => {
-    const formData = await event.request.formData();
+    try {
+      const formData = await event.request.formData();
 
-    const id = formData.get("id");
-    const payload = {
-      caller_name: formData.get("caller_name") as string,
-      phone_number: formData.get("phone_number") as string,
-      call_type: formData.get("call_type") as string,
-      call_time: formData.get("call_time") as string,
-      staff_name: (formData.get("staff_name") as string) || null,
-      forwarded_to_name:
-        (formData.get("forwarded_to_name") as string) || null,
-      notes: (formData.get("notes") as string) || null,
-    };
+      const id = formData.get("id");
+      const payload = {
+        caller_name: formData.get("caller_name") as string,
+        phone_number: formData.get("phone_number") as string,
+        call_type: formData.get("call_type") as string,
+        call_time: formData.get("call_time") as string,
+        staff_name: (formData.get("staff_name") as string) || null,
+        forwarded_to_name:
+          (formData.get("forwarded_to_name") as string) || null,
+        notes: (formData.get("notes") as string) || null,
+      };
 
-    const method = id ? "PUT" : "POST";
-    const endpoint = id
-      ? `${API_BASE_URL}/log/calls/${id}`
-      : `${API_BASE_URL}/log/calls`;
+      const method = id ? "PUT" : "POST";
 
-    const res = await authenticatedFetchServer(
-      endpoint,
-      {
-        method,
-        headers: {
-          "Content-Type": "application/json",
+      // 🔴 FIX: hit /calls, not /log/calls
+      const endpoint = id
+        ? `${API_BASE_URL}/calls/${id}`
+        : `${API_BASE_URL}/calls`;
+
+      const res = await authenticatedFetchServer(
+        endpoint,
+        {
+          method,
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(payload),
         },
-        body: JSON.stringify(payload),
-      },
-      event
-    );
+        event
+      );
 
-    const text = await res.text();
+      const text = await res.text();
 
-    if (!res.ok) {
+      let parsed: any = null;
+      try {
+        parsed = JSON.parse(text);
+      } catch {
+        // plain text / HTML
+      }
+
+      if (!res.ok) {
+        const backendError =
+          parsed?.error ||
+          parsed?.message ||
+          text ||
+          "Failed to save call.";
+        return {
+          success: false,
+          error: backendError,
+        };
+      }
+
+      return {
+        success: true,
+        data: parsed ?? text,
+      };
+    } catch (err: any) {
+      console.error("saveCall action error:", err);
       return {
         success: false,
-        error: text || "Failed to save call",
+        error:
+          err?.message ||
+          "Unexpected error occurred while saving the call entry.",
       };
     }
-
-    return { success: true, text };
   },
 };
