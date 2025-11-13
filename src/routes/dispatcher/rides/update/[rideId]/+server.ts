@@ -126,13 +126,7 @@ function normalize(update: Record<string, unknown>) {
       case 'appointment_time':
       case 'pickup_time': {
         const s = v as string | null | undefined;
-        if (!s) {
-          out[k] = null;
-        } else {
-          // Input is already in format "YYYY-MM-DDTHH:MM" from datetime-local
-          // Append seconds and treat as UTC for storage
-          out[k] = s.includes(':') && s.split(':').length === 2 ? `${s}:00` : s;
-        }
+        out[k] = s ? new Date(s as string).toISOString() : null;
         break;
       }
 
