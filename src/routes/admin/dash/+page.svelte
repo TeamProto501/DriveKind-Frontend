@@ -189,7 +189,7 @@
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         {#each metricCards as card}
           
-            href={card.href}
+            <a href={card.href}
             class="group relative bg-white rounded-lg border border-gray-200 hover:border-gray-300 hover:shadow-lg transition-all duration-200 p-6 overflow-hidden"
           >
             <!-- Gradient Background Effect -->
