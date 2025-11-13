@@ -22,29 +22,29 @@
   import { navigating } from "$app/stores";
   export let data: any;
 
-  // Quick action items for admin
+  // Quick action items for admin (updated labels/targets)
   const quickActions = [
     {
-      label: "Add User",
-      href: "/admin/users/add",
+      label: "Add User",         // stays "Add User"
+      href: "/admin/users",      // 👉 navigate to users page
       icon: Plus,
       color: "bg-blue-500",
     },
     {
       label: "Generate Report",
-      href: "/admin/reports",
+      href: "/admin/reports",    // 👉 reports page
       icon: BarChart3,
       color: "bg-green-500",
     },
     {
       label: "System Settings",
-      href: "/admin/config",
+      href: "/admin/config",     // 👉 config page
       icon: Settings,
       color: "bg-purple-500",
     },
     {
-      label: "Database Backup",
-      href: "/admin/database",
+      label: "Database",         // 👉 renamed from "Database Backup"
+      href: "/admin/database",   // 👉 database page
       icon: Database,
       color: "bg-orange-500",
     },
@@ -52,40 +52,17 @@
 
   // Tab configuration
   const tabs = [
-    {
-      id: "que",
-      label: "Queue",
-      icon: Users,
-      description: "Manage ride requests and assignments",
-    },
-    {
-      id: "clients",
-      label: "Clients",
-      icon: UserCheck,
-      description: "View and manage client accounts",
-    },
-    {
-      id: "drivers",
-      label: "Drivers",
-      icon: Car,
-      description: "Manage driver accounts and schedules",
-    },
-    {
-      id: "volunteer",
-      label: "Volunteers",
-      icon: User,
-      description: "Manage volunteers and their accounts",
-    },
-    {
-      id: "dispatcher",
-      label: "Dispatchers",
-      icon: User,
-      description: "Manage Dispatchers and their accounts",
-    },
+    { id: "que", label: "Queue", icon: Users, description: "Manage ride requests and assignments" },
+    { id: "clients", label: "Clients", icon: UserCheck, description: "View and manage client accounts" },
+    { id: "drivers", label: "Drivers", icon: Car, description: "Manage driver accounts and schedules" },
+    { id: "volunteer", label: "Volunteers", icon: User, description: "Manage volunteers and their accounts" },
+    { id: "dispatcher", label: "Dispatchers", icon: User, description: "Manage Dispatchers and their accounts" },
   ];
+
   $: rows = Array.isArray(data) ? data : (data?.data ?? []);
   $: selectedTab = data?.tab ?? "clients";
   $: isNavigating = $navigating;
+
   function selectTab(tabId: string) {
     if (selectedTab !== tabId) {
       goto(`?tab=${tabId}`, {
@@ -97,10 +74,14 @@
   }
 </script>
 
+<!-- Make breadcrumbs non-interactive -->
+<div class="static-breadcrumbs">
+  <Breadcrumbs />
+</div>
+
 <RoleGuard requiredRoles={["Admin"]}>
   <div class="min-h-screen bg-gray-50">
-    <!-- Breadcrumbs -->
-    <Breadcrumbs />
+    <!-- (Breadcrumbs moved above with static behavior) -->
 
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <!-- Header Section -->
@@ -109,15 +90,12 @@
           <div>
             <h1 class="text-3xl font-bold text-gray-900">Admin Dashboard</h1>
             <p class="text-gray-600 mt-2">
-              Welcome to your admin dashboard. Manage users, view reports, and
-              configure system settings.
+              Welcome to your admin dashboard. Manage users, view reports, and configure system settings.
             </p>
           </div>
 
           <!-- Admin Badge -->
-          <div
-            class="flex items-center space-x-2 px-4 py-2 bg-blue-100 rounded-full"
-          >
+          <div class="flex items-center space-x-2 px-4 py-2 bg-blue-100 rounded-full">
             <Shield class="w-5 h-5 text-blue-600" />
             <span class="text-sm font-medium text-blue-800">Administrator</span>
           </div>
@@ -136,9 +114,7 @@
                 <action.icon class="w-6 h-6" />
               </div>
               <div>
-                <h3
-                  class="font-medium text-gray-900 group-hover:text-blue-600 transition-colors duration-200"
-                >
+                <h3 class="font-medium text-gray-900 group-hover:text-blue-600 transition-colors duration-200">
                   {action.label}
                 </h3>
                 <p class="text-sm text-gray-500">Quick access</p>
@@ -158,8 +134,7 @@
                 <button
                   type="button"
                   on:click={() => selectTab(t.id)}
-                  class="flex items-center space-x-2 py-2 px-1 border-b-2 font-medium text-sm transition-colors duration-200 {selectedTab ===
-                  t.id
+                  class="flex items-center space-x-2 py-2 px-1 border-b-2 font-medium text-sm transition-colors duration-200 {selectedTab === t.id
                     ? 'border-blue-500 text-blue-600'
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}"
                 >
@@ -169,7 +144,7 @@
               {/each}
             </nav>
 
-            <!-- Action Buttons -->
+            <!-- Action Buttons (no routing changes requested) -->
             <div class="flex items-center space-x-2">
               <button
                 class="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-md transition-colors duration-200"
@@ -254,3 +229,14 @@
     </div>
   </div>
 </RoleGuard>
+
+<style>
+  /* Make breadcrumb items look/behave like static text (no click, no pointer) */
+  :global(.static-breadcrumbs a),
+  :global(.static-breadcrumbs button),
+  :global(.static-breadcrumbs [role="link"]) {
+    pointer-events: none;
+    cursor: default;
+    text-decoration: none;
+  }
+</style>
