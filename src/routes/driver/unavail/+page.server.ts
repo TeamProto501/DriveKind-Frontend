@@ -26,8 +26,14 @@ function formatTime(time: string): string {
 export const actions: Actions = {
   createSpecificUnavailability: async (event) => {
     try {
-      const formData = await event.request.formData();
+      const supabase = createSupabaseServerClient(event);
+      const { data: { session } } = await supabase.auth.getSession();
 
+      if (!session) {
+        return fail(401, { error: 'Unauthorized' });
+      }
+
+      const formData = await event.request.formData();
       const date = formData.get("date") as string;
       const startTime = formData.get("startTime") as string;
       const endTime = formData.get("endTime") as string;
@@ -45,30 +51,28 @@ export const actions: Actions = {
       if (!reason) {
         return fail(400, { error: "Please select a reason" });
       }
+
       const unavailabilityData = {
-        unavailable_date: formatDate(date), // YYYY-MM-DD
-        start_time: allDay ? null : formatTime(startTime), // HH:MM:SS or null
-        end_time: allDay ? null : formatTime(endTime), // HH:MM:SS or null
-        all_day: allDay, // boolean
+        user_id: session.user.id,
+        unavailable_date: formatDate(date),
+        start_time: allDay ? null : formatTime(startTime),
+        end_time: allDay ? null : formatTime(endTime),
+        all_day: allDay,
         reason: reason,
-        repeating_day: null, // specific date = null
+        recurring: false, // NOT recurring
+        recurrence_pattern: null,
+        days_of_week: null,
+        recurrence_end_date: null,
+        repeating_day: null
       };
 
-      // call api
-      const response = await authenticatedFetchServer(
-        `${API_BASE_URL}/driver-unavailability`,
-        {
-          method: "POST",
-          body: JSON.stringify(unavailabilityData),
-        },
-        event
-      );
+      const { error } = await supabase
+        .from('driver_unavailability')
+        .insert(unavailabilityData);
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        return fail(response.status, {
-          error: errorData.error || "Failed to create unavailability",
-        });
+      if (error) {
+        console.error('Error inserting unavailability:', error);
+        return fail(500, { error: error.message });
       }
 
       return { success: true };
@@ -84,15 +88,21 @@ export const actions: Actions = {
 
   createRegularUnavailability: async (event) => {
     try {
-      const formData = await event.request.formData();
+      const supabase = createSupabaseServerClient(event);
+      const { data: { session } } = await supabase.auth.getSession();
 
+      if (!session) {
+        return fail(401, { error: 'Unauthorized' });
+      }
+
+      const formData = await event.request.formData();
       const numberOfDates = parseInt(formData.get("numberOfDate") as string);
 
       if (!numberOfDates || numberOfDates < 1) {
         return fail(400, { error: "Invalid number of dates" });
       }
 
-      // Parse dates on FormData
+      // Parse dates from FormData
       const dates = [];
       for (let i = 0; i < numberOfDates; i++) {
         const selectedDay = formData.get(`dates[${i}][selectedDay]`) as string;
@@ -126,40 +136,56 @@ export const actions: Actions = {
         });
       }
 
-      // Send Dates to db individually
+      // Convert day name to day number (0 = Sunday, 6 = Saturday)
+      function dayNameToDayNumber(dayName: string): number {
+        const dayMap: Record<string, number> = {
+          'Sunday': 0,
+          'Monday': 1,
+          'Tuesday': 2,
+          'Wednesday': 3,
+          'Thursday': 4,
+          'Friday': 5,
+          'Saturday': 6
+        };
+        return dayMap[dayName] ?? 1; // Default to Monday
+      }
+
+      // Calculate end date (1 year from now)
+      const startDate = new Date();
+      const endDate = new Date(startDate);
+      endDate.setFullYear(endDate.getFullYear() + 1);
+
+      // Insert recurring unavailability records
       const results = [];
       for (const dateData of dates) {
+        const dayNumber = dayNameToDayNumber(dateData.selectedDay);
+        
         const unavailabilityData = {
-          repeating_day: dateData.selectedDay, // day_enum (Monday, Tuesday, etc.)
-          start_time: dateData.startTime
-            ? formatTime(dateData.startTime)
-            : null, // HH:MM:SS or null
-          end_time: dateData.endTime ? formatTime(dateData.endTime) : null, // HH:MM:SS or null
-          all_day: dateData.allDay, // boolean
+          user_id: session.user.id,
+          unavailable_date: startDate.toISOString().split('T')[0], // YYYY-MM-DD
+          recurring: true,
+          recurrence_pattern: 'weekly',
+          days_of_week: [dayNumber], // Array of day numbers
+          recurrence_end_date: endDate.toISOString().split('T')[0],
+          start_time: dateData.startTime ? formatTime(dateData.startTime) : null,
+          end_time: dateData.endTime ? formatTime(dateData.endTime) : null,
+          all_day: dateData.allDay,
           reason: dateData.reason,
-          unavailable_date: null, // regular date = null
+          repeating_day: null // Deprecated field, set to null
         };
 
-        const response = await authenticatedFetchServer(
-          `${API_BASE_URL}/driver-unavailability`,
-          {
-            method: "POST",
-            body: JSON.stringify(unavailabilityData),
-          },
-          event
-        );
+        const { error } = await supabase
+          .from('driver_unavailability')
+          .insert(unavailabilityData);
 
-        if (!response.ok) {
-          const errorData = await response.json();
-          return fail(response.status, {
-            error:
-              errorData.error ||
-              `Failed to create unavailability for ${dateData.selectedDay}`,
+        if (error) {
+          console.error('Error inserting unavailability:', error);
+          return fail(500, {
+            error: `Failed to create unavailability for ${dateData.selectedDay}: ${error.message}`
           });
         }
 
-        const result = await response.json();
-        results.push(result);
+        results.push(unavailabilityData);
       }
 
       return { success: true, results };
@@ -172,6 +198,7 @@ export const actions: Actions = {
       });
     }
   },
+
   deleteUnavailability: async (event) => {
     try {
       const formData = await event.request.formData();
