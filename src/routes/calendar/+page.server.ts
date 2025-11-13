@@ -2,6 +2,73 @@
 import { createSupabaseServerClient } from '$lib/supabase.server';
 import { error, redirect } from '@sveltejs/kit';
 
+// Helper function to expand recurring unavailability
+function expandRecurringUnavailability(unavail: any[]): any[] {
+  const expanded: any[] = [];
+  
+  unavail.forEach(item => {
+    if (!item.recurring) {
+      // Non-recurring, add as-is
+      expanded.push(item);
+      return;
+    }
+
+    // Expand recurring unavailability
+    const startDate = new Date(item.unavailable_date);
+    const endDate = item.recurrence_end_date 
+      ? new Date(item.recurrence_end_date)
+      : new Date(startDate.getTime() + 365 * 24 * 60 * 60 * 1000); // Default 1 year
+    
+    const pattern = item.recurrence_pattern || 'weekly';
+    const daysOfWeek = item.days_of_week || [startDate.getDay()];
+    
+    let currentDate = new Date(startDate);
+    const maxIterations = 365; // Safety limit
+    let iterations = 0;
+
+    while (currentDate <= endDate && iterations < maxIterations) {
+      iterations++;
+      
+      // Check if current day matches pattern
+      if (pattern === 'daily') {
+        expanded.push({
+          ...item,
+          id: `${item.id}-${currentDate.toISOString().split('T')[0]}`,
+          unavailable_date: currentDate.toISOString().split('T')[0],
+          is_recurring_instance: true,
+          original_id: item.id
+        });
+        currentDate.setDate(currentDate.getDate() + 1);
+      } else if (pattern === 'weekly') {
+        const dayOfWeek = currentDate.getDay();
+        if (daysOfWeek.includes(dayOfWeek)) {
+          expanded.push({
+            ...item,
+            id: `${item.id}-${currentDate.toISOString().split('T')[0]}`,
+            unavailable_date: currentDate.toISOString().split('T')[0],
+            is_recurring_instance: true,
+            original_id: item.id
+          });
+        }
+        currentDate.setDate(currentDate.getDate() + 1);
+      } else if (pattern === 'monthly') {
+        if (currentDate.getDate() === startDate.getDate()) {
+          expanded.push({
+            ...item,
+            id: `${item.id}-${currentDate.toISOString().split('T')[0]}`,
+            unavailable_date: currentDate.toISOString().split('T')[0],
+            is_recurring_instance: true,
+            original_id: item.id
+          });
+        }
+        currentDate.setDate(currentDate.getDate() + 1);
+      }
+    }
+  });
+
+  return expanded;
+}
+
 export const load = async (event) => {
   const supabase = createSupabaseServerClient(event);
   const { data: { session } } = await supabase.auth.getSession();
@@ -42,17 +109,19 @@ export const load = async (event) => {
     .eq('user_id', session.user.id)
     .single();
 
-  const myUnavailabilityData = (myUnavailabilityRaw || []).map(item => ({
+  // Expand recurring unavailability
+  const myUnavailabilityExpanded = expandRecurringUnavailability(myUnavailabilityRaw || []);
+  
+  const myUnavailabilityData = myUnavailabilityExpanded.map(item => ({
     ...item,
     staff_profiles: myStaffProfile
   }));
 
-  console.log('My unavailability with profile:', myUnavailabilityData);
+  console.log('My unavailability expanded:', myUnavailabilityData.length);
 
   // Fetch ALL driver unavailability (admin/dispatcher only)
   let allUnavailabilityData = [];
   if (isAdminOrDispatcher) {
-    // First get all unavailability for org
     const { data: allUnavailRaw } = await supabase
       .from('driver_unavailability')
       .select('*')
@@ -61,8 +130,11 @@ export const load = async (event) => {
     console.log('All unavail raw:', allUnavailRaw?.length || 0);
 
     if (allUnavailRaw && allUnavailRaw.length > 0) {
+      // Expand recurring unavailability
+      const allUnavailExpanded = expandRecurringUnavailability(allUnavailRaw);
+      
       // Get unique user_ids
-      const userIds = [...new Set(allUnavailRaw.map(u => u.user_id).filter(Boolean))];
+      const userIds = [...new Set(allUnavailExpanded.map(u => u.user_id).filter(Boolean))];
       
       // Fetch staff profiles for these users in the org
       const { data: staffProfiles } = await supabase
@@ -76,14 +148,14 @@ export const load = async (event) => {
       const staffMap = new Map(staffProfiles?.map(s => [s.user_id, s]) || []);
 
       // Only include unavailability for users in this org
-      allUnavailabilityData = allUnavailRaw
+      allUnavailabilityData = allUnavailExpanded
         .filter(item => staffMap.has(item.user_id))
         .map(item => ({
           ...item,
           staff_profiles: staffMap.get(item.user_id)
         }));
 
-      console.log('All unavail with profiles:', allUnavailabilityData.length);
+      console.log('All unavail expanded with profiles:', allUnavailabilityData.length);
     }
   }
 
