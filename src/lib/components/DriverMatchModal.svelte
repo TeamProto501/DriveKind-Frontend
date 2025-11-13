@@ -237,6 +237,18 @@
               </span>
             </div>
           </div>
+
+          <!-- Added: Notes + Client Limitations -->
+          <div class="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+            <div class="flex items-start">
+              <span class="font-medium text-gray-700">Notes:</span>
+              <span class="ml-2 text-gray-900 break-words">{ride.notes || '—'}</span>
+            </div>
+            <div class="flex items-start">
+              <span class="font-medium text-gray-700">Client limitations:</span>
+              <span class="ml-2 text-gray-900 break-words">{ride.clients?.other_limitations || 'None'}</span>
+            </div>
+          </div>
         </div>
       {/if}
 

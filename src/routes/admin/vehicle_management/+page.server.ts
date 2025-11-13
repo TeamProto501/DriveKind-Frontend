@@ -1,5 +1,5 @@
-import type { PageServerLoad } from './$types';
-import { redirect } from '@sveltejs/kit';
+import type { PageServerLoad, Actions } from './$types';
+import { redirect, fail } from '@sveltejs/kit';
 import { createSupabaseServerClient } from '$lib/supabase.server';
 
 export const load: PageServerLoad = async (event) => {
@@ -56,8 +56,6 @@ export const load: PageServerLoad = async (event) => {
     .eq('org_id', profile.org_id)
     .contains('role', ['Driver']);
 
-  console.log('Server-side vehicles for org', profile.org_id, ':', vehiclesWithProfiles);
-
   return {
     session,
     profile,
@@ -66,3 +64,163 @@ export const load: PageServerLoad = async (event) => {
     driverOptions: drivers || []
   };
 };
+
+export const actions = {
+  create: async (event) => {
+    const supabase = createSupabaseServerClient(event);
+    const { data: { session } } = await supabase.auth.getSession();
+
+    if (!session) {
+      return fail(401, { error: 'Unauthorized' });
+    }
+
+    const { data: profile } = await supabase
+      .from('staff_profiles')
+      .select('org_id, role')
+      .eq('user_id', session.user.id)
+      .single();
+
+    if (!profile?.org_id) {
+      return fail(400, { error: 'No organization found' });
+    }
+
+    const roles = Array.isArray(profile.role) ? profile.role : [];
+    if (!roles.includes('Admin') && !roles.includes('Super Admin')) {
+      return fail(403, { error: 'Permission denied' });
+    }
+
+    const formData = await event.request.formData();
+    const user_id = formData.get('user_id') as string;
+    const type_of_vehicle_enum = formData.get('type_of_vehicle_enum') as string;
+    const vehicle_color = formData.get('vehicle_color') as string;
+    const nondriver_seats = parseInt(formData.get('nondriver_seats') as string);
+    const active = formData.get('active') === 'true';
+
+    // If creating as Active, first deactivate all other vehicles for this user
+    if (active) {
+      await supabase
+        .from('vehicles')
+        .update({ active: false })
+        .eq('org_id', profile.org_id)
+        .eq('user_id', user_id);
+    }
+
+    const { error } = await supabase
+      .from('vehicles')
+      .insert({
+        org_id: profile.org_id,
+        user_id,
+        type_of_vehicle_enum,
+        vehicle_color,
+        nondriver_seats,
+        active
+      });
+
+    if (error) {
+      console.error('Create vehicle error:', error);
+      return fail(500, { error: error.message });
+    }
+
+    return { success: true };
+  },
+
+  update: async (event) => {
+    const supabase = createSupabaseServerClient(event);
+    const { data: { session } } = await supabase.auth.getSession();
+
+    if (!session) {
+      return fail(401, { error: 'Unauthorized' });
+    }
+
+    const { data: profile } = await supabase
+      .from('staff_profiles')
+      .select('org_id, role')
+      .eq('user_id', session.user.id)
+      .single();
+
+    if (!profile?.org_id) {
+      return fail(400, { error: 'No organization found' });
+    }
+
+    const roles = Array.isArray(profile.role) ? profile.role : [];
+    if (!roles.includes('Admin') && !roles.includes('Super Admin')) {
+      return fail(403, { error: 'Permission denied' });
+    }
+
+    const formData = await event.request.formData();
+    const vehicle_id = parseInt(formData.get('vehicle_id') as string);
+    const owner_user_id = formData.get('owner_user_id') as string;
+    const type_of_vehicle_enum = formData.get('type_of_vehicle_enum') as string;
+    const vehicle_color = formData.get('vehicle_color') as string;
+    const nondriver_seats = parseInt(formData.get('nondriver_seats') as string);
+    const active = formData.get('active') === 'true';
+
+    // If setting to Active, deactivate other vehicles for same user
+    if (active && owner_user_id) {
+      await supabase
+        .from('vehicles')
+        .update({ active: false })
+        .eq('org_id', profile.org_id)
+        .eq('user_id', owner_user_id)
+        .neq('vehicle_id', vehicle_id);
+    }
+
+    const { error } = await supabase
+      .from('vehicles')
+      .update({
+        type_of_vehicle_enum,
+        vehicle_color,
+        nondriver_seats,
+        active
+      })
+      .eq('vehicle_id', vehicle_id)
+      .eq('org_id', profile.org_id);
+
+    if (error) {
+      console.error('Update vehicle error:', error);
+      return fail(500, { error: error.message });
+    }
+
+    return { success: true };
+  },
+
+  delete: async (event) => {
+    const supabase = createSupabaseServerClient(event);
+    const { data: { session } } = await supabase.auth.getSession();
+
+    if (!session) {
+      return fail(401, { error: 'Unauthorized' });
+    }
+
+    const { data: profile } = await supabase
+      .from('staff_profiles')
+      .select('org_id, role')
+      .eq('user_id', session.user.id)
+      .single();
+
+    if (!profile?.org_id) {
+      return fail(400, { error: 'No organization found' });
+    }
+
+    const roles = Array.isArray(profile.role) ? profile.role : [];
+    if (!roles.includes('Admin') && !roles.includes('Super Admin')) {
+      return fail(403, { error: 'Permission denied' });
+    }
+
+    const formData = await event.request.formData();
+    const vehicle_id = parseInt(formData.get('vehicle_id') as string);
+
+    const { error } = await supabase
+      .from('vehicles')
+      .delete()
+      .eq('vehicle_id', vehicle_id)
+      .eq('org_id', profile.org_id);
+
+    if (error) {
+      console.error('Delete vehicle error:', error);
+      return fail(500, { error: error.message });
+    }
+
+    return { success: true };
+  }
+} satisfies Actions;

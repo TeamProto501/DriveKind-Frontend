@@ -715,16 +715,6 @@
           </button>
           
           <button
-            onclick={() => activeTab = "reported"}
-            class="py-4 px-1 border-b-2 font-medium text-sm transition-colors {activeTab === 'reported' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}"
-          >
-            Reported Rides
-            {#if rideCounts().reported > 0}
-              <span class="ml-2 py-0.5 px-2 rounded-full text-xs bg-purple-100 text-purple-600">{rideCounts().reported}</span>
-            {/if}
-          </button>
-          
-          <button
             onclick={() => activeTab = "completed"}
             class="py-4 px-1 border-b-2 font-medium text-sm transition-colors {activeTab === 'completed' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}"
           >
@@ -762,7 +752,7 @@
             placeholder="Search rides..." 
             bind:value={searchTerm}
             class="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-          />
+            />
         </div>
       </div>
 
