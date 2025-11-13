@@ -61,9 +61,9 @@
     user_id: string | null;
     type_of_vehicle_enum: VehicleType | null;
     vehicle_color: string | null;
-    nondriver_seats: number | null; // int2
+    nondriver_seats: number | null;
     active: boolean | null;
-    org_id: number | null; // used only for filtering
+    org_id: number | null;
     staff_profile?: {
       first_name: string | null;
       last_name: string | null;
@@ -73,10 +73,8 @@
   // toast
   let toast = $state("");
   let toastOk = $state(true);
-  let tostOk = $state(true);
   function setToast(message: string, ok = true) {
     toast = message;
-    tostOk = ok;
     toastOk = ok;
     setTimeout(() => (toast = ""), 3500);
   }
@@ -125,33 +123,14 @@
     {}
   );
 
-  // we keep the vehicle’s current owner for “one-active-per-user” logic
+  // we keep the vehicle's current owner for "one-active-per-user" logic
   let editOwnerUserId = $state<string | null>(null);
+  let editDriverName = $state<string>(""); // NEW: Store driver name for modal title
 
   // DELETE modal
   let showDeleteModal = $state(false);
   let isDeleting = $state(false);
   let toDelete = $state<VehicleRow | null>(null);
-
-  // ---- Viewer org lookup ----
-  async function loadViewerIdentity() {
-    viewerUid = data?.session?.user?.id ?? null;
-    if (!viewerUid) {
-      const { data: auth, error } = await supabase.auth.getUser();
-      if (error) throw error;
-      viewerUid = auth?.user?.id ?? null;
-    }
-    if (!viewerUid) throw new Error("No user session.");
-
-    const { data: sp, error: spErr } = await supabase
-      .from("staff_profiles")
-      .select("org_id")
-      .eq("user_id", viewerUid)
-      .single();
-
-    if (spErr) throw spErr;
-    viewerOrgId = (sp?.org_id ?? null) as number | null;
-  }
 
   async function loadVehicles() {
     await invalidateAll();
@@ -206,9 +185,6 @@
                 .trim()
                 .toLowerCase();
             return (
-              String(v.vehicle_id ?? "")
-                .toLowerCase()
-                .includes(q) ||
               String(v.type_of_vehicle_enum ?? "")
                 .toLowerCase()
                 .includes(q) ||
@@ -254,12 +230,16 @@
 
   function openEdit(row: VehicleRow) {
     if (!canManage) return;
-    editOwnerUserId = row.user_id ?? null; // keep owner for one-active-per-user logic
+    editOwnerUserId = row.user_id ?? null;
+    
+    // Store driver name for modal title
+    editDriverName = row.staff_profile
+      ? `${row.staff_profile.first_name ?? ""} ${row.staff_profile.last_name ?? ""}`.trim()
+      : "Unknown Driver";
+    
     editForm = {
       vehicle_id: row.vehicle_id,
-      type_of_vehicle_enum: (row.type_of_vehicle_enum ?? "") as
-        | VehicleType
-        | "",
+      type_of_vehicle_enum: (row.type_of_vehicle_enum ?? "") as VehicleType | "",
       vehicle_color: row.vehicle_color ?? "",
       nondriver_seats: row.nondriver_seats ?? "",
       active: !!row.active,
@@ -313,7 +293,6 @@
 
     isSaving = true;
     try {
-      // If creating as Active, first deactivate all other vehicles for this user in this org
       if (addForm.active) {
         const { error: offErr } = await supabase
           .from("vehicles")
@@ -346,7 +325,7 @@
     }
   }
 
-  // ------- UPDATE (owner not changed here) -------
+  // ------- UPDATE -------
   function onEditSubmit(e: Event) {
     e.preventDefault();
     void saveEdits();
@@ -380,7 +359,6 @@
 
     isSaving = true;
     try {
-      // If setting this vehicle to Active, first deactivate other vehicles for same user in this org
       if (editForm.active && editOwnerUserId) {
         const { error: offErr } = await supabase
           .from("vehicles")
@@ -428,8 +406,8 @@
             <Car class="w-6 h-6 text-blue-600" />
           </div>
           <div>
-            <h1 class="text-2xl font-bold text-gray-900">Vehicles</h1>
-            <p class="text-sm text-gray-600">Vehicles in your organization</p>
+            <h1 class="text-2xl font-bold text-gray-900">Vehicle Management</h1>
+            <p class="text-sm text-gray-600">Manage your organization's fleet</p>
           </div>
         </div>
 
@@ -471,7 +449,7 @@
               />
               <input
                 type="text"
-                placeholder="Search vehicles (id, driver, type, color, seats, status)…"
+                placeholder="Search vehicles (driver, type, color, seats, status)…"
                 bind:value={searchTerm}
                 class="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
@@ -520,10 +498,7 @@
           <table class="min-w-full divide-y divide-gray-200">
             <thead class="bg-gray-50">
               <tr>
-                <th
-                  class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase"
-                  >ID</th
-                >
+                <!-- REMOVED ID COLUMN -->
                 <th
                   class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase"
                   >Driver</th
@@ -555,11 +530,7 @@
             <tbody class="bg-white divide-y divide-gray-200">
               {#each filteredVehicles as v (v.vehicle_id)}
                 <tr class="hover:bg-gray-50">
-                  <td class="px-6 py-4 whitespace-nowrap">
-                    <div class="text-sm font-medium text-gray-900">
-                      #{v.vehicle_id}
-                    </div>
-                  </td>
+                  <!-- REMOVED ID CELL -->
                   <td class="px-6 py-4 whitespace-nowrap">
                     <div class="text-sm text-gray-900">
                       {#if v.staff_profile}
@@ -660,7 +631,7 @@
               {#each driverOptions as d (d.user_id)}
                 <option value={d.user_id}
                   >{`${d.first_name ?? ""} ${d.last_name ?? ""}`.trim() ||
-                    d.user_id}</option
+                    "Unknown"}</option
                 >
               {/each}
             </select>
@@ -750,12 +721,12 @@
     </Dialog.Root>
   {/if}
 
-  <!-- Edit Modal -->
+  <!-- Edit Modal - UPDATED TITLE -->
   {#if canManage}
     <Dialog.Root bind:open={showEditModal}>
       <Dialog.Content class="sm:max-w-md bg-white">
         <Dialog.Header>
-          <Dialog.Title>Edit Vehicle #{editForm.vehicle_id}</Dialog.Title>
+          <Dialog.Title>Edit Vehicle - {editDriverName}</Dialog.Title>
           <Dialog.Description>Update vehicle details.</Dialog.Description>
         </Dialog.Header>
 
@@ -842,7 +813,7 @@
     </Dialog.Root>
   {/if}
 
-  <!-- Delete Modal -->
+  <!-- Delete Modal - UPDATED MESSAGE -->
   {#if canManage}
     <Dialog.Root bind:open={showDeleteModal}>
       <Dialog.Content class="sm:max-w-md bg-white">
@@ -854,9 +825,15 @@
         <div
           class="p-4 bg-yellow-50 border border-yellow-200 rounded-lg text-sm text-yellow-800"
         >
-          Delete vehicle <span class="font-medium">#{toDelete?.vehicle_id}</span
-          >
-          ({toDelete?.type_of_vehicle_enum ?? "—"})?
+          Delete <span class="font-medium">{toDelete?.type_of_vehicle_enum ?? "—"}</span>
+          ({toDelete?.vehicle_color ?? "—"}) for 
+          <span class="font-medium">
+            {#if toDelete?.staff_profile}
+              {`${toDelete.staff_profile.first_name ?? ""} ${toDelete.staff_profile.last_name ?? ""}`.trim() || "Unknown Driver"}
+            {:else}
+              Unknown Driver
+            {/if}
+          </span>?
         </div>
 
         <Dialog.Footer class="mt-6">
