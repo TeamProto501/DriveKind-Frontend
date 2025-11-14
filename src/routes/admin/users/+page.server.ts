@@ -1,7 +1,7 @@
 // src/routes/admin/users/+page.server.ts
 import { API_BASE_URL } from "$lib/api";
-import { error, redirect } from '@sveltejs/kit';
-import { createSupabaseServerClient } from '$lib/supabase.server';  // ADD THIS LINE
+import { error, redirect, json } from '@sveltejs/kit';
+import { createSupabaseServerClient } from '$lib/supabase.server';
 import type { Actions } from './$types';
 
 export const load = async (event) => {
@@ -101,5 +101,78 @@ export const load = async (event) => {
       session: null,
       error: err.message || 'Failed to load data'
     };
+  }
+};
+
+// Add server actions for deactivate functionality
+export const actions: Actions = {
+  deactivateUser: async (event) => {
+    const supabase = createSupabaseServerClient(event);
+    
+    // Verify session
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    if (sessionError || !session) {
+      return { success: false, error: 'Unauthorized' };
+    }
+
+    // Get user_id from form data
+    const formData = await event.request.formData();
+    const userId = formData.get('user_id') as string;
+    
+    if (!userId) {
+      return { success: false, error: 'User ID is required' };
+    }
+
+    // Get current user's profile to verify permissions
+    const { data: profile, error: profileError } = await supabase
+      .from('staff_profiles')
+      .select('org_id, role')
+      .eq('user_id', session.user.id)
+      .single();
+
+    if (profileError || !profile) {
+      return { success: false, error: 'Profile not found' };
+    }
+
+    // Check if user has Admin permission
+    const roles = Array.isArray(profile.role) ? profile.role : (profile.role ? [profile.role] : []);
+    const hasPermission = roles.some(r => ['Admin', 'Super Admin'].includes(r));
+    
+    if (!hasPermission) {
+      return { success: false, error: 'Insufficient permissions' };
+    }
+
+    // Verify the user to deactivate belongs to same org
+    const { data: targetUser, error: fetchError } = await supabase
+      .from('staff_profiles')
+      .select('org_id, user_id')
+      .eq('user_id', userId)
+      .single();
+
+    if (fetchError || !targetUser) {
+      return { success: false, error: 'User not found' };
+    }
+
+    if (targetUser.org_id !== profile.org_id) {
+      return { success: false, error: 'Unauthorized to deactivate this user' };
+    }
+
+    // Prevent deactivating yourself
+    if (userId === session.user.id) {
+      return { success: false, error: 'Cannot deactivate your own account' };
+    }
+
+    // Deactivate user (set active = false)
+    const { error: updateError } = await supabase
+      .from('staff_profiles')
+      .update({ active: false })
+      .eq('user_id', userId);
+
+    if (updateError) {
+      console.error('Deactivate error:', updateError);
+      return { success: false, error: updateError.message };
+    }
+
+    return { success: true };
   }
 };

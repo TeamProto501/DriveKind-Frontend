@@ -1,7 +1,7 @@
 <script lang="ts">
   import RoleGuard from '$lib/components/RoleGuard.svelte';
   import Breadcrumbs from '$lib/components/Breadcrumbs.svelte';
-  import { Users, Plus, Search, Filter, Trash2, ChevronUp, ChevronDown, ChevronsUpDown, X } from '@lucide/svelte';
+  import { Users, Plus, Search, Filter, Ban, ChevronUp, ChevronDown, ChevronsUpDown, X } from '@lucide/svelte';
   import UserSidebar from './UserSidebar.svelte';
   import ClientSidebar from './ClientSidebar.svelte';
   import { API_BASE_URL } from '$lib/api';
@@ -25,6 +25,7 @@
     state?: string | null;
     training_completed?: boolean | null;
     mileage_reimbursement?: boolean | null;
+    active?: boolean | null;
   };
 
   type ClientRow = {
@@ -74,13 +75,12 @@
   let isCreateMode = false;
   let showSidebar = false;
 
-  let showDeleteModal = false;
-  let showDeleteSearch = false;
-  let deleteSearchQuery = '';
-  let deleteSearchResults: StaffRow[] = [];
-  let userToDelete: StaffRow | null = null;
-  let deleteConfirmEmail = '';
-  let isDeleting = false;
+  let showDeactivateUserModal = false;
+  let showDeactivateUserSearch = false;
+  let deactivateUserSearchQuery = '';
+  let deactivateUserSearchResults: StaffRow[] = [];
+  let userToDeactivate: StaffRow | null = null;
+  let isDeactivatingUser = false;
 
   let showDeactivateModal = false;
   let clientToDeactivate: ClientRow | null = null;
@@ -297,48 +297,46 @@
     closeSidebar();
   }
 
-  // Delete search (users only)
-  function openDeleteSearch() {
-    showDeleteSearch = true;
-    deleteSearchQuery = '';
-    deleteSearchResults = [];
+  // Deactivate user search
+  function openDeactivateUserSearch() {
+    showDeactivateUserSearch = true;
+    deactivateUserSearchQuery = '';
+    deactivateUserSearchResults = [];
   }
-  function closeDeleteSearch() {
-    showDeleteSearch = false;
-    deleteSearchQuery = '';
-    deleteSearchResults = [];
+  function closeDeactivateUserSearch() {
+    showDeactivateUserSearch = false;
+    deactivateUserSearchQuery = '';
+    deactivateUserSearchResults = [];
   }
-  function searchUsersForDelete() {
-    if (!deleteSearchQuery.trim()) {
-      deleteSearchResults = [];
+  function searchUsersForDeactivate() {
+    if (!deactivateUserSearchQuery.trim()) {
+      deactivateUserSearchResults = [];
       return;
     }
-    const q = deleteSearchQuery.toLowerCase();
-    deleteSearchResults = staffProfiles
+    const q = deactivateUserSearchQuery.toLowerCase();
+    deactivateUserSearchResults = staffProfiles
       .filter(
         (u) =>
-          `${u.first_name} ${u.last_name}`.toLowerCase().includes(q) ||
+          u.active !== false && // Only show active users
+          (`${u.first_name} ${u.last_name}`.toLowerCase().includes(q) ||
           (u.email && u.email.toLowerCase().includes(q)) ||
-          (u.primary_phone && u.primary_phone.includes(q))
+          (u.primary_phone && u.primary_phone.includes(q)))
       )
       .slice(0, 10);
   }
 
-  function selectUserForDeletion(user: StaffRow) {
-    userToDelete = user;
-    deleteConfirmEmail = '';
-    showDeleteModal = true;
-    closeDeleteSearch();
+  function selectUserForDeactivation(user: StaffRow) {
+    userToDeactivate = user;
+    showDeactivateUserModal = true;
+    closeDeactivateUserSearch();
   }
-  function openDeleteModal(user: StaffRow) {
-    userToDelete = user;
-    deleteConfirmEmail = '';
-    showDeleteModal = true;
+  function openDeactivateUserModal(user: StaffRow) {
+    userToDeactivate = user;
+    showDeactivateUserModal = true;
   }
-  function closeDeleteModal() {
-    showDeleteModal = false;
-    userToDelete = null;
-    deleteConfirmEmail = '';
+  function closeDeactivateUserModal() {
+    showDeactivateUserModal = false;
+    userToDeactivate = null;
   }
 
   function openDeactivateModal(client: ClientRow) {
@@ -381,40 +379,35 @@
     }
   }
 
-  async function confirmDelete() {
-    if (!userToDelete) return;
-
-    const userEmail = userToDelete.email || '';
-
-    if (deleteConfirmEmail !== userEmail) {
-      toastStore.error('Email does not match');
-      return;
-    }
+  async function confirmDeactivateUser() {
+    if (!userToDeactivate) return;
 
     try {
-      isDeleting = true;
+      isDeactivatingUser = true;
 
-      const response = await fetch(`${API_BASE_URL}/staff-profiles/${userToDelete.user_id}`, {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${data.session.access_token}`
-        }
+      // Use SvelteKit form action
+      const formData = new FormData();
+      formData.append('user_id', userToDeactivate.user_id);
+
+      const response = await fetch('?/deactivateUser', {
+        method: 'POST',
+        body: formData
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to delete user');
+      const result = await response.json();
+      
+      if (!result?.data?.success) {
+        throw new Error(result?.data?.error || 'Failed to deactivate user');
       }
 
-      toastStore.success('User deleted successfully');
-      closeDeleteModal();
+      toastStore.success('User deactivated successfully');
+      closeDeactivateUserModal();
       await refreshData();
     } catch (error: any) {
-      console.error('Delete error:', error);
-      toastStore.error(`Failed to delete user: ${error.message}`);
+      console.error('Deactivate error:', error);
+      toastStore.error(`Failed to deactivate user: ${error.message}`);
     } finally {
-      isDeleting = false;
+      isDeactivatingUser = false;
     }
   }
 
@@ -443,7 +436,7 @@
       
       <div class="mb-8 flex items-center justify-between">
         <div>
-          <h1 class="text-3xl font-bold text-gray-900">User Management</h1>
+          <h1 class="text-3xl font-bold text-gray-900">User and Client Management</h1>
           <p class="text-gray-600 mt-2">Manage user accounts, roles, and client records.</p>
         </div>
 
@@ -459,10 +452,10 @@
 
           {#if activeTab === 'users'}
             <button
-              class="inline-flex items-center gap-2 bg-red-100 text-red-700 px-4 py-2 rounded-lg shadow hover:bg-red-200 transition"
-              on:click={openDeleteSearch}
+              class="inline-flex items-center gap-2 bg-orange-100 text-orange-700 px-4 py-2 rounded-lg shadow hover:bg-orange-200 transition"
+              on:click={openDeactivateUserSearch}
             >
-              <Trash2 class="w-4 h-4" /> Delete User
+              <Ban class="w-4 h-4" /> Deactivate User
             </button>
           {/if}
 
@@ -560,6 +553,7 @@
                         <svelte:component this={getSortIcon('role')} class="w-4 h-4" />
                       </button>
                     </th>
+                    <th class="px-4 py-2">Status</th>
                     <th class="px-4 py-2">Actions</th>
                   </tr>
                 </thead>
@@ -574,6 +568,11 @@
                           {Array.isArray(user.role) ? user.role.join(', ') : (user.role || '-')}
                         </span>
                       </td>
+                      <td class="px-4 py-2">
+                        <span class="inline-flex items-center px-2 py-1 rounded-full text-xs {user.active === false ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}">
+                          {user.active === false ? 'Inactive' : 'Active'}
+                        </span>
+                      </td>
                       <td class="px-4 py-2" on:click|stopPropagation>
                         <div class="flex items-center gap-3">
                           <button
@@ -582,12 +581,14 @@
                           >
                             Edit
                           </button>
-                          <button
-                            class="text-red-600 hover:underline text-sm font-medium"
-                            on:click={() => openDeleteModal(user)}
-                          >
-                            Delete
-                          </button>
+                          {#if user.active !== false}
+                            <button
+                              class="text-orange-600 hover:underline text-sm font-medium"
+                              on:click={() => openDeactivateUserModal(user)}
+                            >
+                              Deactivate
+                            </button>
+                          {/if}
                         </div>
                       </td>
                     </tr>
@@ -748,37 +749,37 @@
       />
     {/if}
 
-    <!-- Delete Search Modal (Users Only) -->
-    {#if showDeleteSearch}
+    <!-- Deactivate User Search Modal -->
+    {#if showDeactivateUserSearch}
       <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
         <div class="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
           <div class="px-6 py-4 border-b flex items-center justify-between">
-            <h3 class="text-lg font-semibold text-gray-900">Delete User</h3>
-            <button on:click={closeDeleteSearch} class="text-gray-500 hover:text-gray-700">
+            <h3 class="text-lg font-semibold text-gray-900">Deactivate User</h3>
+            <button on:click={closeDeactivateUserSearch} class="text-gray-500 hover:text-gray-700">
               <X class="w-5 h-5" />
             </button>
           </div>
 
           <div class="p-6">
-            <p class="text-sm text-gray-600 mb-4">Search for a user to delete:</p>
+            <p class="text-sm text-gray-600 mb-4">Search for a user to deactivate:</p>
 
             <div class="flex items-center gap-2 mb-4">
               <Search class="w-4 h-4 text-gray-400" />
               <input
                 type="text"
                 placeholder="Search by name, email, or phone..."
-                bind:value={deleteSearchQuery}
-                on:input={searchUsersForDelete}
+                bind:value={deactivateUserSearchQuery}
+                on:input={searchUsersForDeactivate}
                 class="flex-1 border rounded-lg px-3 py-2 text-sm"
                 autofocus
               />
             </div>
 
-            {#if deleteSearchResults.length > 0}
+            {#if deactivateUserSearchResults.length > 0}
               <div class="space-y-2 max-h-64 overflow-y-auto">
-                {#each deleteSearchResults as result}
+                {#each deactivateUserSearchResults as result}
                   <button
-                    on:click={() => selectUserForDeletion(result)}
+                    on:click={() => selectUserForDeactivation(result)}
                     class="w-full text-left p-3 border rounded-lg hover:bg-gray-50 transition-colors"
                   >
                     <div class="font-medium text-gray-900">
@@ -790,14 +791,14 @@
                   </button>
                 {/each}
               </div>
-            {:else if deleteSearchQuery.trim()}
-              <p class="text-sm text-gray-500 text-center py-4">No users found</p>
+            {:else if deactivateUserSearchQuery.trim()}
+              <p class="text-sm text-gray-500 text-center py-4">No active users found</p>
             {/if}
           </div>
 
           <div class="px-6 py-4 border-t flex justify-end">
             <button
-              on:click={closeDeleteSearch}
+              on:click={closeDeactivateUserSearch}
               class="px-4 py-2 rounded-lg border text-gray-700 hover:bg-gray-50"
             >
               Cancel
@@ -807,72 +808,57 @@
       </div>
     {/if}
 
-    <!-- Delete Confirmation Modal (Users Only) -->
-    {#if showDeleteModal && userToDelete}
+    <!-- Deactivate User Confirmation Modal -->
+    {#if showDeactivateUserModal && userToDeactivate}
       <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
         <div class="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
           <div class="px-6 py-4 border-b">
-            <h3 class="text-lg font-semibold text-red-600">Confirm Deletion</h3>
+            <h3 class="text-lg font-semibold text-orange-600">Confirm Deactivation</h3>
           </div>
 
           <div class="p-6">
             <div class="mb-4">
               <p class="text-sm text-gray-900 font-medium mb-2">
-                You are about to delete:
+                You are about to deactivate:
               </p>
               <div class="p-3 bg-gray-50 rounded-lg">
                 <div class="font-medium text-gray-900">
-                  {userToDelete.first_name} {userToDelete.last_name}
+                  {userToDeactivate.first_name} {userToDeactivate.last_name}
                 </div>
                 <div class="text-xs text-gray-500">
-                  {userToDelete.email || userToDelete.primary_phone}
+                  {userToDeactivate.email || userToDeactivate.primary_phone}
                 </div>
               </div>
             </div>
 
             <div class="mb-4">
-              <p class="text-sm text-red-600 font-medium mb-2">⚠️ This action cannot be undone!</p>
-              <p class="text-sm text-gray-600 mb-4">
-                To confirm, please type the email address below:
+              <p class="text-sm text-gray-600">
+                This will set the user's status to <strong>Inactive</strong>. The user record will be preserved and can be reactivated later by editing the user.
               </p>
-
-              <div class="mb-2">
-                <code class="text-xs bg-gray-100 px-2 py-1 rounded">
-                  {userToDelete.email || ''}
-                </code>
-              </div>
-
-              <input
-                type="text"
-                bind:value={deleteConfirmEmail}
-                placeholder="Type email to confirm"
-                class="w-full border rounded-lg px-3 py-2 text-sm"
-                autofocus
-              />
             </div>
           </div>
 
           <div class="px-6 py-4 border-t flex justify-end gap-2">
             <button
-              on:click={closeDeleteModal}
-              disabled={isDeleting}
+              on:click={closeDeactivateUserModal}
+              disabled={isDeactivatingUser}
               class="px-4 py-2 rounded-lg border text-gray-700 hover:bg-gray-50 disabled:opacity-50"
             >
               Cancel
             </button>
             <button
-              on:click={confirmDelete}
-              disabled={isDeleting || !deleteConfirmEmail}
-              class="px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
+              on:click={confirmDeactivateUser}
+              disabled={isDeactivatingUser}
+              class="px-4 py-2 rounded-lg bg-orange-600 text-white hover:bg-orange-700 disabled:opacity-50"
             >
-              {isDeleting ? 'Deleting...' : 'Delete User'}
+              {isDeactivatingUser ? 'Deactivating...' : 'Deactivate User'}
             </button>
           </div>
         </div>
       </div>
     {/if}
 
-    <!-- Deactivate Confirmation Modal (Clients Only) -->
+    <!-- Deactivate Client Confirmation Modal -->
     {#if showDeactivateModal && clientToDeactivate}
       <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
         <div class="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
