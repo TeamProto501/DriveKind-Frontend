@@ -1,86 +1,72 @@
-import { json, type RequestHandler } from '@sveltejs/kit';
+import type { RequestHandler } from './$types';
+import { json } from '@sveltejs/kit';
 import { createSupabaseServerClient } from '$lib/supabase.server';
 
 export const POST: RequestHandler = async (event) => {
-  try {
-    const supabase = createSupabaseServerClient(event);
-    const { data: { session } } = await supabase.auth.getSession();
+  const supabase = createSupabaseServerClient(event);
+  
+  // Verify session
+  const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+  if (sessionError || !session) {
+    return json({ error: 'Unauthorized' }, { status: 401 });
+  }
 
-    if (!session) {
-      return json({ error: 'Unauthorized' }, { status: 401 });
-    }
+  // Get user's profile to verify org and permissions
+  const { data: profile, error: profileError } = await supabase
+    .from('staff_profiles')
+    .select('org_id, role')
+    .eq('user_id', session.user.id)
+    .single();
 
-    const body = await event.request.json();
-    const { location_name, address, address2, city, state, zipcode, org_id } = body;
+  if (profileError || !profile) {
+    return json({ error: 'Profile not found' }, { status: 404 });
+  }
 
-    // Validate required fields
-    if (!location_name || !address || !city || !state) {
-      return json({ error: 'Missing required fields: location_name, address, city, and state are required' }, { status: 400 });
-    }
+  // Check if user has permission (Admin or Super Admin)
+  const roles = Array.isArray(profile.role) ? profile.role : (profile.role ? [profile.role] : []);
+  const hasPermission = roles.some(r => ['Admin', 'Super Admin'].includes(r));
+  
+  if (!hasPermission) {
+    return json({ error: 'Insufficient permissions' }, { status: 403 });
+  }
 
-    // Get user's org_id if not provided
-    let userOrgId = org_id;
-    if (!userOrgId) {
-      const { data: profile } = await supabase
-        .from('staff_profiles')
-        .select('org_id')
-        .eq('user_id', session.user.id)
-        .single();
-      
-      if (!profile) {
-        return json({ error: 'User profile not found' }, { status: 404 });
-      }
-      userOrgId = profile.org_id;
-    }
+  // Parse request body
+  const body = await event.request.json();
+  const { location_name, address, address2, city, state, zipcode, org_id } = body;
 
-    // Verify user has permission (Dispatcher or Admin role)
-    const { data: profile } = await supabase
-      .from('staff_profiles')
-      .select('org_id, role')
-      .eq('user_id', session.user.id)
-      .single();
+  // Validate required fields
+  if (!location_name?.trim()) {
+    return json({ error: 'Location name is required' }, { status: 400 });
+  }
+  if (!address?.trim() || !city?.trim() || !state?.trim()) {
+    return json({ error: 'Address, City, and State are required' }, { status: 400 });
+  }
 
-    if (!profile) {
-      return json({ error: 'User profile not found' }, { status: 404 });
-    }
+  // Verify org_id matches user's org
+  if (org_id !== profile.org_id) {
+    return json({ error: 'Organization mismatch' }, { status: 403 });
+  }
 
-    if (profile.org_id !== userOrgId) {
-      return json({ error: 'You do not have permission to create destinations for this organization' }, { status: 403 });
-    }
-
-    const hasPermission = Array.isArray(profile.role)
-      ? (profile.role.includes('Dispatcher') || profile.role.includes('Admin') || profile.role.includes('Super Admin'))
-      : (profile.role === 'Dispatcher' || profile.role === 'Admin' || profile.role === 'Super Admin');
-
-    if (!hasPermission) {
-      return json({ error: 'You do not have permission to create destinations' }, { status: 403 });
-    }
-
-    const payload = {
+  // Insert destination
+  const { data: destination, error: insertError } = await supabase
+    .from('destinations')
+    .insert({
       location_name: location_name.trim(),
       address: address.trim(),
       address2: address2?.trim() || null,
       city: city.trim(),
       state: state.trim(),
       zipcode: zipcode?.trim() || null,
-      org_id: userOrgId
-    };
+      org_id: profile.org_id
+    })
+    .select()
+    .single();
 
-    const { data: destination, error: destinationError } = await supabase
-      .from('destinations')
-      .insert(payload)
-      .select()
-      .single();
-
-    if (destinationError) {
-      console.error('Error creating destination:', destinationError);
-      return json({ error: `Failed to create destination: ${destinationError.message}` }, { status: 500 });
-    }
-
-    return json({ success: true, destination });
-  } catch (error: any) {
-    console.error('Error in destination creation:', error);
-    return json({ error: `Internal server error: ${error.message}` }, { status: 500 });
+  if (insertError) {
+    console.error('Insert error:', insertError);
+    return json({ error: insertError.message }, { status: 500 });
   }
+
+  return json({ success: true, destination }, { status: 201 });
 };
 

@@ -87,6 +87,7 @@ export const load: PageServerLoad = async (event) => {
         dropoff_address2,
         donation_amount,
         completion_status,
+        trip_type,
         clients:client_id (
           first_name,
           last_name,

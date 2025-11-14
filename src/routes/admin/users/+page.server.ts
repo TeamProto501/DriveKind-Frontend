@@ -1,8 +1,7 @@
 // src/routes/admin/users/+page.server.ts
 import { API_BASE_URL } from "$lib/api";
 import { error, redirect } from '@sveltejs/kit';
-import { createSupabaseServerClient } from '$lib/supabase.server';  // ADD THIS LINE
-import type { Actions } from './$types';
+import { createSupabaseServerClient } from '$lib/supabase.server';
 
 export const load = async (event) => {
   const tab = event.url.searchParams.get("tab") ?? "users";

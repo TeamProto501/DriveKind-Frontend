@@ -150,6 +150,19 @@
         return "bg-gray-100 text-gray-800";
     }
   }
+
+  function getTripTypeColor(completionStatus: string) {
+    switch (completionStatus) {
+      case "Completed Round Trip":
+        return "bg-purple-100 text-purple-800";
+      case "Completed One Way To":
+        return "bg-blue-100 text-blue-800";
+      case "Completed One Way From":
+        return "bg-teal-100 text-teal-800";
+      default:
+        return "bg-gray-100 text-gray-800";
+    }
+  }
   
   const formatDate = (ts: string) => {
     if (!ts) return '';
@@ -391,7 +404,7 @@
     destination_name: "",
     pickup_from_home: true,
     call_id: "",
-    completion_status: "",
+    completion_status: "Completed Round Trip",
   });
 
   type Destination = {
@@ -466,7 +479,7 @@
       destination_name: "",
       pickup_from_home: true,
       call_id: "",
-      completion_status: "",
+      completion_status: "Completed Round Trip",
     };
     stepErrors = [];
   }
@@ -576,7 +589,7 @@
       destination_name: ride.destination_name ?? "",
       pickup_from_home: !!ride.pickup_from_home,
       call_id: (ride.call_id ?? "").toString(),
-      completion_status: ride.completion_status ?? "",
+      completion_status: ride.completion_status ?? "Completed Round Trip",
     };
     
     if (rideForm.pickup_from_home && rideForm.client_id)
@@ -722,7 +735,6 @@
         return Number(base.riders ?? 0);
       })(),
 
-      round_trip: base.round_trip ?? false,
       purpose: has(form.purpose)
         ? sanitizeInput(form.purpose)
         : (base.purpose ?? null),
@@ -742,9 +754,11 @@
       call_id: has(form.call_id)
         ? parseInt(form.call_id, 10)
         : (base.call_id ?? null),
+      
+      round_trip: form.completion_status === "Completed Round Trip",
       completion_status: has(form.completion_status)
         ? form.completion_status
-        : (base.completion_status ?? null),
+        : (base.completion_status ?? "Completed Round Trip"),
     };
 
     if (DEBUG) console.debug("🧾 Payload:", payload);
@@ -1292,6 +1306,12 @@
                   >
                     {ride.status.toUpperCase()}
                   </span>
+                  <span class="px-2 py-1 text-xs font-medium rounded-full {getTripTypeColor(ride.completion_status || 'Completed Round Trip')}">
+                    {ride.completion_status === 'Completed Round Trip' ? 'Round Trip' : 
+                    ride.completion_status === 'Completed One Way To' ? 'One Way To' :
+                    ride.completion_status === 'Completed One Way From' ? 'One Way From' : 
+                    ride.completion_status || 'Round Trip'}
+                  </span>
                   <span class="px-2 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-800">
                     {ride.purpose}
                   </span>
@@ -1732,6 +1752,21 @@
 
           <div class="grid gap-3 md:grid-cols-3">
             <div>
+              <label for="ride_type_create" class="block text-sm font-medium text-gray-700">Ride Type *</label>
+              <select
+                id="ride_type_create"
+                bind:value={rideForm.completion_status}
+                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="Completed Round Trip">Round Trip</option>
+                <option value="Completed One Way To">One Way To</option>
+                <option value="Completed One Way From">One Way From</option>
+              </select>
+              <p class="text-xs text-gray-500 mt-1">
+                Specify whether this is a round trip or one-way ride.
+              </p>
+            </div>
+            <div>
               <label for="purpose" class="block text-sm font-medium text-gray-700">Purpose</label>
               <Input
                 id="purpose"
@@ -1739,6 +1774,18 @@
                 placeholder="e.g., Medical"
               />
             </div>
+            <div>
+              <label for="riders" class="block text-sm font-medium text-gray-700"># of additional passengers (excluding client)</label>
+              <Input
+                id="riders"
+                type="number"
+                min="0"
+                bind:value={rideForm.riders}
+              />
+            </div>
+          </div>
+
+          <div class="grid gap-3 md:grid-cols-2 mt-3">
             <div>
               <label for="estimated_appointment_length" class="block text-sm font-medium text-gray-700">Estimated appointment length</label>
               <div class="flex gap-2 items-end">
@@ -1766,15 +1813,6 @@
                   />
                 </div>
               </div>
-            </div>
-            <div>
-              <label for="riders" class="block text-sm font-medium text-gray-700"># of additional passengers (excluding client)</label>
-              <Input
-                id="riders"
-                type="number"
-                min="0"
-                bind:value={rideForm.riders}
-              />
             </div>
           </div>
 
@@ -1976,6 +2014,23 @@
                 Date &amp; time of the appointment.
               </p>
             </div>
+
+            <div class="mt-3">
+              <label for="ride_type">Ride Type *</label>
+              <select
+                id="ride_type"
+                bind:value={rideForm.completion_status}
+                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="Completed Round Trip">Round Trip</option>
+                <option value="Completed One Way To">One Way To</option>
+                <option value="Completed One Way From">One Way From</option>
+              </select>
+              <p class="text-xs text-gray-500 mt-1">
+                Specify whether this is a round trip or one-way ride.
+              </p>
+            </div>
+
             <div>
               <label for="e_pickup_time">Pickup Time</label>
               <Input
@@ -2338,11 +2393,11 @@
     </div>
   </div>
 {/if}
+
 <DriverMatchModal
   bind:show={showDriverMatchModal}
   ride={selectedRideForMatch}
   token={data.session?.access_token}
-  onSelectDriver={sendRideRequest}
   isLoading={isUpdating}
 />
 
