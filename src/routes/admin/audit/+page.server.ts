@@ -133,9 +133,7 @@ export const actions = {
       const formData = await event.request.formData();
 
       const id = formData.get("id");
-      const client_id = formData.get("client_id");
-
-      const payload: any = {
+      const payload = {
         caller_name: formData.get("caller_name") as string,
         phone_number: formData.get("phone_number") as string,
         call_type: formData.get("call_type") as string,
@@ -146,12 +144,9 @@ export const actions = {
         notes: (formData.get("notes") as string) || null,
       };
 
-      if (client_id) {
-        payload.client_id = Number(client_id as string);
-      }
-
       const method = id ? "PUT" : "POST";
 
+      // 🔴 FIX: hit /calls, not /log/calls
       const endpoint = id
         ? `${API_BASE_URL}/calls/${id}`
         : `${API_BASE_URL}/calls`;

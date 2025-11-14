@@ -344,11 +344,6 @@ let visibleStaff = $derived(
       formData.append("forwarded_to_name", callForm.forwarded_to_name);
       formData.append("notes", callForm.notes);
 
-      // 🔹 NEW: pass client_id when caller came from the client dropdown
-      if (callerMode === "client" && selectedClientId) {
-        formData.append("client_id", selectedClientId);
-      }
-
       const res = await fetch("?/saveCall", {
         method: "POST",
         body: formData,
@@ -357,7 +352,9 @@ let visibleStaff = $derived(
       const result = await res.json().catch(() => null);
 
       if (!res.ok || !result?.success) {
-        throw new Error(result?.error || "Failed to save call entry.");
+        throw new Error(
+          result?.error || "Failed to save call entry."
+        );
       }
 
       closeCallModal();
