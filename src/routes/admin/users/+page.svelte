@@ -413,6 +413,34 @@
     }
   }
 
+  async function reactivateUser(user: StaffRow) {
+    if (!confirm(`Reactivate ${user.first_name} ${user.last_name}?`)) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/staff-profiles/${user.user_id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${data.session.access_token}`
+        },
+        body: JSON.stringify({ active: true })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to reactivate user');
+      }
+
+      toastStore.success('User reactivated successfully');
+      await refreshData();
+    } catch (error: any) {
+      console.error('Reactivate error:', error);
+      toastStore.error(`Failed to reactivate user: ${error.message}`);
+    }
+  }
+
   function nextPage() { if (currentPage < totalPages) currentPage++; }
   function prevPage() { if (currentPage > 1) currentPage--; }
   function changePageSize(size: number) {
@@ -583,7 +611,14 @@
                           >
                             Edit
                           </button>
-                          {#if user.active !== false}
+                          {#if user.active === false}
+                            <button
+                              class="text-green-600 hover:underline text-sm font-medium"
+                              on:click={() => reactivateUser(user)}
+                            >
+                              Reactivate
+                            </button>
+                          {:else}
                             <button
                               class="text-orange-600 hover:underline text-sm font-medium"
                               on:click={() => openDeactivateUserModal(user)}
