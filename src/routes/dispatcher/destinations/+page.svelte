@@ -6,6 +6,7 @@
     Plus,
     Pencil,
     Trash2,
+    X,
   } from "@lucide/svelte";
   import { onMount } from "svelte";
   import { supabase } from "$lib/supabase";
@@ -71,15 +72,13 @@
   let viewerUid: string | null = $state(data?.session?.user?.id || null);
   let viewerOrgId: number | null = $state(data?.profile?.org_id || null);
 
-  // toast
+  // toast - now with fixed positioning above modal
   let toast = $state("");
   let toastOk = $state(true);
-  let tostOk = $state(true); // tiny helper for initial write
   function setToast(message: string, ok = true) {
     toast = message;
-    tostOk = ok;
     toastOk = ok;
-    setTimeout(() => (toast = ""), 4000);
+    setTimeout(() => (toast = ""), 6000); // Increased to 6s for readability
   }
 
   // CREATE / EDIT modal state (only rendered if canManage)
@@ -94,6 +93,14 @@
     city: "" as string,
     state: "" as string,
     zipcode: "" as string,
+  });
+
+  // Inline validation errors
+  let formErrors = $state({
+    location_name: "",
+    address: "",
+    city: "",
+    state: "",
   });
 
   // DELETE modal state (only rendered if canManage)
@@ -207,6 +214,44 @@
       state: "",
       zipcode: "",
     };
+    formErrors = {
+      location_name: "",
+      address: "",
+      city: "",
+      state: "",
+    };
+  }
+
+  function validateForm(): boolean {
+    let isValid = true;
+    formErrors = {
+      location_name: "",
+      address: "",
+      city: "",
+      state: "",
+    };
+
+    if (!form.location_name.trim()) {
+      formErrors.location_name = "Location name is required";
+      isValid = false;
+    }
+
+    if (!form.address.trim()) {
+      formErrors.address = "Street address is required";
+      isValid = false;
+    }
+
+    if (!form.city.trim()) {
+      formErrors.city = "City is required";
+      isValid = false;
+    }
+
+    if (!form.state.trim()) {
+      formErrors.state = "State is required";
+      isValid = false;
+    }
+
+    return isValid;
   }
 
   function openCreateModal() {
@@ -228,6 +273,12 @@
       state: row.state ?? "",
       zipcode: row.zipcode ?? "",
     };
+    formErrors = {
+      location_name: "",
+      address: "",
+      city: "",
+      state: "",
+    };
     showUpsertModal = true;
   }
 
@@ -241,10 +292,11 @@
       return;
     }
 
-    if (!form.location_name.trim())
-      return setToast("Location name is required.", false);
-    if (!form.address.trim() || !form.city.trim() || !form.state.trim())
-      return setToast("Address, City, and State are required.", false);
+    // Validate form
+    if (!validateForm()) {
+      setToast("Please fix the errors in the form below.", false);
+      return;
+    }
 
     isSaving = true;
     try {
@@ -270,7 +322,7 @@
           throw new Error(result.error || "Failed to create destination");
         }
 
-        setToast("Destination created.", true);
+        setToast("Destination created successfully!", true);
       } else {
         if (!form.destination_id)
           return setToast("Missing destination_id for update.", false);
@@ -298,7 +350,7 @@
           throw new Error(result.error || "Failed to update destination");
         }
 
-        setToast("Destination updated.", true);
+        setToast("Destination updated successfully!", true);
       }
 
       showUpsertModal = false;
@@ -348,7 +400,7 @@
         throw new Error(result.error || "Failed to delete destination");
       }
 
-      setToast("Destination deleted.", true);
+      setToast("Destination deleted successfully!", true);
       showDeleteModal = false;
       toDelete = null;
       await loadDestinations();
@@ -393,6 +445,31 @@
 </script>
 
 <div class="min-h-screen bg-gray-50">
+  <!-- Toast - Fixed position at top, above modals -->
+  {#if toast}
+    <div class="fixed top-4 left-1/2 -translate-x-1/2 z-[100] max-w-2xl w-full px-4">
+      <div
+        class={toastOk
+          ? "rounded-lg p-4 bg-green-50 border-2 border-green-200 shadow-lg"
+          : "rounded-lg p-4 bg-red-50 border-2 border-red-200 shadow-lg"}
+      >
+        <div class="flex items-start gap-3">
+          <p class={toastOk ? "text-sm text-green-800 flex-1" : "text-sm text-red-800 flex-1"}>
+            {toast}
+          </p>
+          <button
+            onclick={() => (toast = "")}
+            class={toastOk
+              ? "text-green-600 hover:text-green-800"
+              : "text-red-600 hover:text-red-800"}
+          >
+            <X class="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+    </div>
+  {/if}
+
   <!-- Header -->
   <div class="bg-white shadow-sm border-b border-gray-200">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -418,23 +495,6 @@
       </div>
     </div>
   </div>
-
-  <!-- Toast -->
-  {#if toast}
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
-      <div
-        class={toastOk
-          ? "rounded-md p-3 bg-green-50 border border-green-200"
-          : "rounded-md p-3 bg-red-50 border border-red-200"}
-      >
-        <p
-          class={toastOk ? "text-sm text-green-800" : "text-base text-red-800"}
-        >
-          {toast}
-        </p>
-      </div>
-    </div>
-  {/if}
 
   <!-- Main -->
   <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -588,7 +648,7 @@
   {#if canManage}
     <!-- Create / Edit Modal -->
     <Dialog.Root bind:open={showUpsertModal}>
-      <Dialog.Content class="sm:max-w-lg bg-white">
+      <Dialog.Content class="sm:max-w-lg bg-white max-h-[90vh] overflow-y-auto">
         <Dialog.Header>
           <Dialog.Title
             >{upsertMode === "create"
@@ -597,29 +657,37 @@
           >
           <Dialog.Description>
             {upsertMode === "create"
-              ? "Create a new destination entry."
+              ? "Create a new destination entry. Fields marked with * are required."
               : `Update details for destination ID ${form.destination_id}.`}
           </Dialog.Description>
         </Dialog.Header>
 
         <div class="space-y-4">
           <div class="space-y-2">
-            <Label for="location_name">Location Name</Label>
+            <Label for="location_name">Location Name *</Label>
             <Input
               id="location_name"
               bind:value={form.location_name}
               placeholder="e.g., Jefferson Medical Plaza"
+              class={formErrors.location_name ? "border-red-500" : ""}
             />
+            {#if formErrors.location_name}
+              <p class="text-sm text-red-600">{formErrors.location_name}</p>
+            {/if}
           </div>
 
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div class="space-y-2">
-              <Label for="address">Address</Label>
+              <Label for="address">Address *</Label>
               <Input
                 id="address"
                 bind:value={form.address}
                 placeholder="123 Main St"
+                class={formErrors.address ? "border-red-500" : ""}
               />
+              {#if formErrors.address}
+                <p class="text-sm text-red-600">{formErrors.address}</p>
+              {/if}
             </div>
             <div class="space-y-2">
               <Label for="address2">Address 2</Label>
@@ -633,12 +701,28 @@
 
           <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div class="space-y-2">
-              <Label for="city">City</Label>
-              <Input id="city" bind:value={form.city} placeholder="City" />
+              <Label for="city">City *</Label>
+              <Input
+                id="city"
+                bind:value={form.city}
+                placeholder="City"
+                class={formErrors.city ? "border-red-500" : ""}
+              />
+              {#if formErrors.city}
+                <p class="text-sm text-red-600">{formErrors.city}</p>
+              {/if}
             </div>
             <div class="space-y-2">
-              <Label for="state">State</Label>
-              <Input id="state" bind:value={form.state} placeholder="NY" />
+              <Label for="state">State *</Label>
+              <Input
+                id="state"
+                bind:value={form.state}
+                placeholder="NY"
+                class={formErrors.state ? "border-red-500" : ""}
+              />
+              {#if formErrors.state}
+                <p class="text-sm text-red-600">{formErrors.state}</p>
+              {/if}
             </div>
             <div class="space-y-2">
               <Label for="zipcode">Zipcode</Label>
