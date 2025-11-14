@@ -394,7 +394,7 @@
 					</div>
 				{:else}
 					<div class="space-y-6">
-						{#each vehicles as v (v.vehicle_id)}
+						{#each vehicles as v (v.vehicle_id), index (v.vehicle_id)}
 							<div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
 								<div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
 									<div class="flex items-center gap-3">
@@ -403,7 +403,7 @@
 										</div>
 										<div>
 											<h2 class="text-lg font-semibold text-gray-900">
-												Vehicle #{v.vehicle_id} • {v.type_of_vehicle_enum ?? '—'}
+												Vehicle #{index + 1} • {v.type_of_vehicle_enum ?? '—'}
 											</h2>
 										</div>
 									</div>
