@@ -77,6 +77,12 @@
     "Cancelled by Driver",
   ];
 
+  const TRIP_TYPE_OPTIONS = [
+    "Round Trip",
+    "One Way To",
+    "One Way From"
+  ];
+
   const filteredClients = $derived(() => {
     const all = data?.clients ?? [];
     return userOrgId ? all.filter((c: any) => c.org_id === userOrgId) : all;
@@ -146,6 +152,19 @@
         return "bg-green-100 text-green-800";
       case "Cancelled":
         return "bg-red-100 text-red-800";
+      default:
+        return "bg-gray-100 text-gray-800";
+    }
+  }
+
+  function getTripTypeColor(tripType: string) {
+    switch (tripType) {
+      case "Round Trip":
+        return "bg-purple-100 text-purple-800";
+      case "One Way To":
+        return "bg-blue-100 text-blue-800";
+      case "One Way From":
+        return "bg-teal-100 text-teal-800";
       default:
         return "bg-gray-100 text-gray-800";
     }
@@ -360,6 +379,7 @@
     pickup_from_home: boolean;
     call_id: string;
     completion_status: string;
+    trip_type: string;
   };
 
   let rideForm = $state<RideForm>({
@@ -392,6 +412,7 @@
     pickup_from_home: true,
     call_id: "",
     completion_status: "",
+    trip_type: "Round Trip",
   });
 
   type Destination = {
@@ -467,12 +488,18 @@
       pickup_from_home: true,
       call_id: "",
       completion_status: "",
+      trip_type: "Round Trip",
     };
     stepErrors = [];
   }
 
   $effect(() => {
     if (!rideForm.donation) rideForm.donation_amount = "0.00";
+  });
+
+  // Update round_trip based on trip_type
+  $effect(() => {
+    rideForm.round_trip = rideForm.trip_type === "Round Trip";
   });
 
   function applyClientAddressToPickup() {
@@ -577,6 +604,7 @@
       pickup_from_home: !!ride.pickup_from_home,
       call_id: (ride.call_id ?? "").toString(),
       completion_status: ride.completion_status ?? "",
+      trip_type: ride.trip_type ?? (ride.round_trip ? "Round Trip" : "One Way To"),
     };
     
     if (rideForm.pickup_from_home && rideForm.client_id)
@@ -722,7 +750,7 @@
         return Number(base.riders ?? 0);
       })(),
 
-      round_trip: base.round_trip ?? false,
+      round_trip: form.trip_type === "Round Trip",
       purpose: has(form.purpose)
         ? sanitizeInput(form.purpose)
         : (base.purpose ?? null),
@@ -745,6 +773,9 @@
       completion_status: has(form.completion_status)
         ? form.completion_status
         : (base.completion_status ?? null),
+      trip_type: has(form.trip_type)
+        ? form.trip_type
+        : (base.trip_type ?? "Round Trip"),
     };
 
     if (DEBUG) console.debug("🧾 Payload:", payload);
@@ -759,6 +790,7 @@
     if (isBlank(payload.dropoff_city)) miss.push("Dropoff city");
     if (requireAppt && isBlank(payload.appointment_time))
       miss.push("Appointment time");
+    if (isBlank(payload.trip_type)) miss.push("Trip type");
     return miss;
   }
 
@@ -804,6 +836,11 @@
           rideForm.client_id ||
             (isEditing() ? String(selectedRide?.client_id ?? "") : ""),
           "Client"
+        ),
+        validateRequired(
+          rideForm.trip_type ||
+            (isEditing() ? String(selectedRide?.trip_type ?? "") : ""),
+          "Trip type"
         ),
       ];
       if (needAppt)
@@ -1043,49 +1080,6 @@
     }
   }
 
-  async function sendRideRequest(driverIds: string[]) {
-    if (!selectedRideForMatch || driverIds.length === 0) return;
-    isUpdating = true;
-
-    try {
-      const token = data.session?.access_token;
-      const results = await Promise.allSettled(
-        driverIds.map((driverId) =>
-          fetch(
-            `${import.meta.env.VITE_API_URL}/rides/${selectedRideForMatch.ride_id}/send-request`,
-            {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${token}`,
-              },
-              body: JSON.stringify({ driver_user_id: driverId }),
-            }
-          ).then((r) => r.json())
-        )
-      );
-
-      const successful = results.filter((r) => r.status === "fulfilled").length;
-      const failed = results.filter((r) => r.status === "rejected").length;
-
-      if (successful > 0) {
-        showDriverMatchModal = false;
-        selectedRideForMatch = null;
-        await invalidateAll();
-        alert(
-          `Ride request sent to ${successful} driver${successful !== 1 ? "s" : ""}!${failed > 0 ? ` (${failed} failed)` : ""}`
-        );
-      } else {
-        alert("Failed to send ride requests to any drivers");
-      }
-    } catch (e) {
-      console.error(e);
-      alert("Error sending ride requests.");
-    } finally {
-      isUpdating = false;
-    }
-  }
-
   let showOnlyMyRides = $state(true); // Filter toggle for My Rides vs All Rides
 
   // Watch for create parameter from navbar
@@ -1291,6 +1285,9 @@
                     class="px-2 py-1 text-xs font-medium rounded-full {getStatusColor(ride.status)}"
                   >
                     {ride.status.toUpperCase()}
+                  </span>
+                  <span class="px-2 py-1 text-xs font-medium rounded-full {getTripTypeColor(ride.trip_type || 'Round Trip')}">
+                    {ride.trip_type || 'Round Trip'}
                   </span>
                   <span class="px-2 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-800">
                     {ride.purpose}
@@ -1549,6 +1546,23 @@
                 Date &amp; time of the appointment.
               </p>
             </div>
+
+            <div class="mt-3">
+              <label for="trip_type">Trip Type *</label>
+              <select
+                id="trip_type"
+                bind:value={rideForm.trip_type}
+                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              >
+                {#each TRIP_TYPE_OPTIONS as option}
+                  <option value={option}>{option}</option>
+                {/each}
+              </select>
+              <p class="text-xs text-gray-500 mt-1">
+                Specify whether this is a round trip or one-way ride.
+              </p>
+            </div>
+
             <div>
               <label for="pickup_time">Pickup Time</label>
               <Input
@@ -1976,6 +1990,23 @@
                 Date &amp; time of the appointment.
               </p>
             </div>
+
+            <div class="mt-3">
+              <label for="e_trip_type">Trip Type *</label>
+              <select
+                id="e_trip_type"
+                bind:value={rideForm.trip_type}
+                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              >
+                {#each TRIP_TYPE_OPTIONS as option}
+                  <option value={option}>{option}</option>
+                {/each}
+              </select>
+              <p class="text-xs text-gray-500 mt-1">
+                Specify whether this is a round trip or one-way ride.
+              </p>
+            </div>
+
             <div>
               <label for="e_pickup_time">Pickup Time</label>
               <Input
@@ -2338,11 +2369,11 @@
     </div>
   </div>
 {/if}
+
 <DriverMatchModal
   bind:show={showDriverMatchModal}
   ride={selectedRideForMatch}
   token={data.session?.access_token}
-  onSelectDriver={sendRideRequest}
   isLoading={isUpdating}
 />
 
