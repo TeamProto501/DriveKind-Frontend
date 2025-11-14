@@ -693,6 +693,20 @@
         ? toLocalDateTimeInput(base.appointment_time)
         : "";
 
+    // Map trip_type to default completion_status
+    const getDefaultCompletionStatus = (tripType: string): string | null => {
+      switch (tripType) {
+        case "Round Trip":
+          return "Completed Round Trip";
+        case "One Way To":
+          return "Completed One Way To";
+        case "One Way From":
+          return "Completed One Way From";
+        default:
+          return null;
+      }
+    };
+
     const payload = {
       org_id: parseInt(_org, 10),
       client_id: parseInt(_client, 10),
@@ -770,9 +784,20 @@
       call_id: has(form.call_id)
         ? parseInt(form.call_id, 10)
         : (base.call_id ?? null),
-      completion_status: has(form.completion_status)
-        ? form.completion_status
-        : (base.completion_status ?? null),
+      
+      // Preset completion_status based on trip_type when creating
+      // Allow manual override when editing
+      completion_status: (() => {
+        if (isEditing() && has(form.completion_status)) {
+          // When editing, use the form value if explicitly set
+          return form.completion_status;
+        } else if (has(form.trip_type)) {
+          // When creating or trip_type changes, preset based on trip_type
+          return getDefaultCompletionStatus(form.trip_type);
+        }
+        return base.completion_status ?? null;
+      })(),
+      
       trip_type: has(form.trip_type)
         ? form.trip_type
         : (base.trip_type ?? "Round Trip"),
@@ -1075,6 +1100,49 @@
     } catch (e) {
       console.error(e);
       alert("Error updating ride.");
+    } finally {
+      isUpdating = false;
+    }
+  }
+
+  async function sendRideRequest(driverIds: string[]) {
+    if (!selectedRideForMatch || driverIds.length === 0) return;
+    isUpdating = true;
+
+    try {
+      const token = data.session?.access_token;
+      const results = await Promise.allSettled(
+        driverIds.map((driverId) =>
+          fetch(
+            `${import.meta.env.VITE_API_URL}/rides/${selectedRideForMatch.ride_id}/send-request`,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${token}`,
+              },
+              body: JSON.stringify({ driver_user_id: driverId }),
+            }
+          ).then((r) => r.json())
+        )
+      );
+
+      const successful = results.filter((r) => r.status === "fulfilled").length;
+      const failed = results.filter((r) => r.status === "rejected").length;
+
+      if (successful > 0) {
+        showDriverMatchModal = false;
+        selectedRideForMatch = null;
+        await invalidateAll();
+        alert(
+          `Ride request sent to ${successful} driver${successful !== 1 ? "s" : ""}!${failed > 0 ? ` (${failed} failed)` : ""}`
+        );
+      } else {
+        alert("Failed to send ride requests to any drivers");
+      }
+    } catch (e) {
+      console.error(e);
+      alert("Error sending ride requests.");
     } finally {
       isUpdating = false;
     }
