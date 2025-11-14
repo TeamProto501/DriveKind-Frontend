@@ -38,7 +38,7 @@
     town_preference?: string;
     allergens?: string;
     driver_other_limitations?: string;
-    cannot_handle_mobility_devices?: string[]; // Array of mobility_assistance_enum values
+    cannot_handle_mobility_devices?: string[];
   };
 
   type StaffProfile = StaffForm & {
@@ -47,6 +47,7 @@
     role: string[] | string;
     last_drove?: string | null;
     active_vehicle?: number | null;
+    active?: boolean | null;
   };
 
   // Role gating for Super Admin
@@ -171,7 +172,7 @@
   }
   $: form = initForm();
 
-  // --- REQUIRED FIELD VALIDATION (email, primary phone, dob, gender, contact pref, address, city, state, zip) ---
+  // --- REQUIRED FIELD VALIDATION ---
   function validateStep(s: number): string[] {
     const errs: string[] = [];
     if (s === 1) {
@@ -180,14 +181,14 @@
       if (!form.email || !form.email.trim()) errs.push("Email is required.");
       if (!form.primary_phone || !form.primary_phone.trim())
         errs.push("Primary phone is required.");
-    if (createMode && !tempPassword) 
+      if (createMode && !tempPassword) 
         errs.push("Temporary password is required for new users.");
       if (createMode && tempPassword && tempPassword.length < 6)
         errs.push("Password must be at least 6 characters.");
       if (createMode && !tempPasswordConfirm)
-        errs.push("Password confirmation is required."); // ← Add this
+        errs.push("Password confirmation is required.");
       if (createMode && tempPassword !== tempPasswordConfirm)
-        errs.push("Passwords do not match."); // ← Add this
+        errs.push("Passwords do not match.");
       if (!form.role || form.role.length === 0)
         errs.push("Select at least one role.");
     }
@@ -207,6 +208,7 @@
     }
     return errs;
   }
+  
   function next() {
     const e = validateStep(step);
     if (e.length) {
@@ -216,19 +218,18 @@
     errorMessage = null;
     step = Math.min(3, step + 1);
   }
+  
   function back() {
     step = Math.max(1, step - 1);
     errorMessage = null;
   }
 
   function goToUserStep(target: number) {
-    // free backward navigation
     if (target <= step) {
       step = Math.max(1, Math.min(3, target));
       errorMessage = null;
       return;
     }
-    // block forward unless current step validates
     const e = validateStep(step);
     if (e.length) {
       errorMessage = e.join(" ");
@@ -259,7 +260,6 @@
           profileData: {
             ...form,
             role: form.role,
-            // orgId set server-side from admin's profile
           },
         };
 
@@ -290,7 +290,6 @@
         dispatch("updated");
         dispatch("close");
       } else if (user) {
-        // update existing user - use server endpoint
         const res = await fetch(`/admin/users/update/${user.user_id}`, {
           method: "POST",
           headers: {
@@ -369,6 +368,13 @@
           <div class="text-gray-600">
             {Array.isArray(user.role) ? user.role.join(", ") : user.role}
           </div>
+          {#if user.active === false}
+            <div class="mt-2">
+              <span class="inline-flex items-center px-2 py-1 rounded-full text-xs bg-red-100 text-red-800">
+                Inactive
+              </span>
+            </div>
+          {/if}
         </div>
 
         <div class="grid grid-cols-1 gap-3">
@@ -459,12 +465,6 @@
               <div class="text-xs text-gray-500">Allergens</div>
               <div class="font-medium">{user.allergens || "—"}</div>
             </div>
-            <div>
-              <div class="text-xs text-gray-500">Other Driver Limitations</div>
-              <div class="font-medium">
-                {user.driver_other_limitations || "—"}
-              </div>
-            </div>
             {#if normalizeRoles(user.role).includes("Driver")}
               <div>
                 <div class="text-xs text-gray-500">Cannot Handle Mobility Devices</div>
@@ -506,7 +506,6 @@
             >
               {s}
             </button>
-            <!-- svelte-ignore element_invalid_self_closing_tag -->
             {#if s < 3}
               <button
                 type="button"
@@ -707,6 +706,59 @@
 
       {#if step === 3}
         <div class="space-y-3">
+          <!-- REACTIVATE BUTTON FOR INACTIVE USERS -->
+          {#if !createMode && user && user.active === false}
+            <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
+              <div class="flex items-start gap-3">
+                <div class="flex-shrink-0">
+                  <svg class="w-5 h-5 text-yellow-600" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                  </svg>
+                </div>
+                <div class="flex-1">
+                  <h4 class="text-sm font-medium text-yellow-800 mb-1">User is Deactivated</h4>
+                  <p class="text-sm text-yellow-700 mb-3">This user account is currently inactive. Click below to reactivate this user.</p>
+                  <button
+                    type="button"
+                    onclick={async () => {
+                      if (!user) return;
+                      if (!confirm(`Reactivate ${user.first_name} ${user.last_name}?`)) return;
+                      
+                      try {
+                        const response = await fetch(`${import.meta.env.VITE_API_URL}/staff-profiles/${user.user_id}`, {
+                          method: 'PUT',
+                          headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${session.access_token}`
+                          },
+                          body: JSON.stringify({ active: true })
+                        });
+
+                        if (!response.ok) {
+                          const errorData = await response.json();
+                          throw new Error(errorData.error || 'Failed to reactivate user');
+                        }
+
+                        toastStore.success('User reactivated successfully');
+                        dispatch('updated');
+                        dispatch('close');
+                      } catch (error: any) {
+                        console.error('Reactivate error:', error);
+                        toastStore.error(`Failed to reactivate user: ${error.message}`);
+                      }
+                    }}
+                    class="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium"
+                  >
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Reactivate User
+                  </button>
+                </div>
+              </div>
+            </div>
+          {/if}
+
           <div class="grid grid-cols-1 gap-3">
             <div>
               <label class="block text-base font-medium"
@@ -774,15 +826,6 @@
               bind:value={form.allergens}
             />
       </div>
-          <div>
-            <label class="block text-base font-medium"
-              >Other Driver Limitations</label
-            ><textarea
-              rows="2"
-              class="mt-1 w-full border rounded px-3 py-2 text-base"
-              bind:value={form.driver_other_limitations}
-            />
-          </div>
           {#if form.role && (Array.isArray(form.role) ? form.role.includes("Driver") : form.role === "Driver")}
             <div>
               <label class="block text-base font-medium mb-2"
@@ -792,7 +835,7 @@
                 Select mobility devices this driver cannot handle. These drivers will be excluded from rides with clients using these devices.
               </p>
               <div class="space-y-2">
-                {#each ["cane", "light walker", "roll-leader"] as device}
+                {#each ["cane", "crutches", "light walker", "rollator"] as device}
                   {@const isSelected = form.cannot_handle_mobility_devices?.includes(device) || false}
                   <label class="flex items-center gap-2 cursor-pointer">
                     <input
@@ -809,7 +852,7 @@
                         } else {
                           form.cannot_handle_mobility_devices = form.cannot_handle_mobility_devices.filter((d: string) => d !== device);
                         }
-                        form = form; // Trigger reactivity
+                        form = form;
                       }}
                       class="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
                     />

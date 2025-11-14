@@ -6,7 +6,7 @@
     Plus,
     Search,
     Filter,
-    Trash2,
+    Ban,
     ChevronUp,
     ChevronDown,
     ChevronsUpDown,
@@ -35,6 +35,7 @@
     state?: string | null;
     training_completed?: boolean | null;
     mileage_reimbursement?: boolean | null;
+    active?: boolean | null;
   };
 
   type ClientRow = {
@@ -89,13 +90,12 @@
   let isCreateMode = false;
   let showSidebar = false;
 
-  let showDeleteModal = false;
-  let showDeleteSearch = false;
-  let deleteSearchQuery = "";
-  let deleteSearchResults: StaffRow[] = [];
-  let userToDelete: StaffRow | null = null;
-  let deleteConfirmEmail = "";
-  let isDeleting = false;
+  let showDeactivateUserModal = false;
+  let showDeactivateUserSearch = false;
+  let deactivateUserSearchQuery = "";
+  let deactivateUserSearchResults: StaffRow[] = [];
+  let userToDeactivate: StaffRow | null = null;
+  let isDeactivatingUser = false;
 
   let showDeactivateModal = false;
   let clientToDeactivate: ClientRow | null = null;
@@ -338,48 +338,46 @@
     closeSidebar();
   }
 
-  // Delete search (users only)
-  function openDeleteSearch() {
-    showDeleteSearch = true;
-    deleteSearchQuery = "";
-    deleteSearchResults = [];
+  // Deactivate user search
+  function openDeactivateUserSearch() {
+    showDeactivateUserSearch = true;
+    deactivateUserSearchQuery = "";
+    deactivateUserSearchResults = [];
   }
-  function closeDeleteSearch() {
-    showDeleteSearch = false;
-    deleteSearchQuery = "";
-    deleteSearchResults = [];
+  function closeDeactivateUserSearch() {
+    showDeactivateUserSearch = false;
+    deactivateUserSearchQuery = "";
+    deactivateUserSearchResults = [];
   }
-  function searchUsersForDelete() {
-    if (!deleteSearchQuery.trim()) {
-      deleteSearchResults = [];
+  function searchUsersForDeactivate() {
+    if (!deactivateUserSearchQuery.trim()) {
+      deactivateUserSearchResults = [];
       return;
     }
-    const q = deleteSearchQuery.toLowerCase();
-    deleteSearchResults = staffProfiles
+    const q = deactivateUserSearchQuery.toLowerCase();
+    deactivateUserSearchResults = staffProfiles
       .filter(
         (u) =>
-          `${u.first_name} ${u.last_name}`.toLowerCase().includes(q) ||
-          (u.email && u.email.toLowerCase().includes(q)) ||
-          (u.primary_phone && u.primary_phone.includes(q))
+          u.active !== false && // Only show active users
+          (`${u.first_name} ${u.last_name}`.toLowerCase().includes(q) ||
+            (u.email && u.email.toLowerCase().includes(q)) ||
+            (u.primary_phone && u.primary_phone.includes(q)))
       )
       .slice(0, 10);
   }
 
-  function selectUserForDeletion(user: StaffRow) {
-    userToDelete = user;
-    deleteConfirmEmail = "";
-    showDeleteModal = true;
-    closeDeleteSearch();
+  function selectUserForDeactivation(user: StaffRow) {
+    userToDeactivate = user;
+    showDeactivateUserModal = true;
+    closeDeactivateUserSearch();
   }
-  function openDeleteModal(user: StaffRow) {
-    userToDelete = user;
-    deleteConfirmEmail = "";
-    showDeleteModal = true;
+  function openDeactivateUserModal(user: StaffRow) {
+    userToDeactivate = user;
+    showDeactivateUserModal = true;
   }
-  function closeDeleteModal() {
-    showDeleteModal = false;
-    userToDelete = null;
-    deleteConfirmEmail = "";
+  function closeDeactivateUserModal() {
+    showDeactivateUserModal = false;
+    userToDeactivate = null;
   }
 
   function openDeactivateModal(client: ClientRow) {
@@ -425,43 +423,71 @@
     }
   }
 
-  async function confirmDelete() {
-    if (!userToDelete) return;
+  import { enhance } from "$app/forms";
 
-    const userEmail = userToDelete.email || "";
-
-    if (deleteConfirmEmail !== userEmail) {
-      toastStore.error("Email does not match");
-      return;
-    }
+  async function confirmDeactivateUser() {
+    if (!userToDeactivate) return;
 
     try {
-      isDeleting = true;
+      isDeactivatingUser = true;
 
+      // Use API endpoint - same pattern as client deactivate
       const response = await fetch(
-        `${API_BASE_URL}/staff-profiles/${userToDelete.user_id}`,
+        `${API_BASE_URL}/staff-profiles/${userToDeactivate.user_id}`,
         {
-          method: "DELETE",
+          method: "PUT",
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${data.session.access_token}`,
           },
+          body: JSON.stringify({ active: false }),
         }
       );
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to delete user");
+        throw new Error(errorData.error || "Failed to deactivate user");
       }
 
-      toastStore.success("User deleted successfully");
-      closeDeleteModal();
+      toastStore.success("User deactivated successfully");
+      closeDeactivateUserModal();
       await refreshData();
     } catch (error: any) {
-      console.error("Delete error:", error);
-      toastStore.error(`Failed to delete user: ${error.message}`);
+      console.error("Deactivate error:", error);
+      toastStore.error(`Failed to deactivate user: ${error.message}`);
     } finally {
-      isDeleting = false;
+      isDeactivatingUser = false;
+    }
+  }
+
+  async function reactivateUser(user: StaffRow) {
+    if (!confirm(`Reactivate ${user.first_name} ${user.last_name}?`)) {
+      return;
+    }
+
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/staff-profiles/${user.user_id}`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${data.session.access_token}`,
+          },
+          body: JSON.stringify({ active: true }),
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to reactivate user");
+      }
+
+      toastStore.success("User reactivated successfully");
+      await refreshData();
+    } catch (error: any) {
+      console.error("Reactivate error:", error);
+      toastStore.error(`Failed to reactivate user: ${error.message}`);
     }
   }
 
@@ -493,7 +519,9 @@
 
       <div class="mb-8 flex items-center justify-between">
         <div>
-          <h1 class="text-3xl font-bold text-gray-900">User Management</h1>
+          <h1 class="text-3xl font-bold text-gray-900">
+            User and Client Management
+          </h1>
           <p class="text-gray-600 mt-2">
             Manage user accounts, roles, and client records.
           </p>
@@ -511,10 +539,10 @@
 
           {#if activeTab === "users"}
             <button
-              class="inline-flex items-center gap-2 bg-red-100 text-red-700 px-4 py-2 rounded-lg shadow hover:bg-red-200 transition"
-              on:click={openDeleteSearch}
+              class="inline-flex items-center gap-2 bg-orange-100 text-orange-700 px-4 py-2 rounded-lg shadow hover:bg-orange-200 transition"
+              on:click={openDeactivateUserSearch}
             >
-              <Trash2 class="w-4 h-4" /> Delete User
+              <Ban class="w-4 h-4" /> Deactivate User
             </button>
           {/if}
 
@@ -645,6 +673,7 @@
                         />
                       </button>
                     </th>
+                    <th class="px-4 py-2">Status</th>
                     <th class="px-4 py-2">Actions</th>
                   </tr>
                 </thead>
@@ -669,6 +698,26 @@
                             : user.role || "-"}
                         </span>
                       </td>
+                      <td class="px-4 py-2">
+                        <span
+                          class="inline-flex items-center px-2 py-1 rounded-full text-xs {user.active ===
+                          false
+                            ? 'bg-red-100 text-red-800'
+                            : 'bg-green-100 text-green-800'}"
+                        >
+                          {user.active === false ? "Inactive" : "Active"}
+                        </span>
+                      </td>
+                      <td class="px-4 py-2">
+                        <span
+                          class="inline-flex items-center px-2 py-1 rounded-full text-xs {user.active ===
+                          false
+                            ? 'bg-red-100 text-red-800'
+                            : 'bg-green-100 text-green-800'}"
+                        >
+                          {user.active === false ? "Inactive" : "Active"}
+                        </span>
+                      </td>
                       <td class="px-4 py-2" on:click|stopPropagation>
                         <div class="flex items-center gap-3">
                           <button
@@ -677,12 +726,21 @@
                           >
                             Edit
                           </button>
-                          <button
-                            class="text-red-600 hover:underline text-sm font-medium"
-                            on:click={() => openDeleteModal(user)}
-                          >
-                            Delete
-                          </button>
+                          {#if user.active === false}
+                            <button
+                              class="text-green-600 hover:underline text-sm font-medium"
+                              on:click={() => reactivateUser(user)}
+                            >
+                              Reactivate
+                            </button>
+                          {:else}
+                            <button
+                              class="text-orange-600 hover:underline text-sm font-medium"
+                              on:click={() => openDeactivateUserModal(user)}
+                            >
+                              Deactivate
+                            </button>
+                          {/if}
                         </div>
                       </td>
                     </tr>
@@ -920,18 +978,18 @@
               <input
                 type="text"
                 placeholder="Search by name, email, or phone..."
-                bind:value={deleteSearchQuery}
-                on:input={searchUsersForDelete}
+                bind:value={deactivateUserSearchQuery}
+                on:input={searchUsersForDeactivate}
                 class="flex-1 border rounded-lg px-3 py-2 text-sm"
                 autofocus
               />
             </div>
 
-            {#if deleteSearchResults.length > 0}
+            {#if deactivateUserSearchResults.length > 0}
               <div class="space-y-2 max-h-64 overflow-y-auto">
-                {#each deleteSearchResults as result}
+                {#each deactivateUserSearchResults as result}
                   <button
-                    on:click={() => selectUserForDeletion(result)}
+                    on:click={() => selectUserForDeactivation(result)}
                     class="w-full text-left p-3 border rounded-lg hover:bg-gray-50 transition-colors"
                   >
                     <div class="font-medium text-gray-900">
@@ -953,7 +1011,7 @@
 
           <div class="px-6 py-4 border-t flex justify-end">
             <button
-              on:click={closeDeleteSearch}
+              on:click={closeDeactivateUserSearch}
               class="px-4 py-2 rounded-lg border text-gray-700 hover:bg-gray-50"
             >
               Cancel
@@ -970,13 +1028,15 @@
       >
         <div class="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
           <div class="px-6 py-4 border-b">
-            <h3 class="text-lg font-semibold text-red-600">Confirm Deletion</h3>
+            <h3 class="text-lg font-semibold text-orange-600">
+              Confirm Deactivation
+            </h3>
           </div>
 
           <div class="p-6">
             <div class="mb-4">
               <p class="text-sm text-gray-900 font-medium mb-2">
-                You are about to delete:
+                You are about to deactivate:
               </p>
               <div class="p-3 bg-gray-50 rounded-lg">
                 <div class="font-medium text-gray-900">
@@ -984,7 +1044,7 @@
                   {userToDelete.last_name}
                 </div>
                 <div class="text-xs text-gray-500">
-                  {userToDelete.email || userToDelete.primary_phone}
+                  {userToDeactivate.email || userToDeactivate.primary_phone}
                 </div>
               </div>
             </div>
@@ -1015,16 +1075,16 @@
 
           <div class="px-6 py-4 border-t flex justify-end gap-2">
             <button
-              on:click={closeDeleteModal}
-              disabled={isDeleting}
+              on:click={closeDeactivateUserModal}
+              disabled={isDeactivatingUser}
               class="px-4 py-2 rounded-lg border text-gray-700 hover:bg-gray-50 disabled:opacity-50"
             >
               Cancel
             </button>
             <button
-              on:click={confirmDelete}
-              disabled={isDeleting || !deleteConfirmEmail}
-              class="px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
+              on:click={confirmDeactivateUser}
+              disabled={isDeactivatingUser}
+              class="px-4 py-2 rounded-lg bg-orange-600 text-white hover:bg-orange-700 disabled:opacity-50"
             >
               {isDeleting ? "Deleting..." : "Delete User"}
             </button>
@@ -1033,7 +1093,7 @@
       </div>
     {/if}
 
-    <!-- Deactivate Confirmation Modal (Clients Only) -->
+    <!-- Deactivate Client Confirmation Modal -->
     {#if showDeactivateModal && clientToDeactivate}
       <div
         class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"

@@ -148,9 +148,11 @@
       </div>
 
       <div>
-        <label for="reason-specific" class="text-sm font-medium">Reason</label>
+        <label for="reason-specific" class="text-sm font-medium">
+          Reason <span class="text-gray-500 font-normal">(optional)</span>
+        </label>
         <NativeSelect.Root name="reason">
-          <NativeSelect.Option value="">Select Reason</NativeSelect.Option>
+          <NativeSelect.Option value="">No reason specified</NativeSelect.Option>
           <NativeSelect.Option value="Holiday">Holiday</NativeSelect.Option>
           <NativeSelect.Option value="Personal">Personal</NativeSelect.Option>
           <NativeSelect.Option value="Medical">Medical</NativeSelect.Option>
@@ -268,12 +270,14 @@
           </div>
         </div>
         <div>
-          <label for="reason-{index}" class="text-sm font-medium">Reason</label>
+          <label for="reason-{index}" class="text-sm font-medium">
+            Reason <span class="text-gray-500 font-normal">(optional)</span>
+          </label>
           <NativeSelect.Root
             name="dates[{index}][reason]"
             bind:value={dateItem.reason}
           >
-            <NativeSelect.Option value="">Select Reason</NativeSelect.Option>
+            <NativeSelect.Option value="">No reason specified</NativeSelect.Option>
             <NativeSelect.Option value="Holiday">Holiday</NativeSelect.Option>
             <NativeSelect.Option value="Personal">Personal</NativeSelect.Option>
             <NativeSelect.Option value="Medical">Medical</NativeSelect.Option>
