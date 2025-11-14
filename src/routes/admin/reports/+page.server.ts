@@ -1,5 +1,5 @@
 import type { PageServerLoad, Actions } from './$types';
-import { error, fail } from '@sveltejs/kit';
+import { error, fail, redirect } from '@sveltejs/kit';
 import { createSupabaseServerClient } from '$lib/supabase.server';
 
 export interface RideReportData {
@@ -34,67 +34,157 @@ export interface ClientProfile {
   client_id: number;
   first_name: string;
   last_name: string;
+  gender?: string;
+  date_of_birth?: string;
+  lives_alone?: boolean;
 }
 
 export const load: PageServerLoad = async (event) => {
   const supabase = createSupabaseServerClient(event);
+  const { data: { session } } = await supabase.auth.getSession();
+  
+  if (!session) throw redirect(302, '/login');
 
-  // Fetch all staff with Driver role
-  const { data: staffData, error: staffError } = await supabase
+  // Get user profile
+  const { data: userProfile, error: profileError } = await supabase
     .from('staff_profiles')
-    .select('user_id, first_name, last_name, role')
-    .contains('role', ['Driver']);
+    .select('*')
+    .eq('user_id', session.user.id)
+    .single();
 
-  if (staffError) {
-    console.error('Error fetching drivers:', staffError);
-    error(500, 'Failed to load drivers');
+  if (profileError) {
+    console.error('Error fetching user profile:', profileError);
   }
 
-  // Transform staff data to driver format
-  const drivers: StaffProfile[] = (staffData || []).map((s: any) => ({
-    user_id: s.user_id,
-    first_name: s.first_name || 'Unknown',
-    last_name: s.last_name || 'Driver',
-    role: s.role || []
-  }));
+  // Get organization
+  const { data: organization } = await supabase
+    .from('organization')
+    .select('*')
+    .eq('org_id', userProfile?.org_id)
+    .single();
 
-  // Fetch all clients
-  const { data: clientsData, error: clientsError } = await supabase
-    .from('clients')
-    .select('client_id, first_name, last_name');
+  // Check if user is admin
+  const isAdmin = Array.isArray(userProfile?.role) 
+    ? userProfile.role.includes('Admin') 
+    : userProfile?.role === 'Admin';
 
-  if (clientsError) {
-    console.error('Error fetching clients:', clientsError);
-    error(500, 'Failed to load clients');
+  let drivers: StaffProfile[] = [];
+  let clients: ClientProfile[] = [];
+  let allStaff: StaffProfile[] = [];
+
+  if (isAdmin) {
+    // Fetch drivers
+    const { data: driversData } = await supabase
+      .from('staff_profiles')
+      .select('user_id, first_name, last_name, role')
+      .contains('role', ['Driver'])
+      .order('first_name');
+    
+    // Fetch clients
+    const { data: clientsData } = await supabase
+      .from('clients')
+      .select('client_id, first_name, last_name, gender, date_of_birth, lives_alone')
+      .order('first_name');
+
+    // Fetch all staff
+    const { data: allStaffData } = await supabase
+      .from('staff_profiles')
+      .select('user_id, first_name, last_name, role')
+      .order('first_name');
+
+    drivers = (driversData || []).map((d: any) => ({
+      user_id: d.user_id,
+      first_name: d.first_name || 'Unknown',
+      last_name: d.last_name || '',
+      role: d.role || []
+    }));
+
+    clients = clientsData || [];
+
+    allStaff = (allStaffData || []).map((s: any) => ({
+      user_id: s.user_id,
+      first_name: s.first_name || 'Unknown',
+      last_name: s.last_name || '',
+      role: s.role || []
+    }));
   }
-
-  const clients: ClientProfile[] = clientsData || [];
-
-  // Fetch all dispatchers (staff with Dispatcher role)
-  const { data: dispatchersData, error: dispatchersError } = await supabase
-    .from('staff_profiles')
-    .select('user_id, first_name, last_name, role')
-    .contains('role', ['Dispatcher']);
-
-  if (dispatchersError) {
-    console.error('Error fetching dispatchers:', dispatchersError);
-  }
-
-  const dispatchers: StaffProfile[] = (dispatchersData || []).map((s: any) => ({
-    user_id: s.user_id,
-    first_name: s.first_name || 'Unknown',
-    last_name: s.last_name || 'Dispatcher',
-    role: s.role || []
-  }));
 
   return {
+    session,
+    userProfile,
+    organization,
     drivers,
     clients,
-    dispatchers
+    allStaff,
+    isAdmin
   };
 };
 
 export const actions: Actions = {
+  // Get driver's rides for auto-population
+  getDriverRides: async (event) => {
+    const supabase = createSupabaseServerClient(event);
+    const { request } = event;
+    const { data: { session } } = await supabase.auth.getSession();
+    
+    if (!session) return fail(401, { error: 'Unauthorized' });
+
+    const formData = await request.formData();
+    const startDate = formData.get('startDate') as string;
+    const endDate = formData.get('endDate') as string;
+
+    if (!startDate || !endDate) {
+      return fail(400, { error: 'Please select both start and end dates' });
+    }
+
+    try {
+      // Query rides for this driver
+      let query = supabase
+        .from('rides')
+        .select('hours, miles_driven, ride_id, client_id')
+        .eq('driver_user_id', session.user.id)
+        .eq('status', 'Completed');
+
+      if (startDate) {
+        query = query.gte('appointment_time', new Date(startDate).toISOString());
+      }
+      if (endDate) {
+        const end = new Date(endDate);
+        end.setDate(end.getDate() + 1);
+        query = query.lt('appointment_time', end.toISOString());
+      }
+
+      const { data: rides, error: ridesError } = await query;
+
+      if (ridesError) {
+        console.error('Error fetching rides:', ridesError);
+        return fail(500, { error: 'Failed to fetch rides' });
+      }
+
+      // Calculate totals
+      const totalHours = rides?.reduce((sum, r) => sum + (r.hours || 0), 0) || 0;
+      const totalMiles = rides?.reduce((sum, r) => sum + (r.miles_driven || 0), 0) || 0;
+      const rideCount = rides?.length || 0;
+      
+      // Count unique clients
+      const uniqueClients = new Set(rides?.map(r => r.client_id).filter(Boolean)).size;
+
+      return {
+        success: true,
+        autoFill: {
+          hours: totalHours,
+          miles: totalMiles,
+          rides: rideCount,
+          clients: uniqueClients
+        },
+        message: `Loaded ${rideCount} rides with ${totalHours.toFixed(2)} hours and ${totalMiles.toFixed(1)} miles`
+      };
+    } catch (err) {
+      console.error('Error in getDriverRides:', err);
+      return fail(500, { error: 'An unexpected error occurred' });
+    }
+  },
+
   fetchRides: async (event) => {
     const supabase = createSupabaseServerClient(event);
     const { request } = event;
@@ -135,14 +225,12 @@ export const actions: Actions = {
       } else if (filterType === 'client' && selectedId && selectedId !== 'all') {
         query = query.eq('client_id', parseInt(selectedId));
       }
-      // 'organization' type doesn't need additional filtering (shows all)
 
       // Apply date range filter
       if (fromDate) {
         query = query.gte('appointment_time', new Date(fromDate).toISOString());
       }
       if (toDate) {
-        // Add one day to include the entire end date
         const endDate = new Date(toDate);
         endDate.setDate(endDate.getDate() + 1);
         query = query.lt('appointment_time', endDate.toISOString());
@@ -155,24 +243,21 @@ export const actions: Actions = {
         return fail(500, { error: 'Failed to fetch rides data' });
       }
 
-      // Fetch driver and client names for all rides
+      // Fetch driver and client names
       const driverUserIds = [...new Set(ridesData?.map((r: any) => r.driver_user_id).filter(Boolean))];
       const clientIds = [...new Set(ridesData?.map((r: any) => r.client_id).filter(Boolean))];
       const dispatcherUserIds = [...new Set(ridesData?.map((r: any) => r.dispatcher_user_id).filter(Boolean))];
 
-      // Fetch drivers
       const { data: driversData } = await supabase
         .from('staff_profiles')
-        .select('user_id, first_name, last_name')
+        .select('user_id, first_name, last_name, role')
         .in('user_id', driverUserIds);
 
-      // Fetch dispatchers
       const { data: dispatchersData } = await supabase
         .from('staff_profiles')
         .select('user_id, first_name, last_name')
         .in('user_id', dispatcherUserIds);
 
-      // Fetch clients
       const { data: clientsData } = await supabase
         .from('clients')
         .select('client_id, first_name, last_name')
@@ -182,7 +267,10 @@ export const actions: Actions = {
       const driverMap = new Map(
         (driversData || []).map((d: any) => [
           d.user_id,
-          `${d.first_name || ''} ${d.last_name || ''}`.trim() || 'Unknown Driver'
+          {
+            name: `${d.first_name || ''} ${d.last_name || ''}`.trim() || 'Unknown Driver',
+            role: d.role
+          }
         ])
       );
 
@@ -202,10 +290,11 @@ export const actions: Actions = {
 
       // Transform the data
       const rides: RideReportData[] = (ridesData || []).map((ride: any) => {
+        const driverInfo = driverMap.get(ride.driver_user_id);
         return {
           ride_id: ride.ride_id,
           client_name: clientMap.get(ride.client_id) || 'Unknown Client',
-          driver_name: driverMap.get(ride.driver_user_id) || 'Unknown Driver',
+          driver_name: driverInfo?.name || 'Unknown Driver',
           dispatcher_name: dispatcherMap.get(ride.dispatcher_user_id) || 'Unknown',
           appointment_time: ride.appointment_time,
           pickup_time: ride.pickup_time || null,
@@ -227,6 +316,7 @@ export const actions: Actions = {
       return {
         success: true,
         rides,
+        driversData: driversData || [],
         message: `Found ${rides.length} completed ride${rides.length !== 1 ? 's' : ''}`
       };
     } catch (err) {
