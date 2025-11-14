@@ -404,7 +404,7 @@
     destination_name: "",
     pickup_from_home: true,
     call_id: "",
-    completion_status: "",
+    completion_status: "Completed Round Trip",
   });
 
   type Destination = {
@@ -479,7 +479,7 @@
       destination_name: "",
       pickup_from_home: true,
       call_id: "",
-      completion_status: "",
+      completion_status: "Completed Round Trip",
     };
     stepErrors = [];
   }
@@ -589,7 +589,7 @@
       destination_name: ride.destination_name ?? "",
       pickup_from_home: !!ride.pickup_from_home,
       call_id: (ride.call_id ?? "").toString(),
-      completion_status: ride.completion_status ?? "",
+      completion_status: ride.completion_status ?? "Completed Round Trip",
     };
     
     if (rideForm.pickup_from_home && rideForm.client_id)
@@ -735,6 +735,10 @@
         return Number(base.riders ?? 0);
       })(),
 
+      purpose: has(form.purpose)
+        ? sanitizeInput(form.purpose)
+        : (base.purpose ?? null),
+
       estimated_appointment_length: (() => {
         const v = has(form.estimated_appointment_length)
           ? form.estimated_appointment_length
@@ -752,8 +756,7 @@
         : (base.call_id ?? null),
       
       round_trip: form.completion_status === "Completed Round Trip",
-      // Allow manual override when editing
-       completion_status: has(form.completion_status)
+      completion_status: has(form.completion_status)
         ? form.completion_status
         : (base.completion_status ?? "Completed Round Trip"),
     };
@@ -1749,6 +1752,21 @@
 
           <div class="grid gap-3 md:grid-cols-3">
             <div>
+              <label for="ride_type_create" class="block text-sm font-medium text-gray-700">Ride Type *</label>
+              <select
+                id="ride_type_create"
+                bind:value={rideForm.completion_status}
+                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="Completed Round Trip">Round Trip</option>
+                <option value="Completed One Way To">One Way To</option>
+                <option value="Completed One Way From">One Way From</option>
+              </select>
+              <p class="text-xs text-gray-500 mt-1">
+                Specify whether this is a round trip or one-way ride.
+              </p>
+            </div>
+            <div>
               <label for="purpose" class="block text-sm font-medium text-gray-700">Purpose</label>
               <Input
                 id="purpose"
@@ -1756,6 +1774,18 @@
                 placeholder="e.g., Medical"
               />
             </div>
+            <div>
+              <label for="riders" class="block text-sm font-medium text-gray-700"># of additional passengers (excluding client)</label>
+              <Input
+                id="riders"
+                type="number"
+                min="0"
+                bind:value={rideForm.riders}
+              />
+            </div>
+          </div>
+
+          <div class="grid gap-3 md:grid-cols-2 mt-3">
             <div>
               <label for="estimated_appointment_length" class="block text-sm font-medium text-gray-700">Estimated appointment length</label>
               <div class="flex gap-2 items-end">
@@ -1783,15 +1813,6 @@
                   />
                 </div>
               </div>
-            </div>
-            <div>
-              <label for="riders" class="block text-sm font-medium text-gray-700"># of additional passengers (excluding client)</label>
-              <Input
-                id="riders"
-                type="number"
-                min="0"
-                bind:value={rideForm.riders}
-              />
             </div>
           </div>
 
