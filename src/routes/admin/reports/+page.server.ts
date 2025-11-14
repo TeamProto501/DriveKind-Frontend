@@ -121,6 +121,60 @@ export const load: PageServerLoad = async (event) => {
 };
 
 export const actions: Actions = {
+  // Get driver's rides for personal report (past month)
+  getPersonalDriverRides: async (event) => {
+    const supabase = createSupabaseServerClient(event);
+    const { data: { session } } = await supabase.auth.getSession();
+    
+    if (!session) return fail(401, { error: 'Unauthorized' });
+
+    try {
+      // Get rides from past month
+      const oneMonthAgo = new Date();
+      oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
+      
+      const query = supabase
+        .from('rides')
+        .select('hours, miles_driven, ride_id, client_id, round_trip')
+        .eq('driver_user_id', session.user.id)
+        .eq('status', 'Completed')
+        .gte('appointment_time', oneMonthAgo.toISOString());
+
+      const { data: rides, error: ridesError } = await query;
+
+      if (ridesError) {
+        console.error('Error fetching rides:', ridesError);
+        return fail(500, { error: 'Failed to fetch rides' });
+      }
+
+      // Calculate totals
+      const totalHours = rides?.reduce((sum, r) => sum + (r.hours || 0), 0) || 0;
+      const totalMiles = rides?.reduce((sum, r) => sum + (r.miles_driven || 0), 0) || 0;
+      
+      // Count one-way rides (round trip = 2 one-ways)
+      const oneWayRides = rides?.reduce((sum, r) => {
+        return sum + (r.round_trip ? 2 : 1);
+      }, 0) || 0;
+      
+      // Count unique clients
+      const uniqueClients = new Set(rides?.map(r => r.client_id).filter(Boolean)).size;
+
+      return {
+        success: true,
+        personalAutoFill: {
+          hours: totalHours,
+          miles: totalMiles,
+          rides: oneWayRides,
+          clients: uniqueClients
+        },
+        message: `Loaded ${rides?.length || 0} completed rides from the past month`
+      };
+    } catch (err) {
+      console.error('Error in getPersonalDriverRides:', err);
+      return fail(500, { error: 'An unexpected error occurred' });
+    }
+  },
+
   // Get driver's rides for auto-population
   getDriverRides: async (event) => {
     const supabase = createSupabaseServerClient(event);

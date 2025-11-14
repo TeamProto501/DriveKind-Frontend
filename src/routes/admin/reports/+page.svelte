@@ -28,6 +28,9 @@
   let selectedRole = $state<string>('');
   let personalHours = $state<number>(0);
   let personalMiles = $state<number>(0);
+  let personalClients = $state<number>(0);
+  let personalRides = $state<number>(0);
+  let isLoadingPersonalRides = $state(false);
 
   // Organization Reporting State
   let filterType = $state<'driver' | 'client' | 'organization'>('driver');
@@ -63,6 +66,19 @@
   if (availableRoles.length > 0 && !selectedRole) {
     selectedRole = availableRoles[0];
   }
+
+  // Handle personal rides response
+  $effect(() => {
+    if (form?.success && form.personalAutoFill) {
+      personalHours = form.personalAutoFill.hours;
+      personalMiles = form.personalAutoFill.miles;
+      personalRides = form.personalAutoFill.rides;
+      personalClients = form.personalAutoFill.clients;
+      if (form.message) {
+        toastStore.success(form.message);
+      }
+    }
+  });
 
   // Handle admin rides response
   $effect(() => {
@@ -217,8 +233,8 @@
     const row = [
       `"${volunteerName}"`,
       personalHours.toFixed(2),
-      0, // No clients for personal report
-      0, // No rides for personal report
+      personalClients || 0,
+      personalRides || 0,
       personalMiles.toFixed(1),
       `"${selectedRole}"`
     ];
@@ -423,6 +439,42 @@
               <p class="text-xs text-gray-500 mt-1">Select which role to report your hours under</p>
             </div>
 
+            <!-- Driver Auto-fill from Rides -->
+            {#if selectedRole === 'Driver'}
+              <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <h3 class="text-sm font-medium text-blue-900 mb-2 flex items-center gap-2">
+                  <CarIcon class="w-4 h-4" />
+                  Auto-fill from Your Rides
+                </h3>
+                <p class="text-xs text-blue-700 mb-3">
+                  Load your completed rides from the past month to auto-populate hours, miles, and ride counts
+                </p>
+                
+                <form
+                  method="POST"
+                  action="?/getPersonalDriverRides"
+                  use:enhance={() => {
+                    isLoadingPersonalRides = true;
+                    return async ({ update }) => {
+                      isLoadingPersonalRides = false;
+                      await update();
+                    };
+                  }}
+                >
+                  <Button type="submit" disabled={isLoadingPersonalRides} class="w-full" variant="outline">
+                    {#if isLoadingPersonalRides}
+                      <LoaderIcon class="w-4 h-4 mr-2 animate-spin" />
+                      Loading Rides...
+                    {:else}
+                      <CarIcon class="w-4 h-4 mr-2" />
+                      Load My Rides (Past Month)
+                    {/if}
+                  </Button>
+                </form>
+              </div>
+              <div class="border-t pt-4" />
+            {/if}
+
             <!-- Hours and Miles Entry -->
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
@@ -475,6 +527,16 @@
                     <p class="text-xs text-gray-500">Miles</p>
                     <p class="font-medium text-green-600">{personalMiles.toFixed(1)}</p>
                   </div>
+                  {#if selectedRole === 'Driver'}
+                    <div>
+                      <p class="text-xs text-gray-500">Clients Served</p>
+                      <p class="font-medium text-purple-600">{personalClients}</p>
+                    </div>
+                    <div>
+                      <p class="text-xs text-gray-500">One-way Rides</p>
+                      <p class="font-medium text-orange-600">{personalRides}</p>
+                    </div>
+                  {/if}
                 </div>
               </div>
             {/if}
