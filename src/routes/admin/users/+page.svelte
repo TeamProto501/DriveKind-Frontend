@@ -379,25 +379,27 @@
     }
   }
 
+  import { enhance } from '$app/forms';
+  
   async function confirmDeactivateUser() {
     if (!userToDeactivate) return;
 
     try {
       isDeactivatingUser = true;
 
-      // Use SvelteKit form action
-      const formData = new FormData();
-      formData.append('user_id', userToDeactivate.user_id);
-
-      const response = await fetch('?/deactivateUser', {
-        method: 'POST',
-        body: formData
+      // Use API endpoint - same pattern as client deactivate
+      const response = await fetch(`${API_BASE_URL}/staff-profiles/${userToDeactivate.user_id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${data.session.access_token}`
+        },
+        body: JSON.stringify({ active: false })
       });
 
-      const result = await response.json();
-      
-      if (!result?.data?.success) {
-        throw new Error(result?.data?.error || 'Failed to deactivate user');
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to deactivate user');
       }
 
       toastStore.success('User deactivated successfully');
