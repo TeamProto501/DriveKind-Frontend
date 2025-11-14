@@ -77,12 +77,6 @@
     "Cancelled by Driver",
   ];
 
-  const TRIP_TYPE_OPTIONS = [
-    "Round Trip",
-    "One Way To",
-    "One Way From"
-  ];
-
   const filteredClients = $derived(() => {
     const all = data?.clients ?? [];
     return userOrgId ? all.filter((c: any) => c.org_id === userOrgId) : all;
@@ -157,13 +151,13 @@
     }
   }
 
-  function getTripTypeColor(tripType: string) {
-    switch (tripType) {
-      case "Round Trip":
+  function getTripTypeColor(completionStatus: string) {
+    switch (completionStatus) {
+      case "Completed Round Trip":
         return "bg-purple-100 text-purple-800";
-      case "One Way To":
+      case "Completed One Way To":
         return "bg-blue-100 text-blue-800";
-      case "One Way From":
+      case "Completed One Way From":
         return "bg-teal-100 text-teal-800";
       default:
         return "bg-gray-100 text-gray-800";
@@ -379,7 +373,6 @@
     pickup_from_home: boolean;
     call_id: string;
     completion_status: string;
-    trip_type: string;
   };
 
   let rideForm = $state<RideForm>({
@@ -412,7 +405,6 @@
     pickup_from_home: true,
     call_id: "",
     completion_status: "",
-    trip_type: "Round Trip",
   });
 
   type Destination = {
@@ -488,18 +480,12 @@
       pickup_from_home: true,
       call_id: "",
       completion_status: "",
-      trip_type: "Round Trip",
     };
     stepErrors = [];
   }
 
   $effect(() => {
     if (!rideForm.donation) rideForm.donation_amount = "0.00";
-  });
-
-  // Update round_trip based on trip_type
-  $effect(() => {
-    rideForm.round_trip = rideForm.trip_type === "Round Trip";
   });
 
   function applyClientAddressToPickup() {
@@ -604,7 +590,6 @@
       pickup_from_home: !!ride.pickup_from_home,
       call_id: (ride.call_id ?? "").toString(),
       completion_status: ride.completion_status ?? "",
-      trip_type: ride.trip_type ?? (ride.round_trip ? "Round Trip" : "One Way To"),
     };
     
     if (rideForm.pickup_from_home && rideForm.client_id)
@@ -693,20 +678,6 @@
         ? toLocalDateTimeInput(base.appointment_time)
         : "";
 
-    // Map trip_type to default completion_status
-    const getDefaultCompletionStatus = (tripType: string): string | null => {
-      switch (tripType) {
-        case "Round Trip":
-          return "Completed Round Trip";
-        case "One Way To":
-          return "Completed One Way To";
-        case "One Way From":
-          return "Completed One Way From";
-        default:
-          return null;
-      }
-    };
-
     const payload = {
       org_id: parseInt(_org, 10),
       client_id: parseInt(_client, 10),
@@ -764,11 +735,6 @@
         return Number(base.riders ?? 0);
       })(),
 
-      round_trip: form.trip_type === "Round Trip",
-      purpose: has(form.purpose)
-        ? sanitizeInput(form.purpose)
-        : (base.purpose ?? null),
-
       estimated_appointment_length: (() => {
         const v = has(form.estimated_appointment_length)
           ? form.estimated_appointment_length
@@ -785,22 +751,11 @@
         ? parseInt(form.call_id, 10)
         : (base.call_id ?? null),
       
-      // Preset completion_status based on trip_type when creating
+      round_trip: form.completion_status === "Completed Round Trip",
       // Allow manual override when editing
-      completion_status: (() => {
-        if (isEditing() && has(form.completion_status)) {
-          // When editing, use the form value if explicitly set
-          return form.completion_status;
-        } else if (has(form.trip_type)) {
-          // When creating or trip_type changes, preset based on trip_type
-          return getDefaultCompletionStatus(form.trip_type);
-        }
-        return base.completion_status ?? null;
-      })(),
-      
-      trip_type: has(form.trip_type)
-        ? form.trip_type
-        : (base.trip_type ?? "Round Trip"),
+       completion_status: has(form.completion_status)
+        ? form.completion_status
+        : (base.completion_status ?? "Completed Round Trip"),
     };
 
     if (DEBUG) console.debug("🧾 Payload:", payload);
@@ -815,7 +770,6 @@
     if (isBlank(payload.dropoff_city)) miss.push("Dropoff city");
     if (requireAppt && isBlank(payload.appointment_time))
       miss.push("Appointment time");
-    if (isBlank(payload.trip_type)) miss.push("Trip type");
     return miss;
   }
 
@@ -861,11 +815,6 @@
           rideForm.client_id ||
             (isEditing() ? String(selectedRide?.client_id ?? "") : ""),
           "Client"
-        ),
-        validateRequired(
-          rideForm.trip_type ||
-            (isEditing() ? String(selectedRide?.trip_type ?? "") : ""),
-          "Trip type"
         ),
       ];
       if (needAppt)
@@ -1354,8 +1303,11 @@
                   >
                     {ride.status.toUpperCase()}
                   </span>
-                  <span class="px-2 py-1 text-xs font-medium rounded-full {getTripTypeColor(ride.trip_type || 'Round Trip')}">
-                    {ride.trip_type || 'Round Trip'}
+                  <span class="px-2 py-1 text-xs font-medium rounded-full {getTripTypeColor(ride.completion_status || 'Completed Round Trip')}">
+                    {ride.completion_status === 'Completed Round Trip' ? 'Round Trip' : 
+                    ride.completion_status === 'Completed One Way To' ? 'One Way To' :
+                    ride.completion_status === 'Completed One Way From' ? 'One Way From' : 
+                    ride.completion_status || 'Round Trip'}
                   </span>
                   <span class="px-2 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-800">
                     {ride.purpose}
@@ -1614,23 +1566,6 @@
                 Date &amp; time of the appointment.
               </p>
             </div>
-
-            <div class="mt-3">
-              <label for="trip_type">Trip Type *</label>
-              <select
-                id="trip_type"
-                bind:value={rideForm.trip_type}
-                class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              >
-                {#each TRIP_TYPE_OPTIONS as option}
-                  <option value={option}>{option}</option>
-                {/each}
-              </select>
-              <p class="text-xs text-gray-500 mt-1">
-                Specify whether this is a round trip or one-way ride.
-              </p>
-            </div>
-
             <div>
               <label for="pickup_time">Pickup Time</label>
               <Input
@@ -2060,15 +1995,15 @@
             </div>
 
             <div class="mt-3">
-              <label for="e_trip_type">Trip Type *</label>
+              <label for="ride_type">Ride Type *</label>
               <select
-                id="e_trip_type"
-                bind:value={rideForm.trip_type}
+                id="ride_type"
+                bind:value={rideForm.completion_status}
                 class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               >
-                {#each TRIP_TYPE_OPTIONS as option}
-                  <option value={option}>{option}</option>
-                {/each}
+                <option value="Completed Round Trip">Round Trip</option>
+                <option value="Completed One Way To">One Way To</option>
+                <option value="Completed One Way From">One Way From</option>
               </select>
               <p class="text-xs text-gray-500 mt-1">
                 Specify whether this is a round trip or one-way ride.
