@@ -1,5 +1,4 @@
 <!-- Combined Reports Page: Personal PDF Generator + Admin Organization Reports -->
-<!-- Combined Reports Page: Personal PDF Generator + Admin Organization Reports -->
 <script lang="ts">
   import type { PageData, ActionData } from './$types';
   import { Button } from '$lib/components/ui/button';
@@ -74,6 +73,8 @@
   let totalDonations = $state(0);
   let fromDate = $state('');
   let toDate = $state('');
+  let additionalHours = $state<number>(0);
+  let additionalMiles = $state<number>(0);
 
   let globalFilter = $state('');
   let driverFilter = $state('');
@@ -391,11 +392,13 @@
   };
 
   const calculateTotalHours = (rideList: RideReportData[]) => {
-    return rideList.reduce((total, ride) => total + (ride.hours || 0), 0);
+    const rideHours = rideList.reduce((total, ride) => total + (ride.hours || 0), 0);
+    return rideHours + (additionalHours || 0);
   };
 
   const calculateTotalMiles = (rideList: RideReportData[]) => {
-    return rideList.reduce((total, ride) => total + (ride.miles_driven || 0), 0);
+    const rideMiles = rideList.reduce((total, ride) => total + (ride.miles_driven || 0), 0);
+    return rideMiles + (additionalMiles || 0);
   };
 
   const calculateTotalDonations = (rideList: RideReportData[]) => {
@@ -471,7 +474,7 @@
   };
 
   const exportVolunteerCSV = () => {
-    if (rides.length === 0) {
+    if (rides.length === 0 && !additionalHours && !additionalMiles) {
       toastStore.error('No data to export');
       return;
     }
@@ -499,14 +502,20 @@
     });
 
     const headers = ['Volunteer Name', '# Hours', '# Clients', '# one-way rides', 'Total # of miles', 'Position'];
-    const rows = Array.from(volunteerMap.values()).map(v => [
-      `"${v.name}"`,
-      v.hours.toFixed(2),
-      v.clients.size,
-      v.rides,
-      v.miles.toFixed(1),
-      '"Driver"'
-    ]);
+    const rows = Array.from(volunteerMap.values()).map(v => {
+      // Add additional hours/miles to the totals
+      const totalHours = v.hours + (additionalHours || 0);
+      const totalMiles = v.miles + (additionalMiles || 0);
+      
+      return [
+        `"${v.name}"`,
+        totalHours.toFixed(2),
+        v.clients.size,
+        v.rides,
+        totalMiles.toFixed(1),
+        '"Driver"'
+      ];
+    });
 
     const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
     
@@ -568,6 +577,8 @@
     totalDonations = 0;
     fromDate = '';
     toDate = '';
+    additionalHours = 0;
+    additionalMiles = 0;
     globalFilter = '';
     driverFilter = '';
     sortColumn = 'appointment_time';
@@ -852,6 +863,36 @@
                     </div>
                   </div>
                 </div>
+
+                <!-- Additional Hours/Miles -->
+                <div class="space-y-2">
+                  <Label class="text-sm font-medium">Additional Hours/Miles (Optional)</Label>
+                  <p class="text-xs text-muted-foreground">Add extra hours or miles not tracked in rides</p>
+                  <div class="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label class="text-xs text-gray-500">Additional Hours</Label>
+                      <Input
+                        type="number"
+                        bind:value={additionalHours}
+                        min="0"
+                        step="0.25"
+                        placeholder="0.00"
+                        class="text-sm"
+                      />
+                    </div>
+                    <div>
+                      <Label class="text-xs text-gray-500">Additional Miles</Label>
+                      <Input
+                        type="number"
+                        bind:value={additionalMiles}
+                        min="0"
+                        step="0.1"
+                        placeholder="0.0"
+                        class="text-sm"
+                      />
+                    </div>
+                  </div>
+                </div>
               </CardContent>
             </Card>
 
@@ -880,6 +921,11 @@
                         .{((totalHours % 1) * 60).toFixed(0).padStart(2, '0')} hrs
                       </span>
                     </div>
+                    {#if additionalHours > 0}
+                      <p class="text-xs text-gray-500 mt-1">
+                        Includes {additionalHours.toFixed(2)} additional hours
+                      </p>
+                    {/if}
                   </div>
 
                   <div>
@@ -890,6 +936,11 @@
                         .{Math.round((totalMiles % 1) * 10)} mi
                       </span>
                     </div>
+                    {#if additionalMiles > 0}
+                      <p class="text-xs text-blue-500 mt-1">
+                        Includes {additionalMiles.toFixed(1)} additional miles
+                      </p>
+                    {/if}
                   </div>
 
                   {#if rides.length > 0}
