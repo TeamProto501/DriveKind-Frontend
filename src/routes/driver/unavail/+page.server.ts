@@ -60,9 +60,7 @@ export const actions: Actions = {
         return fail(400, { error: "Please provide start and end times" });
       }
 
-      if (!reason) {
-        return fail(400, { error: "Please select a reason" });
-      }
+      // Reason is now optional - no validation needed
 
       const unavailabilityData = {
         user_id: session.user.id,
@@ -70,7 +68,7 @@ export const actions: Actions = {
         start_time: allDay ? null : formatTime(startTime),
         end_time: allDay ? null : formatTime(endTime),
         all_day: allDay,
-        reason: reason,
+        reason: reason || null, // Allow null/empty reason
         recurring: false,
         recurrence_pattern: null,
         days_of_week: null,
@@ -132,18 +130,14 @@ export const actions: Actions = {
           });
         }
 
-        if (!reason) {
-          return fail(400, {
-            error: `Please select a reason for date #${i + 1}`,
-          });
-        }
+        // Reason is now optional - removed validation
 
         dates.push({
           selectedDay,
           allDay,
           startTime: allDay ? null : startTime,
           endTime: allDay ? null : endTime,
-          reason,
+          reason: reason || null, // Allow null/empty reason
         });
       }
 
@@ -180,7 +174,7 @@ export const actions: Actions = {
           start_time: dateData.startTime ? formatTime(dateData.startTime) : null,
           end_time: dateData.endTime ? formatTime(dateData.endTime) : null,
           all_day: dateData.allDay,
-          reason: dateData.reason,
+          reason: dateData.reason || null, // Allow null/empty reason
           repeating_day: dateData.selectedDay
         };
 
