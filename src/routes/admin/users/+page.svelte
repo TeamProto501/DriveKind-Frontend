@@ -501,6 +501,7 @@
     pageSize = size;
     currentPage = 1;
   }
+
   applyFilters();
 </script>
 
@@ -696,16 +697,6 @@
                           {Array.isArray(user.role)
                             ? user.role.join(", ")
                             : user.role || "-"}
-                        </span>
-                      </td>
-                      <td class="px-4 py-2">
-                        <span
-                          class="inline-flex items-center px-2 py-1 rounded-full text-xs {user.active ===
-                          false
-                            ? 'bg-red-100 text-red-800'
-                            : 'bg-green-100 text-green-800'}"
-                        >
-                          {user.active === false ? "Inactive" : "Active"}
                         </span>
                       </td>
                       <td class="px-4 py-2">
@@ -935,7 +926,6 @@
         {orgId}
         on:close={closeSidebar}
         on:updated={handleUserUpdated}
-        dPassword={data.dPassword}
       />
     {/if}
 
@@ -946,22 +936,21 @@
         createMode={isClientCreateMode}
         session={data.session}
         {orgId}
-        minimumAge={data.minimumAge}
         on:close={closeClientSidebar}
         on:updated={handleClientUpdated}
       />
     {/if}
 
-    <!-- Delete Search Modal (Users Only) -->
-    {#if showDeleteSearch}
+    <!-- Deactivate User Search Modal -->
+    {#if showDeactivateUserSearch}
       <div
         class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
       >
         <div class="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
           <div class="px-6 py-4 border-b flex items-center justify-between">
-            <h3 class="text-lg font-semibold text-gray-900">Delete User</h3>
+            <h3 class="text-lg font-semibold text-gray-900">Deactivate User</h3>
             <button
-              on:click={closeDeleteSearch}
+              on:click={closeDeactivateUserSearch}
               class="text-gray-500 hover:text-gray-700"
             >
               <X class="w-5 h-5" />
@@ -970,7 +959,7 @@
 
           <div class="p-6">
             <p class="text-sm text-gray-600 mb-4">
-              Search for a user to delete:
+              Search for a user to deactivate:
             </p>
 
             <div class="flex items-center gap-2 mb-4">
@@ -1002,9 +991,9 @@
                   </button>
                 {/each}
               </div>
-            {:else if deleteSearchQuery.trim()}
+            {:else if deactivateUserSearchQuery.trim()}
               <p class="text-sm text-gray-500 text-center py-4">
-                No users found
+                No active users found
               </p>
             {/if}
           </div>
@@ -1021,8 +1010,8 @@
       </div>
     {/if}
 
-    <!-- Delete Confirmation Modal (Users Only) -->
-    {#if showDeleteModal && userToDelete}
+    <!-- Deactivate User Confirmation Modal -->
+    {#if showDeactivateUserModal && userToDeactivate}
       <div
         class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
       >
@@ -1040,8 +1029,8 @@
               </p>
               <div class="p-3 bg-gray-50 rounded-lg">
                 <div class="font-medium text-gray-900">
-                  {userToDelete.first_name}
-                  {userToDelete.last_name}
+                  {userToDeactivate.first_name}
+                  {userToDeactivate.last_name}
                 </div>
                 <div class="text-xs text-gray-500">
                   {userToDeactivate.email || userToDeactivate.primary_phone}
@@ -1050,26 +1039,11 @@
             </div>
 
             <div class="mb-4">
-              <p class="text-sm text-red-600 font-medium mb-2">
-                ⚠️ This action cannot be undone!
+              <p class="text-sm text-gray-600">
+                This will set the user's status to <strong>Inactive</strong>.
+                The user record will be preserved and can be reactivated later
+                by editing the user.
               </p>
-              <p class="text-sm text-gray-600 mb-4">
-                To confirm, please type the email address below:
-              </p>
-
-              <div class="mb-2">
-                <code class="text-xs bg-gray-100 px-2 py-1 rounded">
-                  {userToDelete.email || ""}
-                </code>
-              </div>
-
-              <input
-                type="text"
-                bind:value={deleteConfirmEmail}
-                placeholder="Type email to confirm"
-                class="w-full border rounded-lg px-3 py-2 text-sm"
-                autofocus
-              />
             </div>
           </div>
 
@@ -1086,7 +1060,7 @@
               disabled={isDeactivatingUser}
               class="px-4 py-2 rounded-lg bg-orange-600 text-white hover:bg-orange-700 disabled:opacity-50"
             >
-              {isDeleting ? "Deleting..." : "Delete User"}
+              {isDeactivatingUser ? "Deactivating..." : "Deactivate User"}
             </button>
           </div>
         </div>
