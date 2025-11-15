@@ -111,11 +111,23 @@
       .map((s) => s.trim())
       .filter(Boolean)
       .map((tok) => {
-        const m = tok.match(/^(\d{1,2})\/(\d{1,2})$/);
-        if (!m) return "";
-        const mm = Math.max(1, Math.min(12, parseInt(m[1], 10)));
-        const dd = Math.max(1, Math.min(31, parseInt(m[2], 10)));
-        return `${MONTHS[mm - 1]} ${ordinal(dd)}`;
+        let m = tok.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2})$/);
+        if (m) {
+          const mm = Math.max(1, Math.min(12, parseInt(m[1], 10)));
+          const dd = Math.max(1, Math.min(31, parseInt(m[2], 10)));
+          let year = parseInt(m[3], 10);
+
+          return `${MONTHS[mm - 1]} ${ordinal(dd)}, ${year}`;
+        }
+
+        m = tok.match(/^(\d{1,2})\/(\d{1,2})$/);
+        if (m) {
+          const mm = Math.max(1, Math.min(12, parseInt(m[1], 10)));
+          const dd = Math.max(1, Math.min(31, parseInt(m[2], 10)));
+          return `${MONTHS[mm - 1]} ${ordinal(dd)}`;
+        }
+
+        return "";
       })
       .filter(Boolean);
   }
@@ -1329,11 +1341,12 @@
                   >
                   <input
                     type="text"
-                    placeholder="MM/DD, MM/DD"
+                    placeholder="MM/DD, MM/DD/YY"
                     bind:value={form.days_off}
                     class="mt-1 w-full border rounded-md px-3 py-2 border-gray-300"
                   />
                   <p class="text-xs text-gray-500 mt-1">
+                    Examples: "12/25, 1/1" (yearly) or "7/4/25" (specific year).
                     Will render like: {formatDaysOff(form.days_off).join(", ")}
                   </p>
                 </div>
