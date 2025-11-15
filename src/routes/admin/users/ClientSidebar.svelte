@@ -8,7 +8,7 @@
   export let createMode: boolean = false;
   export let session: any = undefined;
   export let orgId: number;
-
+  export let minimumAge: number = 0;
   const dispatch = createEventDispatcher();
 
   type Client = {
@@ -77,6 +77,22 @@
   let saving = false;
   let errorMessage: string | null = null;
 
+  function calculateAge(birthDate: string): number {
+    const today = new Date();
+    const birth = new Date(birthDate);
+
+    let age = today.getFullYear() - birth.getFullYear();
+    const monthDiff = today.getMonth() - birth.getMonth();
+
+    if (
+      monthDiff < 0 ||
+      (monthDiff === 0 && today.getDate() < birth.getDate())
+    ) {
+      age--;
+    }
+
+    return age;
+  }
   function initForm(): Client {
     if (!client || createMode) {
       return {
@@ -132,7 +148,24 @@
       if (!form.last_name.trim()) e.push("Last name is required.");
       // Email is optional - removed from validation
       if (!form.primary_phone.trim()) e.push("Primary phone is required.");
-      if (!form.date_of_birth) e.push("Date of birth is required.");
+      if (!form.date_of_birth) {
+        e.push("Date of birth is required.");
+      } else {
+        const birthDate = new Date(form.date_of_birth);
+        const today = new Date();
+        if (isNaN(birthDate.getTime())) {
+          e.push("Invalid date of birth");
+        } else if (birthDate > today) {
+          e.push(`Date of birth cannot be in the future ${minimumAge}`);
+        } else if (minimumAge > 0) {
+          const age = calculateAge(form.date_of_birth);
+          if (age < minimumAge) {
+            e.push(
+              `Client must be at least ${minimumAge} years old. Current age: ${age}.`
+            );
+          }
+        }
+      }
       if (!form.gender) e.push("Gender is required.");
       if (!form.contact_pref) e.push("Contact preference is required.");
     }
