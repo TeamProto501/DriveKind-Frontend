@@ -1,26 +1,29 @@
-import type { PageServerLoad } from './$types';
-import { createSupabaseServerClient } from '$lib/supabase.server';
-import { redirect } from '@sveltejs/kit';
+import type { PageServerLoad } from "./$types";
+import { createSupabaseServerClient } from "$lib/supabase.server";
+import { redirect } from "@sveltejs/kit";
 
 export const load: PageServerLoad = async (event) => {
   const supabase = createSupabaseServerClient(event);
 
   try {
     // Session
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    const {
+      data: { session },
+      error: sessionError,
+    } = await supabase.auth.getSession();
     if (sessionError || !session) {
-      throw redirect(302, '/login');
+      throw redirect(302, "/login");
     }
 
     // Profile (must be dispatcher or admin)
     const { data: profile, error: profileError } = await supabase
-      .from('staff_profiles')
-      .select('user_id, org_id, first_name, last_name, role')
-      .eq('user_id', session.user.id)
+      .from("staff_profiles")
+      .select("user_id, org_id, first_name, last_name, role")
+      .eq("user_id", session.user.id)
       .single();
 
     if (profileError || !profile) {
-      console.error('Profile error:', profileError);
+      console.error("Profile error:", profileError);
       return {
         session,
         rides: [],
@@ -29,15 +32,15 @@ export const load: PageServerLoad = async (event) => {
         calls: [],
         destinations: [],
         profile: null,
-        error: 'Profile not found. Please contact your administrator.'
+        error: "Profile not found. Please contact your administrator.",
       };
     }
 
     const hasDispatcherRole =
       profile.role &&
       (Array.isArray(profile.role)
-        ? (profile.role.includes('Dispatcher') || profile.role.includes('Admin'))
-        : (profile.role === 'Dispatcher' || profile.role === 'Admin'));
+        ? profile.role.includes("Dispatcher") || profile.role.includes("Admin")
+        : profile.role === "Dispatcher" || profile.role === "Admin");
 
     if (!hasDispatcherRole) {
       return {
@@ -48,14 +51,15 @@ export const load: PageServerLoad = async (event) => {
         calls: [],
         destinations: [],
         profile,
-        error: 'Access denied. Dispatcher role required.'
+        error: "Access denied. Dispatcher role required.",
       };
     }
 
     // Rides (notes included; nested clients include other_limitations)
     const { data: rides, error: ridesError } = await supabase
-      .from('rides')
-      .select(`
+      .from("rides")
+      .select(
+        `
         ride_id,
         org_id,
         client_id,
@@ -103,29 +107,31 @@ export const load: PageServerLoad = async (event) => {
           first_name,
           last_name
         )
-      `)
-      .eq('org_id', profile.org_id)
-      .order('appointment_time', { ascending: true });
+      `
+      )
+      .eq("org_id", profile.org_id)
+      .order("appointment_time", { ascending: true });
 
     if (ridesError) {
-      console.error('Error loading rides:', ridesError);
+      console.error("Error loading rides:", ridesError);
     }
 
     // Drivers
     const { data: drivers, error: driversError } = await supabase
-      .from('staff_profiles')
-      .select('user_id, first_name, last_name, role')
-      .eq('org_id', profile.org_id)
-      .contains('role', ['Driver']);
+      .from("staff_profiles")
+      .select("user_id, first_name, last_name, role")
+      .eq("org_id", profile.org_id)
+      .contains("role", ["Driver"]);
 
     if (driversError) {
-      console.error('Error loading drivers:', driversError);
+      console.error("Error loading drivers:", driversError);
     }
 
     // Clients
     const { data: clients, error: clientsError } = await supabase
-      .from('clients')
-      .select(`
+      .from("clients")
+      .select(
+        `
         client_id,
         org_id,
         first_name,
@@ -139,34 +145,48 @@ export const load: PageServerLoad = async (event) => {
         zip_code,
         other_limitations,
         mobility_assistance_enum
-      `)
-      .eq('org_id', profile.org_id)
-      .order('first_name', { ascending: true });
+      `
+      )
+      .eq("org_id", profile.org_id)
+      .order("first_name", { ascending: true });
 
     if (clientsError) {
-      console.error('Error loading clients:', clientsError);
+      console.error("Error loading clients:", clientsError);
     }
+    let organization = null;
+    if (profile?.org_id) {
+      const { data: orgData } = await supabase
+        .from("organization")
+        .select('org_id, "days-off"')
+        .eq("org_id", profile.org_id)
+        .single();
 
+      organization = orgData;
+    }
     // Calls
     const { data: calls, error: callsError } = await supabase
-      .from('calls')
-      .select('call_id, org_id, call_time, call_type, caller_first_name, caller_last_name')
-      .eq('org_id', profile.org_id)
-      .order('call_time', { ascending: false });
+      .from("calls")
+      .select(
+        "call_id, org_id, call_time, call_type, caller_first_name, caller_last_name"
+      )
+      .eq("org_id", profile.org_id)
+      .order("call_time", { ascending: false });
 
     if (callsError) {
-      console.error('Error loading calls:', callsError);
+      console.error("Error loading calls:", callsError);
     }
 
     // Destinations
     const { data: destinations, error: destinationsError } = await supabase
-      .from('destinations')
-      .select('destination_id, org_id, location_name, address, address2, city, state, zipcode')
-      .eq('org_id', profile.org_id)
-      .order('location_name', { ascending: true });
+      .from("destinations")
+      .select(
+        "destination_id, org_id, location_name, address, address2, city, state, zipcode"
+      )
+      .eq("org_id", profile.org_id)
+      .order("location_name", { ascending: true });
 
     if (destinationsError) {
-      console.error('Error loading destinations:', destinationsError);
+      console.error("Error loading destinations:", destinationsError);
     }
 
     return {
@@ -177,10 +197,11 @@ export const load: PageServerLoad = async (event) => {
       calls: calls || [],
       destinations: destinations || [],
       profile,
-      error: null
+      organization,
+      error: null,
     };
   } catch (error) {
-    console.error('Error in dispatcher rides page load:', error);
+    console.error("Error in dispatcher rides page load:", error);
     if (error instanceof Response) throw error;
     return {
       session: null,
@@ -190,7 +211,7 @@ export const load: PageServerLoad = async (event) => {
       calls: [],
       destinations: [],
       profile: null,
-      error: 'Failed to load rides data'
+      error: "Failed to load rides data",
     };
   }
 };
