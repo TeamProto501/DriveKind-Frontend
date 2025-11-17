@@ -53,6 +53,12 @@ import {
     data?.profile ? `${data.profile.first_name} ${data.profile.last_name}` : ""
   );
 
+  const minDaysInAdvance = $derived(() => {
+    const v = (data as any)?.organization
+      ?.min_days_in_advance_for_ride_requests;
+    return typeof v === "number" && v > 0 ? v : 0;
+  });
+
   const isEditing = $derived(() => !!selectedRide && showEditModal);
   const userOrgId: number | null = data?.profile?.org_id ?? null;
 
@@ -228,23 +234,48 @@ import {
 
     return result;
   }
-  // Validate appointment time against organization days-off
-  function validateAppointmentTime(dateStr: string): string | null {
-    if (!dateStr) {
-      return null;
-    }
-
-    const result = isDateOff(dateStr);
-
-    if (result) {
-      const date = new Date(dateStr);
-      const formattedDate = date.toLocaleDateString();
-
-      return `Your organization is closed on ${formattedDate}. Please select a different date.`;
-    }
-
+// Validate appointment time against organization days-off
+function validateAppointmentTime(dateStr: string): string | null {
+  if (!dateStr) {
     return null;
   }
+
+  const result = isDateOff(dateStr);
+
+  if (result) {
+    const date = new Date(dateStr);
+    const formattedDate = date.toLocaleDateString();
+
+    return `Your organization is closed on ${formattedDate}. Please select a different date.`;
+  }
+
+  return null;
+}
+
+function validateMinDays(localDateTime: string, label: string): string | null {
+  const min = minDaysInAdvance(); // call the derived value
+  if (!localDateTime || !min) return null;
+
+  const dt = new Date(localDateTime);
+  if (Number.isNaN(dt.getTime())) {
+    return `${label} is invalid.`;
+  }
+
+  const now = new Date();
+  const diffMs = dt.getTime() - now.getTime();
+  const diffDays = diffMs / (1000 * 60 * 60 * 24);
+
+  if (diffDays < min) {
+    if (min === 1) {
+      return `${label} must be at least 1 day in advance.`;
+    }
+    return `${label} must be at least ${min} days in advance.`;
+  }
+
+  return null;
+}
+
+
   function getTripTypeColor(completionStatus: string) {
     switch (completionStatus) {
       case "Completed Round Trip":
@@ -941,10 +972,31 @@ import {
         ...pickupWindowErrors(rideForm.appointment_time, rideForm.pickup_time)
       );
       console.log("🔍 Validating appointment time:", rideForm.appointment_time);
+
+      // Org days-off rule
       if (rideForm.appointment_time) {
         const daysOffError = validateAppointmentTime(rideForm.appointment_time);
         if (daysOffError) {
           errs.push(daysOffError);
+        }
+      }
+
+      // Min days in advance – appointment
+      if (rideForm.appointment_time) {
+        const minErr = validateMinDays(
+          rideForm.appointment_time,
+          "Appointment time"
+        );
+        if (minErr) {
+          errs.push(minErr);
+        }
+      }
+
+      // Min days in advance – pickup (if set)
+      if (rideForm.pickup_time) {
+        const minErr = validateMinDays(rideForm.pickup_time, "Pickup time");
+        if (minErr) {
+          errs.push(minErr);
         }
       }
 
