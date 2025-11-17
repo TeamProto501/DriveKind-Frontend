@@ -1,14 +1,19 @@
 <script lang="ts">
   import * as Table from "$lib/components/ui/table/index.js";
   import * as Pagination from "$lib/components/ui/pagination/index.js";
+
   export let data: any = [];
-  $: items = Array.isArray(data) ? data : (data?.data ?? []);
+  export let onEdit: ((row: any) => void) | null = null;
+
+  $: items = Array.isArray(data) ? data : data?.data ?? [];
   const pageSize = 15;
   let currentPage = 1;
+
   $: pagedData = items.slice(
     (currentPage - 1) * pageSize,
     currentPage * pageSize
   );
+
   const getActionClass = (action: string) => {
     switch (action) {
       case "INSERT":
@@ -21,9 +26,12 @@
         return "text-gray-600";
     }
   };
+
   $: keys = items[0] ? Object.keys(items[0]) : [];
+
   const formatLabel = (k: string) =>
     k.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+
   function handlePageChange(page: number) {
     currentPage = page;
   }
@@ -36,32 +44,58 @@
         <Table.Row>
           <Table.Head class="sticky inset-y-0 start-0 px-4 py-4">#</Table.Head>
           {#each keys as key}
-            <Table.Head class="px-4 py-2 font-medium whitespace-nowrap"
-              >{formatLabel(key)}</Table.Head
-            >
+            <Table.Head class="px-4 py-2 font-medium whitespace-nowrap">
+              {formatLabel(key)}
+            </Table.Head>
           {/each}
+          {#if onEdit}
+            <Table.Head class="px-4 py-2 font-medium whitespace-nowrap">
+              Actions
+            </Table.Head>
+          {/if}
         </Table.Row>
       </Table.Header>
+
       <Table.Body class="divide-y divide-gray-200">
         {#if pagedData.length > 0}
           {#each pagedData as row, i}
             <Table.Row class="px-4 py-2">
               <Table.Cell>{(currentPage - 1) * pageSize + i + 1}</Table.Cell>
               {#each keys as key}
-                <Table.Cell>{row[key] ?? "-"}</Table.Cell>
+                <Table.Cell>
+                  {row[key] ?? "-"}
+                </Table.Cell>
               {/each}
+              {#if onEdit}
+                <Table.Cell>
+                  <button
+                    type="button"
+                    class="text-blue-600 hover:underline"
+                    onclick={() => onEdit && onEdit(row)}
+                  >
+                    Edit
+                  </button>
+                </Table.Cell>
+              {/if}
             </Table.Row>
           {/each}
+
           {#if pagedData.length === 0}
             <Table.Row>
-              <Table.Cell colspan={keys.length + 1} class="text-center"
-                >No data</Table.Cell
+              <Table.Cell
+                colspan={keys.length + 1 + (onEdit ? 1 : 0)}
+                class="text-center"
               >
+                No data
+              </Table.Cell>
             </Table.Row>
           {/if}
         {:else}
           <Table.Row>
-            <Table.Cell class="text-center py-8 text-gray-500 col-span-6">
+            <Table.Cell
+              colspan={keys.length + 1 + (onEdit ? 1 : 0)}
+              class="text-center py-8 text-gray-500"
+            >
               No Data
             </Table.Cell>
           </Table.Row>

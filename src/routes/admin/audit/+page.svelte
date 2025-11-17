@@ -19,6 +19,7 @@
     data: any;
     tab?: string;
   }
+
   let { data }: { data: PageData } = $props();
 
   let items = $derived(
@@ -30,6 +31,7 @@
           ? data
           : []
   );
+
   const tabs = [
     {
       id: "audits",
@@ -42,8 +44,10 @@
       description: "View Call Logs",
     },
   ];
+
   let selectedTab = $state(data?.tab ?? "audits");
   let isNavigating = $derived($navigating);
+
   function selectTab(tabId: string) {
     if (selectedTab !== tabId) {
       goto(`?tab=${tabId}`, {
@@ -53,14 +57,17 @@
       });
     }
   }
+
   $effect(() => {
     selectedTab = data?.tab ?? "audits";
   });
+
   let searchQuery = $state("");
   let selectedTable = $state("all");
   let selectedAction = $state("all");
   let selectedDateRange = $state("all");
   let selectedCallType = $state("all");
+
   let filteredData = $derived(
     items.filter((log) => {
       if (selectedTab === "audits") {
@@ -144,8 +151,8 @@
   function exportLogs() {
     console.log("Exporting audit logs...");
   }
-  //delete stuff
-  // Delete Modal State
+
+  // ======= DELETE LOGS STATE =======
   let showDeleteModal = $state(false);
   let deleteStartTime = $state("");
   let deleteEndTime = $state("");
@@ -154,6 +161,7 @@
   let previewData = $state<any[]>([]);
   let isLoadingPreview = $state(false);
   let previewFormElement: HTMLFormElement;
+
   function openDeleteModal() {
     showDeleteModal = true;
     deleteError = "";
@@ -179,19 +187,16 @@
       return;
     }
 
-    // Get all unique keys from the data
     const headers = Array.from(
       new Set(previewData.flatMap((item) => Object.keys(item)))
     );
 
-    // Create CSV content
     const csvRows = [];
     csvRows.push(headers.join(","));
 
     for (const row of previewData) {
       const values = headers.map((header) => {
         const value = row[header];
-        // Handle values with commas, quotes, or newlines
         if (value === null || value === undefined) return "";
         const stringValue = String(value);
         if (
@@ -246,6 +251,40 @@
     deleteError = "";
     isDeleting = true;
     return true;
+  }
+
+  // ======= EDIT CALL STATE =======
+  let showEditCallModal = $state(false);
+  let editCall: any = $state(null);
+  let isSavingCall = $state(false);
+  let editError = $state("");
+
+  function openEditCallModal(row: any) {
+    if (selectedTab !== "calls") return;
+
+    const copy: any = { ...row };
+
+    // Convert call_time to datetime-local for the input
+    if (copy.call_time) {
+      const dt = new Date(copy.call_time);
+      if (!isNaN(dt.getTime())) {
+        copy.call_time_local = dt.toISOString().slice(0, 16);
+      } else {
+        copy.call_time_local = "";
+      }
+    } else {
+      copy.call_time_local = "";
+    }
+
+    editCall = copy;
+    editError = "";
+    showEditCallModal = true;
+  }
+
+  function closeEditCallModal() {
+    showEditCallModal = false;
+    editCall = null;
+    editError = "";
   }
 </script>
 
@@ -329,6 +368,7 @@
               <option value="Hasnt heard from driver"
                 >Hasn't Heard from Driver</option
               >
+              <option value="Cancelled Ride">Cancelled Ride</option>
             </select>
           {/if}
           <select
@@ -344,7 +384,7 @@
       </div>
     </div>
 
-    <!-- Audit Logs Table -->
+    <!-- Activity Logs Table -->
     <div class="bg-white shadow rounded-lg overflow-hidden">
       <div class="px-6 py-4 border-b border-gray-200">
         <div class="flex items-center justify-between">
@@ -355,12 +395,174 @@
         </div>
       </div>
       <div class="overflow-x-auto">
-        <Table data={filteredData} />
+        <Table
+          data={filteredData}
+          onEdit={selectedTab === "calls" ? openEditCallModal : null}
+        />
       </div>
     </div>
   </div>
 
-  <!-- Delete Modal -->
+  <!-- ======= EDIT CALL MODAL ======= -->
+  <Dialog.Root bind:open={showEditCallModal}>
+    <Dialog.Content class="sm:max-w-lg bg-white">
+      <Dialog.Header>
+        <Dialog.Title>Edit Call</Dialog.Title>
+        <Dialog.Description>
+          Update the details for this call log entry.
+        </Dialog.Description>
+      </Dialog.Header>
+
+      {#if editCall}
+        <form
+          method="POST"
+          action="?/updateCall"
+          use:enhance={() => {
+            isSavingCall = true;
+            editError = "";
+
+            return async ({ result, update }) => {
+              isSavingCall = false;
+
+              if (result.type === "success") {
+                closeEditCallModal();
+                // Reload the page to show updated data
+                goto("", { invalidateAll: true });
+              } else {
+                editError = "Failed to save changes.";
+              }
+
+              await update({ reset: false });
+            };
+          }}
+          class="space-y-4"
+        >
+          <!-- IDs -->
+          <input type="hidden" name="call_id" value={editCall.call_id} />
+          {#if editCall.user_id}
+            <input type="hidden" name="user_id" value={editCall.user_id} />
+          {/if}
+          {#if editCall.org_id}
+            <input type="hidden" name="org_id" value={editCall.org_id} />
+          {/if}
+
+          <div class="space-y-2">
+            <Label for="call_time">Call Time</Label>
+            <Input
+              id="call_time"
+              name="call_time"
+              type="datetime-local"
+              bind:value={editCall.call_time_local}
+            />
+          </div>
+
+          <div class="space-y-2">
+            <Label for="call_type">Call Type</Label>
+            <select
+              id="call_type"
+              name="call_type"
+              class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              bind:value={editCall.call_type}
+            >
+              <option value="">Select type...</option>
+              <option value="Ride Request">Ride Request</option>
+              <option value="Hasnt heard from driver">
+                Hasn't Heard from Driver
+              </option>
+              <option value="Cancelled Ride">Cancelled Ride</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+
+          <div class="space-y-2">
+            <Label for="other_type">Other Type</Label>
+            <Input
+              id="other_type"
+              name="other_type"
+              type="text"
+              bind:value={editCall.other_type}
+            />
+          </div>
+
+          <div class="space-y-2">
+            <Label for="client_id">Client ID</Label>
+            <Input
+              id="client_id"
+              name="client_id"
+              type="number"
+              bind:value={editCall.client_id}
+            />
+          </div>
+
+          <div class="space-y-2">
+            <Label for="phone_number">Phone Number</Label>
+            <Input
+              id="phone_number"
+              name="phone_number"
+              type="text"
+              bind:value={editCall.phone_number}
+            />
+          </div>
+
+          <div class="space-y-2">
+            <Label for="forwarded_to_name">Forwarded To</Label>
+            <Input
+              id="forwarded_to_name"
+              name="forwarded_to_name"
+              type="text"
+              bind:value={editCall.forwarded_to_name}
+            />
+          </div>
+
+          <div class="space-y-2">
+            <Label for="caller_first_name">Caller First Name</Label>
+            <Input
+              id="caller_first_name"
+              name="caller_first_name"
+              type="text"
+              bind:value={editCall.caller_first_name}
+            />
+          </div>
+
+          <div class="space-y-2">
+            <Label for="caller_last_name">Caller Last Name</Label>
+            <Input
+              id="caller_last_name"
+              name="caller_last_name"
+              type="text"
+              bind:value={editCall.caller_last_name}
+            />
+          </div>
+
+          {#if editError}
+            <div class="p-3 bg-red-50 border border-red-200 rounded-lg">
+              <p class="text-sm text-red-800">{editError}</p>
+            </div>
+          {/if}
+
+          <Dialog.Footer>
+            <Button
+              type="button"
+              variant="outline"
+              onclick={closeEditCallModal}
+              disabled={isSavingCall}
+            >
+              Cancel
+            </Button>
+            <Button type="submit" class="flex items-center gap-2">
+              {#if isSavingCall}
+                <span>Saving...</span>
+              {:else}
+                <span>Save Changes</span>
+              {/if}
+            </Button>
+          </Dialog.Footer>
+        </form>
+      {/if}
+    </Dialog.Content>
+  </Dialog.Root>
+
+  <!-- ======= DELETE LOGS MODAL ======= -->
   <Dialog.Root bind:open={showDeleteModal}>
     <Dialog.Content class="sm:max-w-md bg-white">
       <Dialog.Header>
@@ -370,6 +572,8 @@
           data before deletion.
         </Dialog.Description>
       </Dialog.Header>
+
+      <!-- Hidden preview form -->
       <form
         bind:this={previewFormElement}
         method="POST"
@@ -432,7 +636,6 @@
             isDeleting = false;
             if (result.type === "success") {
               closeDeleteModal();
-              // Reload the page to show updated data
               goto("", { invalidateAll: true });
             } else {
               deleteError = "Failed to delete logs.";
