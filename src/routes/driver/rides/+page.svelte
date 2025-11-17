@@ -497,12 +497,6 @@
                   <Edit class="w-4 h-4 mr-1" />Edit
                 </Button>
               {/if}
-
-              {#if ride.status !== "Completed" && ride.status !== "Cancelled"}
-                <Button variant="outline" size="sm" onclick={() => updateRideStatus(ride.ride_id, 'Cancelled')} disabled={isUpdating}>
-                  <XCircle class="w-4 h-4 mr-1" />Cancel
-                </Button>
-              {/if}
             </div>
           </div>
         </CardContent>
