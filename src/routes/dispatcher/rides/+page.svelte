@@ -3,21 +3,23 @@
   import { Card } from "$lib/components/ui/card";
   import { Input } from "$lib/components/ui/input";
   import Textarea from "$lib/components/ui/textarea.svelte";
-  import {
-    Car,
-    Clock,
-    MapPin,
-    User,
-    Phone,
-    Calendar,
-    Search,
-    Plus,
-    Edit,
-    AlertCircle,
-    UserCheck,
-    CheckCircle,
-    FileText,
-  } from "@lucide/svelte";
+import {
+  Car,
+  Clock,
+  MapPin,
+  User,
+  Phone,
+  Calendar,
+  Search,
+  Plus,
+  Edit,
+  AlertCircle,
+  UserCheck,
+  CheckCircle,
+  FileText,
+  ChevronDown,
+  ChevronUp
+} from "@lucide/svelte";
   import { invalidateAll } from "$app/navigation";
   import { onMount } from "svelte";
   import type { PageData } from "./$types";
@@ -287,6 +289,8 @@
   let clientQueryEdit = $state("");
   let showClientListCreate = $state(false);
   let showClientListEdit = $state(false);
+  let expandedClientDetailsCreate = $state<{ [key: number]: boolean }>({});
+  let expandedClientDetailsEdit = $state<{ [key: number]: boolean }>({});
 
   function norm(s: unknown) {
     return (s ?? "").toString().toLowerCase().trim();
@@ -366,6 +370,16 @@
       showClientListCreate = false;
       clientQueryCreate = label;
     }
+  }
+
+  function toggleClientDetailsCreate(clientId: number) {
+    expandedClientDetailsCreate[clientId] =
+      !expandedClientDetailsCreate[clientId];
+  }
+
+  function toggleClientDetailsEdit(clientId: number) {
+    expandedClientDetailsEdit[clientId] =
+      !expandedClientDetailsEdit[clientId];
   }
 
   /* ---------------- Estimated length parsing/formatting ---------------- */
@@ -1653,37 +1667,51 @@
                         class="w-full text-left px-3 py-2 hover:bg-gray-50"
                         onclick={() => selectClientById(c.client_id, false)}
                       >
-                        <div class="font-medium">
-                          {c.first_name}
-                          {c.last_name}
-                        </div>
-                        <div class="text-xs text-gray-500">
-                          {c.primary_phone || "—"}{c.email
-                            ? ` • ${c.email}`
-                            : ""}
-                        </div>
-                        <div class="text-[11px] text-gray-400">
-                          {formatAddress(c) || "—"}
-                        </div>
-                        {#if c.mobility_assistance_enum}
-                          <div
-                            class="mt-1 text-[11px] text-blue-600 flex items-start gap-1"
-                          >
-                            <span class="font-medium">Mobility Device:</span>
-                            <span class="capitalize"
-                              >{c.mobility_assistance_enum}</span
+                        <div class="flex items-center justify-between gap-2">
+                          <div class="font-medium">
+                            {c.first_name} {c.last_name}
+                          </div>
+                            <!-- svelte-ignore a11y_click_events_have_key_events -->
+                            <!-- svelte-ignore a11y_no_static_element_interactions -->
+                            <span
+                              class="ml-2 p-1 rounded-full hover:bg-gray-100 text-gray-500 cursor-pointer"
+                              onclick={(event) => {
+                                event.stopPropagation();
+                                toggleClientDetailsCreate(c.client_id);
+                              }}
+                              aria-label={expandedClientDetailsCreate[c.client_id]
+                                ? "Hide client details"
+                                : "Show client details"}
                             >
+                              {#if expandedClientDetailsCreate[c.client_id]}
+                                <ChevronUp class="w-4 h-4" />
+                              {:else}
+                                <ChevronDown class="w-4 h-4" />
+                              {/if}
+                            </span>
+                        </div>
+
+                        {#if expandedClientDetailsCreate[c.client_id]}
+                          <div class="mt-1 text-xs text-gray-500">
+                            {c.primary_phone || "—"}{c.email ? ` • ${c.email}` : ""}
+                          </div>
+                          <div class="text-[11px] text-gray-400">
+                            {formatAddress(c) || "—"}
+                          </div>
+                          {#if c.mobility_assistance_enum}
+                            <div class="mt-1 text-[11px] text-blue-600 flex items-start gap-1">
+                              <span class="font-medium">Mobility Device:</span>
+                              <span class="capitalize">{c.mobility_assistance_enum}</span>
+                            </div>
+                          {/if}
+                          <div class="mt-1 text-[11px] text-gray-600 flex items-start gap-1">
+                            <AlertCircle class="w-3 h-3 mt-0.5 text-gray-400" />
+                            <span>
+                              <span class="font-medium">Limitations:</span>
+                              {c.other_limitations || "None"}
+                            </span>
                           </div>
                         {/if}
-                        <div
-                          class="mt-1 text-[11px] text-gray-600 flex items-start gap-1"
-                        >
-                          <AlertCircle class="w-3 h-3 mt-0.5 text-gray-400" />
-                          <span>
-                            <span class="font-medium">Limitations:</span>
-                            {c.other_limitations || "None"}
-                          </span>
-                        </div>
                       </button>
                     {/each}
                     {#if filteredClientList(clientQueryCreate).length === 0}
@@ -2163,56 +2191,71 @@
                   class="w-full"
                 />
                 <input type="hidden" value={rideForm.client_id} />
-                {#if showClientListEdit}
-                  <div
-                    class="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow max-h-64 overflow-y-auto"
-                  >
-                    {#each filteredClientList(clientQueryEdit) as c}
-                      <button
-                        type="button"
-                        class="w-full text-left px-3 py-2 hover:bg-gray-50"
-                        onclick={() => selectClientById(c.client_id, true)}
-                      >
-                        <div class="font-medium">
-                          {c.first_name}
-                          {c.last_name}
-                        </div>
-                        <div class="text-xs text-gray-500">
-                          {c.primary_phone || "—"}{c.email
-                            ? ` • ${c.email}`
-                            : ""}
-                        </div>
-                        <div class="text-[11px] text-gray-400">
-                          {formatAddress(c) || "—"}
-                        </div>
-                        {#if c.mobility_assistance_enum}
-                          <div
-                            class="mt-1 text-[11px] text-blue-600 flex items-start gap-1"
-                          >
-                            <span class="font-medium">Mobility Device:</span>
-                            <span class="capitalize"
-                              >{c.mobility_assistance_enum}</span
-                            >
-                          </div>
-                        {/if}
-                        <div
-                          class="mt-1 text-[11px] text-gray-600 flex items-start gap-1"
+                  {#if showClientListEdit}
+                    <div
+                      class="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow max-h-64 overflow-y-auto"
+                    >
+                      {#each filteredClientList(clientQueryEdit) as c}
+                        <button
+                          type="button"
+                          class="w-full text-left px-3 py-2 hover:bg-gray-50"
+                          onclick={() => selectClientById(c.client_id, true)}
                         >
-                          <AlertCircle class="w-3 h-3 mt-0.5 text-gray-400" />
-                          <span>
-                            <span class="font-medium">Limitations:</span>
-                            {c.other_limitations || "None"}
-                          </span>
+                          <div class="flex items-center justify-between gap-2">
+                            <div class="font-medium">
+                              {c.first_name} {c.last_name}
+                            </div>
+                            <!-- svelte-ignore a11y_click_events_have_key_events -->
+                            <!-- svelte-ignore a11y_no_static_element_interactions -->
+                            <span
+                              class="ml-2 p-1 rounded-full hover:bg-gray-100 text-gray-500 cursor-pointer"
+                              onclick={(event) => {
+                                event.stopPropagation();
+                                toggleClientDetailsEdit(c.client_id);
+                              }}
+                              aria-label={expandedClientDetailsEdit[c.client_id]
+                                ? "Hide client details"
+                                : "Show client details"}
+                            >
+                              {#if expandedClientDetailsEdit[c.client_id]}
+                                <ChevronUp class="w-4 h-4" />
+                              {:else}
+                                <ChevronDown class="w-4 h-4" />
+                              {/if}
+                            </span>
+                          </div>
+
+                          {#if expandedClientDetailsEdit[c.client_id]}
+                            <div class="mt-1 text-xs text-gray-500">
+                              {c.primary_phone || "—"}{c.email ? ` • ${c.email}` : ""}
+                            </div>
+                            <div class="text-[11px] text-gray-400">
+                              {formatAddress(c) || "—"}
+                            </div>
+                            {#if c.mobility_assistance_enum}
+                              <div class="mt-1 text-[11px] text-blue-600 flex items-start gap-1">
+                                <span class="font-medium">Mobility Device:</span>
+                                <span class="capitalize">{c.mobility_assistance_enum}</span>
+                              </div>
+                            {/if}
+                            <div class="mt-1 text-[11px] text-gray-600 flex items-start gap-1">
+                              <AlertCircle class="w-3 h-3 mt-0.5 text-gray-400" />
+                              <span>
+                                <span class="font-medium">Limitations:</span>
+                                {c.other_limitations || "None"}
+                              </span>
+                            </div>
+                          {/if}
+                        </button>
+                      {/each}
+
+                      {#if filteredClientList(clientQueryEdit).length === 0}
+                        <div class="px-3 py-2 text-sm text-gray-500">
+                          No matches
                         </div>
-                      </button>
-                    {/each}
-                    {#if filteredClientList(clientQueryEdit).length === 0}
-                      <div class="px-3 py-2 text-sm text-gray-500">
-                        No matches
-                      </div>
-                    {/if}
-                  </div>
-                {/if}
+                      {/if}
+                    </div>
+                  {/if}
               </div>
             </div>
 
