@@ -42,10 +42,8 @@
   let canManage = $derived(hasRole(["Admin", "Super Admin"]));
 
   // ---- Vehicle Types from Organization ----
-  // Valid enum values (Motorcycle removed)
-  const VALID_ENUM_VALUES = ['SUV', 'Sedan', 'Van', 'Truck', 'Coupe'] as const;
-  
   // Vehicle types available for this organization (loaded from server)
+  // These are free-form text entries, not restricted to enum values
   let vehicleTypes = $state<string[]>(data?.vehicleTypes || ['SUV', 'Sedan', 'Van', 'Truck', 'Coupe']);
   $effect(() => {
     if (data?.vehicleTypes) {
@@ -436,10 +434,7 @@
       setToast("Vehicle type cannot be empty", false);
       return;
     }
-    if (!VALID_ENUM_VALUES.includes(trimmed as any)) {
-      setToast(`Invalid vehicle type. Must be one of: ${VALID_ENUM_VALUES.join(', ')}`, false);
-      return;
-    }
+    // Check for duplicates (case-insensitive)
     if (vehicleTypes.some((t, i) => i !== editingVehicleTypeIndex && t.toLowerCase() === trimmed.toLowerCase())) {
       setToast("Vehicle type already exists", false);
       return;
@@ -456,10 +451,7 @@
       setToast("Vehicle type cannot be empty", false);
       return;
     }
-    if (!VALID_ENUM_VALUES.includes(trimmed as any)) {
-      setToast(`Invalid vehicle type. Must be one of: ${VALID_ENUM_VALUES.join(', ')}`, false);
-      return;
-    }
+    // Check for duplicates (case-insensitive)
     if (vehicleTypes.some(t => t.toLowerCase() === trimmed.toLowerCase())) {
       setToast("Vehicle type already exists", false);
       return;
@@ -991,7 +983,7 @@
       <Dialog.Content class="sm:max-w-lg bg-white">
         <Dialog.Header>
           <Dialog.Title>Manage Vehicle Types</Dialog.Title>
-          <Dialog.Description>Add or remove vehicle types available for your organization. Only valid enum values can be used: {VALID_ENUM_VALUES.join(', ')}</Dialog.Description>
+          <Dialog.Description>Add, edit, or remove vehicle types available for your organization. You can use any vehicle type names you want.</Dialog.Description>
         </Dialog.Header>
 
         <div class="space-y-4">
@@ -1002,14 +994,14 @@
               {#each vehicleTypes as type, index}
                 <div class="flex items-center gap-2 p-2 bg-gray-50 rounded">
                   {#if editingVehicleTypeIndex === index}
-                    <select
+                    <input
+                      type="text"
                       bind:value={editingVehicleTypeValue}
                       class="flex-1 px-2 py-1 border border-gray-300 rounded text-sm"
-                    >
-                      {#each VALID_ENUM_VALUES as enumVal}
-                        <option value={enumVal}>{enumVal}</option>
-                      {/each}
-                    </select>
+                      placeholder="Enter vehicle type"
+                      onkeydown={(e) => { if (e.key === 'Enter') saveEditVehicleType(); }}
+                      onkeyup={(e) => { if (e.key === 'Escape') cancelEditVehicleType(); }}
+                    />
                     <Button size="sm" onclick={saveEditVehicleType}>Save</Button>
                     <Button size="sm" variant="outline" onclick={cancelEditVehicleType}>Cancel</Button>
                   {:else}
@@ -1032,22 +1024,18 @@
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-2">Add Vehicle Type</label>
             <div class="flex gap-2">
-              <select
+              <input
+                type="text"
                 bind:value={newVehicleType}
+                placeholder="e.g., Minivan, Electric Car, etc."
                 class="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm"
-              >
-                <option value="">Select a vehicle type...</option>
-                {#each VALID_ENUM_VALUES as enumVal}
-                  {#if !vehicleTypes.includes(enumVal)}
-                    <option value={enumVal}>{enumVal}</option>
-                  {/if}
-                {/each}
-              </select>
+                onkeydown={(e) => { if (e.key === 'Enter') addVehicleType(); }}
+              />
               <Button onclick={addVehicleType} disabled={!newVehicleType.trim()}>
                 <Plus class="w-4 h-4" />
               </Button>
             </div>
-            <p class="mt-1 text-xs text-gray-500">Only enum values not already added can be selected</p>
+            <p class="mt-1 text-xs text-gray-500">Enter any vehicle type name (e.g., Minivan, Electric Car, Hybrid, etc.)</p>
           </div>
         </div>
 

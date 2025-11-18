@@ -1,102 +1,99 @@
 # Vehicle Types Migration Guide
 
 ## Overview
-Keep the `type_of_vehicle_enum` enum in the database, but:
-- Remove 'Motorcycle' from the enum definition
-- Add `vehicle_types` array to `organization` table to control which enum values are available for each organization
-- Allow admins to add/remove enum values from their organization's available vehicle types
+Replace the hardcoded vehicle enum with a dynamic array-based system stored in the `organization` table. This allows each organization to customize their vehicle types with any text values they want.
 
 ## Database Changes (Supabase)
 
-### Step 1: Update the enum to remove Motorcycle
+### Step 1: Update existing vehicles with Motorcycle type
 
-First, update existing vehicles that use Motorcycle, then modify the enum:
+First, update existing vehicles that use Motorcycle:
 
 ```sql
--- Step 1: Update existing vehicles with Motorcycle type to another type
+-- Update vehicles with Motorcycle to another type (e.g., Truck)
 UPDATE public.vehicles 
 SET type_of_vehicle_enum = 'Truck'::type_of_vehicle_enum 
 WHERE type_of_vehicle_enum = 'Motorcycle';
-
--- Step 2: Drop and recreate the enum without Motorcycle
--- Note: This requires dropping dependent objects first
-ALTER TYPE type_of_vehicle_enum RENAME TO type_of_vehicle_enum_old;
-
-CREATE TYPE type_of_vehicle_enum AS ENUM ('SUV', 'Sedan', 'Van', 'Truck', 'Coupe');
-
--- Step 3: Update the vehicles table to use the new enum
-ALTER TABLE public.vehicles 
-  ALTER COLUMN type_of_vehicle_enum TYPE type_of_vehicle_enum 
-  USING type_of_vehicle_enum::text::type_of_vehicle_enum;
-
--- Step 4: Drop the old enum
-DROP TYPE type_of_vehicle_enum_old;
 ```
 
-### Step 2: Add `vehicle_types` column to `organization` table
+### Step 2: Change enum column to TEXT
 
-The `vehicle_types` array will contain which enum values are available for that organization:
+Convert the `type_of_vehicle_enum` column from enum to TEXT:
+
+```sql
+-- Step 1: Add a new TEXT column
+ALTER TABLE public.vehicles 
+ADD COLUMN type_of_vehicle TEXT;
+
+-- Step 2: Copy data from enum to TEXT column
+UPDATE public.vehicles 
+SET type_of_vehicle = type_of_vehicle_enum::text;
+
+-- Step 3: Drop the old enum column
+ALTER TABLE public.vehicles 
+DROP COLUMN type_of_vehicle_enum;
+
+-- Step 4: Rename the new column to the original name
+ALTER TABLE public.vehicles 
+RENAME COLUMN type_of_vehicle TO type_of_vehicle_enum;
+
+-- Step 5: (Optional) Drop the old enum type if no longer needed
+-- DROP TYPE type_of_vehicle_enum;
+```
+
+### Step 3: Add `vehicle_types` column to `organization` table
+
+The `vehicle_types` array will contain the available vehicle types for that organization:
 
 ```sql
 -- Add vehicle_types column as TEXT array
 ALTER TABLE public.organization 
 ADD COLUMN IF NOT EXISTS vehicle_types TEXT[] DEFAULT ARRAY['SUV', 'Sedan', 'Van', 'Truck', 'Coupe']::TEXT[];
 
--- Update existing organizations with default vehicle types (all enum values except Motorcycle)
+-- Update existing organizations with default vehicle types (excluding Motorcycle)
 UPDATE public.organization 
 SET vehicle_types = ARRAY['SUV', 'Sedan', 'Van', 'Truck', 'Coupe']::TEXT[]
 WHERE vehicle_types IS NULL;
 ```
 
 **Important Notes:**
-- The `type_of_vehicle_enum` column in the `vehicles` table remains as an enum type
-- The enum values are: 'SUV', 'Sedan', 'Van', 'Truck', 'Coupe' (Motorcycle removed)
-- The `vehicle_types` array in `organization` controls which enum values are available/active for that organization
-- Admins can add/remove enum values from the array, but they can only choose from valid enum values
-- When adding a new vehicle type, it must be a valid enum value
+- The `type_of_vehicle_enum` column in the `vehicles` table is now a TEXT column (not an enum)
+- Admins can add/remove/edit any vehicle types - they are not restricted to specific values
+- The `vehicle_types` array in `organization` controls which vehicle types are available for that organization
+- When creating/editing vehicles, users can only select from the organization's `vehicle_types` array
 
 ## Code Changes
 
-### Files to Modify:
-1. `src/routes/admin/vehicle_management/+page.server.ts` - Load vehicle_types from org, add updateVehicleTypes action, validate enum values
-2. `src/routes/admin/vehicle_management/+page.svelte` - Add UI for managing vehicle types, use org vehicle_types, validate against enum
+### Files Modified:
+1. `src/routes/admin/vehicle_management/+page.server.ts` - Load vehicle_types from org, add updateVehicleTypes action, remove enum validation
+2. `src/routes/admin/vehicle_management/+page.svelte` - Add UI for managing vehicle types (free-form text), use org vehicle_types
 3. `src/routes/driver/vehicles/+page.server.ts` - Load vehicle_types from org
 4. `src/routes/driver/vehicles/+page.svelte` - Use org vehicle_types instead of hardcoded array
-5. `src/routes/driver/vehicles/create/+server.ts` - Validate against org vehicle_types and enum
-6. `src/routes/driver/vehicles/update/[vehicleId]/+server.ts` - Validate against org vehicle_types and enum
+5. `src/routes/driver/vehicles/create/+server.ts` - Validate against org vehicle_types (no enum validation)
+6. `src/routes/driver/vehicles/update/[vehicleId]/+server.ts` - Validate against org vehicle_types (no enum validation)
 
 ### Key Changes:
-- Remove hardcoded `VEHICLE_TYPES` arrays
+- Remove all enum type definitions and validations
 - Remove "Motorcycle" from all type definitions
 - Load `vehicle_types` from organization in server load functions
-- Add CRUD operations for vehicle types in admin vehicle management page
-- Validate that vehicle types added by admins are valid enum values
-- Validate vehicle type selections against organization's `vehicle_types` array
+- Add CRUD operations for vehicle types in admin vehicle management page (free-form text input)
+- Validate vehicle type selections against organization's `vehicle_types` array only
 - Use `getUser()` instead of `getSession()` for secure authentication
-
-## Valid Enum Values
-
-The enum can only contain these values:
-- 'SUV'
-- 'Sedan'
-- 'Van'
-- 'Truck'
-- 'Coupe'
-
-Admins can choose which of these enum values are available for their organization via the `vehicle_types` array.
+- Allow admins to add any text as a vehicle type (no enum restrictions)
 
 ## Testing Checklist
 
-- [ ] Enum updated to remove Motorcycle
+- [ ] Database column changed from enum to TEXT
 - [ ] Database column added successfully
 - [ ] Existing organizations have default vehicle_types
 - [ ] Admin can view vehicle types in vehicle management page
-- [ ] Admin can add enum values to vehicle_types array
-- [ ] Admin can remove enum values from vehicle_types array (with validation if vehicles use that type)
-- [ ] Admin cannot add invalid enum values (only SUV, Sedan, Van, Truck, Coupe)
+- [ ] Admin can add new vehicle types (any text)
+- [ ] Admin can remove vehicle types (with validation if vehicles use that type)
+- [ ] Admin can edit vehicle type names (any text)
 - [ ] Driver vehicle creation uses organization's vehicle_types
 - [ ] Driver vehicle editing uses organization's vehicle_types
 - [ ] Admin vehicle creation uses organization's vehicle_types
 - [ ] Admin vehicle editing uses organization's vehicle_types
 - [ ] "Motorcycle" is removed from all dropdowns
 - [ ] Validation prevents using vehicle types not in organization's list
+- [ ] No enum validation errors occur

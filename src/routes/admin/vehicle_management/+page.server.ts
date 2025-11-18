@@ -305,12 +305,7 @@ export const actions = {
       return fail(400, { error: 'All vehicle types must be non-empty strings' });
     }
 
-    // Validate that all vehicle types are valid enum values
-    const validEnumValues = ['SUV', 'Sedan', 'Van', 'Truck', 'Coupe'];
-    const invalidTypes = vehicleTypes.filter(t => !validEnumValues.includes(t));
-    if (invalidTypes.length > 0) {
-      return fail(400, { error: `Invalid vehicle types: ${invalidTypes.join(', ')}. Valid values are: ${validEnumValues.join(', ')}` });
-    }
+    // No enum validation - admins can add any vehicle types they want
 
     const { data: updatedOrg, error } = await supabase
       .from('organization')
