@@ -4,9 +4,9 @@ import { createSupabaseServerClient } from '$lib/supabase.server';
 export const POST: RequestHandler = async (event) => {
   try {
     const supabase = createSupabaseServerClient(event);
-    const { data: { session } } = await supabase.auth.getSession();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
 
-    if (!session) {
+    if (authError || !user) {
       return json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -31,7 +31,7 @@ export const POST: RequestHandler = async (event) => {
     // Verify the vehicle belongs to the current user
     const { data: existingVehicle, error: fetchError } = await supabase
       .from('vehicles')
-      .select('vehicle_id, user_id')
+      .select('vehicle_id, user_id, org_id')
       .eq('vehicle_id', vehicleId)
       .single();
 
@@ -39,12 +39,24 @@ export const POST: RequestHandler = async (event) => {
       return json({ error: 'Vehicle not found' }, { status: 404 });
     }
 
-    if (existingVehicle.user_id !== session.user.id) {
+    if (existingVehicle.user_id !== user.id) {
       return json({ error: 'You do not have permission to update this vehicle' }, { status: 403 });
     }
 
+    // Validate vehicle type against organization's vehicle_types
+    const { data: org } = await supabase
+      .from('organization')
+      .select('vehicle_types')
+      .eq('org_id', existingVehicle.org_id)
+      .single();
+
+    const vehicleTypes = org?.vehicle_types || ['SUV', 'Sedan', 'Van', 'Truck', 'Coupe'];
+    if (!vehicleTypes.includes(type_of_vehicle_enum)) {
+      return json({ error: `Invalid vehicle type. Must be one of: ${vehicleTypes.join(', ')}` }, { status: 400 });
+    }
+
     const payload = {
-      type_of_vehicle_enum: type_of_vehicle_enum as 'SUV' | 'Sedan' | 'Van' | 'Motorcycle' | 'Truck' | 'Coupe',
+      type_of_vehicle_enum: type_of_vehicle_enum,
       vehicle_color: vehicle_color.trim(),
       nondriver_seats: Math.trunc(nondriver_seats)
     };
@@ -53,7 +65,7 @@ export const POST: RequestHandler = async (event) => {
       .from('vehicles')
       .update(payload)
       .eq('vehicle_id', vehicleId)
-      .eq('user_id', session.user.id)
+      .eq('user_id', user.id)
       .select()
       .single();
 

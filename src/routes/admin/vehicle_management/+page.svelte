@@ -27,6 +27,7 @@
     session?: { user: any } | null;
     profile?: any | null;
     roles?: string[] | null;
+    vehicleTypes?: string[] | null;
   }
 
   // ---- Role handling (runes) ----
@@ -39,16 +40,17 @@
   });
   let canManage = $derived(hasRole(["Admin", "Super Admin"]));
 
-  // ---- Types / State ----
-  type VehicleType = "SUV" | "Sedan" | "Van" | "Motorcycle" | "Truck" | "Coupe";
-  const VEHICLE_TYPES: VehicleType[] = [
-    "SUV",
-    "Sedan",
-    "Van",
-    "Motorcycle",
-    "Truck",
-    "Coupe",
-  ];
+  // ---- Vehicle Types from Organization ----
+  // Valid enum values (Motorcycle removed)
+  const VALID_ENUM_VALUES = ['SUV', 'Sedan', 'Van', 'Truck', 'Coupe'] as const;
+  
+  // Vehicle types available for this organization (loaded from server)
+  let vehicleTypes = $state<string[]>(data?.vehicleTypes || ['SUV', 'Sedan', 'Van', 'Truck', 'Coupe']);
+  $effect(() => {
+    if (data?.vehicleTypes) {
+      vehicleTypes = data.vehicleTypes;
+    }
+  });
 
   interface StaffLite {
     user_id: string;
@@ -59,7 +61,7 @@
   interface VehicleRow {
     vehicle_id: number;
     user_id: string | null;
-    type_of_vehicle_enum: VehicleType | null;
+    type_of_vehicle_enum: string | null;
     vehicle_color: string | null;
     nondriver_seats: number | null;
     active: boolean | null;
@@ -88,7 +90,7 @@
 
   let addForm = $state<{
     user_id: string | "";
-    type_of_vehicle_enum: VehicleType | "";
+    type_of_vehicle_enum: string | "";
     vehicle_color: string;
     nondriver_seats: SeatsField;
     active: boolean;
@@ -108,7 +110,7 @@
 
   let editForm = $state<{
     vehicle_id: number;
-    type_of_vehicle_enum: VehicleType | "";
+    type_of_vehicle_enum: string | "";
     vehicle_color: string;
     nondriver_seats: SeatsField;
     active: boolean;
@@ -131,6 +133,13 @@
   let showDeleteModal = $state(false);
   let isDeleting = $state(false);
   let toDelete = $state<VehicleRow | null>(null);
+
+  // Vehicle Types Management
+  let showVehicleTypesModal = $state(false);
+  let editingVehicleTypeIndex = $state<number | null>(null);
+  let editingVehicleTypeValue = $state("");
+  let newVehicleType = $state("");
+  let isSavingVehicleTypes = $state(false);
 
   async function loadVehicles() {
     await invalidateAll();
@@ -239,7 +248,7 @@
     
     editForm = {
       vehicle_id: row.vehicle_id,
-      type_of_vehicle_enum: (row.type_of_vehicle_enum ?? "") as VehicleType | "",
+      type_of_vehicle_enum: row.type_of_vehicle_enum ?? "",
       vehicle_color: row.vehicle_color ?? "",
       nondriver_seats: row.nondriver_seats ?? "",
       active: !!row.active,
@@ -387,6 +396,122 @@
       isSaving = false;
     }
   }
+
+  // ------- Vehicle Types Management -------
+  function openVehicleTypesModal() {
+    if (!canManage) return;
+    showVehicleTypesModal = true;
+    editingVehicleTypeIndex = null;
+    editingVehicleTypeValue = "";
+    newVehicleType = "";
+  }
+
+  function closeVehicleTypesModal() {
+    showVehicleTypesModal = false;
+    editingVehicleTypeIndex = null;
+    editingVehicleTypeValue = "";
+    newVehicleType = "";
+  }
+
+  function startEditVehicleType(index: number) {
+    editingVehicleTypeIndex = index;
+    editingVehicleTypeValue = vehicleTypes[index];
+  }
+
+  function cancelEditVehicleType() {
+    editingVehicleTypeIndex = null;
+    editingVehicleTypeValue = "";
+  }
+
+  function saveEditVehicleType() {
+    if (editingVehicleTypeIndex === null) return;
+    const trimmed = editingVehicleTypeValue.trim();
+    if (!trimmed) {
+      setToast("Vehicle type cannot be empty", false);
+      return;
+    }
+    if (!VALID_ENUM_VALUES.includes(trimmed as any)) {
+      setToast(`Invalid vehicle type. Must be one of: ${VALID_ENUM_VALUES.join(', ')}`, false);
+      return;
+    }
+    if (vehicleTypes.some((t, i) => i !== editingVehicleTypeIndex && t.toLowerCase() === trimmed.toLowerCase())) {
+      setToast("Vehicle type already exists", false);
+      return;
+    }
+    // Create a new array to ensure reactivity
+    vehicleTypes = vehicleTypes.map((t, i) => i === editingVehicleTypeIndex ? trimmed : t);
+    editingVehicleTypeIndex = null;
+    editingVehicleTypeValue = "";
+  }
+
+  function addVehicleType() {
+    const trimmed = newVehicleType.trim();
+    if (!trimmed) {
+      setToast("Vehicle type cannot be empty", false);
+      return;
+    }
+    if (!VALID_ENUM_VALUES.includes(trimmed as any)) {
+      setToast(`Invalid vehicle type. Must be one of: ${VALID_ENUM_VALUES.join(', ')}`, false);
+      return;
+    }
+    if (vehicleTypes.some(t => t.toLowerCase() === trimmed.toLowerCase())) {
+      setToast("Vehicle type already exists", false);
+      return;
+    }
+    vehicleTypes = [...vehicleTypes, trimmed];
+    newVehicleType = "";
+  }
+
+  function removeVehicleType(index: number) {
+    const typeToRemove = vehicleTypes[index];
+    // Check if any vehicles are using this type
+    const vehiclesUsingType = vehicles.filter(v => v.type_of_vehicle_enum === typeToRemove);
+    if (vehiclesUsingType.length > 0) {
+      setToast(`Cannot remove "${typeToRemove}" - ${vehiclesUsingType.length} vehicle(s) are using it`, false);
+      return;
+    }
+    vehicleTypes = vehicleTypes.filter((_, i) => i !== index);
+  }
+
+  async function saveVehicleTypes() {
+    if (!canManage || !viewerOrgId) return;
+    isSavingVehicleTypes = true;
+    try {
+      console.log('Saving vehicle types:', vehicleTypes);
+      const formData = new FormData();
+      formData.append('vehicle_types', JSON.stringify(vehicleTypes));
+
+      const response = await fetch('?/updateVehicleTypes', {
+        method: 'POST',
+        headers: {
+          'accept': 'application/json'
+        },
+        body: formData
+      });
+
+      const result = await response.json();
+      console.log('Update vehicle types response:', result);
+      
+      // Check if it's a failure response
+      if (result.type === 'failure' || result.type === 'error' || !response.ok) {
+        const errorMsg = result.error || result.data?.error || 'Failed to update vehicle types';
+        console.error('Update vehicle types failed:', errorMsg);
+        throw new Error(errorMsg);
+      }
+
+      setToast("Vehicle types updated successfully", true);
+      // Reload the page data to get updated vehicle types
+      await invalidateAll();
+      // Wait a bit for the data to reload
+      await new Promise(resolve => setTimeout(resolve, 100));
+      closeVehicleTypesModal();
+    } catch (err: any) {
+      console.error("Save vehicle types error:", err?.message ?? err);
+      setToast(err?.message ?? "Failed to update vehicle types.", false);
+    } finally {
+      isSavingVehicleTypes = false;
+    }
+  }
 </script>
 
 <div class="min-h-screen bg-gray-50">
@@ -405,10 +530,16 @@
         </div>
 
         {#if canManage}
-          <Button class="flex items-center gap-2" onclick={openAdd}>
-            <Plus class="w-4 h-4" />
-            <span>Add Vehicle</span>
-          </Button>
+          <div class="flex items-center gap-2">
+            <Button variant="outline" class="flex items-center gap-2" onclick={openVehicleTypesModal}>
+              <Settings class="w-4 h-4" />
+              <span>Manage Vehicle Types</span>
+            </Button>
+            <Button class="flex items-center gap-2" onclick={openAdd}>
+              <Plus class="w-4 h-4" />
+              <span>Add Vehicle</span>
+            </Button>
+          </div>
         {/if}
       </div>
     </div>
@@ -645,7 +776,7 @@
               bind:value={addForm.type_of_vehicle_enum}
             >
               <option value="">—</option>
-              {#each VEHICLE_TYPES as t}<option value={t}>{t}</option>{/each}
+              {#each vehicleTypes as t}<option value={t}>{t}</option>{/each}
             </select>
             {#if addErrors.type}<p class="text-xs text-red-600 mt-1">
                 {addErrors.type}
@@ -736,7 +867,7 @@
               bind:value={editForm.type_of_vehicle_enum}
             >
               <option value="">—</option>
-              {#each VEHICLE_TYPES as t}<option value={t}>{t}</option>{/each}
+              {#each vehicleTypes as t}<option value={t}>{t}</option>{/each}
             </select>
             {#if editErrors.type}<p class="text-xs text-red-600 mt-1">
                 {editErrors.type}
@@ -841,6 +972,89 @@
             disabled={isDeleting}
           >
             {isDeleting ? "Deleting…" : "Delete"}
+          </Button>
+        </Dialog.Footer>
+      </Dialog.Content>
+    </Dialog.Root>
+  {/if}
+
+  <!-- Vehicle Types Management Modal -->
+  {#if canManage}
+    <Dialog.Root bind:open={showVehicleTypesModal}>
+      <Dialog.Content class="sm:max-w-lg bg-white">
+        <Dialog.Header>
+          <Dialog.Title>Manage Vehicle Types</Dialog.Title>
+          <Dialog.Description>Add or remove vehicle types available for your organization. Only valid enum values can be used: {VALID_ENUM_VALUES.join(', ')}</Dialog.Description>
+        </Dialog.Header>
+
+        <div class="space-y-4">
+          <!-- Existing Vehicle Types -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">Current Vehicle Types</label>
+            <div class="space-y-2 max-h-64 overflow-y-auto border border-gray-200 rounded-md p-3">
+              {#each vehicleTypes as type, index}
+                <div class="flex items-center gap-2 p-2 bg-gray-50 rounded">
+                  {#if editingVehicleTypeIndex === index}
+                    <select
+                      bind:value={editingVehicleTypeValue}
+                      class="flex-1 px-2 py-1 border border-gray-300 rounded text-sm"
+                    >
+                      {#each VALID_ENUM_VALUES as enumVal}
+                        <option value={enumVal}>{enumVal}</option>
+                      {/each}
+                    </select>
+                    <Button size="sm" onclick={saveEditVehicleType}>Save</Button>
+                    <Button size="sm" variant="outline" onclick={cancelEditVehicleType}>Cancel</Button>
+                  {:else}
+                    <span class="flex-1 text-sm font-medium">{type}</span>
+                    <Button size="sm" variant="outline" onclick={() => startEditVehicleType(index)}>
+                      <Pencil class="w-3 h-3" />
+                    </Button>
+                    <Button size="sm" variant="destructive" onclick={() => removeVehicleType(index)}>
+                      <Trash2 class="w-3 h-3" />
+                    </Button>
+                  {/if}
+                </div>
+              {:else}
+                <p class="text-sm text-gray-500 text-center py-4">No vehicle types yet</p>
+              {/each}
+            </div>
+          </div>
+
+          <!-- Add New Vehicle Type -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">Add Vehicle Type</label>
+            <div class="flex gap-2">
+              <select
+                bind:value={newVehicleType}
+                class="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm"
+              >
+                <option value="">Select a vehicle type...</option>
+                {#each VALID_ENUM_VALUES as enumVal}
+                  {#if !vehicleTypes.includes(enumVal)}
+                    <option value={enumVal}>{enumVal}</option>
+                  {/if}
+                {/each}
+              </select>
+              <Button onclick={addVehicleType} disabled={!newVehicleType.trim()}>
+                <Plus class="w-4 h-4" />
+              </Button>
+            </div>
+            <p class="mt-1 text-xs text-gray-500">Only enum values not already added can be selected</p>
+          </div>
+        </div>
+
+        <Dialog.Footer class="mt-6">
+          <Button
+            variant="outline"
+            onclick={closeVehicleTypesModal}
+            type="button"
+            disabled={isSavingVehicleTypes}>Cancel</Button>
+          <Button 
+            onclick={saveVehicleTypes} 
+            disabled={isSavingVehicleTypes}
+          >
+            {isSavingVehicleTypes ? "Saving…" : "Save Changes"}
           </Button>
         </Dialog.Footer>
       </Dialog.Content>

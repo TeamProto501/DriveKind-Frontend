@@ -44,26 +44,18 @@
     user_id: string;
     nondriver_seats: number | null;
     vehicle_color: string | null;
-    type_of_vehicle_enum:
-      | "SUV"
-      | "Sedan"
-      | "Van"
-      | "Motorcycle"
-      | "Truck"
-      | "Coupe"
-      | null;
+    type_of_vehicle_enum: string | null;
     org_id: number | null;
     active: boolean | null;
   };
 
-  const VEHICLE_TYPES = [
-    "SUV",
-    "Sedan",
-    "Van",
-    "Motorcycle",
-    "Truck",
-    "Coupe",
-  ] as const;
+  // Vehicle types from organization (loaded from server)
+  let vehicleTypes = $state<string[]>(data.vehicleTypes || ['SUV', 'Sedan', 'Van', 'Truck', 'Coupe']);
+  $effect(() => {
+    if (data.vehicleTypes) {
+      vehicleTypes = data.vehicleTypes;
+    }
+  });
 
   let toast = $state("");
   let toastOk = $state(true);
@@ -591,7 +583,7 @@
               bind:value={addForm.type_of_vehicle_enum}
             >
               <option value="">—</option>
-              {#each VEHICLE_TYPES as t}<option value={t}>{t}</option>{/each}
+							{#each vehicleTypes as t}<option value={t}>{t}</option>{/each}
             </select>
             {#if addErrors.type}<p class="text-xs text-red-600 mt-1">
                 {addErrors.type}
@@ -681,7 +673,7 @@
               bind:value={editForm.type_of_vehicle_enum}
             >
               <option value="">—</option>
-              {#each VEHICLE_TYPES as t}<option value={t}>{t}</option>{/each}
+							{#each vehicleTypes as t}<option value={t}>{t}</option>{/each}
             </select>
             {#if editErrors.type}<p class="text-xs text-red-600 mt-1">
                 {editErrors.type}

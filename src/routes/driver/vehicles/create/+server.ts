@@ -4,9 +4,9 @@ import { createSupabaseServerClient } from '$lib/supabase.server';
 export const POST: RequestHandler = async (event) => {
   try {
     const supabase = createSupabaseServerClient(event);
-    const { data: { session } } = await supabase.auth.getSession();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
 
-    if (!session) {
+    if (authError || !user) {
       return json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -29,7 +29,7 @@ export const POST: RequestHandler = async (event) => {
       const { data: profile } = await supabase
         .from('staff_profiles')
         .select('org_id')
-        .eq('user_id', session.user.id)
+        .eq('user_id', user.id)
         .single();
       
       if (!profile) {
@@ -38,10 +38,22 @@ export const POST: RequestHandler = async (event) => {
       userOrgId = profile.org_id;
     }
 
+    // Validate vehicle type against organization's vehicle_types
+    const { data: org } = await supabase
+      .from('organization')
+      .select('vehicle_types')
+      .eq('org_id', userOrgId)
+      .single();
+
+    const vehicleTypes = org?.vehicle_types || ['SUV', 'Sedan', 'Van', 'Truck', 'Coupe'];
+    if (!vehicleTypes.includes(type_of_vehicle_enum)) {
+      return json({ error: `Invalid vehicle type. Must be one of: ${vehicleTypes.join(', ')}` }, { status: 400 });
+    }
+
     const payload = {
-      user_id: session.user.id,
+      user_id: user.id,
       org_id: userOrgId,
-      type_of_vehicle_enum: type_of_vehicle_enum as 'SUV' | 'Sedan' | 'Van' | 'Motorcycle' | 'Truck' | 'Coupe',
+      type_of_vehicle_enum: type_of_vehicle_enum,
       vehicle_color: vehicle_color.trim(),
       nondriver_seats: Math.trunc(nondriver_seats),
       active: false
