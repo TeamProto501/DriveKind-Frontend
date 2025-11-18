@@ -1,47 +1,87 @@
 import { authenticatedFetchServer, API_BASE_URL } from "$lib/api.server";
+import type { PageServerLoad, Actions } from "./$types";
 
-//initial dashboard load for audit log
-export const load = async (event) => {
-  const tab = event.url.searchParams.get("tab") ?? "audits";
-  const endpoint = tab === "calls" ? "/log/calls" : "/audit-log/dash";
+function getRows(raw: any): any[] {
+  if (Array.isArray(raw?.data)) return raw.data;
+  if (Array.isArray(raw)) return raw;
+  return [];
+}
 
-  const res = await authenticatedFetchServer(
-    API_BASE_URL + endpoint,
-    {},
-    event
-  );
-  const text = await res.text();
-  const data = JSON.parse(text);
-  return { data, tab };
-};
-function flattenData(data: any[]) {
+function flattenCalls(data: any[]): any[] {
   return data.map((item) => {
     const flattened: any = { ...item };
 
-    // Handle staff_profiles object
+    // Optional: if your API joins staff_profiles, map to staff_name
     if (item.staff_profiles) {
-      flattened.staff_first_name = item.staff_profiles.first_name || "";
-      flattened.staff_last_name = item.staff_profiles.last_name || "";
+      const first = item.staff_profiles.first_name ?? "";
+      const last = item.staff_profiles.last_name ?? "";
+      flattened.staff_name = [first, last].filter(Boolean).join(" ");
       delete flattened.staff_profiles;
     }
+
+    // Calls table columns are left as-is:
+    // call_id, user_id, org_id, call_time, call_type,
+    // other_type, client_id, phone_number, forwarded_to,
+    // caller_first_name, caller_last_name
 
     return flattened;
   });
 }
-export const actions = {
+
+export const load: PageServerLoad = async (event) => {
+  const tab = event.url.searchParams.get("tab") ?? "audits";
+
+  if (tab === "calls") {
+    const res = await authenticatedFetchServer(
+      API_BASE_URL + "/calls",
+      {},
+      event
+    );
+
+    const text = await res.text();
+    let raw: any;
+    try {
+      raw = JSON.parse(text);
+    } catch {
+      raw = text;
+    }
+
+    const rows = flattenCalls(getRows(raw));
+    return { data: rows, tab: "calls" };
+  } else {
+    const res = await authenticatedFetchServer(
+      API_BASE_URL + "/audit-log/dash",
+      {},
+      event
+    );
+
+    const text = await res.text();
+    let raw: any;
+    try {
+      raw = JSON.parse(text);
+    } catch {
+      raw = text;
+    }
+
+    const rows = getRows(raw);
+    return { data: rows, tab: "audits" };
+  }
+};
+
+export const actions: Actions = {
   deleteByRange: async (event) => {
     const formData = await event.request.formData();
     const startTime = formData.get("startTime") as string;
     const endTime = formData.get("endTime") as string;
-    const formatToSQL = (dateTimeLocal: string) => {
-      return dateTimeLocal.replace("T", " ") + ":00";
-    };
+
+    const formatToSQL = (dateTimeLocal: string) =>
+      dateTimeLocal.replace("T", " ") + ":00";
 
     const startSQL = formatToSQL(startTime);
     const endSQL = formatToSQL(endTime);
 
     const res = await authenticatedFetchServer(
-      API_BASE_URL + "/log/deleteByTime",
+      API_BASE_URL + "/calls/deleteByTime",
       {
         method: "POST",
         headers: {
@@ -63,15 +103,15 @@ export const actions = {
     const formData = await event.request.formData();
     const startTime = formData.get("startTime") as string;
     const endTime = formData.get("endTime") as string;
-    const formatToSQL = (dateTimeLocal: string) => {
-      return dateTimeLocal.replace("T", " ") + ":00";
-    };
+
+    const formatToSQL = (dateTimeLocal: string) =>
+      dateTimeLocal.replace("T", " ") + ":00";
 
     const startSQL = formatToSQL(startTime);
     const endSQL = formatToSQL(endTime);
 
     const res = await authenticatedFetchServer(
-      API_BASE_URL + "/log/previewByTime",
+      API_BASE_URL + "/calls/previewByTime",
       {
         method: "POST",
         headers: {
@@ -86,8 +126,70 @@ export const actions = {
     );
 
     const text = await res.text();
-    const data = JSON.parse(text);
-    const flattenedData = flattenData(data);
-    return { data: flattenedData };
+    let raw: any;
+    try {
+      raw = JSON.parse(text);
+    } catch {
+      raw = text;
+    }
+
+    const rows = flattenCalls(getRows(raw));
+    return { data: rows };
+  },
+
+  updateCall: async (event) => {
+    const formData = await event.request.formData();
+
+    const call_id = formData.get("call_id") as string;
+
+    const call_time_local = formData.get("call_time") as string | null;
+    const formatToSQL = (dateTimeLocal: string) =>
+      dateTimeLocal.replace("T", " ") + ":00";
+
+    const body: any = {
+      // not editable, but passed in case your API wants them
+      user_id: formData.get("user_id") || null,
+      client_id: formData.get("client_id") || null,
+      call_type: formData.get("call_type") || null,
+
+      // editable fields
+      call_time: call_time_local ? formatToSQL(call_time_local) : null,
+      other_type: formData.get("other_type") || null,
+      phone_number: formData.get("phone_number") || null,
+      forwarded_to: formData.get("forwarded_to") || null,
+      caller_first_name: formData.get("caller_first_name") || null,
+      caller_last_name: formData.get("caller_last_name") || null,
+      // org_id intentionally not sent
+    };
+
+    try {
+      const res = await authenticatedFetchServer(
+        API_BASE_URL + `/calls/${call_id}`,
+        {
+          method: "PUT", // change to PATCH / different URL if your API uses that
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(body),
+        },
+        event
+      );
+
+      const text = await res.text();
+
+      if (!res.ok) {
+        return {
+          success: false,
+          error: text || `API returned ${res.status}`,
+        };
+      }
+
+      return { success: true };
+    } catch (err: any) {
+      return {
+        success: false,
+        error: err?.message || "Unexpected error while updating call.",
+      };
+    }
   },
 };
