@@ -464,14 +464,19 @@
   }
 
   function removeVehicleType(index: number) {
+    console.log('removeVehicleType called, index:', index);
     const typeToRemove = vehicleTypes[index];
+    console.log('Type to remove:', typeToRemove);
     // Check if any vehicles are using this type
     const vehiclesUsingType = vehicles.filter(v => v.type_of_vehicle_enum === typeToRemove);
+    console.log('Vehicles using this type:', vehiclesUsingType.length);
     if (vehiclesUsingType.length > 0) {
       setToast(`Cannot remove "${typeToRemove}" - ${vehiclesUsingType.length} vehicle(s) are using it`, false);
       return;
     }
+    console.log('Removing vehicle type, current types:', vehicleTypes);
     vehicleTypes = vehicleTypes.filter((_, i) => i !== index);
+    console.log('Updated vehicleTypes:', vehicleTypes);
   }
 
   async function saveVehicleTypes() {
@@ -1005,14 +1010,51 @@
                       onkeydown={(e) => { if (e.key === 'Enter') saveEditVehicleType(); }}
                       onkeyup={(e) => { if (e.key === 'Escape') cancelEditVehicleType(); }}
                     />
-                    <Button size="sm" onclick={saveEditVehicleType}>Save</Button>
-                    <Button size="sm" variant="outline" onclick={cancelEditVehicleType}>Cancel</Button>
+                    <Button 
+                      size="sm" 
+                      type="button"
+                      onclick={(e) => {
+                        e.preventDefault();
+                        saveEditVehicleType();
+                      }}
+                    >
+                      Save
+                    </Button>
+                    <Button 
+                      size="sm" 
+                      variant="outline" 
+                      type="button"
+                      onclick={(e) => {
+                        e.preventDefault();
+                        cancelEditVehicleType();
+                      }}
+                    >
+                      Cancel
+                    </Button>
                   {:else}
                     <span class="flex-1 text-sm font-medium">{type}</span>
-                    <Button size="sm" variant="outline" onclick={() => startEditVehicleType(index)}>
+                    <Button 
+                      size="sm" 
+                      variant="outline" 
+                      type="button"
+                      onclick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        startEditVehicleType(index);
+                      }}
+                    >
                       <Pencil class="w-3 h-3" />
                     </Button>
-                    <Button size="sm" variant="destructive" onclick={() => removeVehicleType(index)}>
+                    <Button 
+                      size="sm" 
+                      variant="destructive" 
+                      type="button"
+                      onclick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        removeVehicleType(index);
+                      }}
+                    >
                       <Trash2 class="w-3 h-3" />
                     </Button>
                   {/if}
