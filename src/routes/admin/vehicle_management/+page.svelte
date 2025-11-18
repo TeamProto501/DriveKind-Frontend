@@ -446,6 +446,7 @@
   }
 
   function addVehicleType() {
+    console.log('addVehicleType called, newVehicleType:', newVehicleType);
     const trimmed = newVehicleType.trim();
     if (!trimmed) {
       setToast("Vehicle type cannot be empty", false);
@@ -456,8 +457,10 @@
       setToast("Vehicle type already exists", false);
       return;
     }
+    console.log('Adding vehicle type:', trimmed);
     vehicleTypes = [...vehicleTypes, trimmed];
     newVehicleType = "";
+    console.log('Updated vehicleTypes:', vehicleTypes);
   }
 
   function removeVehicleType(index: number) {
@@ -1029,9 +1032,21 @@
                 bind:value={newVehicleType}
                 placeholder="e.g., Minivan, Electric Car, etc."
                 class="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm"
-                onkeydown={(e) => { if (e.key === 'Enter') addVehicleType(); }}
+                onkeydown={(e) => { 
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    addVehicleType();
+                  }
+                }}
               />
-              <Button onclick={addVehicleType} disabled={!newVehicleType.trim()}>
+              <Button 
+                type="button"
+                onclick={(e) => {
+                  e.preventDefault();
+                  addVehicleType();
+                }} 
+                disabled={!newVehicleType.trim()}
+              >
                 <Plus class="w-4 h-4" />
               </Button>
             </div>
