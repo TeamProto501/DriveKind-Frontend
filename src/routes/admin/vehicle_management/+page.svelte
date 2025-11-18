@@ -1,6 +1,7 @@
 <script lang="ts">
-  import { Car, Search, Trash2, Pencil, Plus } from "@lucide/svelte";
-  import { invalidateAll } from "$app/navigation";
+  import { Car, Search, Trash2, Pencil, Plus, Settings } from "@lucide/svelte";
+  import { invalidateAll, invalidate } from "$app/navigation";
+  import { applyAction } from "$app/forms";
   import { supabase } from "$lib/supabase";
 
   // shadcn/ui
@@ -48,7 +49,12 @@
   let vehicleTypes = $state<string[]>(data?.vehicleTypes || ['SUV', 'Sedan', 'Van', 'Truck', 'Coupe']);
   $effect(() => {
     if (data?.vehicleTypes) {
-      vehicleTypes = data.vehicleTypes;
+      // Always update to ensure we have the latest from server
+      const newTypes = [...data.vehicleTypes];
+      // Only update if different to avoid unnecessary reactivity triggers
+      if (JSON.stringify(newTypes.sort()) !== JSON.stringify(vehicleTypes.sort())) {
+        vehicleTypes = newTypes;
+      }
     }
   });
 
@@ -500,10 +506,11 @@
       }
 
       setToast("Vehicle types updated successfully", true);
-      // Reload the page data to get updated vehicle types
+      // Invalidate the page to trigger reload - use invalidateAll for broader refresh
       await invalidateAll();
-      // Wait a bit for the data to reload
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // Wait for SvelteKit to reload the data
+      // The $effect will automatically sync vehicleTypes when data.vehicleTypes updates
+      await new Promise(resolve => setTimeout(resolve, 300));
       closeVehicleTypesModal();
     } catch (err: any) {
       console.error("Save vehicle types error:", err?.message ?? err);
