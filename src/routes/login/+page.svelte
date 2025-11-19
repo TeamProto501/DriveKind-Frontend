@@ -9,7 +9,6 @@
   let form = $derived($page.form as ActionData);
 
   let loading = $state(false);
-  let showMagicLinkForm = $state(false);
 </script>
 
 <div class="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
@@ -95,80 +94,7 @@
       >
         Forgot your Password?
       </a>
-      <div class="text-sm text-gray-600">or</div>
-      <button
-        type="button"
-        onclick={() => showMagicLinkForm = !showMagicLinkForm}
-        class="text-sm text-blue-600 hover:text-blue-500 hover:underline"
-      >
-        Sign in with Magic Link
-      </button>
     </div>
-
-    {#if showMagicLinkForm}
-      <form 
-        method="POST"
-        action="?/sendMagicLink"
-        use:enhance={() => {
-          loading = true;
-          return async ({ update }) => {
-            loading = false;
-            await update();
-          };
-        }}
-        class="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200"
-      >
-        <div class="mb-4">
-          <label for="magicLinkEmail" class="block text-sm font-medium text-gray-700 mb-2">
-            Email address
-          </label>
-          <input
-            id="magicLinkEmail"
-            name="email"
-            type="email"
-            required
-            class="relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-lg focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-            placeholder="Enter your email"
-          />
-          <p class="mt-2 text-xs text-gray-600">
-            We'll send you a link to sign in without a password
-          </p>
-        </div>
-
-        {#if form?.magicLinkSuccess}
-          <div class="rounded-md bg-green-50 p-3 mb-4">
-            <div class="text-sm text-green-800">
-              Magic link sent! Check your email and click the link to sign in.
-            </div>
-          </div>
-        {/if}
-
-        {#if form?.magicLinkError}
-          <div class="rounded-md bg-red-50 p-3 mb-4">
-            <div class="text-sm text-red-800">
-              {form.magicLinkError}
-            </div>
-          </div>
-        {/if}
-
-        <div class="flex gap-2">
-          <button
-            type="submit"
-            disabled={loading}
-            class="flex-1 px-4 py-2 border border-transparent text-sm font-medium rounded-lg text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 transition-colors"
-          >
-            {loading ? 'Sending...' : 'Send Magic Link'}
-          </button>
-          <button
-            type="button"
-            onclick={() => showMagicLinkForm = false}
-            class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 text-sm"
-          >
-            Cancel
-          </button>
-        </div>
-      </form>
-    {/if}
 
     {#if data.passwordResetSuccess}
       <div class="rounded-md bg-green-50 p-4">

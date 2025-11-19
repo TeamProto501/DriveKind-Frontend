@@ -19,17 +19,17 @@
         </div>
       </div>
       <h2 class="mt-6 text-center text-3xl font-extrabold text-gray-900">
-        Forgot Your Password?
+        Reset Your Password
       </h2>
       <p class="mt-2 text-center text-sm text-gray-600">
-        Enter your email address and we'll send you a magic link to sign in. You can change your password after logging in.
+        Enter your email address and we'll send you a link to reset your password
       </p>
     </div>
 
     {#if showSuccess || form?.success}
       <div class="rounded-md bg-green-50 p-4">
         <div class="text-sm text-green-800">
-          {form?.message || 'If an account with that email exists, a magic link has been sent to your email. Click the link to sign in.'}
+          {form?.message || 'If an account with that email exists, a password reset link has been sent to your email.'}
         </div>
         <div class="mt-4">
           <a
@@ -43,7 +43,7 @@
     {:else}
       <form
         method="POST"
-        action="?/sendMagicLink"
+        action="?/resetPassword"
         use:enhance={() => {
           loading = true;
           return async ({ update, result }) => {
@@ -85,7 +85,7 @@
             disabled={loading}
             class="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-lg text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 transition-colors"
           >
-            {loading ? 'Sending...' : 'Send Magic Link'}
+            {loading ? 'Sending...' : 'Send Reset Link'}
           </button>
 
           <a
