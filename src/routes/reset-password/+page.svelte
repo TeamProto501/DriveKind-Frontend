@@ -14,17 +14,61 @@
   let showConfirmPassword = $state(false);
   let hasValidToken = $state(data.hasValidToken || false);
   let error = $state(data.error || null);
+  let isProcessing = $state(false);
   
   // If server already validated the token, we're good
   if (data.hasValidToken) {
     hasValidToken = true;
   }
 
-  // Handle hash fragments on client side (Supabase sends tokens as hash fragments)
+  // Handle hash fragments and code query params on client side
   onMount(async () => {
     console.log('Reset password page loaded');
     console.log('Current URL:', window.location.href);
     console.log('Hash:', window.location.hash);
+    console.log('Search params:', window.location.search);
+    
+    // Check for code in query parameters (PKCE flow)
+    const urlParams = new URLSearchParams(window.location.search);
+    const code = urlParams.get('code');
+    const type = urlParams.get('type');
+    
+    // If we have a code parameter and server-side exchange failed, try client-side
+    if (code && type === 'recovery' && !data.hasValidToken) {
+      isProcessing = true;
+      console.log('Attempting client-side code exchange...');
+      try {
+        const { data: exchangeData, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+        
+        if (exchangeError) {
+          console.error('Client-side code exchange error:', exchangeError);
+          error = `Invalid or expired reset token: ${exchangeError.message}. Please request a new password reset link.`;
+          isProcessing = false;
+          return;
+        }
+        
+        if (exchangeData?.session) {
+          console.log('Client-side code exchange successful, session created');
+          hasValidToken = true;
+          error = null;
+          isProcessing = false;
+          // Remove code from URL
+          urlParams.delete('code');
+          urlParams.delete('type');
+          const newSearch = urlParams.toString();
+          window.history.replaceState(null, '', window.location.pathname + (newSearch ? `?${newSearch}` : ''));
+          await invalidateAll();
+          return;
+        } else {
+          isProcessing = false;
+        }
+      } catch (e) {
+        console.error('Error in client-side code exchange:', e);
+        error = 'Invalid or expired reset token. Please request a new password reset link.';
+        isProcessing = false;
+        return;
+      }
+    }
     
     // Check if there are hash fragments in the URL
     const hash = window.location.hash.substring(1);
@@ -43,6 +87,7 @@
 
       if (accessToken && type === 'recovery' && refreshToken) {
         // Exchange the tokens for a session
+        isProcessing = true;
         try {
           console.log('Attempting to set session with recovery tokens...');
           const { data: { session }, error: sessionError } = await supabase.auth.setSession({
@@ -53,6 +98,7 @@
           if (sessionError) {
             console.error('Session error:', sessionError);
             error = `Invalid or expired reset token: ${sessionError.message}. Please request a new password reset link.`;
+            isProcessing = false;
             return;
           }
 
@@ -60,16 +106,19 @@
             console.log('Session created successfully, user:', session.user?.email);
             hasValidToken = true;
             error = null;
+            isProcessing = false;
             // Remove hash from URL
             window.history.replaceState(null, '', window.location.pathname + window.location.search);
             await invalidateAll();
           } else {
             console.error('No session returned after setSession');
             error = 'Invalid or expired reset token. Please request a new password reset link.';
+            isProcessing = false;
           }
         } catch (e) {
           console.error('Error setting session:', e);
           error = 'Invalid or expired reset token. Please request a new password reset link.';
+          isProcessing = false;
         }
       } else {
         console.error('Missing required token parameters:', { accessToken: !!accessToken, type, refreshToken: !!refreshToken });
@@ -82,10 +131,17 @@
       if (session) {
         console.log('Found existing session');
         hasValidToken = true;
-      } else if (!data.hasValidToken) {
-        // Only show error if server didn't already validate
+        isProcessing = false;
+      } else if (!data.hasValidToken && !code) {
+        // Only show error if server didn't already validate and we don't have a code to process
         console.error('No session found and no hash fragments');
         error = data.error || 'Invalid or expired reset token. Please click the link from your email or request a new password reset link.';
+        isProcessing = false;
+      } else if (code) {
+        // We have a code, processing will happen above
+        isProcessing = true;
+      } else {
+        isProcessing = false;
       }
     }
   });
@@ -121,7 +177,7 @@
           </a>
         </div>
       </div>
-    {:else if !hasValidToken}
+    {:else if isProcessing || (!hasValidToken && !error)}
       <div class="rounded-md bg-yellow-50 p-4">
         <div class="text-sm text-yellow-800">
           Verifying reset token...
