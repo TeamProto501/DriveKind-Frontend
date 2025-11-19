@@ -487,15 +487,18 @@
                   >
                     {v.active ? "Active" : "Inactive"}
                   </span>
-                  {#if !v.active}
-                    <button
-                      class="inline-flex items-center gap-1 px-3 py-1.5 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50"
-                      onclick={() => setActive(v.vehicle_id)}
-                    >
+                  <button
+                    class="inline-flex items-center gap-1 px-3 py-1.5 rounded-md border {v.active ? 'border-red-300 text-red-700 hover:bg-red-50' : 'border-gray-300 text-gray-700 hover:bg-gray-50'}"
+                    onclick={() => setActive(v.vehicle_id)}
+                  >
+                    {#if v.active}
+                      <X class="w-4 h-4" />
+                      <span>Deactivate</span>
+                    {:else}
                       <CheckCircle2 class="w-4 h-4" />
                       <span>Set Active</span>
-                    </button>
-                  {/if}
+                    {/if}
+                  </button>
                   <button
                     class="inline-flex items-center gap-1 px-3 py-1.5 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50"
                     onclick={() => openEdit(v)}
