@@ -1,5 +1,6 @@
-// src/routes/admin/audit/+page.server.ts
 import { authenticatedFetchServer, API_BASE_URL } from "$lib/api.server";
+import { createSupabaseServerClient } from "$lib/supabase.server";
+import { redirect } from "@sveltejs/kit";
 import type { PageServerLoad, Actions } from "./$types";
 
 function getRows(raw: any): any[] {
@@ -12,7 +13,7 @@ function flattenCalls(data: any[]): any[] {
   return data.map((item) => {
     const flattened: any = { ...item };
 
-    // If the API joins staff_profiles, turn that into a simple staff_name
+    // Optional: if your API joins staff_profiles, map to staff_name
     if (item.staff_profiles) {
       const first = item.staff_profiles.first_name ?? "";
       const last = item.staff_profiles.last_name ?? "";
@@ -20,16 +21,32 @@ function flattenCalls(data: any[]): any[] {
       delete flattened.staff_profiles;
     }
 
-    // Calls table columns (leave names as they are in the DB / API):
-    // call_id, user_id, org_id, call_time, call_type,
-    // other_type, client_id, phone_number, forwarded_to_name,
-    // caller_first_name, caller_last_name
-
+    // Leave all actual DB columns as-is so we can choose what to display:
+    // call_id, user_id, org_id, call_time, call_type, other_type, client_id,
+    // phone_number, forwarded_to_name, caller_first_name, caller_last_name, etc.
     return flattened;
   });
 }
 
 export const load: PageServerLoad = async (event) => {
+  const supabase = createSupabaseServerClient(event);
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
+  if (!session) {
+    throw redirect(302, "/login");
+  }
+
+  // Get user's org_id for scoping calls
+  const { data: profile } = await supabase
+    .from("staff_profiles")
+    .select("org_id")
+    .eq("user_id", session.user.id)
+    .single();
+
+  const userOrgId = profile?.org_id ?? null;
+
   const tab = event.url.searchParams.get("tab") ?? "audits";
 
   if (tab === "calls") {
@@ -48,7 +65,14 @@ export const load: PageServerLoad = async (event) => {
     }
 
     const rows = flattenCalls(getRows(raw));
-    return { data: rows, tab: "calls" };
+
+    // Filter by org_id if we have it
+    const scopedRows =
+      userOrgId == null
+        ? rows
+        : rows.filter((row: any) => row.org_id === userOrgId);
+
+    return { data: scopedRows, tab: "calls", userOrgId };
   } else {
     const res = await authenticatedFetchServer(
       API_BASE_URL + "/audit-log/dash",
@@ -64,9 +88,8 @@ export const load: PageServerLoad = async (event) => {
       raw = text;
     }
 
-    // /audit-log/dash returns { success, data, count }
     const rows = getRows(raw);
-    return { data: rows, tab: "audits" };
+    return { data: rows, tab: "audits", userOrgId };
   }
 };
 
@@ -98,7 +121,7 @@ export const actions: Actions = {
     );
 
     const text = await res.text();
-    return { success: res.ok, text };
+    return { success: true, text };
   },
 
   previewByRange: async (event) => {
@@ -149,12 +172,12 @@ export const actions: Actions = {
       dateTimeLocal.replace("T", " ") + ":00";
 
     const body: any = {
-      // Not really edited, but passed through if your API wants them
+      // not editable, but passed in case your API wants them
       user_id: formData.get("user_id") || null,
       client_id: formData.get("client_id") || null,
       call_type: formData.get("call_type") || null,
 
-      // Editable fields – NOTE the column names here:
+      // editable fields
       call_time: call_time_local ? formatToSQL(call_time_local) : null,
       other_type: formData.get("other_type") || null,
       phone_number: formData.get("phone_number") || null,

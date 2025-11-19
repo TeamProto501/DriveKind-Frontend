@@ -6,11 +6,9 @@
   export let data: PageData;
   export let form: ActionData | null = null;
 
-  // Make tab reactive instead of a const
   let activeTab: "audits" | "calls" = "audits";
   $: activeTab = ((data.tab as "audits" | "calls") ?? "audits");
 
-  // Header text reacts to the tab
   $: headerTitle =
     activeTab === "audits" ? "Audit Logs" : "Call Log";
 
@@ -22,7 +20,6 @@
   // ----- Audits tab state -----
   let search = "";
 
-  // If previewByRange returned data, use that; otherwise use the loaded rows
   $: previewRows =
     form && "data" in form && form?.data ? (form as any).data : null;
 
@@ -40,12 +37,11 @@
         );
 
   // ----- Calls tab state -----
-  $: callRows = activeTab === "calls" ? (data.data ?? []) : [];
-
   type CallRow = {
     call_id: number;
     user_id: string;
     client_id: number | null;
+    org_id?: number | null;
     call_type: string | null;
     call_time: string | null;
     other_type: string | null;
@@ -55,8 +51,47 @@
     caller_last_name: string | null;
   };
 
+   // Raw rows from the server (already org-scoped in +page.server.ts)
+  $: rawCallRows = activeTab === "calls" ? ((data.data as any[]) ?? []) : [];
+
+  // Sort by call_time descending (most recent first)
+  $: sortedCallRows = [...rawCallRows].sort((a: any, b: any) => {
+    const ta = a.call_time ? new Date(a.call_time.replace(" ", "T")).getTime() : 0;
+    const tb = b.call_time ? new Date(b.call_time.replace(" ", "T")).getTime() : 0;
+    return tb - ta;
+  });
+
+  // Display rows with caller_name combined, org_id hidden
+  $: displayCallRows = sortedCallRows.map((row: any) => {
+    const base: CallRow = row;
+    const caller_name = [
+      base.caller_first_name ?? "",
+      base.caller_last_name ?? "",
+    ]
+      .join(" ")
+      .trim();
+
+    return {
+      // visible columns
+      call_id: base.call_id,
+      user_id: base.user_id,
+      client_id: base.client_id ?? null,
+      caller_name: caller_name || "",
+      call_time: base.call_time,
+      phone_number: base.phone_number,
+      call_type: base.call_type,
+      other_type: base.other_type,
+      forwarded_to_name: base.forwarded_to_name,
+
+      // hidden but needed for editing
+      org_id: base.org_id ?? null,
+      caller_first_name: base.caller_first_name,
+      caller_last_name: base.caller_last_name,
+    };
+  });
+
   let showEditModal = false;
-  let editRow: CallRow | null = null;
+  let editRow: any = null;
 
   function openEdit(row: any) {
     editRow = row;
@@ -70,7 +105,6 @@
 
   function toLocalInputValue(isoOrSql: string | null): string {
     if (!isoOrSql) return "";
-    // Accept "YYYY-MM-DD HH:MM:SS" or ISO 8601
     const normalized = isoOrSql.replace(" ", "T");
     const d = new Date(normalized);
     if (Number.isNaN(d.getTime())) return "";
@@ -135,7 +169,6 @@
   {#if activeTab === "audits"}
     <!-- AUDITS TAB -->
     <div class="space-y-4">
-      <!-- Range form + delete / preview -->
       <form
         method="POST"
         class="flex flex-wrap items-end gap-4 rounded-md border border-gray-200 bg-white p-4"
@@ -187,7 +220,6 @@
         </div>
       </form>
 
-      <!-- Search bar -->
       <div class="flex justify-between items-center">
         <div class="relative w-full max-w-md">
           <input
@@ -203,6 +235,7 @@
         <h2 class="mb-2 text-base font-semibold text-gray-900">
           Activity Logs
         </h2>
+        <!-- Audits keep the # column and dynamic keys -->
         <Table data={filteredAuditRows} />
       </div>
     </div>
@@ -213,7 +246,24 @@
         <h2 class="text-base font-semibold text-gray-900">Calls</h2>
       </div>
 
-      <Table data={callRows} enableEdit={true} onEdit={openEdit} />
+      <!-- Calls: no # column, custom column order, org_id hidden -->
+      <Table
+        data={displayCallRows}
+        enableEdit={true}
+        onEdit={openEdit}
+        showIndex={false}
+        columns={[
+          "call_id",
+          "user_id",
+          "client_id",
+          "caller_name",
+          "call_time",
+          "phone_number",
+          "call_type",
+          "other_type",
+          "forwarded_to_name"
+        ]}
+      />
     </div>
   {/if}
 

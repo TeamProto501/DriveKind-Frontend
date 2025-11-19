@@ -6,6 +6,12 @@
   export let enableEdit: boolean = false;
   export let onEdit: ((row: any) => void) | null = null;
 
+  // Optional: explicit column order / subset
+  export let columns: string[] | null = null;
+
+  // Whether to show the leading "#" index column
+  export let showIndex: boolean = true;
+
   $: items = Array.isArray(data) ? data : data?.data ?? [];
 
   const pageSize = 15;
@@ -16,7 +22,25 @@
     currentPage * pageSize
   );
 
-  $: keys = items[0] ? Object.keys(items[0]) : [];
+  const getActionClass = (action: string) => {
+    switch (action) {
+      case "INSERT":
+        return "text-green-600 font-semibold";
+      case "UPDATE":
+        return "text-blue-600 font-semibold";
+      case "DELETE":
+        return "text-red-600 font-semibold";
+      default:
+        return "text-gray-600";
+    }
+  };
+
+  $: keys =
+    columns && columns.length > 0
+      ? columns
+      : items[0]
+      ? Object.keys(items[0])
+      : [];
 
   const formatLabel = (k: string) =>
     k.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -31,7 +55,9 @@
     <Table.Root class="min-w-full divide-y-2 divide-gray-200 bg-white text-sm">
       <Table.Header class="ltr:text-left rtl:text-right bg-gray-100">
         <Table.Row>
-          <Table.Head class="sticky inset-y-0 start-0 px-4 py-4">#</Table.Head>
+          {#if showIndex}
+            <Table.Head class="sticky inset-y-0 start-0 px-4 py-4">#</Table.Head>
+          {/if}
           {#each keys as key}
             <Table.Head class="px-4 py-2 font-medium whitespace-nowrap">
               {formatLabel(key)}
@@ -49,7 +75,11 @@
         {#if pagedData.length > 0}
           {#each pagedData as row, i}
             <Table.Row class="px-4 py-2">
-              <Table.Cell>{(currentPage - 1) * pageSize + i + 1}</Table.Cell>
+              {#if showIndex}
+                <Table.Cell>
+                  {(currentPage - 1) * pageSize + i + 1}
+                </Table.Cell>
+              {/if}
               {#each keys as key}
                 <Table.Cell>{row[key] ?? "-"}</Table.Cell>
               {/each}
@@ -69,7 +99,7 @@
         {:else}
           <Table.Row>
             <Table.Cell
-              colspan={keys.length + 1 + (enableEdit ? 1 : 0)}
+              colspan={keys.length + (enableEdit ? 1 : 0) + (showIndex ? 1 : 0)}
               class="text-center py-8 text-gray-500"
             >
               No Data
