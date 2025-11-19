@@ -29,9 +29,7 @@
     if (!len) return 0;
     const s = String(len).toLowerCase();
 
-    // hours
     const hMatch = s.match(/(\d+)\s*(?:h|hr|hrs|hour|hours)/);
-    // minutes
     const mMatch = s.match(/(\d+)\s*(?:m|min|mins|minute|minutes)/);
 
     const h = hMatch ? parseInt(hMatch[1], 10) : 0;
@@ -73,7 +71,6 @@
     return grouped;
   }
   
-  // Transform unavailability events
   function groupUnavailabilityByDate(unavailData: any[]) {
     const grouped = new Map<string, any[]>();
     unavailData
@@ -97,10 +94,16 @@
           const driverName = `${item.staff_profiles?.first_name || ''} ${item.staff_profiles?.last_name || ''}`.trim();
           
           if (item.all_day) {
+            // For all-day events, use the date string format and set end to next day
+            const startDate = item.unavailable_date;
+            const endDate = new Date(item.unavailable_date);
+            endDate.setDate(endDate.getDate() + 1);
+            
             return {
               id: `unavail-${item.id}`,
-              title: `🚫 ${driverName}`,
-              start: item.unavailable_date,
+              title: `🚫 ${driverName} (All Day)`,
+              start: startDate,
+              end: endDate.toISOString().split('T')[0],
               allDay: true,
               backgroundColor: '#ef4444',
               borderColor: '#dc2626',
@@ -116,8 +119,9 @@
           return {
             id: `unavail-${item.id}`,
             title: `🚫 ${driverName}`,
-            start: `${item.unavailable_date}T${item.start_time}`,
-            end: `${item.unavailable_date}T${item.end_time}`,
+            start: `${item.unavailable_date}T${item.start_time || '00:00:00'}`,
+            end: `${item.unavailable_date}T${item.end_time || '23:59:59'}`,
+            allDay: false,
             backgroundColor: '#ef4444',
             borderColor: '#dc2626',
             extendedProps: {
@@ -139,10 +143,15 @@
           const driverName = `${item.staff_profiles?.first_name || ''} ${item.staff_profiles?.last_name || ''}`.trim();
           
           if (item.all_day) {
+            // For all-day events in week/month view
+            const endDate = new Date(item.unavailable_date);
+            endDate.setDate(endDate.getDate() + 1);
+            
             summaryEvents.push({
               id: `unavail-${item.id}`,
-              title: `🚫 ${driverName}`,
+              title: `🚫 ${driverName} (All Day)`,
               start: item.unavailable_date,
+              end: endDate.toISOString().split('T')[0],
               allDay: true,
               backgroundColor: '#ef4444',
               borderColor: '#dc2626',
@@ -156,8 +165,9 @@
             summaryEvents.push({
               id: `unavail-${item.id}`,
               title: `🚫 ${driverName}`,
-              start: `${item.unavailable_date}T${item.start_time}`,
-              end: `${item.unavailable_date}T${item.end_time}`,
+              start: `${item.unavailable_date}T${item.start_time || '00:00:00'}`,
+              end: `${item.unavailable_date}T${item.end_time || '23:59:59'}`,
+              allDay: false,
               backgroundColor: '#ef4444',
               borderColor: '#dc2626',
               extendedProps: {
@@ -169,10 +179,14 @@
           }
         } else {
           // Multiple unavailability on same day - create summary
+          const endDate = new Date(dateStr);
+          endDate.setDate(endDate.getDate() + 1);
+          
           summaryEvents.push({
             id: `unavail-summary-${dateStr}`,
             title: `🚫 ${dayUnavail.length} Unavailable`,
             start: dateStr,
+            end: endDate.toISOString().split('T')[0],
             allDay: true,
             backgroundColor: '#ef4444',
             borderColor: '#dc2626',
@@ -190,13 +204,11 @@
     }
   }
 
-  // Update the calls to include isDayView parameter
   let myUnavailabilityEvents = $derived(transformUnavailabilityEvents(data.myUnavailability, currentCalendarView === 'timeGridDay'));
   let allUnavailabilityEvents = $derived(transformUnavailabilityEvents(data.allUnavailability, currentCalendarView === 'timeGridDay'));
   
   function transformRidesToEvents(rides: any[], isDayView = false) {
     if (isDayView) {
-      // For day view, show rides at their actual time
       const groupedByTime = groupRidesByTimeSlot(rides);
       const events: any[] = [];
       
@@ -220,18 +232,16 @@
           borderColor = '#7c3aed';
         }
 
-        // Calculate end time (start + 1 hour default)
         const startTime = new Date(firstRide.appointment_time);
-        const endTime = new Date(startTime.getTime() + 60 * 60 * 1000); // Add 1 hour
+        const endTime = new Date(startTime.getTime() + 60 * 60 * 1000);
         
         if (timeRides.length === 1) {
-          const mins = minutesFromEstimated(firstRide.estimated_appointment_length);
           events.push({
             id: `ride-${firstRide.ride_id}`,
             title: `🚗 ${clientName} → ${firstRide.destination_name}`,
             start: startTime.toISOString(),
             end: endTime.toISOString(),
-            allDay: false, // CRITICAL: must be false
+            allDay: false,
             backgroundColor,
             borderColor,
             extendedProps: {
@@ -245,7 +255,7 @@
             title: `🚗 ${timeRides.length} Rides`,
             start: startTime.toISOString(),
             end: endTime.toISOString(),
-            allDay: false, // CRITICAL: must be false
+            allDay: false,
             backgroundColor,
             borderColor,
             extendedProps: {
@@ -259,7 +269,6 @@
       
       return events;
     } else {
-      // For month/week view, show at specific times
       return rides.map((ride: any) => {
         const clientName = ride.clients 
           ? `${ride.clients.first_name} ${ride.clients.last_name}`
@@ -279,17 +288,15 @@
           borderColor = '#7c3aed';
         }
 
-        // Calculate end time (start + 1 hour default)
         const startTime = new Date(ride.appointment_time);
         const endTime = new Date(startTime.getTime() + 60 * 60 * 1000);
         
-        const mins = minutesFromEstimated(ride.estimated_appointment_length);
         return {
           id: `ride-${ride.ride_id}`,
           title: `🚗 ${clientName}`,
           start: startTime.toISOString(),
           end: endTime.toISOString(),
-          allDay: false, // CRITICAL: must be false
+          allDay: false,
           backgroundColor,
           borderColor,
           extendedProps: {
@@ -330,7 +337,6 @@
 
   let myRideEvents = $derived(transformRidesToEvents(data.myRides, isTimedView));
   let allRidesDetailEvents = $derived(transformRidesToEvents(data.allRides || [], isTimedView));
-
   let allRidesSummaryEvents = $derived(createDailySummaryEvents(data.allRides || []));
   
   let displayEvents = $derived.by(() => {
@@ -362,7 +368,6 @@
         selectedDayRides = props.rides;
         showSidePanel = true;
       } else if (props.type === 'unavailability-group') {
-        // Show list of unavailable drivers
         const unavailList = props.unavailabilities
           .map((u: any) => {
             const name = `${u.staff_profiles?.first_name || ''} ${u.staff_profiles?.last_name || ''}`.trim();
@@ -520,12 +525,10 @@
 
       <!-- Calendar Grid with Side Panel -->
       <div class="flex gap-6">
-        <!-- Calendar -->
         <div class="flex-1 bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <Calendar plugins={[TimeGrid, DayGrid, Interaction]} {options} />
         </div>
 
-        <!-- Side Panel for Rides -->
         {#if showSidePanel}
           <div class="w-96 bg-white rounded-lg shadow-lg border border-gray-200 flex flex-col max-h-[700px]">
             <div class="px-6 py-4 border-b flex items-center justify-between">
