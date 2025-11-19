@@ -40,7 +40,12 @@ export const load: PageServerLoad = async (event) => {
     throw redirect(302, homePage);
   }
 
-  return {};
+  // Check for password reset success message
+  const passwordReset = event.url.searchParams.get('passwordReset');
+
+  return {
+    passwordResetSuccess: passwordReset === 'success',
+  };
 };
 
 export const actions: Actions = {
