@@ -30,23 +30,21 @@ function flattenCalls(data: any[]): any[] {
 
 export const load: PageServerLoad = async (event) => {
   const tab = event.url.searchParams.get("tab") ?? "audits";
-  console.log('Loading audit page with tab:', tab);
 
   // ----- CALLS TAB (direct from Supabase, org-scoped) -----
   if (tab === "calls") {
     const supabase = createSupabaseServerClient(event);
 
     const {
-      data: { session },
-      error: sessionError,
-    } = await supabase.auth.getSession();
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
 
-    if (sessionError) {
-      console.error("Error getting session:", sessionError);
+    if (userError) {
+      // user error handled silently; auth checks below will return appropriate data
     }
 
-    if (!session) {
-      console.log('No session found, returning empty data');
+    if (!user) {
       return { data: [], tab: "calls", staffProfiles: [], clients: [] };
     }
 
@@ -54,22 +52,21 @@ export const load: PageServerLoad = async (event) => {
     const { data: profile, error: profileError } = await supabase
       .from("staff_profiles")
       .select("org_id")
-      .eq("user_id", session.user.id)
+      .eq("user_id", user.id)
       .single();
 
     if (profileError) {
-      console.error("Error loading staff profile:", profileError);
+      // profile loading error will be handled downstream
     }
 
     const orgId = profile?.org_id ?? null;
-    console.log('Profile:', profile, 'OrgId:', orgId);
 
     let calls: any[] = [];
     let staffProfiles: any[] = [];
     let clients: any[] = [];
 
     if (orgId !== null) {
-      console.log('Fetching calls for orgId:', orgId);
+  // Fetching calls for org-scoped view
       // Calls for this org
       const { data: callData, error: callError } = await supabase
         .from("calls")
@@ -80,44 +77,36 @@ export const load: PageServerLoad = async (event) => {
         )
         .eq("org_id", orgId);
 
-      if (callError) {
-        console.error("Error loading calls:", callError);
-      } else {
+      if (!callError) {
         calls = callData ?? [];
       }
-      console.log('Calls data:', calls, 'Error:', callError);
+      // console.log('Calls data:', calls, 'Error:', callError);
 
       // Staff in this org (for Dispatcher column + dropdown)
-      console.log('Fetching staff profiles for orgId:', orgId);
+  // Fetch staff profiles for dropdowns
       const { data: staffData, error: staffError } = await supabase
         .from("staff_profiles")
         .select("user_id, org_id, first_name, last_name")
         .eq("org_id", orgId);
 
-      if (staffError) {
-        console.error("Error loading staff profiles:", staffError);
-      } else {
+      if (!staffError) {
         staffProfiles = staffData ?? [];
       }
-      console.log('Staff profiles:', staffProfiles, 'Error:', staffError);
 
       // Clients in this org (for Client column + dropdown)
-      console.log('Fetching clients for orgId:', orgId);
+  // Fetch clients for this org
       const { data: clientData, error: clientError } = await supabase
         .from("clients")
         // ⭐⭐⭐ ADDED primary_phone HERE — THE ONLY CHANGE ⭐⭐⭐
         .select("client_id, org_id, first_name, last_name, primary_phone")
         .eq("org_id", orgId);
 
-      if (clientError) {
-        console.error("Error loading clients:", clientError);
-      } else {
+      if (!clientError) {
         clients = clientData ?? [];
       }
-      console.log('Clients:', clients, 'Error:', clientError);
     }
 
-    console.log('Returning for calls tab:', { data: calls, tab: "calls", staffProfiles, clients });
+    // console.log('Returning for calls tab:', { data: calls, tab: "calls", staffProfiles, clients });
     return {
       data: calls,
       tab: "calls",
@@ -127,20 +116,18 @@ export const load: PageServerLoad = async (event) => {
   }
 
   // ----- AUDITS TAB (now using Supabase SDK instead of backend API) -----
-  console.log('Fetching audits from Supabase');
   const supabase = createSupabaseServerClient(event);
 
   const {
-    data: { session },
-    error: sessionError,
-  } = await supabase.auth.getSession();
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
 
-  if (sessionError) {
-    console.error("Error getting session for audits:", sessionError);
+  if (userError) {
+    // user error handled silently; return below if no user
   }
 
-  if (!session) {
-    console.log('No session found for audits, returning empty data');
+  if (!user) {
     return { 
       data: [], 
       tab: "audits", 
@@ -154,20 +141,19 @@ export const load: PageServerLoad = async (event) => {
   const { data: profile, error: profileError } = await supabase
     .from("staff_profiles")
     .select("org_id")
-    .eq("user_id", session.user.id)
+    .eq("user_id", user.id)
     .single();
 
   if (profileError) {
-    console.error("Error loading staff profile for audits:", profileError);
+    // profile loading error handled downstream
   }
 
   const orgId = profile?.org_id ?? null;
-  console.log('Profile for audits:', profile, 'OrgId:', orgId);
 
   let audits: any[] = [];
 
   if (orgId !== null) {
-    console.log('Fetching audit_log for orgId:', orgId);
+  // Fetch audit log for this org
     const { data: auditData, error: auditError } = await supabase
       .from("transactions_audit_log")
       .select("*")
@@ -175,7 +161,6 @@ export const load: PageServerLoad = async (event) => {
       .order("timestamp", { ascending: false });
 
     if (auditError) {
-      console.error("Error loading audit_log:", auditError);
       return {
         data: [],
         tab: "audits",
@@ -183,13 +168,11 @@ export const load: PageServerLoad = async (event) => {
         clients: [],
         error: `Failed to fetch audits: ${auditError.message}`,
       };
-    } else {
-      audits = auditData ?? [];
     }
-    console.log('Audit data:', audits);
+    audits = auditData ?? [];
   }
 
-  console.log('Returning for audits tab:', { data: audits, tab: "audits", staffProfiles: [], clients: [] });
+  // returning audits tab data
   return {
     data: audits,
     tab: "audits",
@@ -274,31 +257,36 @@ export const actions: Actions = {
 
     const callIdStr = formData.get("call_id") as string | null;
     if (!callIdStr) {
+      console.error("updateCall error: Missing call_id.");
       return { success: false, error: "Missing call_id." };
     }
     const call_id = Number(callIdStr);
 
     // Auth + org scoping (same pattern as createCall / deleteCall)
     const {
-      data: { session },
-      error: sessionError
-    } = await supabase.auth.getSession();
+      data: { user },
+      error: userError
+    } = await supabase.auth.getUser();
 
-    if (sessionError || !session) {
+    if (userError || !user) {
+      console.error(`updateCall auth error: ${userError?.message || 'No user'}`);
       return { success: false, error: "Not authenticated." };
     }
 
     const { data: profile, error: profileError } = await supabase
       .from("staff_profiles")
       .select("org_id")
-      .eq("user_id", session.user.id)
+      .eq("user_id", user.id)
       .single();
 
     if (profileError || !profile?.org_id) {
+      console.error(`updateCall profile error: ${profileError?.message || 'No org_id'}`);
       return { success: false, error: "Could not determine user org." };
     }
 
-    const orgId = profile.org_id;
+  const orgId = profile.org_id;
+  // Log the incoming update attempt for debugging (scoped)
+  console.log(`updateCall called: call_id=${call_id}, orgId=${orgId}`);
 
     const call_time_local = formData.get("call_time") as string | null;
     const formatToSQL = (dateTimeLocal: string) =>
@@ -314,27 +302,28 @@ export const actions: Actions = {
       client_id,
       call_type: (formData.get("call_type") as string) || null,
       call_time: call_time_local ? formatToSQL(call_time_local) : null,
-      other_type: (formData.get("other_type") as string) || null,
-      phone_number: (formData.get("phone_number") as string) || null,
-      forwarded_to_name:
-        (formData.get("forwarded_to_name") as string) || null,
-      caller_first_name:
-        (formData.get("caller_first_name") as string) || null,
-      caller_last_name:
-        (formData.get("caller_last_name") as string) || null
+      other_type: (formData.get("other_type") as string) || "",
+      phone_number: (formData.get("phone_number") as string) || "",
+      forwarded_to_name: (formData.get("forwarded_to_name") as string) || "",
+      caller_first_name: (formData.get("caller_first_name") as string) || "",
+      caller_last_name: (formData.get("caller_last_name") as string) || ""
     };
 
+    console.log(`updateCall updating call: call_id=${call_id}, payload=${JSON.stringify(updatePayload)}`);
     const { error: updateError } = await supabase
       .from("calls")
       .update(updatePayload)
-      .eq("call_id", call_id); // removed .eq("org_id", orgId)
+      .eq("call_id", call_id)
+      .eq("org_id", orgId);
 
     if (updateError) {
+      console.error(`updateCall update error: ${updateError.message}`);
       return { success: false, error: updateError.message };
     }
 
-    // ✅ ALWAYS go back to Calls tab after a successful edit
-    throw redirect(303, "/admin/audit?tab=calls");
+  // Log success and go back to Calls tab after a successful edit
+  console.log(`updateCall successful: call_id=${call_id}, orgId=${orgId}`);
+  throw redirect(303, "/admin/audit?tab=calls");
   },
 
   // Delete a single call (directly via Supabase, org-scoped)
@@ -350,37 +339,42 @@ export const actions: Actions = {
     const supabase = createSupabaseServerClient(event);
 
     const {
-      data: { session },
-      error: sessionError,
-    } = await supabase.auth.getSession();
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
 
-    if (sessionError || !session) {
+    if (userError || !user) {
       return { success: false, error: "Not authenticated." };
     }
 
     const { data: profile, error: profileError } = await supabase
       .from("staff_profiles")
       .select("org_id")
-      .eq("user_id", session.user.id)
+      .eq("user_id", user.id)
       .single();
 
     if (profileError || !profile?.org_id) {
       return { success: false, error: "Could not determine user org." };
     }
 
-    const orgId = profile.org_id;
+  const orgId = profile.org_id;
+  // Log the incoming delete attempt for debugging (scoped)
+  console.log(`deleteCall called: call_id=${call_id}, orgId=${orgId}`);
 
     const { error: deleteError } = await supabase
       .from("calls")
       .delete()
-      .eq("call_id", call_id); // removed org_id filter
+      .eq("call_id", call_id)
+      .eq("org_id", orgId);
 
     if (deleteError) {
+      console.error(`deleteCall error: ${deleteError.message}`);
       return { success: false, error: deleteError.message };
     }
 
-    // ✅ Always land back on calls
-    throw redirect(303, "/admin/audit?tab=calls");
+  // Log success and always land back on calls
+  console.log(`deleteCall successful: call_id=${call_id}, orgId=${orgId}`);
+  throw redirect(303, "/admin/audit?tab=calls");
   },
 
   // Create a new call (directly via Supabase, org-scoped)
@@ -389,18 +383,18 @@ export const actions: Actions = {
     const formData = await event.request.formData();
 
     const {
-      data: { session },
-      error: sessionError,
-    } = await supabase.auth.getSession();
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
 
-    if (sessionError || !session) {
+    if (userError || !user) {
       return { success: false, error: "Not authenticated." };
     }
 
     const { data: profile, error: profileError } = await supabase
       .from("staff_profiles")
       .select("org_id")
-      .eq("user_id", session.user.id)
+      .eq("user_id", user.id)
       .single();
 
     if (profileError || !profile?.org_id) {
