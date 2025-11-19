@@ -41,10 +41,26 @@ function getRoleBasedHomePage(roles: string[]): string {
 export const handle: Handle = async ({ event, resolve }) => {
 	const supabase = createSupabaseServerClient(event);
 	
+	const pathname = event.url.pathname;
+	
+	// Check for password reset tokens in URL (from Supabase verify endpoint redirect)
+	// Supabase redirects to Site URL with tokens in query params or hash
+	const code = event.url.searchParams.get('code');
+	const type = event.url.searchParams.get('type');
+	const hash = event.url.hash;
+	
+	// If we're at the root and have recovery tokens, redirect to reset-password
+	if (pathname === '/' && (type === 'recovery' || code || (hash && hash.includes('type=recovery')))) {
+		// Preserve the tokens in the redirect
+		const params = new URLSearchParams();
+		if (code) params.set('code', code);
+		if (type) params.set('type', type);
+		const queryString = params.toString();
+		throw redirect(303, `/reset-password${queryString ? `?${queryString}` : ''}`);
+	}
+	
 	// Get the current user
 	const { data: { user } } = await supabase.auth.getUser();
-	
-	const pathname = event.url.pathname;
 	
 	// If user is not authenticated and trying to access a protected route
 	if (!user && !isPublicRoute(pathname)) {

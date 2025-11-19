@@ -23,6 +23,22 @@
   });
 
   onMount(async () => {
+    // Check for password reset tokens in hash fragments (client-side only)
+    // Supabase sometimes redirects with tokens in hash fragments
+    const hash = window.location.hash.substring(1);
+    if (hash) {
+      const hashParams = new URLSearchParams(hash);
+      const type = hashParams.get('type');
+      const accessToken = hashParams.get('access_token');
+      
+      // If this is a recovery token, redirect to reset-password
+      if (type === 'recovery' && accessToken) {
+        // Preserve the hash fragment
+        await goto(`/reset-password${window.location.hash}`);
+        return;
+      }
+    }
+    
     // Load dashboard statistics based on user role
     // This is mock data - replace with actual API calls
     if (primaryRole === 'Dispatcher' || primaryRole === 'Admin' || primaryRole === 'Super Admin') {
