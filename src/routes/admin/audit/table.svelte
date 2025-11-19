@@ -1,29 +1,33 @@
 <script lang="ts">
   import * as Table from "$lib/components/ui/table/index.js";
   import * as Pagination from "$lib/components/ui/pagination/index.js";
+  import { X } from "@lucide/svelte";
 
-  export let data: any = [];
-  export let enableEdit: boolean = false;
-  export let onEdit: ((row: any) => void) | null = null;
+  let {
+    data = [],
+    enableEdit = false,
+    onEdit = null,
+    onDelete = null,
+    columns = null,
+    showIndex = true
+  }: {
+    data?: any;
+    enableEdit?: boolean;
+    onEdit?: ((row: any) => void) | null;
+    onDelete?: ((row: any) => void) | null;
+    columns?: string[] | null;
+    showIndex?: boolean;
+  } = $props();
 
-  // Optional delete callback for an extra button
-  export let onDelete: ((row: any) => void) | null = null;
-
-  // Optional: explicit column order / subset
-  export let columns: string[] | null = null;
-
-  // Whether to show the leading "#" index column
-  export let showIndex: boolean = true;
-
-  $: items = Array.isArray(data) ? data : data?.data ?? [];
+  let items = $derived(Array.isArray(data) ? data : data?.data ?? []);
 
   const pageSize = 15;
-  let currentPage = 1;
+  let currentPage = $state(1);
 
-  $: pagedData = items.slice(
+  let pagedData = $derived(items.slice(
     (currentPage - 1) * pageSize,
     currentPage * pageSize
-  );
+  ));
 
   const getActionClass = (action: string) => {
     switch (action) {
@@ -38,18 +42,36 @@
     }
   };
 
-  $: keys =
+  let keys = $derived(
     columns && columns.length > 0
       ? columns
       : items[0]
       ? Object.keys(items[0])
-      : [];
+      : []
+  );
 
   const formatLabel = (k: string) =>
     k.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 
   function handlePageChange(page: number) {
     currentPage = page;
+  }
+
+  // Modal state for showing full cell content
+  let showCellModal = $state(false);
+  let cellModalContent = $state("");
+  let cellModalTitle = $state("");
+
+  function openCellModal(key: string, value: any) {
+    cellModalTitle = formatLabel(key);
+    cellModalContent = value != null ? String(value) : "-";
+    showCellModal = true;
+  }
+
+  function closeCellModal() {
+    showCellModal = false;
+    cellModalContent = "";
+    cellModalTitle = "";
   }
 </script>
 
@@ -84,7 +106,15 @@
                 </Table.Cell>
               {/if}
               {#each keys as key}
-                <Table.Cell>{row[key] ?? "-"}</Table.Cell>
+                <Table.Cell 
+                  class="max-w-48 truncate cursor-pointer hover:bg-gray-50 transition-colors"
+                  title="Click to view full content"
+                  onclick={() => openCellModal(key, row[key])}
+                >
+                  <span class="block truncate">
+                    {row[key] ?? "-"}
+                  </span>
+                </Table.Cell>
               {/each}
               {#if enableEdit && (onEdit || onDelete)}
                 <Table.Cell>
@@ -93,7 +123,7 @@
                       <button
                         type="button"
                         class="text-blue-600 hover:underline text-sm"
-                        on:click={() => onEdit(row)}
+                        onclick={() => onEdit(row)}
                       >
                         Edit
                       </button>
@@ -102,7 +132,7 @@
                       <button
                         type="button"
                         class="text-red-600 hover:underline text-sm"
-                        on:click={() => onDelete(row)}
+                        onclick={() => onDelete(row)}
                       >
                         Delete
                       </button>
@@ -163,3 +193,37 @@
     {/if}
   </div>
 </div>
+
+<!-- Cell Content Modal -->
+{#if showCellModal}
+  <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onclick={closeCellModal}>
+    <div class="w-full max-w-2xl mx-4 rounded-lg bg-white p-6 shadow-lg" onclick={(e) => e.stopPropagation()}>
+      <div class="mb-4 flex items-center justify-between">
+        <h3 class="text-lg font-semibold">
+          {cellModalTitle}
+        </h3>
+        <button
+          type="button"
+          class="text-gray-400 hover:text-gray-600"
+          onclick={closeCellModal}
+        >
+          <X class="h-5 w-5" />
+        </button>
+      </div>
+      
+      <div class="max-h-96 overflow-y-auto rounded border border-gray-200 bg-gray-50 p-4">
+        <pre class="whitespace-pre-wrap wrap-break-word text-sm text-gray-800">{cellModalContent}</pre>
+      </div>
+
+      <div class="mt-4 flex justify-end">
+        <button
+          type="button"
+          class="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+          onclick={closeCellModal}
+        >
+          Close
+        </button>
+      </div>
+    </div>
+  </div>
+{/if}
