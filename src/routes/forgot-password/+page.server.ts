@@ -33,7 +33,8 @@ export const actions: Actions = {
 
     // Use auth callback which will handle the code exchange and redirect to reset-password
     // The callback will detect it's a recovery type and redirect accordingly
-    const callbackUrl = `${event.url.origin}/auth/callback`;
+    // Make sure to use the full URL with protocol
+    const callbackUrl = `${event.url.protocol}//${event.url.host}/auth/callback`;
     console.log('Sending password reset email with redirect URL:', callbackUrl);
     
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
