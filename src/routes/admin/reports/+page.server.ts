@@ -80,10 +80,11 @@ export const load: PageServerLoad = async (event) => {
       .contains('role', ['Driver'])
       .order('first_name');
     
-    // Fetch clients
+    // Fetch clients with demographics data for reports
     const { data: clientsData } = await supabase
       .from('clients')
       .select('client_id, first_name, last_name, gender, date_of_birth, lives_alone')
+      .eq('org_id', userProfile?.org_id)
       .order('first_name');
 
     // Fetch all staff

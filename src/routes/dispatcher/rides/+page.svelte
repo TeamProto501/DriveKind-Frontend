@@ -77,6 +77,11 @@ import {
     "Pending",
   ];
 
+  const DONATION_TYPE_OPTIONS = [
+      "Cash",
+      "Envelope", 
+    ];
+  
   const COMPLETION_STATUS_OPTIONS = [
     "Completed Round Trip",
     "Completed One Way To",
@@ -505,6 +510,7 @@ function validateMinDays(localDateTime: string, label: string): string | null {
     hours: string;
     donation: boolean;
     donation_amount: string;
+    donation_type: string;
     riders: string;
     round_trip: boolean;
     purpose: string;
@@ -537,6 +543,7 @@ function validateMinDays(localDateTime: string, label: string): string | null {
     hours: "",
     donation: false,
     donation_amount: "",
+    donation_type: "",
     riders: "0",
     round_trip: false,
     purpose: "Medical",
@@ -612,6 +619,7 @@ function validateMinDays(localDateTime: string, label: string): string | null {
       hours: "",
       donation: false,
       donation_amount: "",
+      donation_type: "",
       riders: "0",
       round_trip: false,
       purpose: "Medical",
@@ -722,6 +730,7 @@ function validateMinDays(localDateTime: string, label: string): string | null {
       donation: !!ride.donation,
       donation_amount:
         ride.donation_amount?.toString?.() ?? (ride.donation ? "0.00" : "0.00"),
+        donation_type: ride.donation_type ?? "",
       riders: (ride.riders ?? 0).toString(),
       round_trip: !!ride.round_trip,
       purpose: ride.purpose ?? "",
@@ -865,7 +874,8 @@ function validateMinDays(localDateTime: string, label: string): string | null {
       hours: numFromStr(form.hours, base.hours ?? null),
 
       donation: base.donation ?? false,
-      donation_amount: base.donation_amount ?? 0,
+      donation_amount: form.donation ? numFromStr(form.donation_amount, base.donation_amount ?? 0) : 0,
+      donation_type: form.donation ? (form.donation_type || base.donation_type || null) : null,
 
       riders: (() => {
         if (has(form.riders)) {
@@ -2729,6 +2739,49 @@ function validateMinDays(localDateTime: string, label: string): string | null {
                 Type of completion (round trip, one-way, etc.)
               </p>
             </div>
+
+            <div class="mt-4 border-t pt-4">
+              <h4 class="font-medium text-gray-700 mb-3">Donation</h4>
+              
+              <div class="flex items-center gap-2 mb-3">
+                <input
+                  id="e_donation"
+                  type="checkbox"
+                  bind:checked={rideForm.donation}
+                />
+                <label for="e_donation" class="text-sm font-medium text-gray-700">Donation received</label>
+              </div>
+
+              {#if rideForm.donation}
+                <div class="grid gap-4 md:grid-cols-2">
+                  <div>
+                    <label for="e_donation_type" class="block text-sm font-medium text-gray-700">Donation Type</label>
+                    <select
+                      id="e_donation_type"
+                      bind:value={rideForm.donation_type}
+                      class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    >
+                      <option value="">— Select type —</option>
+                      {#each DONATION_TYPE_OPTIONS as dtype}
+                        <option value={dtype}>{dtype}</option>
+                      {/each}
+                    </select>
+                  </div>
+                  <div>
+                    <label for="e_donation_amount" class="block text-sm font-medium text-gray-700">Donation Amount ($)</label>
+                    <Input
+                      id="e_donation_amount"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      bind:value={rideForm.donation_amount}
+                      placeholder="0.00"
+                    />
+                  </div>
+                </div>
+              {/if}
+            </div>
+            <!-- END DONATION SECTION -->
 
             <!-- Notes (edit/completion) -->
             <div class="mt-4 md:col-span-2">

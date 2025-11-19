@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Car, Search, Trash2, Pencil, Plus } from "@lucide/svelte";
+  import { Car, Search, Trash2, Pencil, Plus, Settings } from "@lucide/svelte";
   import { invalidateAll } from "$app/navigation";
   import { supabase } from "$lib/supabase";
 
@@ -15,6 +15,19 @@
   let viewerUid = $state(data?.session?.user?.id || null);
   let viewerOrgId = $state(data?.profile?.org_id || null);
 
+  // Sync vehicles and driverOptions when data changes (after invalidateAll)
+  $effect(() => {
+    if (data?.vehicles) {
+      vehicles = data.vehicles;
+    }
+    if (data?.driverOptions) {
+      driverOptions = data.driverOptions;
+    }
+    if (data?.vehicleTypes) {
+      vehicleTypes = data.vehicleTypes;
+    }
+  });
+
   let isLoading = $state(false);
   let loadError = $state(data?.error || "");
   let driversLoading = $state(false);
@@ -27,6 +40,9 @@
     session?: { user: any } | null;
     profile?: any | null;
     roles?: string[] | null;
+    vehicles?: VehicleRow[];
+    driverOptions?: StaffLite[];
+    vehicleTypes?: string[];
   }
 
   // ---- Role handling (runes) ----
@@ -39,16 +55,14 @@
   });
   let canManage = $derived(hasRole(["Admin", "Super Admin"]));
 
-  // ---- Types / State ----
-  type VehicleType = "SUV" | "Sedan" | "Van" | "Motorcycle" | "Truck" | "Coupe";
-  const VEHICLE_TYPES: VehicleType[] = [
-    "SUV",
-    "Sedan",
-    "Van",
-    "Motorcycle",
-    "Truck",
-    "Coupe",
-  ];
+  // ---- Vehicle Types from Organization ----
+  // Vehicle types available for this organization (loaded from server)
+  let vehicleTypes = $state<string[]>(data?.vehicleTypes || ['SUV', 'Sedan', 'Van', 'Truck', 'Coupe']);
+  $effect(() => {
+    if (data?.vehicleTypes) {
+      vehicleTypes = data.vehicleTypes;
+    }
+  });
 
   interface StaffLite {
     user_id: string;
@@ -59,7 +73,7 @@
   interface VehicleRow {
     vehicle_id: number;
     user_id: string | null;
-    type_of_vehicle_enum: VehicleType | null;
+    type_of_vehicle_enum: string | null;
     vehicle_color: string | null;
     nondriver_seats: number | null;
     active: boolean | null;
@@ -88,7 +102,7 @@
 
   let addForm = $state<{
     user_id: string | "";
-    type_of_vehicle_enum: VehicleType | "";
+    type_of_vehicle_enum: string;
     vehicle_color: string;
     nondriver_seats: SeatsField;
     active: boolean;
@@ -108,7 +122,7 @@
 
   let editForm = $state<{
     vehicle_id: number;
-    type_of_vehicle_enum: VehicleType | "";
+    type_of_vehicle_enum: string;
     vehicle_color: string;
     nondriver_seats: SeatsField;
     active: boolean;
@@ -132,8 +146,121 @@
   let isDeleting = $state(false);
   let toDelete = $state<VehicleRow | null>(null);
 
+  // Vehicle Types Management
+  let showVehicleTypesModal = $state(false);
+  let editingVehicleTypeIndex = $state<number | null>(null);
+  let editingVehicleTypeValue = $state("");
+  let newVehicleType = $state("");
+  let isSavingVehicleTypes = $state(false);
+
   async function loadVehicles() {
     await invalidateAll();
+    // Wait a bit for SvelteKit to reload the data
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+
+  // ------- Vehicle Types Management -------
+  function openVehicleTypesModal() {
+    if (!canManage) return;
+    showVehicleTypesModal = true;
+    editingVehicleTypeIndex = null;
+    editingVehicleTypeValue = "";
+    newVehicleType = "";
+  }
+
+  function closeVehicleTypesModal() {
+    showVehicleTypesModal = false;
+    editingVehicleTypeIndex = null;
+    editingVehicleTypeValue = "";
+    newVehicleType = "";
+  }
+
+  function startEditVehicleType(index: number) {
+    editingVehicleTypeIndex = index;
+    editingVehicleTypeValue = vehicleTypes[index];
+  }
+
+  function cancelEditVehicleType() {
+    editingVehicleTypeIndex = null;
+    editingVehicleTypeValue = "";
+  }
+
+  function saveEditVehicleType() {
+    if (editingVehicleTypeIndex === null) return;
+    const trimmed = editingVehicleTypeValue.trim();
+    if (!trimmed) {
+      setToast("Vehicle type cannot be empty", false);
+      return;
+    }
+    // Check for duplicates (case-insensitive)
+    if (vehicleTypes.some((t, i) => i !== editingVehicleTypeIndex && t.toLowerCase() === trimmed.toLowerCase())) {
+      setToast("Vehicle type already exists", false);
+      return;
+    }
+    // Create a new array to ensure reactivity
+    vehicleTypes = vehicleTypes.map((t, i) => i === editingVehicleTypeIndex ? trimmed : t);
+    editingVehicleTypeIndex = null;
+    editingVehicleTypeValue = "";
+  }
+
+  function addVehicleType() {
+    const trimmed = newVehicleType?.trim() || '';
+    if (!trimmed) {
+      setToast("Vehicle type cannot be empty", false);
+      return;
+    }
+    // Check for duplicates (case-insensitive)
+    if (vehicleTypes.some(t => t.toLowerCase() === trimmed.toLowerCase())) {
+      setToast("Vehicle type already exists", false);
+      return;
+    }
+    vehicleTypes = [...vehicleTypes, trimmed];
+    newVehicleType = "";
+  }
+
+  function removeVehicleType(index: number) {
+    if (index < 0 || index >= vehicleTypes.length) return;
+    const typeToRemove = vehicleTypes[index];
+    // Check if any vehicles are using this type
+    const vehiclesUsingType = vehicles.filter(v => v.type_of_vehicle_enum === typeToRemove);
+    if (vehiclesUsingType.length > 0) {
+      setToast(`Cannot remove "${typeToRemove}" - ${vehiclesUsingType.length} vehicle(s) are using it`, false);
+      return;
+    }
+    vehicleTypes = vehicleTypes.filter((_, i) => i !== index);
+  }
+
+  async function saveVehicleTypes() {
+    if (!canManage || !viewerOrgId) return;
+    isSavingVehicleTypes = true;
+    try {
+      const currentVehicleTypes = [...vehicleTypes];
+      const formData = new FormData();
+      formData.append('vehicle_types', JSON.stringify(currentVehicleTypes));
+
+      const response = await fetch('/admin/vehicle_management?/updateVehicleTypes', {
+        method: 'POST',
+        headers: { 'accept': 'application/json' },
+        body: formData
+      });
+
+      const result = await response.json();
+      
+      if (result.type === 'failure' || result.type === 'error' || !response.ok) {
+        const errorMsg = result.error || result.data?.error || 'Failed to update vehicle types';
+        throw new Error(errorMsg);
+      }
+
+      setToast("Vehicle types updated successfully", true);
+      await invalidateAll();
+      await new Promise(resolve => setTimeout(resolve, 300));
+      closeVehicleTypesModal();
+    } catch (err: any) {
+      console.error("Save vehicle types error:", err?.message ?? err);
+      setToast(err?.message ?? "Failed to update vehicle types.", false);
+    } finally {
+      isSavingVehicleTypes = false;
+    }
   }
 
   // ------- Delete -------
@@ -152,15 +279,23 @@
 
     isDeleting = true;
     try {
-      const { error } = await supabase
-        .from("vehicles")
-        .delete()
-        .eq("vehicle_id", toDelete.vehicle_id)
-        .eq("org_id", viewerOrgId);
+      const formData = new FormData();
+      formData.append('vehicle_id', toDelete.vehicle_id.toString());
 
-      if (error) throw error;
+      const response = await fetch('/admin/vehicle_management?/delete', {
+        method: 'POST',
+        headers: { 'accept': 'application/json' },
+        body: formData
+      });
 
-      setToast("Vehicle deleted.", true);
+      const result = await response.json();
+      
+      if (result.type === 'failure' || result.type === 'error' || !response.ok) {
+        const errorMsg = result.error || result.data?.error || 'Failed to delete vehicle';
+        throw new Error(errorMsg);
+      }
+
+      setToast("Vehicle deleted successfully", true);
       showDeleteModal = false;
       toDelete = null;
       await loadVehicles();
@@ -239,7 +374,7 @@
     
     editForm = {
       vehicle_id: row.vehicle_id,
-      type_of_vehicle_enum: (row.type_of_vehicle_enum ?? "") as VehicleType | "",
+      type_of_vehicle_enum: row.type_of_vehicle_enum ?? "",
       vehicle_color: row.vehicle_color ?? "",
       nondriver_seats: row.nondriver_seats ?? "",
       active: !!row.active,
@@ -405,10 +540,16 @@
         </div>
 
         {#if canManage}
-          <Button class="flex items-center gap-2" onclick={openAdd}>
-            <Plus class="w-4 h-4" />
-            <span>Add Vehicle</span>
-          </Button>
+          <div class="flex items-center gap-2">
+            <Button variant="outline" class="flex items-center gap-2" onclick={openVehicleTypesModal}>
+              <Settings class="w-4 h-4" />
+              <span>Manage Vehicle Types</span>
+            </Button>
+            <Button class="flex items-center gap-2" onclick={openAdd}>
+              <Plus class="w-4 h-4" />
+              <span>Add Vehicle</span>
+            </Button>
+          </div>
         {/if}
       </div>
     </div>
@@ -645,7 +786,7 @@
               bind:value={addForm.type_of_vehicle_enum}
             >
               <option value="">—</option>
-              {#each VEHICLE_TYPES as t}<option value={t}>{t}</option>{/each}
+              {#each vehicleTypes as t}<option value={t}>{t}</option>{/each}
             </select>
             {#if addErrors.type}<p class="text-xs text-red-600 mt-1">
                 {addErrors.type}
@@ -736,7 +877,7 @@
               bind:value={editForm.type_of_vehicle_enum}
             >
               <option value="">—</option>
-              {#each VEHICLE_TYPES as t}<option value={t}>{t}</option>{/each}
+              {#each vehicleTypes as t}<option value={t}>{t}</option>{/each}
             </select>
             {#if editErrors.type}<p class="text-xs text-red-600 mt-1">
                 {editErrors.type}
@@ -841,6 +982,121 @@
             disabled={isDeleting}
           >
             {isDeleting ? "Deleting…" : "Delete"}
+          </Button>
+        </Dialog.Footer>
+      </Dialog.Content>
+    </Dialog.Root>
+  {/if}
+
+  <!-- Vehicle Types Management Modal -->
+  {#if canManage}
+    <Dialog.Root bind:open={showVehicleTypesModal}>
+      <Dialog.Content class="sm:max-w-lg bg-white">
+        <Dialog.Header>
+          <Dialog.Title>Manage Vehicle Types</Dialog.Title>
+          <Dialog.Description>Add, edit, or remove vehicle types available for your organization.</Dialog.Description>
+        </Dialog.Header>
+
+        <div class="space-y-4">
+          <!-- Existing Vehicle Types -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">Current Vehicle Types</label>
+            <div class="space-y-2 max-h-64 overflow-y-auto border border-gray-200 rounded-md p-3">
+              {#each vehicleTypes as type, index}
+                <div class="flex items-center gap-2 p-2 bg-gray-50 rounded">
+                  {#if editingVehicleTypeIndex === index}
+                    <input
+                      type="text"
+                      bind:value={editingVehicleTypeValue}
+                      class="flex-1 px-2 py-1 border border-gray-300 rounded text-sm"
+                      placeholder="Enter vehicle type"
+                      onkeydown={(e) => { if (e.key === 'Enter') saveEditVehicleType(); }}
+                      onkeyup={(e) => { if (e.key === 'Escape') cancelEditVehicleType(); }}
+                    />
+                    <button 
+                      type="button"
+                      class="px-3 py-1.5 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50 text-sm"
+                      onclick={saveEditVehicleType}
+                    >
+                      Save
+                    </button>
+                    <button 
+                      type="button"
+                      class="px-3 py-1.5 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50 text-sm"
+                      onclick={cancelEditVehicleType}
+                    >
+                      Cancel
+                    </button>
+                  {:else}
+                    <span class="flex-1 text-sm font-medium">{type}</span>
+                    <button
+                      type="button"
+                      class="px-3 py-1.5 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50 text-sm"
+                      onclick={() => startEditVehicleType(index)}
+                    >
+                      <Pencil class="w-4 h-4 inline" />
+                      <span class="ml-1">Edit</span>
+                    </button>
+                    <button
+                      type="button"
+                      class="px-3 py-1.5 rounded-md border border-red-300 text-red-700 hover:bg-red-50 text-sm"
+                      onclick={() => removeVehicleType(index)}
+                    >
+                      <Trash2 class="w-4 h-4 inline" />
+                      <span class="ml-1">Delete</span>
+                    </button>
+                  {/if}
+                </div>
+              {:else}
+                <p class="text-sm text-gray-500 text-center py-4">No vehicle types yet</p>
+              {/each}
+            </div>
+          </div>
+
+          <!-- Add New Vehicle Type -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">Add Vehicle Type</label>
+            <div class="flex gap-2">
+              <input
+                type="text"
+                bind:value={newVehicleType}
+                placeholder="e.g., Minivan, Electric Car, etc."
+                class="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm"
+                onkeydown={(e) => { 
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    addVehicleType();
+                  }
+                }}
+              />
+              <button
+                type="button"
+                class="px-3 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                onclick={addVehicleType}
+                disabled={!newVehicleType || !newVehicleType.trim()}
+              >
+                <Plus class="w-4 h-4 inline" />
+                <span class="ml-1">Add</span>
+              </button>
+            </div>
+            <p class="mt-1 text-xs text-gray-500">Enter any vehicle type name (e.g., Minivan, Electric Car, Hybrid, etc.)</p>
+          </div>
+        </div>
+
+        <Dialog.Footer class="mt-6">
+          <Button
+            variant="outline"
+            onclick={closeVehicleTypesModal}
+            type="button"
+            disabled={isSavingVehicleTypes}
+          >
+            Cancel
+          </Button>
+          <Button 
+            onclick={saveVehicleTypes} 
+            disabled={isSavingVehicleTypes}
+          >
+            {isSavingVehicleTypes ? "Saving…" : "Save Changes"}
           </Button>
         </Dialog.Footer>
       </Dialog.Content>
