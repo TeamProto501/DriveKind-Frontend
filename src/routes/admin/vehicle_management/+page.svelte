@@ -40,6 +40,9 @@
     session?: { user: any } | null;
     profile?: any | null;
     roles?: string[] | null;
+    vehicles?: VehicleRow[];
+    driverOptions?: StaffLite[];
+    vehicleTypes?: string[];
   }
 
   // ---- Role handling (runes) ----
