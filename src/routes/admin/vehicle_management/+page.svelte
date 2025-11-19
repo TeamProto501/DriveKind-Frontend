@@ -523,9 +523,11 @@
     if (!canManage || !viewerOrgId) return;
     isSavingVehicleTypes = true;
     try {
-      console.log('Saving vehicle types:', vehicleTypes);
+      // Get the current value directly to avoid stale closure
+      const currentVehicleTypes = [...vehicleTypes];
+      console.log('Saving vehicle types (current):', currentVehicleTypes);
       const formData = new FormData();
-      formData.append('vehicle_types', JSON.stringify(vehicleTypes));
+      formData.append('vehicle_types', JSON.stringify(currentVehicleTypes));
 
       const response = await fetch('?/updateVehicleTypes', {
         method: 'POST',
@@ -1085,14 +1087,18 @@
                     >
                       <Pencil class="w-3 h-3" />
                     </Button>
-                    <Button 
-                      size="sm" 
-                      variant="destructive" 
+                    <button
                       type="button"
-                      onclick={(e) => removeVehicleType(index, e)}
+                      class="inline-flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md text-sm font-medium outline-none transition-all focus-visible:ring-[3px] disabled:pointer-events-none disabled:opacity-50 h-8 gap-1.5 rounded-md px-2.5 bg-destructive shadow-xs hover:bg-destructive/90 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40 dark:bg-destructive/60 text-white"
+                      onclick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        console.log('Delete button clicked, index:', index);
+                        removeVehicleType(index, e);
+                      }}
                     >
                       <Trash2 class="w-3 h-3" />
-                    </Button>
+                    </button>
                   {/if}
                 </div>
               {:else}
