@@ -7,6 +7,8 @@ export const GET: RequestHandler = async (event) => {
 	const code = event.url.searchParams.get('code');
 	const type = event.url.searchParams.get('type'); // 'recovery' for password reset
 
+	console.log('Auth callback - code:', !!code, 'type:', type);
+
 	if (code) {
 		const { data, error } = await supabase.auth.exchangeCodeForSession(code);
 		
@@ -20,11 +22,21 @@ export const GET: RequestHandler = async (event) => {
 			throw redirect(303, '/login?error=auth_failed');
 		}
 
-		// If this is a password reset (recovery), redirect to reset-password page
-		if (type === 'recovery' || (data?.session && data.session.user)) {
-			// Check if this is a recovery session by checking the user's metadata or session
-			// For password reset, redirect to reset-password page
+		console.log('Code exchanged successfully, session:', !!data?.session);
+
+		// Check if this is a password reset flow
+		// Password reset codes have type='recovery' or we can check the session
+		if (type === 'recovery') {
+			console.log('Recovery type detected, redirecting to reset-password');
 			throw redirect(303, '/reset-password');
+		}
+
+		// For other flows (sign up, email confirmation), check if we have a session
+		if (data?.session) {
+			// Check if user needs to set password (recovery flow)
+			// For now, if we have a session from a recovery code, go to reset-password
+			// Otherwise, redirect to home
+			throw redirect(303, '/');
 		}
 	}
 
