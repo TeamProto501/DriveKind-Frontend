@@ -15,6 +15,19 @@
   let viewerUid = $state(data?.session?.user?.id || null);
   let viewerOrgId = $state(data?.profile?.org_id || null);
 
+  // Sync vehicles and driverOptions when data changes (after invalidateAll)
+  $effect(() => {
+    if (data?.vehicles) {
+      vehicles = data.vehicles;
+    }
+    if (data?.driverOptions) {
+      driverOptions = data.driverOptions;
+    }
+    if (data?.vehicleTypes) {
+      vehicleTypes = data.vehicleTypes;
+    }
+  });
+
   let isLoading = $state(false);
   let loadError = $state(data?.error || "");
   let driversLoading = $state(false);
@@ -139,6 +152,8 @@
 
   async function loadVehicles() {
     await invalidateAll();
+    // Wait a bit for SvelteKit to reload the data
+    await new Promise(resolve => setTimeout(resolve, 100));
   }
 
   // ------- Vehicle Types Management -------
