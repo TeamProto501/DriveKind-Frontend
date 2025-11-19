@@ -1,7 +1,7 @@
 # Vehicle Types Migration Guide
 
 ## Overview
-Replace the hardcoded vehicle enum with a dynamic array-based system stored in the `organization` table. This allows each organization to customize their vehicle types with any text values they want.
+Replace the hardcoded vehicle enum with a dynamic table-based system. Create a separate `vehicle_types` table where each organization can have their own vehicle types.
 
 ## Database Changes (Supabase)
 
@@ -41,59 +41,92 @@ RENAME COLUMN type_of_vehicle TO type_of_vehicle_enum;
 -- DROP TYPE type_of_vehicle_enum;
 ```
 
-### Step 3: Add `vehicle_types` column to `organization` table
+### Step 3: Create vehicle_types table
 
-The `vehicle_types` array will contain the available vehicle types for that organization:
+Create a new table to store vehicle types for each organization:
 
 ```sql
--- Add vehicle_types column as TEXT array
-ALTER TABLE public.organization 
-ADD COLUMN IF NOT EXISTS vehicle_types TEXT[] DEFAULT ARRAY['SUV', 'Sedan', 'Van', 'Truck', 'Coupe']::TEXT[];
+-- Create vehicle_types table
+CREATE TABLE public.vehicle_types (
+  vehicle_type_id BIGSERIAL PRIMARY KEY,
+  org_id INTEGER NOT NULL REFERENCES public.organization(org_id) ON DELETE CASCADE,
+  type_name TEXT NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  UNIQUE(org_id, type_name)
+);
 
--- Update existing organizations with default vehicle types (excluding Motorcycle)
-UPDATE public.organization 
-SET vehicle_types = ARRAY['SUV', 'Sedan', 'Van', 'Truck', 'Coupe']::TEXT[]
-WHERE vehicle_types IS NULL;
+-- Create index for faster lookups
+CREATE INDEX idx_vehicle_types_org_id ON public.vehicle_types(org_id);
+
+-- Add RLS policies (if using RLS)
+ALTER TABLE public.vehicle_types ENABLE ROW LEVEL SECURITY;
+
+-- Policy: Users can view vehicle types for their organization
+CREATE POLICY "Users can view vehicle types for their org"
+  ON public.vehicle_types
+  FOR SELECT
+  USING (
+    org_id IN (
+      SELECT org_id FROM public.staff_profiles WHERE user_id = auth.uid()
+    )
+  );
+
+-- Policy: Admins can manage vehicle types for their organization
+CREATE POLICY "Admins can manage vehicle types for their org"
+  ON public.vehicle_types
+  FOR ALL
+  USING (
+    org_id IN (
+      SELECT org_id FROM public.staff_profiles 
+      WHERE user_id = auth.uid() 
+      AND (role @> ARRAY['Admin']::text[] OR role @> ARRAY['Super Admin']::text[])
+    )
+  );
 ```
 
-**Important Notes:**
-- The `type_of_vehicle_enum` column in the `vehicles` table is now a TEXT column (not an enum)
-- Admins can add/remove/edit any vehicle types - they are not restricted to specific values
-- The `vehicle_types` array in `organization` controls which vehicle types are available for that organization
-- When creating/editing vehicles, users can only select from the organization's `vehicle_types` array
+### Step 4: Populate vehicle_types table with default values
+
+```sql
+-- Insert default vehicle types for all existing organizations
+INSERT INTO public.vehicle_types (org_id, type_name)
+SELECT 
+  org_id,
+  unnest(ARRAY['SUV', 'Sedan', 'Van', 'Truck', 'Coupe']::TEXT[]) as type_name
+FROM public.organization
+ON CONFLICT (org_id, type_name) DO NOTHING;
+```
 
 ## Code Changes
 
-### Files Modified:
-1. `src/routes/admin/vehicle_management/+page.server.ts` - Load vehicle_types from org, add updateVehicleTypes action, remove enum validation
-2. `src/routes/admin/vehicle_management/+page.svelte` - Add UI for managing vehicle types (free-form text), use org vehicle_types
-3. `src/routes/driver/vehicles/+page.server.ts` - Load vehicle_types from org
-4. `src/routes/driver/vehicles/+page.svelte` - Use org vehicle_types instead of hardcoded array
-5. `src/routes/driver/vehicles/create/+server.ts` - Validate against org vehicle_types (no enum validation)
-6. `src/routes/driver/vehicles/update/[vehicleId]/+server.ts` - Validate against org vehicle_types (no enum validation)
+### Files to Modify:
+1. `src/routes/admin/vehicle_management/+page.server.ts` - Load vehicle_types from table, add CRUD actions
+2. `src/routes/admin/vehicle_management/+page.svelte` - Update UI to use table-based vehicle types
+3. `src/routes/driver/vehicles/+page.server.ts` - Load vehicle_types from table
+4. `src/routes/driver/vehicles/+page.svelte` - Use table-based vehicle_types
+5. `src/routes/driver/vehicles/create/+server.ts` - Validate against vehicle_types table
+6. `src/routes/driver/vehicles/update/[vehicleId]/+server.ts` - Validate against vehicle_types table
 
 ### Key Changes:
-- Remove all enum type definitions and validations
-- Remove "Motorcycle" from all type definitions
-- Load `vehicle_types` from organization in server load functions
-- Add CRUD operations for vehicle types in admin vehicle management page (free-form text input)
-- Validate vehicle type selections against organization's `vehicle_types` array only
-- Use `getUser()` instead of `getSession()` for secure authentication
-- Allow admins to add any text as a vehicle type (no enum restrictions)
+- Remove `vehicle_types` array from organization table
+- Load vehicle types from `vehicle_types` table
+- Add vehicle type = INSERT into `vehicle_types` table
+- Remove vehicle type = DELETE from `vehicle_types` table
+- Edit vehicle type = UPDATE `vehicle_types` table
+- Validate vehicle type selections against `vehicle_types` table
 
 ## Testing Checklist
 
-- [ ] Database column changed from enum to TEXT
-- [ ] Database column added successfully
-- [ ] Existing organizations have default vehicle_types
+- [ ] Database table created successfully
+- [ ] Default vehicle types inserted for all organizations
 - [ ] Admin can view vehicle types in vehicle management page
-- [ ] Admin can add new vehicle types (any text)
-- [ ] Admin can remove vehicle types (with validation if vehicles use that type)
-- [ ] Admin can edit vehicle type names (any text)
-- [ ] Driver vehicle creation uses organization's vehicle_types
-- [ ] Driver vehicle editing uses organization's vehicle_types
-- [ ] Admin vehicle creation uses organization's vehicle_types
-- [ ] Admin vehicle editing uses organization's vehicle_types
+- [ ] Admin can add new vehicle types (inserts into table)
+- [ ] Admin can remove vehicle types (deletes from table, with validation if vehicles use that type)
+- [ ] Admin can edit vehicle type names (updates table)
+- [ ] Driver vehicle creation uses organization's vehicle_types from table
+- [ ] Driver vehicle editing uses organization's vehicle_types from table
+- [ ] Admin vehicle creation uses organization's vehicle_types from table
+- [ ] Admin vehicle editing uses organization's vehicle_types from table
 - [ ] "Motorcycle" is removed from all dropdowns
 - [ ] Validation prevents using vehicle types not in organization's list
-- [ ] No enum validation errors occur
+- [ ] RLS policies work correctly

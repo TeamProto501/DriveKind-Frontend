@@ -142,8 +142,35 @@
   let showVehicleTypesModal = $state(false);
   let editingVehicleTypeIndex = $state<number | null>(null);
   let editingVehicleTypeValue = $state("");
+  let editingVehicleTypeId = $state<number | null>(null);
   let newVehicleType = $state("");
-  let isSavingVehicleTypes = $state(false);
+  let vehicleTypesWithIds = $state<Array<{vehicle_type_id: number, type_name: string}>>([]);
+  
+  // Sync vehicleTypesWithIds when data changes
+  $effect(() => {
+    if (data?.vehicleTypes) {
+      // Load full vehicle types data with IDs from server
+      loadVehicleTypesWithIds();
+    }
+  });
+  
+  async function loadVehicleTypesWithIds() {
+    if (!viewerOrgId) return;
+    try {
+      const { data, error } = await supabase
+        .from('vehicle_types')
+        .select('vehicle_type_id, type_name')
+        .eq('org_id', viewerOrgId)
+        .order('type_name', { ascending: true });
+      
+      if (error) throw error;
+      vehicleTypesWithIds = data || [];
+      // Also update the simple array for dropdowns
+      vehicleTypes = data?.map(vt => vt.type_name) || [];
+    } catch (err) {
+      console.error('Error loading vehicle types:', err);
+    }
+  }
 
   async function loadVehicles() {
     await invalidateAll();
@@ -402,12 +429,14 @@
   }
 
   // ------- Vehicle Types Management -------
-  function openVehicleTypesModal() {
+  async function openVehicleTypesModal() {
     if (!canManage) return;
     showVehicleTypesModal = true;
     editingVehicleTypeIndex = null;
+    editingVehicleTypeId = null;
     editingVehicleTypeValue = "";
     newVehicleType = "";
+    await loadVehicleTypesWithIds();
   }
 
   function closeVehicleTypesModal() {
@@ -419,140 +448,152 @@
 
   function startEditVehicleType(index: number) {
     editingVehicleTypeIndex = index;
-    editingVehicleTypeValue = vehicleTypes[index];
+    const vehicleType = vehicleTypesWithIds[index];
+    editingVehicleTypeValue = vehicleType.type_name;
+    editingVehicleTypeId = vehicleType.vehicle_type_id;
   }
 
   function cancelEditVehicleType() {
     editingVehicleTypeIndex = null;
+    editingVehicleTypeId = null;
     editingVehicleTypeValue = "";
   }
 
-  function saveEditVehicleType() {
-    if (editingVehicleTypeIndex === null) return;
+  async function saveEditVehicleType() {
+    if (editingVehicleTypeIndex === null || editingVehicleTypeId === null) return;
     const trimmed = editingVehicleTypeValue.trim();
     if (!trimmed) {
       setToast("Vehicle type cannot be empty", false);
       return;
     }
-    // Check for duplicates (case-insensitive)
+    
+    // Check for duplicates (case-insensitive) in local state
     if (vehicleTypes.some((t, i) => i !== editingVehicleTypeIndex && t.toLowerCase() === trimmed.toLowerCase())) {
       setToast("Vehicle type already exists", false);
       return;
     }
-    // Create a new array to ensure reactivity
-    vehicleTypes = vehicleTypes.map((t, i) => i === editingVehicleTypeIndex ? trimmed : t);
-    editingVehicleTypeIndex = null;
-    editingVehicleTypeValue = "";
+    
+    try {
+      const formData = new FormData();
+      formData.append('vehicle_type_id', editingVehicleTypeId.toString());
+      formData.append('type_name', trimmed);
+      
+      const response = await fetch('/admin/vehicle_management?/updateVehicleType', {
+        method: 'POST',
+        headers: { 'accept': 'application/json' },
+        body: formData
+      });
+      
+      const result = await response.json();
+      
+      if (result.type === 'failure' || result.type === 'error' || !response.ok) {
+        const errorMsg = result.error || result.data?.error || 'Failed to update vehicle type';
+        throw new Error(errorMsg);
+      }
+      
+      setToast("Vehicle type updated successfully", true);
+      editingVehicleTypeIndex = null;
+      editingVehicleTypeId = null;
+      editingVehicleTypeValue = "";
+      await loadVehicleTypesWithIds();
+      await invalidateAll();
+    } catch (err: any) {
+      console.error('Update vehicle type error:', err);
+      setToast(err?.message ?? "Failed to update vehicle type.", false);
+    }
   }
 
-  function addVehicleType() {
+  async function addVehicleType() {
     console.log('=== addVehicleType START ===');
-    console.log('newVehicleType value:', newVehicleType);
-    console.log('current vehicleTypes:', vehicleTypes);
-    
     const trimmed = newVehicleType?.trim() || '';
-    console.log('trimmed value:', trimmed);
     
     if (!trimmed) {
-      console.log('Empty value, showing toast');
       setToast("Vehicle type cannot be empty", false);
       return;
     }
     
-    // Check for duplicates (case-insensitive)
+    // Check for duplicates (case-insensitive) in local state
     const isDuplicate = vehicleTypes.some(t => t.toLowerCase() === trimmed.toLowerCase());
-    console.log('Is duplicate?', isDuplicate);
-    
     if (isDuplicate) {
-      console.log('Duplicate found, showing toast');
       setToast("Vehicle type already exists", false);
       return;
     }
     
-    console.log('Adding vehicle type:', trimmed);
-    const newArray = [...vehicleTypes, trimmed];
-    console.log('New array:', newArray);
-    vehicleTypes = newArray;
-    newVehicleType = "";
-    console.log('State updated. vehicleTypes:', vehicleTypes);
-    console.log('newVehicleType cleared:', newVehicleType);
+    try {
+      const formData = new FormData();
+      formData.append('type_name', trimmed);
+      
+      const response = await fetch('/admin/vehicle_management?/addVehicleType', {
+        method: 'POST',
+        headers: { 'accept': 'application/json' },
+        body: formData
+      });
+      
+      const result = await response.json();
+      
+      if (result.type === 'failure' || result.type === 'error' || !response.ok) {
+        const errorMsg = result.error || result.data?.error || 'Failed to add vehicle type';
+        throw new Error(errorMsg);
+      }
+      
+      setToast("Vehicle type added successfully", true);
+      newVehicleType = "";
+      await loadVehicleTypesWithIds();
+      await invalidateAll();
+    } catch (err: any) {
+      console.error('Add vehicle type error:', err);
+      setToast(err?.message ?? "Failed to add vehicle type.", false);
+    }
     console.log('=== addVehicleType END ===');
   }
 
-  function removeVehicleType(index: number) {
+  async function removeVehicleType(index: number) {
     console.log('=== removeVehicleType START ===');
-    console.log('Index to remove:', index);
-    console.log('Current vehicleTypes:', vehicleTypes);
-    console.log('vehicleTypes length:', vehicleTypes.length);
-    
-    if (index < 0 || index >= vehicleTypes.length) {
+    if (index < 0 || index >= vehicleTypesWithIds.length) {
       console.log('Invalid index!');
       return;
     }
     
-    const typeToRemove = vehicleTypes[index];
-    console.log('Type to remove:', typeToRemove);
+    const vehicleType = vehicleTypesWithIds[index];
+    console.log('Type to remove:', vehicleType);
     
     // Check if any vehicles are using this type
-    const vehiclesUsingType = vehicles.filter(v => v.type_of_vehicle_enum === typeToRemove);
+    const vehiclesUsingType = vehicles.filter(v => v.type_of_vehicle_enum === vehicleType.type_name);
     console.log('Vehicles using this type:', vehiclesUsingType.length);
     
     if (vehiclesUsingType.length > 0) {
-      console.log('Cannot remove - vehicles using it');
-      setToast(`Cannot remove "${typeToRemove}" - ${vehiclesUsingType.length} vehicle(s) are using it`, false);
+      setToast(`Cannot remove "${vehicleType.type_name}" - ${vehiclesUsingType.length} vehicle(s) are using it`, false);
       return;
     }
     
-    console.log('Removing vehicle type, current types:', vehicleTypes);
-    const newArray = vehicleTypes.filter((_, i) => i !== index);
-    console.log('New array after filter:', newArray);
-    vehicleTypes = newArray;
-    console.log('State updated. vehicleTypes:', vehicleTypes);
+    try {
+      const formData = new FormData();
+      formData.append('vehicle_type_id', vehicleType.vehicle_type_id.toString());
+      
+      const response = await fetch('/admin/vehicle_management?/deleteVehicleType', {
+        method: 'POST',
+        headers: { 'accept': 'application/json' },
+        body: formData
+      });
+      
+      const result = await response.json();
+      
+      if (result.type === 'failure' || result.type === 'error' || !response.ok) {
+        const errorMsg = result.error || result.data?.error || 'Failed to delete vehicle type';
+        throw new Error(errorMsg);
+      }
+      
+      setToast("Vehicle type deleted successfully", true);
+      await loadVehicleTypesWithIds();
+      await invalidateAll();
+    } catch (err: any) {
+      console.error('Delete vehicle type error:', err);
+      setToast(err?.message ?? "Failed to delete vehicle type.", false);
+    }
     console.log('=== removeVehicleType END ===');
   }
 
-  async function saveVehicleTypes() {
-    if (!canManage || !viewerOrgId) return;
-    isSavingVehicleTypes = true;
-    try {
-      // Get the current value directly to avoid stale closure
-      const currentVehicleTypes = [...vehicleTypes];
-      console.log('Saving vehicle types (current):', currentVehicleTypes);
-      const formData = new FormData();
-      formData.append('vehicle_types', JSON.stringify(currentVehicleTypes));
-
-      const response = await fetch('/admin/vehicle_management?/updateVehicleTypes', {
-        method: 'POST',
-        headers: {
-          'accept': 'application/json'
-        },
-        body: formData
-      });
-
-      const result = await response.json();
-      console.log('Update vehicle types response:', result);
-      
-      // Check if it's a failure response
-      if (result.type === 'failure' || result.type === 'error' || !response.ok) {
-        const errorMsg = result.error || result.data?.error || 'Failed to update vehicle types';
-        console.error('Update vehicle types failed:', errorMsg);
-        throw new Error(errorMsg);
-      }
-
-      setToast("Vehicle types updated successfully", true);
-      // Invalidate the page to trigger reload - use invalidateAll for broader refresh
-      await invalidateAll();
-      // Wait for SvelteKit to reload the data
-      // The $effect will automatically sync vehicleTypes when data.vehicleTypes updates
-      await new Promise(resolve => setTimeout(resolve, 300));
-      closeVehicleTypesModal();
-    } catch (err: any) {
-      console.error("Save vehicle types error:", err?.message ?? err);
-      setToast(err?.message ?? "Failed to update vehicle types.", false);
-    } finally {
-      isSavingVehicleTypes = false;
-    }
-  }
+  // No longer needed - we save individually now
 </script>
 
 <div class="min-h-screen bg-gray-50">
@@ -1067,7 +1108,7 @@
                       Cancel
                     </Button>
                   {:else}
-                    <span class="flex-1 text-sm font-medium">{type}</span>
+                    <span class="flex-1 text-sm font-medium">{vehicleType.type_name}</span>
                     <button
                       type="button"
                       class="inline-flex items-center gap-1 px-3 py-1.5 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50"
@@ -1130,12 +1171,8 @@
             variant="outline"
             onclick={closeVehicleTypesModal}
             type="button"
-            disabled={isSavingVehicleTypes}>Cancel</Button>
-          <Button 
-            onclick={saveVehicleTypes} 
-            disabled={isSavingVehicleTypes}
           >
-            {isSavingVehicleTypes ? "Saving…" : "Save Changes"}
+            Close
           </Button>
         </Dialog.Footer>
       </Dialog.Content>

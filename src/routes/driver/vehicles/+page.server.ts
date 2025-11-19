@@ -26,17 +26,17 @@ export const load: PageServerLoad = async (event) => {
 
   console.log('Server-side vehicles for', user.id, ':', vehicles);
 
-  // Get vehicle_types from organization
+  // Get vehicle_types from vehicle_types table
   let vehicleTypes: string[] = ['SUV', 'Sedan', 'Van', 'Truck', 'Coupe'];
   if (profile?.org_id) {
-    const { data: org } = await supabase
-      .from('organization')
-      .select('vehicle_types')
+    const { data: vehicleTypesData } = await supabase
+      .from('vehicle_types')
+      .select('type_name')
       .eq('org_id', profile.org_id)
-      .single();
+      .order('type_name', { ascending: true });
     
-    if (org?.vehicle_types) {
-      vehicleTypes = org.vehicle_types;
+    if (vehicleTypesData && vehicleTypesData.length > 0) {
+      vehicleTypes = vehicleTypesData.map(vt => vt.type_name);
     }
   }
 
