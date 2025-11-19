@@ -30,6 +30,7 @@ function flattenCalls(data: any[]): any[] {
 
 export const load: PageServerLoad = async (event) => {
   const tab = event.url.searchParams.get("tab") ?? "audits";
+  console.log('Loading audit page with tab:', tab);
 
   // ----- CALLS TAB (direct from Supabase, org-scoped) -----
   if (tab === "calls") {
@@ -45,6 +46,7 @@ export const load: PageServerLoad = async (event) => {
     }
 
     if (!session) {
+      console.log('No session found, returning empty data');
       return { data: [], tab: "calls", staffProfiles: [], clients: [] };
     }
 
@@ -60,28 +62,20 @@ export const load: PageServerLoad = async (event) => {
     }
 
     const orgId = profile?.org_id ?? null;
+    console.log('Profile:', profile, 'OrgId:', orgId);
 
     let calls: any[] = [];
     let staffProfiles: any[] = [];
     let clients: any[] = [];
 
     if (orgId !== null) {
+      console.log('Fetching calls for orgId:', orgId);
       // Calls for this org
       const { data: callData, error: callError } = await supabase
         .from("calls")
         .select(
           `
-          call_id,
-          user_id,
-          org_id,
-          client_id,
-          call_time,
-          call_type,
-          other_type,
-          phone_number,
-          forwarded_to_name,
-          caller_first_name,
-          caller_last_name
+          *
         `
         )
         .eq("org_id", orgId);
@@ -91,8 +85,10 @@ export const load: PageServerLoad = async (event) => {
       } else {
         calls = callData ?? [];
       }
+      console.log('Calls data:', calls, 'Error:', callError);
 
       // Staff in this org (for Dispatcher column + dropdown)
+      console.log('Fetching staff profiles for orgId:', orgId);
       const { data: staffData, error: staffError } = await supabase
         .from("staff_profiles")
         .select("user_id, org_id, first_name, last_name")
@@ -103,8 +99,10 @@ export const load: PageServerLoad = async (event) => {
       } else {
         staffProfiles = staffData ?? [];
       }
+      console.log('Staff profiles:', staffProfiles, 'Error:', staffError);
 
       // Clients in this org (for Client column + dropdown)
+      console.log('Fetching clients for orgId:', orgId);
       const { data: clientData, error: clientError } = await supabase
         .from("clients")
         // ⭐⭐⭐ ADDED primary_phone HERE — THE ONLY CHANGE ⭐⭐⭐
@@ -116,8 +114,10 @@ export const load: PageServerLoad = async (event) => {
       } else {
         clients = clientData ?? [];
       }
+      console.log('Clients:', clients, 'Error:', clientError);
     }
 
+    console.log('Returning for calls tab:', { data: calls, tab: "calls", staffProfiles, clients });
     return {
       data: calls,
       tab: "calls",
@@ -127,6 +127,7 @@ export const load: PageServerLoad = async (event) => {
   }
 
   // ----- AUDITS TAB (old behavior via backend API) -----
+  console.log('Fetching audits from API');
   const res = await authenticatedFetchServer(
     API_BASE_URL + "/audit-log/dash",
     {},
@@ -134,15 +135,19 @@ export const load: PageServerLoad = async (event) => {
   );
 
   const text = await res.text();
+  console.log('API response text:', text);
   let raw: any;
   try {
     raw = JSON.parse(text);
   } catch {
     raw = text;
   }
+  console.log('Parsed raw data:', raw);
 
   const rows = getRows(raw);
+  console.log('Rows:', rows);
 
+  console.log('Returning for audits tab:', { data: rows, tab: "audits", staffProfiles: [], clients: [] });
   return {
     data: rows,
     tab: "audits",
