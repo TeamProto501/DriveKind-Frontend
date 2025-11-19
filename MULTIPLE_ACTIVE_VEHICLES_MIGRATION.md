@@ -21,17 +21,21 @@ COMMENT ON COLUMN public.rides.assigned_vehicle IS 'The vehicle chosen by the dr
 
 ## Code Changes Summary
 
-### Completed:
+### Completed (Frontend):
 1. ✅ Removed single active vehicle restriction in driver vehicles page
 2. ✅ Removed single active vehicle restriction in admin vehicle management
 3. ✅ Updated set-active endpoint to toggle instead of deactivating others
+4. ✅ Updated driver rides page to load active vehicles and calculate eligible vehicles
+5. ✅ Added vehicle selection UI when driver has multiple eligible vehicles
+6. ✅ Updated acceptRide to require vehicle selection and send vehicle_id to backend
+7. ✅ Show eligible vehicles count in ride card
 
-### In Progress:
-4. ⏳ Update ride matching logic to check if at least one active vehicle works
-5. ⏳ Update ride request to show eligible vehicles to driver
-6. ⏳ Add vehicle selection UI when driver has multiple eligible vehicles
-7. ⏳ Update ride acceptance to save assigned_vehicle
-8. ⏳ Update ride display to show assigned vehicle throughout lifecycle
+### Pending (Backend API):
+8. ⏳ Update `/rides/:rideId/accept` endpoint to accept `vehicle_id` in request body
+9. ⏳ Update `/rides/:rideId/accept` endpoint to save `assigned_vehicle` to database
+10. ⏳ Update ride matching logic (backend) to check if driver has at least one eligible active vehicle
+11. ⏳ Update ride queries to include `assigned_vehicle` and vehicle details
+12. ⏳ Update ride display throughout app to show assigned vehicle
 
 ## Ride Matching Logic Changes
 
