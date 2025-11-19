@@ -102,38 +102,62 @@
     "Other",
   ];
 
-  const staffProfiles = ((data as any).staffProfiles ?? []) as StaffProfile[];
-  const clients = ((data as any).clients ?? []) as ClientRow[];
+  // -----------------------------
+  // STAFF / CLIENT LOOKUPS
+  // -----------------------------
 
-  // Already org-scoped on the server
-  const filteredStaff = staffProfiles;
-  const filteredClients = clients;
+  // Base arrays
+  let staffProfiles: StaffProfile[] = [];
+  let clients: ClientRow[] = [];
+
+  // Filtered versions (still org-scoped)
+  let filteredStaff: StaffProfile[] = [];
+  let filteredClients: ClientRow[] = [];
 
   // Maps for quick lookup by id
-  const staffById = new Map<string, StaffProfile>();
-  for (const sp of filteredStaff) {
-    if (sp.user_id) staffById.set(sp.user_id, sp);
+  let staffById = new Map<string, StaffProfile>();
+  let clientById = new Map<number, ClientRow>();
+
+  // Always reflect the latest `data` from the server
+  $: staffProfiles = ((data as any).staffProfiles ?? []) as StaffProfile[];
+  $: clients = ((data as any).clients ?? []) as ClientRow[];
+
+  // Already org-scoped on the server
+  $: filteredStaff = staffProfiles;
+  $: filteredClients = clients;
+
+  // Rebuild maps whenever staff/clients change
+  $: {
+    staffById = new Map<string, StaffProfile>();
+    for (const sp of filteredStaff) {
+      if (sp.user_id) staffById.set(sp.user_id, sp);
+    }
   }
 
-  const clientById = new Map<number, ClientRow>();
-  for (const c of filteredClients) {
-    if (c.client_id != null) clientById.set(c.client_id, c);
+  $: {
+    clientById = new Map<number, ClientRow>();
+    for (const c of filteredClients) {
+      if (c.client_id != null) clientById.set(c.client_id, c);
+    }
   }
 
-  // Options for dropdowns
-  const dispatcherOptions = filteredStaff.map((sp) => {
+  // Options for dropdowns (reactive)
+  let dispatcherOptions: { value: string; label: string }[] = [];
+  let clientOptions: { value: string; label: string }[] = [];
+
+  $: dispatcherOptions = filteredStaff.map((sp) => {
     const name = `${sp.first_name ?? ""} ${sp.last_name ?? ""}`.trim();
     return {
       value: sp.user_id,
-      label: name || sp.user_id,
+      label: name || sp.user_id
     };
   });
 
-  const clientOptions = filteredClients.map((c) => {
+  $: clientOptions = filteredClients.map((c) => {
     const name = `${c.first_name ?? ""} ${c.last_name ?? ""}`.trim();
     return {
       value: String(c.client_id),
-      label: name || `Client #${c.client_id}`,
+      label: name || `Client #${c.client_id}`
     };
   });
 
@@ -247,6 +271,7 @@
       ? clientById.get(Number(selectedClientId))!.primary_phone ?? ""
       : "";
 
+  // If you want the input to be locked when using client phone:
   $: phoneLockedToClient =
     !!selectedClientId && !!clientPhoneForEdit && useClientPhone;
 
@@ -283,9 +308,8 @@
     const clientPhone = client?.primary_phone ?? "";
 
     // Default behavior:
-    // - If we have a client but ALSO have a manual phone -> checkbox UNCHECKED
-    // - If we have a client with phone and NO manual phone -> checkbox CHECKED
-    if (client && clientPhone && !manualPhone) {
+    // If we have a client with a phone, use the client's phone by default
+    if (client && clientPhone) {
       useClientPhone = true;
       if (editRow) {
         editRow.phone_number = clientPhone;
@@ -293,14 +317,15 @@
     } else {
       useClientPhone = false;
       // keep existing manual phone number in editRow
+      if (editRow) {
+        editRow.phone_number = manualPhone;
+      }
     }
 
     // If we already have a client, make sure caller name fields reflect that client
-    if (selectedClientId && editRow) {
-      if (client) {
-        editRow.caller_first_name = client.first_name ?? "";
-        editRow.caller_last_name = client.last_name ?? "";
-      }
+    if (selectedClientId && editRow && client) {
+      editRow.caller_first_name = client.first_name ?? "";
+      editRow.caller_last_name = client.last_name ?? "";
     }
 
     showEditModal = true;
@@ -317,7 +342,7 @@
 
   // Handle client select changes:
   // - if blank, keep caller name editable & keep manual phone state
-  // - if client chosen, auto-populate caller name, and if useClientPhone is true, override phone
+  // - if client chosen, auto-populate caller name AND phone number
   function handleClientChange(event: Event) {
     const select = event.target as HTMLSelectElement;
     selectedClientId = select.value;
@@ -325,6 +350,7 @@
 
     if (!selectedClientId) {
       // No client selected; leave caller names and phone as user typed
+      useClientPhone = false;
       return;
     }
 
@@ -334,8 +360,12 @@
       editRow.caller_last_name = client.last_name ?? "";
 
       const clientPhone = client.primary_phone ?? "";
-      if (useClientPhone && clientPhone) {
+      if (clientPhone) {
+        // Always sync to the selected client's phone
+        useClientPhone = true;
         editRow.phone_number = clientPhone;
+      } else {
+        useClientPhone = false;
       }
     }
   }
@@ -405,7 +435,7 @@
     newSelectedClientId = select.value;
 
     if (!newSelectedClientId) {
-      // no client, keep manual caller fields as-is
+      // no client, keep manual caller fields and phone as-is
       return;
     }
 
@@ -413,6 +443,10 @@
     if (client) {
       newCallerFirstName = client.first_name ?? "";
       newCallerLastName = client.last_name ?? "";
+      if (client.primary_phone) {
+        // For new call, also default phone number to client's phone
+        newPhoneNumber = client.primary_phone;
+      }
     }
   }
 </script>

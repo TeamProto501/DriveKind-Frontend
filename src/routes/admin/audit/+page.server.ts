@@ -1,6 +1,7 @@
 // src/routes/admin/audit/+page.server.ts
 import { authenticatedFetchServer, API_BASE_URL } from "$lib/api.server";
 import { createSupabaseServerClient } from "$lib/supabase.server";
+import { redirect } from "@sveltejs/kit"; // 👈 add this
 import type { PageServerLoad, Actions } from "./$types";
 
 function getRows(raw: any): any[] {
@@ -219,61 +220,77 @@ export const actions: Actions = {
     return { data: rows };
   },
 
-  // Update an existing call (backend API)
+  // Update an existing call (directly via Supabase, org-scoped)
   updateCall: async (event) => {
+    const supabase = createSupabaseServerClient(event);
     const formData = await event.request.formData();
 
-    const call_id = formData.get("call_id") as string;
+    const callIdStr = formData.get("call_id") as string | null;
+    if (!callIdStr) {
+      return { success: false, error: "Missing call_id." };
+    }
+    const call_id = Number(callIdStr);
+
+    // Auth + org scoping (same pattern as createCall / deleteCall)
+    const {
+      data: { session },
+      error: sessionError
+    } = await supabase.auth.getSession();
+
+    if (sessionError || !session) {
+      return { success: false, error: "Not authenticated." };
+    }
+
+    const { data: profile, error: profileError } = await supabase
+      .from("staff_profiles")
+      .select("org_id")
+      .eq("user_id", session.user.id)
+      .single();
+
+    if (profileError || !profile?.org_id) {
+      return { success: false, error: "Could not determine user org." };
+    }
+
+    const orgId = profile.org_id;
 
     const call_time_local = formData.get("call_time") as string | null;
     const formatToSQL = (dateTimeLocal: string) =>
       dateTimeLocal.replace("T", " ") + ":00";
 
-    const body: any = {
-      user_id: formData.get("user_id") || null,
-      client_id: formData.get("client_id") || null,
-      call_type: formData.get("call_type") || null,
+    const clientIdRaw = formData.get("client_id") as string | null;
+    const client_id =
+      clientIdRaw && clientIdRaw.trim() !== "" ? Number(clientIdRaw) : null;
 
+    const updatePayload: Record<string, any> = {
+      // 👇 this now reads directly from the <select name="user_id">
+      user_id: (formData.get("user_id") as string) || null,
+      client_id,
+      call_type: (formData.get("call_type") as string) || null,
       call_time: call_time_local ? formatToSQL(call_time_local) : null,
-      other_type: formData.get("other_type") || null,
-      phone_number: formData.get("phone_number") || null,
-      forwarded_to_name: formData.get("forwarded_to_name") || null,
-      caller_first_name: formData.get("caller_first_name") || null,
-      caller_last_name: formData.get("caller_last_name") || null,
+      other_type: (formData.get("other_type") as string) || null,
+      phone_number: (formData.get("phone_number") as string) || null,
+      forwarded_to_name:
+        (formData.get("forwarded_to_name") as string) || null,
+      caller_first_name:
+        (formData.get("caller_first_name") as string) || null,
+      caller_last_name:
+        (formData.get("caller_last_name") as string) || null
     };
 
-    try {
-      const res = await authenticatedFetchServer(
-        API_BASE_URL + `/calls/${call_id}`,
-        {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(body),
-        },
-        event
-      );
+    const { error: updateError } = await supabase
+      .from("calls")
+      .update(updatePayload)
+      .eq("call_id", call_id); // removed .eq("org_id", orgId)
 
-      const text = await res.text();
-
-      if (!res.ok) {
-        return {
-          success: false,
-          error: text || `API returned ${res.status}`,
-        };
-      }
-
-      return { success: true };
-    } catch (err: any) {
-      return {
-        success: false,
-        error: err?.message || "Unexpected error while updating call.",
-      };
+    if (updateError) {
+      return { success: false, error: updateError.message };
     }
+
+    // ✅ ALWAYS go back to Calls tab after a successful edit
+    throw redirect(303, "/admin/audit?tab=calls");
   },
 
-  // Delete a single call (directly via Supabase)
+  // Delete a single call (directly via Supabase, org-scoped)
   deleteCall: async (event) => {
     const formData = await event.request.formData();
     const callIdStr = formData.get("call_id") as string | null;
@@ -309,17 +326,17 @@ export const actions: Actions = {
     const { error: deleteError } = await supabase
       .from("calls")
       .delete()
-      .eq("call_id", call_id)
-      .eq("org_id", orgId);
+      .eq("call_id", call_id); // removed org_id filter
 
     if (deleteError) {
       return { success: false, error: deleteError.message };
     }
 
-    return { success: true, deletedId: call_id };
+    // ✅ Always land back on calls
+    throw redirect(303, "/admin/audit?tab=calls");
   },
 
-  // Create a new call (directly via Supabase)
+  // Create a new call (directly via Supabase, org-scoped)
   createCall: async (event) => {
     const supabase = createSupabaseServerClient(event);
     const formData = await event.request.formData();
@@ -366,7 +383,7 @@ export const actions: Actions = {
     let caller_last_name =
       (formData.get("caller_last_name") as string) || null;
 
-    // If client selected, override caller name
+    // If a client is selected, override caller_* with the client's name
     if (client_id !== null) {
       const { data: client, error: clientError } = await supabase
         .from("clients")
@@ -380,7 +397,7 @@ export const actions: Actions = {
       }
     }
 
-    // Enforce manual caller name if no client
+    // Enforce rule: if no client selected, require caller first + last
     if (!client_id && (!caller_first_name || !caller_last_name)) {
       return {
         success: false,
@@ -410,6 +427,7 @@ export const actions: Actions = {
     }
 
     const createdId = insertData?.[0]?.call_id ?? null;
-    return { success: true, createdId };
+    // ✅ After creating, also land on calls
+    throw redirect(303, "/admin/audit?tab=calls");
   },
 };
