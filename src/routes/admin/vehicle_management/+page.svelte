@@ -261,15 +261,23 @@
 
     isDeleting = true;
     try {
-      const { error } = await supabase
-        .from("vehicles")
-        .delete()
-        .eq("vehicle_id", toDelete.vehicle_id)
-        .eq("org_id", viewerOrgId);
+      const formData = new FormData();
+      formData.append('vehicle_id', toDelete.vehicle_id.toString());
 
-      if (error) throw error;
+      const response = await fetch('/admin/vehicle_management?/delete', {
+        method: 'POST',
+        headers: { 'accept': 'application/json' },
+        body: formData
+      });
 
-      setToast("Vehicle deleted.", true);
+      const result = await response.json();
+      
+      if (result.type === 'failure' || result.type === 'error' || !response.ok) {
+        const errorMsg = result.error || result.data?.error || 'Failed to delete vehicle';
+        throw new Error(errorMsg);
+      }
+
+      setToast("Vehicle deleted successfully", true);
       showDeleteModal = false;
       toDelete = null;
       await loadVehicles();
