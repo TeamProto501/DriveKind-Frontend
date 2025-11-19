@@ -8,8 +8,11 @@ To ensure password reset emails redirect to the correct page, you need to config
 
 1. Go to your Supabase Dashboard
 2. Navigate to **Authentication** → **URL Configuration**
-3. Set the **Site URL** to your production URL (e.g., `https://your-domain.com`)
-4. Add `https://your-domain.com/reset-password` to the **Redirect URLs** list
+3. Set the **Site URL** to your production URL (e.g., `https://drivekind.info` or `https://your-domain.com`)
+4. Add the following to the **Redirect URLs** list:
+   - `https://your-domain.com/auth/callback` (required - handles code exchange)
+   - `https://your-domain.com/reset-password` (optional - for direct hash fragment flow)
+   - For local development: `http://localhost:5173/auth/callback` and `http://localhost:5173/reset-password`
 
 ### 2. Email Template
 
