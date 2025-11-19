@@ -1,830 +1,1028 @@
 <script lang="ts">
+  import type { PageData, ActionData } from './$types';
+  import { Button } from '$lib/components/ui/button';
+  import { Input } from '$lib/components/ui/input';
+  import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '$lib/components/ui/table';
+  import { Label } from '$lib/components/ui/label';
+  import { Card, CardContent, CardHeader, CardTitle } from '$lib/components/ui/card';
+  import { toastStore } from '$lib/toast';
+  import { enhance } from '$app/forms';
   import RoleGuard from '$lib/components/RoleGuard.svelte';
   import Breadcrumbs from '$lib/components/Breadcrumbs.svelte';
-  import { Download, Calendar, FileText, Clock, MapPin, Car, AlertCircle, AlertTriangle, FileSpreadsheet, Edit2 } from '@lucide/svelte';
-  import { API_BASE_URL } from '$lib/api';
-  import { toastStore } from '$lib/toast';
-  import type { PageData } from './$types';
-  import jsPDF from 'jspdf';
+  import SearchIcon from "@lucide/svelte/icons/search";
+  import UserIcon from "@lucide/svelte/icons/user";
+  import CarIcon from "@lucide/svelte/icons/car";
+  import BuildingIcon from "@lucide/svelte/icons/building";
+  import LoaderIcon from "@lucide/svelte/icons/loader";
+  import DownloadIcon from "@lucide/svelte/icons/download";
+  import ClockIcon from "@lucide/svelte/icons/clock";
+  import FileTextIcon from "@lucide/svelte/icons/file-text";
+  import type { RideReportData } from './+page.server';
 
-  let { data }: { data: PageData } = $props();
+  let { data, form }: { data: PageData; form?: ActionData } = $props();
 
-  let startDate = $state(getDefaultStartDate());
-  let endDate = $state(getDefaultEndDate());
-  let manualHoursWorked = $state(0);
-  let manualMileage = $state(0);
-  
-  // Full name fields for filename
-  let reportFirstName = $state(data.userProfile?.first_name || '');
-  let reportLastName = $state(data.userProfile?.last_name || '');
-  
-  // Display name fields (editable for report content)
-  let displayFirstName = $state(data.userProfile?.first_name || '');
-  let displayLastName = $state(data.userProfile?.last_name || '');
-  let isEditingName = $state(false);
-  
-  // Format selection
-  let selectedFormats = $state<Set<'pdf' | 'csv'>>(new Set(['pdf']));
-  
-  // Role selection
-  const userRoles = Array.isArray(data.userProfile?.role) 
-    ? data.userProfile.role 
-    : (data.userProfile?.role ? [data.userProfile.role] : ['Volunteer']);
-  
-  let selectedRole = $state(userRoles[0] || 'Volunteer');
-  let isDriverRole = $derived(selectedRole === 'Driver');
-  
-  // Selected rides for drivers
-  let selectedRideIds = $state<Set<number>>(new Set());
-  
-  // Calculate totals from selected rides - FIX: Remove arrow function syntax
-  let ridesHours = $derived.by(() => {
-    if (!isDriverRole || selectedRideIds.size === 0) return 0;
-    return Array.from(selectedRideIds)
-      .map(id => data.completedRides.find(r => r.ride_id === id))
-      .filter(r => r && r.hours)
-      .reduce((sum, r) => sum + (r!.hours || 0), 0);
-  });
-  
-  let ridesMileage = $derived.by(() => {
-    if (!isDriverRole || selectedRideIds.size === 0) return 0;
-    return Array.from(selectedRideIds)
-      .map(id => data.completedRides.find(r => r.ride_id === id))
-      .filter(r => r && r.miles_driven)
-      .reduce((sum, r) => sum + (r!.miles_driven || 0), 0);
-  });
-  
-  // Count total clients served (not unique - same client on 2 rides = 2)
-  let totalClientsServed = $derived.by(() => {
-    if (!isDriverRole || selectedRideIds.size === 0) return 0;
-    return selectedRideIds.size; // Each selected ride = 1 client served
-  });
-  
-  // Calculate one-way trips (round trips count as 2)
-  let oneWayTripsCount = $derived.by(() => {
-    if (!isDriverRole || selectedRideIds.size === 0) return 0;
-    return Array.from(selectedRideIds)
-      .map(id => data.completedRides.find(r => r.ride_id === id))
-      .filter(r => r && r.completion_status)
-      .reduce((count, r) => {
-        const status = r!.completion_status;
-        if (status === 'Completed Round Trip') {
-          return count + 2;
-        } else if (status === 'Completed One Way To' || status === 'Completed One Way From') {
-          return count + 1;
-        }
-        return count;
-      }, 0);
-  });
-  
-  // Total calculations (manual + rides) - Now ridesHours and ridesMileage are values, not functions
-  let totalHours = $derived((Number(manualHoursWorked) || 0) + (ridesHours || 0));
-  let totalMileage = $derived((Number(manualMileage) || 0) + (ridesMileage || 0));
-  
-  // Display name as it will appear on the report
-  let displayName = $derived(`${displayFirstName} ${displayLastName}`);
-  
-  // Filter rides by date range
-  let filteredRides = $derived.by(() => {
-    if (!data.completedRides) return [];
-    return data.completedRides.filter(ride => {
-      const rideDate = new Date(ride.appointment_time);
-      const start = new Date(startDate);
-      const end = new Date(endDate);
-      return rideDate >= start && rideDate <= end;
-    });
-  });
-  
+  // Tab state
+  let activeTab = $state<'personal' | 'organization'>('personal');
+
+  // Personal Report State
+  let selectedRole = $state<string>('');
+  let personalHours = $state<number>(0);
+  let personalMiles = $state<number>(0);
+  let personalClients = $state<number>(0);
+  let personalRides = $state<number>(0);
+  let isLoadingPersonalRides = $state(false);
+
+  // Organization Reporting State
+  let filterType = $state<'driver' | 'client' | 'organization'>('driver');
+  let selectedId = $state<string>('');
+  let rides = $state<RideReportData[]>([]);
+  let isLoading = $state(false);
+  let hasSearched = $state(false);
+  let totalHours = $state(0);
+  let totalMiles = $state(0);
+  let totalDonations = $state(0);
+  let fromDate = $state('');
+  let toDate = $state('');
+  let additionalHours = $state<number>(0);
+  let additionalMiles = $state<number>(0);
+
+  // Export filename customization
+  let exportFileName = $state('');
+
+  let globalFilter = $state('');
+  let driverFilter = $state('');
+  let sortColumn = $state<string>('appointment_time');
+  let sortDirection = $state<'asc' | 'desc'>('desc');
+
+  let formElement: HTMLFormElement;
+
+  const firstName = data.userProfile?.first_name || 'User';
+  const lastName = data.userProfile?.last_name || 'Report';
   const organizationName = data.organization?.name || 'Organization';
-  
-  function getCurrentDateString(): string {
-    const date = new Date();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    const year = date.getFullYear();
-    return `${month}${day}${year}`;
-  }
-  
-  let reportName = $derived(`${reportLastName}${reportFirstName} ${selectedRole} Report_${getCurrentDateString()}`);
-  
-  let isGenerating = false;
+  const isAdmin = data.isAdmin || false;
 
-  let showHoursWarning = false;
-  let showMileageWarning = false;
-  let showStartDateWarning = false;
-  let showEndDateWarning = false;
+  // Get user's available roles
+  const availableRoles = Array.isArray(data.userProfile?.role) 
+    ? data.userProfile.role 
+    : data.userProfile?.role ? [data.userProfile.role] : [];
 
-  function getDefaultStartDate(): string {
-    const date = new Date();
-    date.setMonth(date.getMonth() - 1);
-    return date.toISOString().split('T')[0];
+  // Set default role
+  if (availableRoles.length > 0 && !selectedRole) {
+    selectedRole = availableRoles[0];
   }
 
-  function getDefaultEndDate(): string {
-    return new Date().toISOString().split('T')[0];
-  }
-
-  function validateForm(): boolean {
-    let isValid = true;
-
-    showStartDateWarning = false;
-    showEndDateWarning = false;
-    showHoursWarning = false;
-    showMileageWarning = false;
-
-    if (!startDate) {
-      showStartDateWarning = true;
-      toastStore.error('Please select a start date');
-      isValid = false;
-    }
-
-    if (!endDate) {
-      showEndDateWarning = true;
-      toastStore.error('Please select an end date');
-      isValid = false;
-    }
-
-    if (startDate && endDate && new Date(startDate) > new Date(endDate)) {
-      showStartDateWarning = true;
-      showEndDateWarning = true;
-      toastStore.error('Start date must be before end date');
-      isValid = false;
-    }
-
-    if (manualHoursWorked < 0) {
-      showHoursWarning = true;
-      toastStore.error('Hours cannot be negative');
-      isValid = false;
-    }
-
-    if (manualMileage < 0) {
-      showMileageWarning = true;
-      toastStore.error('Mileage cannot be negative');
-      isValid = false;
-    }
+  // Generate default filename based on selection
+  function generateDefaultFileName() {
+    const today = new Date();
+    const dateStr = `${String(today.getMonth() + 1).padStart(2, '0')}${String(today.getDate()).padStart(2, '0')}${today.getFullYear()}`;
     
-    if (!displayFirstName.trim() || !displayLastName.trim()) {
-      toastStore.error('Please enter your full name');
-      isValid = false;
-    }
-    
-    if (selectedFormats.size === 0) {
-      toastStore.error('Please select at least one report format');
-      isValid = false;
-    }
-
-    return isValid;
-  }
-
-  function toggleRide(rideId: number) {
-    if (selectedRideIds.has(rideId)) {
-      selectedRideIds.delete(rideId);
-    } else {
-      selectedRideIds.add(rideId);
-    }
-    selectedRideIds = new Set(selectedRideIds);
-  }
-  
-  function toggleFormat(format: 'pdf' | 'csv') {
-    if (selectedFormats.has(format)) {
-      selectedFormats.delete(format);
-    } else {
-      selectedFormats.add(format);
-    }
-    selectedFormats = new Set(selectedFormats);
-  }
-
-  async function generateReports() {
-    if (!validateForm()) return;
-    
-    isGenerating = true;
-    
-    try {
-      if (selectedFormats.has('pdf')) {
-        generatePDF();
+    if (filterType === 'driver' && selectedId) {
+      const driver = data.drivers.find(d => d.user_id === selectedId);
+      if (driver) {
+        return `${driver.first_name}_${driver.last_name} Monthly Report_${dateStr}`;
       }
-      if (selectedFormats.has('csv')) {
-        generateCSV();
+    } else if (filterType === 'client' && selectedId) {
+      const client = data.clients.find(c => c.client_id.toString() === selectedId);
+      if (client) {
+        return `${client.first_name}_${client.last_name} Monthly Report_${dateStr}`;
       }
-    } finally {
-      isGenerating = false;
+    } else if (filterType === 'organization') {
+      return `${organizationName} Monthly Report_${dateStr}`;
     }
+    return `Report_${dateStr}`;
   }
 
-  function generateCSV() {
-    try {
-      // CSV Headers matching sponsor's format
-      const headers = [
-        'Volunteer Name',
-        '# Hours',
-        '# Clients',
-        '# one-way rides',
-        'Total # of miles',
-        'Position'
-      ];
-
-      // Data row
-      const row = [
-        displayName,
-        totalHours.toFixed(2),
-        totalClientsServed.toString(),
-        oneWayTripsCount.toString(),
-        totalMileage.toFixed(1),
-        selectedRole
-      ];
-
-      // Create CSV content
-      const csvContent = [
-        headers.join(','),
-        row.map(cell => {
-          if (cell.includes(',')) {
-            return `"${cell}"`;
-          }
-          return cell;
-        }).join(',')
-      ].join('\n');
-
-      // Create and download file
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-      const link = document.createElement('a');
-      const url = URL.createObjectURL(blob);
-      
-      link.setAttribute('href', url);
-      link.setAttribute('download', `${reportName.replace(/\s+/g, '_')}.csv`);
-      link.style.visibility = 'hidden';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      
-      toastStore.success('CSV report generated successfully');
-    } catch (error) {
-      console.error('Error generating CSV:', error);
-      toastStore.error('Failed to generate CSV');
-    }
-  }
-
-  function generatePDF() {
-    try {
-      const doc = new jsPDF();
-      const pageWidth = doc.internal.pageSize.getWidth();
-      const pageHeight = doc.internal.pageSize.getHeight();
-      let yPosition = 20;
-
-      // Header
-      doc.setFontSize(22);
-      doc.setFont('helvetica', 'bold');
-      doc.text('Work Hours & Mileage Report', pageWidth / 2, yPosition, { align: 'center' });
-      
-      yPosition += 12;
-      doc.setFontSize(14);
-      doc.setFont('helvetica', 'normal');
-      doc.text(displayName, pageWidth / 2, yPosition, { align: 'center' });
-      
-      yPosition += 7;
-      doc.setFontSize(10);
-      doc.setTextColor(100);
-      const orgText = `Organization: ${organizationName}`;
-      const orgTextWidth = doc.getTextWidth(orgText);
-      const orgLabelWidth = doc.getTextWidth('Organization: ');
-      const orgStartX = (pageWidth - orgTextWidth) / 2;
-      doc.setFont('helvetica', 'bold');
-      doc.text('Organization:   ', orgStartX, yPosition);
-      doc.setFont('helvetica', 'normal');
-      doc.text(organizationName, orgStartX + orgLabelWidth, yPosition);
-      
-      yPosition += 7;
-      doc.setFontSize(11);
-      const roleText = `Role: ${selectedRole}`;
-      const roleTextWidth = doc.getTextWidth(roleText);
-      const roleLabelWidth = doc.getTextWidth('Role: ');
-      const roleStartX = (pageWidth - roleTextWidth) / 2;
-      doc.setFont('helvetica', 'bold');
-      doc.text('Role:  ', roleStartX, yPosition);
-      doc.setFont('helvetica', 'normal');
-      doc.text(selectedRole, roleStartX + roleLabelWidth, yPosition);
-      
-      yPosition += 7;
-      const periodText = `Report Period: ${formatDate(startDate)} - ${formatDate(endDate)}`;
-      const periodTextWidth = doc.getTextWidth(periodText);
-      const periodLabelWidth = doc.getTextWidth('Report Period: ');
-      const periodStartX = (pageWidth - periodTextWidth) / 2;
-      doc.setFont('helvetica', 'bold');
-      doc.text('Report Period:  ', periodStartX, yPosition);
-      doc.setFont('helvetica', 'normal');
-      doc.text(`${formatDate(startDate)} - ${formatDate(endDate)}`, periodStartX + periodLabelWidth, yPosition);
-      
-      yPosition += 12;
-      doc.setDrawColor(200);
-      doc.line(20, yPosition, pageWidth - 20, yPosition);
-      
-      yPosition += 20;
-
-      // Summary Section
-      doc.setFontSize(16);
-      doc.setFont('helvetica', 'bold');
-      doc.setTextColor(0);
-      doc.text('Summary', 20, yPosition);
-      
-      yPosition += 15;
-
-      const boxWidth = 120;
-      const boxHeight = 25;
-      const boxSpacing = 12;
-      let xPosition = (pageWidth - boxWidth) / 2;
-
-      // Total Hours Box
-      doc.setFillColor(59, 130, 246);
-      doc.roundedRect(xPosition, yPosition, boxWidth, boxHeight, 3, 3, 'F');
-      doc.setTextColor(255);
-      doc.setFontSize(10);
-      doc.setFont('helvetica', 'normal');
-      doc.text('Total Hours Worked', xPosition + boxWidth / 2, yPosition + 8, { align: 'center' });
-      doc.setFontSize(18);
-      doc.setFont('helvetica', 'bold');
-      doc.text(totalHours.toFixed(2), xPosition + boxWidth / 2, yPosition + 18, { align: 'center' });
-
-      yPosition += boxHeight + boxSpacing;
-
-      // Total Mileage Box
-      doc.setFillColor(34, 197, 94);
-      doc.roundedRect(xPosition, yPosition, boxWidth, boxHeight, 3, 3, 'F');
-      doc.setTextColor(255);
-      doc.setFontSize(10);
-      doc.setFont('helvetica', 'normal');
-      doc.text('Total Mileage', xPosition + boxWidth / 2, yPosition + 8, { align: 'center' });
-      doc.setFontSize(18);
-      doc.setFont('helvetica', 'bold');
-      doc.text(`${totalMileage.toFixed(1)} mi`, xPosition + boxWidth / 2, yPosition + 18, { align: 'center' });
-
-      if (isDriverRole) {
-        yPosition += boxHeight + boxSpacing;
-
-        // Total Clients Box
-        doc.setFillColor(236, 72, 153);
-        doc.roundedRect(xPosition, yPosition, boxWidth, boxHeight, 3, 3, 'F');
-        doc.setTextColor(255);
-        doc.setFontSize(10);
-        doc.setFont('helvetica', 'normal');
-        doc.text('Total Clients Served', xPosition + boxWidth / 2, yPosition + 8, { align: 'center' });
-        doc.setFontSize(18);
-        doc.setFont('helvetica', 'bold');
-        doc.text(totalClientsServed.toString(), xPosition + boxWidth / 2, yPosition + 18, { align: 'center' });
-
-        yPosition += boxHeight + boxSpacing;
-
-        // One-Way Trips Box
-        doc.setFillColor(168, 85, 247);
-        doc.roundedRect(xPosition, yPosition, boxWidth, boxHeight, 3, 3, 'F');
-        doc.setTextColor(255);
-        doc.setFontSize(10);
-        doc.setFont('helvetica', 'normal');
-        doc.text('One-Way Trips', xPosition + boxWidth / 2, yPosition + 8, { align: 'center' });
-        doc.setFontSize(18);
-        doc.setFont('helvetica', 'bold');
-        doc.text(oneWayTripsCount.toString(), xPosition + boxWidth / 2, yPosition + 18, { align: 'center' });
+  // Handle personal rides response
+  $effect(() => {
+    if (form?.success && form.personalAutoFill) {
+      personalHours = form.personalAutoFill.hours;
+      personalMiles = form.personalAutoFill.miles;
+      personalRides = form.personalAutoFill.rides;
+      personalClients = form.personalAutoFill.clients;
+      if (form.message) {
+        toastStore.success(form.message);
       }
-
-      yPosition += boxHeight + 20;
-
-      // Note section
-      doc.setFillColor(250, 250, 250);
-      doc.roundedRect(20, yPosition, pageWidth - 40, 20, 2, 2, 'F');
-      yPosition += 7;
-      doc.setFontSize(9);
-      doc.setTextColor(100);
-      doc.setFont('helvetica', 'italic');
-      doc.text('Note: Hours and mileage values are self-reported by the user.', pageWidth / 2, yPosition, { align: 'center' });
-      if (isDriverRole) {
-        yPosition += 6;
-        doc.text('Ride statistics are automatically calculated from system records.', pageWidth / 2, yPosition, { align: 'center' });
-      }
-
-      // Footer
-      doc.setFontSize(8);
-      doc.setTextColor(150);
-      doc.setFont('helvetica', 'normal');
-      doc.text(
-        `Generated on ${new Date().toLocaleDateString()} at ${new Date().toLocaleTimeString()}`,
-        pageWidth / 2,
-        pageHeight - 10,
-        { align: 'center' }
-      );
-
-      const fileName = `${reportName.replace(/\s+/g, '_')}.pdf`;
-      doc.save(fileName);
-      
-      toastStore.success('PDF report generated successfully');
-    } catch (error) {
-      console.error('Error generating PDF:', error);
-      toastStore.error('Failed to generate PDF');
     }
-  }
+  });
 
-  function formatDate(dateString: string): string {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
+  // Handle admin rides response
+  $effect(() => {
+    if (form?.success && form.rides) {
+      rides = form.rides;
+      hasSearched = true;
+      // Generate default filename when results load
+      exportFileName = generateDefaultFileName();
+      if (form.message) {
+        if (form.rides.length === 0) {
+          toastStore.info(form.message);
+        } else {
+          toastStore.success(form.message);
+        }
+      }
+    } else if (form?.error) {
+      toastStore.error(form.error);
+      rides = [];
+      hasSearched = false;
+    }
+  });
+
+  $effect(() => {
+    totalHours = calculateTotalHours(rides);
+    totalMiles = calculateTotalMiles(rides);
+    totalDonations = calculateTotalDonations(rides);
+  });
+
+  // Organization Report Functions
+  const getFilterOptions = () => {
+    switch (filterType) {
+      case 'driver':
+        return data.drivers.map(d => ({
+          value: d.user_id,
+          label: `${d.first_name} ${d.last_name}`
+        }));
+      case 'client':
+        return data.clients.map(c => ({
+          value: c.client_id.toString(),
+          label: `${c.first_name} ${c.last_name}`
+        }));
+      default:
+        return [];
+    }
+  };
+
+  const submitForm = () => {
+    if (!selectedId && filterType !== 'organization') {
+      toastStore.error('Please select a filter option');
+      return;
+    }
+    if (filterType === 'organization') {
+      selectedId = 'all';
+    }
+    formElement.requestSubmit();
+  };
+
+  const calculateTotalHours = (rideList: RideReportData[]) => {
+    const rideHours = rideList.reduce((total, ride) => total + (ride.hours || 0), 0);
+    return rideHours + (additionalHours || 0);
+  };
+
+  const calculateTotalMiles = (rideList: RideReportData[]) => {
+    const rideMiles = rideList.reduce((total, ride) => total + (ride.miles_driven || 0), 0);
+    return rideMiles + (additionalMiles || 0);
+  };
+
+  const calculateTotalDonations = (rideList: RideReportData[]) => {
+    return rideList.reduce((total, ride) => total + (ride.donation_amount || 0), 0);
+  };
+
+  const calculateAverageHours = (rideList: RideReportData[]) => {
+    if (rideList.length === 0) return 0;
+    return calculateTotalHours(rideList) / rideList.length;
+  };
+
+  const getUniqueDriverOptions = () => {
+    const uniqueDrivers = new Set<string>();
+    rides.forEach(ride => {
+      uniqueDrivers.add(ride.driver_name || 'Unknown Driver');
     });
-  }
+    return Array.from(uniqueDrivers).sort();
+  };
 
-  $effect(() => {
-    if (manualHoursWorked >= 0) showHoursWarning = false;
-  });
+  const getFilteredRides = () => {
+    let filtered = rides;
 
-  $effect(() => {
-    if (manualMileage >= 0) showMileageWarning = false;
-  });
-
-  $effect(() => {
-    if (startDate) showStartDateWarning = false;
-  });
-
-  $effect(() => {
-    if (endDate) showEndDateWarning = false;
-  });
-  
-  // Clear selected rides when role changes
-  $effect(() => {
-    if (!isDriverRole) {
-      selectedRideIds = new Set();
+    if (driverFilter) {
+      filtered = filtered.filter(ride => ride.driver_name === driverFilter);
     }
+
+    if (globalFilter) {
+      const searchLower = globalFilter.toLowerCase();
+      filtered = filtered.filter(ride => 
+        ride.driver_name?.toLowerCase().includes(searchLower) ||
+        ride.client_name?.toLowerCase().includes(searchLower) ||
+        ride.alt_pickup_address?.toLowerCase().includes(searchLower) ||
+        ride.destination_name?.toLowerCase().includes(searchLower) ||
+        ride.dropoff_address?.toLowerCase().includes(searchLower)
+      );
+    }
+
+    return [...filtered].sort((a, b) => {
+      let aVal: any = a[sortColumn as keyof RideReportData];
+      let bVal: any = b[sortColumn as keyof RideReportData];
+
+      if (sortColumn === 'appointment_time') {
+        aVal = new Date(aVal).getTime();
+        bVal = new Date(bVal).getTime();
+      }
+
+      if (aVal < bVal) return sortDirection === 'asc' ? -1 : 1;
+      if (aVal > bVal) return sortDirection === 'asc' ? 1 : -1;
+      return 0;
+    });
+  };
+
+  const handleSort = (column: string) => {
+    if (sortColumn === column) {
+      sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+    } else {
+      sortColumn = column;
+      sortDirection = 'asc';
+    }
+  };
+
+  const formatDateShort = (dateStr: string) => {
+    if (!dateStr) return 'Unknown';
+    try {
+      return new Date(dateStr).toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
+      });
+    } catch (e) {
+      return 'Invalid Date';
+    }
+  };
+
+  // Personal Report CSV Export
+  const exportPersonalReportCSV = () => {
+    if (personalHours === 0 && personalMiles === 0) {
+      toastStore.error('Please enter hours or miles to export');
+      return;
+    }
+
+    if (!selectedRole) {
+      toastStore.error('Please select a role');
+      return;
+    }
+
+    const volunteerName = `${firstName} ${lastName}`;
+    const headers = ['Volunteer Name', '# Hours', '# Clients', '# one-way rides', 'Total # of miles', 'Position'];
+    const row = [
+      `"${volunteerName}"`,
+      personalHours.toFixed(2),
+      personalClients || 0,
+      personalRides || 0,
+      personalMiles.toFixed(1),
+      `"${selectedRole}"`
+    ];
+
+    const csv = [headers.join(','), row.join(',')].join('\n');
+    
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `personal-report-${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    window.URL.revokeObjectURL(url);
+    
+    toastStore.success('Personal report exported');
+  };
+
+  // User CSV Export (for Driver reports)
+  const exportUserCSV = () => {
+    if (rides.length === 0 && !additionalHours && !additionalMiles) {
+      toastStore.error('No data to export');
+      return;
+    }
+
+    const volunteerMap = new Map();
+    
+    rides.forEach(ride => {
+      const name = ride.driver_name || 'Unknown';
+      if (!volunteerMap.has(name)) {
+        volunteerMap.set(name, {
+          name,
+          hours: 0,
+          clients: new Set(),
+          rides: 0,
+          miles: 0
+        });
+      }
+      
+      const vol = volunteerMap.get(name);
+      vol.hours += ride.hours || 0;
+      vol.miles += ride.miles_driven || 0;
+      vol.rides += 1;
+      if (ride.client_name) vol.clients.add(ride.client_name);
+    });
+
+    const headers = ['Volunteer Name', '# Hours', '# Clients', '# one-way rides', 'Total # of miles', 'Position'];
+    const rows = Array.from(volunteerMap.values()).map(v => {
+      const volTotalHours = v.hours + (additionalHours || 0);
+      const volTotalMiles = v.miles + (additionalMiles || 0);
+      
+      return [
+        `"${v.name}"`,
+        volTotalHours.toFixed(2),
+        v.clients.size,
+        v.rides,
+        volTotalMiles.toFixed(1),
+        '"Driver"'
+      ];
+    });
+
+    const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const fileName = exportFileName || generateDefaultFileName();
+    a.download = `${fileName.replace(/\s+/g, '_')}.csv`;
+    a.click();
+    window.URL.revokeObjectURL(url);
+    
+    toastStore.success('User report exported');
+  };
+
+  // Client CSV Export (for Client reports) - Demographics Report
+  const exportClientCSV = () => {
+    if (rides.length === 0) {
+      toastStore.error('No data to export');
+      return;
+    }
+
+    // Get unique clients from rides
+    const uniqueClientIds = new Set<number>();
+    rides.forEach(ride => {
+      if (ride.client_id) {
+        uniqueClientIds.add(ride.client_id);
+      }
+    });
+
+    // Get client details from data.clients
+    const clientsInReport = data.clients.filter(c => uniqueClientIds.has(c.client_id));
+
+    // Calculate demographics
+    let maleCount = 0;
+    let femaleCount = 0;
+    let nonBinaryCount = 0;
+    let unknownGenderCount = 0;
+
+    let livesAloneYes = 0;
+    let livesAloneNo = 0;
+    let livesAloneUnknown = 0;
+
+    let ageUnder40 = 0;
+    let age40to54 = 0;
+    let age55to59 = 0;
+    let age60to64 = 0;
+    let age65to74 = 0;
+    let age75to84 = 0;
+    let ageOver85 = 0;
+    let ageUnknown = 0;
+
+    const today = new Date();
+    const currentYear = today.getFullYear();
+
+    clientsInReport.forEach(client => {
+      // Gender count
+      const gender = (client.gender || '').toLowerCase();
+      if (gender === 'male' || gender === 'm') {
+        maleCount++;
+      } else if (gender === 'female' || gender === 'f') {
+        femaleCount++;
+      } else if (gender === 'non-binary' || gender === 'nonbinary' || gender === 'nb') {
+        nonBinaryCount++;
+      } else {
+        unknownGenderCount++;
+      }
+
+      // Lives alone count
+      if (client.lives_alone === true) {
+        livesAloneYes++;
+      } else if (client.lives_alone === false) {
+        livesAloneNo++;
+      } else {
+        livesAloneUnknown++;
+      }
+
+      // Age range count
+      if (client.date_of_birth) {
+        const birthDate = new Date(client.date_of_birth);
+        const age = currentYear - birthDate.getFullYear();
+        
+        if (age < 40) {
+          ageUnder40++;
+        } else if (age >= 40 && age <= 54) {
+          age40to54++;
+        } else if (age >= 55 && age <= 59) {
+          age55to59++;
+        } else if (age >= 60 && age <= 64) {
+          age60to64++;
+        } else if (age >= 65 && age <= 74) {
+          age65to74++;
+        } else if (age >= 75 && age <= 84) {
+          age75to84++;
+        } else if (age >= 85) {
+          ageOver85++;
+        } else {
+          ageUnknown++;
+        }
+      } else {
+        ageUnknown++;
+      }
+    });
+
+    const totalClients = clientsInReport.length;
+
+    // Create CSV content
+    const csvLines = [
+      `Station Name,${organizationName}`,
+      `Report Period,${fromDate || 'N/A'} to ${toDate || 'N/A'}`,
+      ``,
+      `1. Unduplicated Clients by Gender`,
+      `Male,Female,Non-Binary,Unknown,TOTAL`,
+      `${maleCount},${femaleCount},${nonBinaryCount},${unknownGenderCount},${totalClients}`,
+      ``,
+      `2. Lives Alone`,
+      `Yes,No,Unknown,TOTAL`,
+      `${livesAloneYes},${livesAloneNo},${livesAloneUnknown},${totalClients}`,
+      ``,
+      `3. Age Range`,
+      `Under 40,40-54,55-59,60-64,65-74,75-84,Over 85,Unknown,TOTAL`,
+      `${ageUnder40},${age40to54},${age55to59},${age60to64},${age65to74},${age75to84},${ageOver85},${ageUnknown},${totalClients}`
+    ];
+
+    const csvContent = csvLines.join('\n');
+    
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const fileName = exportFileName || generateDefaultFileName();
+    a.download = `${fileName.replace(/\s+/g, '_')}.csv`;
+    a.click();
+    window.URL.revokeObjectURL(url);
+    
+    toastStore.success('Client demographics report exported');
+  };
+
+  $effect(() => {
+    filterType;
+    if (filterType !== 'organization') {
+      selectedId = '';
+    }
+    rides = [];
+    hasSearched = false;
+    totalHours = 0;
+    totalMiles = 0;
+    totalDonations = 0;
+    fromDate = '';
+    toDate = '';
+    additionalHours = 0;
+    additionalMiles = 0;
+    exportFileName = '';
+    globalFilter = '';
+    driverFilter = '';
+    sortColumn = 'appointment_time';
+    sortDirection = 'desc';
   });
 </script>
+
+<svelte:head>
+  <title>Reports | DriveKind</title>
+</svelte:head>
 
 <RoleGuard requiredRoles={['Admin', 'Driver', 'Dispatcher', 'Volunteer']}>
   <div class="min-h-screen bg-gray-50">
     <Breadcrumbs />
     
-    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+      <!-- Page Header -->
       <div class="mb-8">
-        <h1 class="text-3xl font-bold text-gray-900">Work Reports</h1>
-        <p class="text-gray-600 mt-2">Generate a PDF report of your hours worked and mileage.</p>
+        <h1 class="text-3xl font-bold text-gray-900">Reports</h1>
+        <p class="text-gray-600 mt-2">Generate personal reports and organization analytics</p>
       </div>
 
-      <!-- Info Banner -->
-      <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6 flex items-start gap-3">
-        <AlertCircle class="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
-        <div class="text-sm text-blue-900">
-          <p class="font-medium mb-1">How to use this report generator:</p>
-          <ul class="list-disc list-inside space-y-1 text-blue-800">
-            <li>Select which role you're reporting as</li>
-            <li>Select the date range for your report period</li>
-            {#if isDriverRole}
-              <li>Optionally select completed rides to auto-fill hours and mileage</li>
-            {/if}
-            <li>Enter any additional hours and mileage not covered by rides</li>
-            <li>Download your report as a PDF</li>
-          </ul>
-        </div>
-      </div>
-      
-      <!-- Report Generator Card -->
-      <div class="bg-white rounded-lg shadow-sm border border-gray-200">
-        <div class="px-6 py-4 border-b border-gray-200">
-          <div class="flex items-center gap-2">
-            <FileText class="w-5 h-5 text-blue-600" />
-            <h2 class="text-lg font-medium text-gray-900">Report Generator</h2>
-          </div>
-        </div>
-        
-        <div class="p-6 space-y-6">
-          <!-- Role Selection -->
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-2">
-              Reporting As *
-            </label>
-            <select
-              bind:value={selectedRole}
-              class="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+      <!-- Tab Navigation -->
+      <div class="border-b border-gray-200">
+        <nav class="-mb-px flex space-x-8">
+          <button
+            onclick={() => activeTab = 'personal'}
+            class={`whitespace-nowrap pb-4 px-1 border-b-2 font-medium text-sm ${
+              activeTab === 'personal'
+                ? 'border-blue-500 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            <UserIcon class="w-4 h-4 inline mr-2" />
+            Personal Report
+          </button>
+          {#if isAdmin}
+            <button
+              onclick={() => activeTab = 'organization'}
+              class={`whitespace-nowrap pb-4 px-1 border-b-2 font-medium text-sm ${
+                activeTab === 'organization'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
             >
-              {#each userRoles as role}
-                <option value={role}>{role}</option>
-              {/each}
-            </select>
-            <p class="text-xs text-gray-500 mt-1">Select the role you're reporting work for</p>
-          </div>
-
-          <!-- Date Range Selection -->
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-2">
-                <Calendar class="w-4 h-4 inline mr-1" />
-                Start Date *
-              </label>
-              <input
-                type="date"
-                bind:value={startDate}
-                class="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 {showStartDateWarning ? 'border-red-500 ring-2 ring-red-200' : ''}"
-                required
-              />
-              {#if showStartDateWarning}
-                <div class="flex items-center gap-1 mt-1 text-xs text-red-600">
-                  <AlertTriangle class="w-3 h-3" />
-                  <span>Start date is required</span>
-                </div>
-              {/if}
-            </div>
-
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-2">
-                <Calendar class="w-4 h-4 inline mr-1" />
-                End Date *
-              </label>
-              <input
-                type="date"
-                bind:value={endDate}
-                class="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 {showEndDateWarning ? 'border-red-500 ring-2 ring-red-200' : ''}"
-                required
-              />
-              {#if showEndDateWarning}
-                <div class="flex items-center gap-1 mt-1 text-xs text-red-600">
-                  <AlertTriangle class="w-3 h-3" />
-                  <span>End date is required</span>
-                </div>
-              {/if}
-            </div>
-          </div>
-
-          <!-- Completed Rides Selection (Driver only) -->
-          {#if isDriverRole && filteredRides.length > 0}
-            <div class="bg-purple-50 border border-purple-200 rounded-lg p-4">
-              <h3 class="text-sm font-semibold text-purple-900 mb-3 flex items-center gap-2">
-                <Car class="w-4 h-4" />
-                Select Completed Rides
-              </h3>
-              <p class="text-xs text-purple-700 mb-3">
-                Select rides to automatically include their hours and mileage in your report
-              </p>
-              
-              <div class="space-y-2 max-h-60 overflow-y-auto">
-                {#each filteredRides as ride}
-                  <label class="flex items-start gap-3 p-3 bg-white rounded-lg border border-purple-200 hover:border-purple-400 cursor-pointer transition-colors">
-                    <input
-                      type="checkbox"
-                      checked={selectedRideIds.has(ride.ride_id)}
-                      onchange={() => toggleRide(ride.ride_id)}
-                      class="mt-1 h-4 w-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500"
-                    />
-                    <div class="flex-1 text-sm">
-                      <div class="font-medium text-gray-900">
-                        {ride.clients ? `${ride.clients.first_name} ${ride.clients.last_name}` : 'Unknown Client'} → {ride.destination_name}
-                      </div>
-                      <div class="text-xs text-gray-600 mt-1">
-                        {new Date(ride.appointment_time).toLocaleDateString()} • 
-                        {ride.hours ? `${ride.hours}h` : '0h'} • 
-                        {ride.miles_driven ? `${ride.miles_driven}mi` : '0mi'}
-                      </div>
-                    </div>
-                  </label>
-                {/each}
-              </div>
-              
-              {#if selectedRideIds.size > 0}
-                <div class="mt-3 pt-3 border-t border-purple-200">
-                  <div class="text-sm text-purple-900">
-                    <strong>{selectedRideIds.size}</strong> ride{selectedRideIds.size !== 1 ? 's' : ''} selected • 
-                    <strong>{ridesHours.toFixed(2)}h</strong> • 
-                    <strong>{ridesMileage.toFixed(1)}mi</strong>
-                  </div>
-                </div>
-              {/if}
-            </div>
+              <BuildingIcon class="w-4 h-4 inline mr-2" />
+              Organization Reports
+            </button>
           {/if}
+        </nav>
+      </div>
 
-          <!-- Manual Hours and Mileage Input -->
-          <div class="grid gap-3 md:grid-cols-2 mt-3">
+      <!-- PERSONAL REPORT TAB -->
+      {#if activeTab === 'personal'}
+        <Card>
+          <CardHeader>
+            <CardTitle class="flex items-center gap-2">
+              <FileTextIcon class="w-5 h-5 text-blue-600" />
+              Personal Report
+            </CardTitle>
+            <p class="text-sm text-muted-foreground">
+              Generate a CSV report of your volunteer hours and mileage
+            </p>
+          </CardHeader>
+          
+          <CardContent class="space-y-6">
+            <!-- Role Selection -->
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-2">
-                <Clock class="w-4 h-4 inline mr-1" />
-                Additional Hours
-              </label>
-              <input
-                type="number"
-                bind:value={manualHoursWorked}
-                min="0"
-                step="0.5"
-                placeholder="Enter hours (e.g., 5)"
-                class="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 {showHoursWarning ? 'border-red-500 ring-2 ring-red-200' : ''}"
-              />
-              {#if isDriverRole && selectedRideIds.size > 0}
-                <p class="text-xs text-gray-500 mt-1">
-                  {ridesHours.toFixed(2)}h from rides + {manualHoursWorked}h manual = <strong>{totalHours.toFixed(2)}h total</strong>
-                </p>
-              {/if}
-              {#if showHoursWarning}
-                <div class="flex items-center gap-1 mt-1 text-xs text-red-600">
-                  <AlertTriangle class="w-3 h-3" />
-                  <span>Hours cannot be negative</span>
-                </div>
-              {/if}
+              <Label class="block text-sm font-medium text-gray-700 mb-2">
+                Report As (Role) *
+              </Label>
+              <select
+                bind:value={selectedRole}
+                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              >
+                {#each availableRoles as role}
+                  <option value={role}>{role}</option>
+                {/each}
+              </select>
+              <p class="text-xs text-gray-500 mt-1">Select which role to report your hours under</p>
             </div>
 
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-2">
-                <MapPin class="w-4 h-4 inline mr-1" />
-                Additional Mileage
-              </label>
-              <input
-                type="number"
-                bind:value={manualMileage}
-                min="0"
-                step="0.1"
-                placeholder="Enter miles (e.g., 50.5)"
-                class="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 {showMileageWarning ? 'border-red-500 ring-2 ring-red-200' : ''}"
-              />
-              {#if isDriverRole && selectedRideIds.size > 0}
-                <p class="text-xs text-gray-500 mt-1">
-                  {ridesMileage.toFixed(1)}mi from rides + {manualMileage}mi manual = <strong>{totalMileage.toFixed(1)}mi total</strong>
+            <!-- Driver Auto-fill from Rides -->
+            {#if selectedRole === 'Driver'}
+              <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <h3 class="text-sm font-medium text-blue-900 mb-2 flex items-center gap-2">
+                  <CarIcon class="w-4 h-4" />
+                  Auto-fill from Your Rides
+                </h3>
+                <p class="text-xs text-blue-700 mb-3">
+                  Load your completed rides from the past month to auto-populate hours, miles, and ride counts
                 </p>
-              {/if}
-              {#if showMileageWarning}
-                <div class="flex items-center gap-1 mt-1 text-xs text-red-600">
-                  <AlertTriangle class="w-3 h-3" />
-                  <span>Mileage cannot be negative</span>
-                </div>
-              {/if}
-            </div>
-          </div>
+                
+                <form
+                  method="POST"
+                  action="?/getPersonalDriverRides"
+                  use:enhance={() => {
+                    isLoadingPersonalRides = true;
+                    return async ({ update }) => {
+                      isLoadingPersonalRides = false;
+                      await update();
+                    };
+                  }}
+                >
+                  <Button type="submit" disabled={isLoadingPersonalRides} class="w-full" variant="outline">
+                    {#if isLoadingPersonalRides}
+                      <LoaderIcon class="w-4 h-4 mr-2 animate-spin" />
+                      Loading Rides...
+                    {:else}
+                      <CarIcon class="w-4 h-4 mr-2" />
+                      Load My Rides (Past Month)
+                    {/if}
+                  </Button>
+                </form>
+              </div>
+              <div class="border-t pt-4" />
+            {/if}
 
-          <!-- Report Name and Full Name Section -->
-          <div class="space-y-4">
+            <!-- Hours and Miles Entry -->
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label class="block text-sm font-medium text-gray-700 mb-2">
-                  First Name *
-                </label>
-                <input
-                  type="text"
-                  bind:value={reportFirstName}
-                  placeholder="Enter first name"
-                  class="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  required
+                <Label class="block text-sm font-medium text-gray-700 mb-2">
+                  <ClockIcon class="w-4 h-4 inline mr-1" />
+                  Hours
+                </Label>
+                <Input
+                  type="number"
+                  bind:value={personalHours}
+                  min="0"
+                  step="0.25"
+                  placeholder="0.00"
                 />
               </div>
-              
+
               <div>
-                <label class="block text-sm font-medium text-gray-700 mb-2">
-                  Last Name *
-                </label>
-                <input
-                  type="text"
-                  bind:value={reportLastName}
-                  placeholder="Enter last name"
-                  class="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  required
+                <Label class="block text-sm font-medium text-gray-700 mb-2">
+                  <CarIcon class="w-4 h-4 inline mr-1" />
+                  Miles
+                </Label>
+                <Input
+                  type="number"
+                  bind:value={personalMiles}
+                  min="0"
+                  step="0.1"
+                  placeholder="0.0"
                 />
               </div>
             </div>
-            
-            <!-- Name Preview Section (Editable) -->
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-2">
-                Name as it will appear on report *
-              </label>
-              
-              {#if isEditingName}
-                <div class="space-y-2">
-                  <div class="grid grid-cols-2 gap-2">
-                    <input
-                      type="text"
-                      bind:value={displayFirstName}
-                      placeholder="First name"
-                      class="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    />
-                    <input
-                      type="text"
-                      bind:value={displayLastName}
-                      placeholder="Last name"
-                      class="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    />
+
+            <!-- Preview -->
+            {#if personalHours > 0 || personalMiles > 0}
+              <div class="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                <h3 class="text-sm font-medium text-gray-900 mb-2">Report Preview</h3>
+                <div class="grid grid-cols-2 gap-4">
+                  <div>
+                    <p class="text-xs text-gray-500">Volunteer</p>
+                    <p class="font-medium">{firstName} {lastName}</p>
                   </div>
-                  <button
-                    onclick={() => isEditingName = false}
-                    class="text-sm text-blue-600 hover:text-blue-700 font-medium"
-                  >
-                    Done
-                  </button>
-                </div>
-              {:else}
-                <button
-                  onclick={() => isEditingName = true}
-                  class="w-full bg-gray-50 hover:bg-gray-100 border border-gray-300 rounded-lg p-3 text-left transition-colors group"
-                >
-                  <div class="flex items-center justify-between">
-                    <p class="text-base font-semibold text-gray-900">{displayName || '(Click to enter name)'}</p>
-                    <Edit2 class="w-4 h-4 text-gray-400 group-hover:text-gray-600" />
+                  <div>
+                    <p class="text-xs text-gray-500">Position</p>
+                    <p class="font-medium">{selectedRole}</p>
                   </div>
-                  <p class="text-xs text-gray-500 mt-1">Click to edit how your name appears on the report</p>
-                </button>
-              {/if}
-            </div>
-            
-            <!-- Report Filename Preview -->
-            <div class="bg-blue-50 border border-blue-200 rounded-lg p-3">
-              <p class="text-xs text-blue-700 mb-1">Report filename:</p>
-              <p class="text-sm font-mono text-blue-900">{reportName}.pdf / .csv</p>
-            </div>
-          </div>
-
-          <!-- Format Selection -->
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-2">
-              Report Format *
-            </label>
-            <div class="flex gap-4">
-              <label class="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={selectedFormats.has('pdf')}
-                  onchange={() => toggleFormat('pdf')}
-                  class="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                />
-                <span class="text-sm font-medium text-gray-700">PDF</span>
-              </label>
-              <label class="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={selectedFormats.has('csv')}
-                  onchange={() => toggleFormat('csv')}
-                  class="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                />
-                <span class="text-sm font-medium text-gray-700">CSV</span>
-              </label>
-            </div>
-            <p class="text-xs text-gray-500 mt-1">Select one or both formats to generate</p>
-          </div>
-
-          <!-- Generate Button -->
-          <div class="pt-4">
-            <button
-              onclick={generateReports}
-              disabled={isGenerating}
-              class="w-full px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200 flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
-            >
-              <Download class="w-5 h-5" />
-              <span>
-                {#if isGenerating}
-                  Generating Report{selectedFormats.size > 1 ? 's' : ''}...
-                {:else if selectedFormats.size > 1}
-                  Generate & Download Reports (PDF & CSV)
-                {:else if selectedFormats.has('pdf')}
-                  Generate & Download PDF Report
-                {:else}
-                  Generate & Download CSV Report
-                {/if}
-              </span>
-            </button>
-          </div>
-
-      <!-- Preview Summary -->
-      {#if totalHours >= 0 && totalMileage >= 0}
-        <div class="mt-6 bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <h3 class="text-sm font-semibold text-gray-900 mb-4">Report Preview</h3>
-          
-          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-{isDriverRole ? '4' : '2'} gap-4">
-            <div class="bg-blue-50 rounded-lg p-4 border border-blue-200">
-              <div class="flex items-center gap-2 mb-2">
-                <Clock class="w-5 h-5 text-blue-600" />
-                <span class="text-sm font-medium text-blue-900">Total Hours</span>
-              </div>
-              <p class="text-2xl font-bold text-blue-600">{totalHours.toFixed(2)}</p>
-              {#if isDriverRole && ridesHours > 0}
-                <p class="text-xs text-blue-700 mt-1">{ridesHours.toFixed(2)}h rides + {manualHoursWorked}h manual</p>
-              {/if}
-            </div>
-
-            <div class="bg-green-50 rounded-lg p-4 border border-green-200">
-              <div class="flex items-center gap-2 mb-2">
-                <MapPin class="w-5 h-5 text-green-600" />
-                <span class="text-sm font-medium text-green-900">Total Mileage</span>
-              </div>
-              <p class="text-2xl font-bold text-green-600">{totalMileage.toFixed(1)} mi</p>
-              {#if isDriverRole && ridesMileage > 0}
-                <p class="text-xs text-green-700 mt-1">{ridesMileage.toFixed(1)}mi rides + {manualMileage}mi manual</p>
-              {/if}
-            </div>
-
-            {#if isDriverRole}
-              <div class="bg-pink-50 rounded-lg p-4 border border-pink-200">
-                <div class="flex items-center gap-2 mb-2">
-                  <Car class="w-5 h-5 text-pink-600" />
-                  <span class="text-sm font-medium text-pink-900">Clients Served</span>
+                  <div>
+                    <p class="text-xs text-gray-500">Hours</p>
+                    <p class="font-medium text-blue-600">{personalHours.toFixed(2)}</p>
+                  </div>
+                  <div>
+                    <p class="text-xs text-gray-500">Miles</p>
+                    <p class="font-medium text-green-600">{personalMiles.toFixed(1)}</p>
+                  </div>
+                  {#if selectedRole === 'Driver'}
+                    <div>
+                      <p class="text-xs text-gray-500">Clients Served</p>
+                      <p class="font-medium text-purple-600">{personalClients}</p>
+                    </div>
+                    <div>
+                      <p class="text-xs text-gray-500">One-way Rides</p>
+                      <p class="font-medium text-orange-600">{personalRides}</p>
+                    </div>
+                  {/if}
                 </div>
-                <p class="text-2xl font-bold text-pink-600">{totalClientsServed}</p>
-                <p class="text-xs text-pink-700 mt-1">{selectedRideIds.size} ride{selectedRideIds.size !== 1 ? 's' : ''} selected</p>
-              </div>
-
-              <div class="bg-purple-50 rounded-lg p-4 border border-purple-200">
-                <div class="flex items-center gap-2 mb-2">
-                  <Car class="w-5 h-5 text-purple-600" />
-                  <span class="text-sm font-medium text-purple-900">One-Way Trips</span>
-                </div>
-                <p class="text-2xl font-bold text-purple-600">{oneWayTripsCount}</p>
-                <p class="text-xs text-purple-700 mt-1">Round trips count as 2</p>
               </div>
             {/if}
+
+            <!-- Generate Button -->
+            <Button onclick={exportPersonalReportCSV} class="w-full">
+              <DownloadIcon class="w-5 h-5 mr-2" />
+              Generate Personal Report
+            </Button>
+          </CardContent>
+        </Card>
+      {/if}
+
+      <!-- ORGANIZATION REPORTS TAB -->
+      {#if activeTab === 'organization' && isAdmin}
+        <div class="space-y-6">
+          <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- Filter Section -->
+            <Card class="lg:col-span-2">
+              <CardHeader>
+                <CardTitle class="flex items-center gap-2">
+                  <SearchIcon class="h-5 w-5" />
+                  Report Filters
+                </CardTitle>
+              </CardHeader>
+              <CardContent class="space-y-4">
+                <div class="space-y-3">
+                  <Label class="text-sm font-medium">Report Type</Label>
+                  <div class="flex gap-6">
+                    <div class="flex items-center space-x-2">
+                      <input 
+                        type="radio" 
+                        id="driver" 
+                        name="filterType" 
+                        value="driver" 
+                        bind:group={filterType}
+                        class="h-4 w-4"
+                      />
+                      <label for="driver" class="text-sm font-medium flex items-center gap-2 cursor-pointer">
+                        <CarIcon class="h-4 w-4" />
+                        By Driver
+                      </label>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                      <input 
+                        type="radio" 
+                        id="client" 
+                        name="filterType" 
+                        value="client" 
+                        bind:group={filterType}
+                        class="h-4 w-4"
+                      />
+                      <label for="client" class="text-sm font-medium flex items-center gap-2 cursor-pointer">
+                        <UserIcon class="h-4 w-4" />
+                        By Client
+                      </label>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                      <input 
+                        type="radio" 
+                        id="organization" 
+                        name="filterType" 
+                        value="organization" 
+                        bind:group={filterType}
+                        class="h-4 w-4"
+                      />
+                      <label for="organization" class="text-sm font-medium flex items-center gap-2 cursor-pointer">
+                        <BuildingIcon class="h-4 w-4" />
+                        Whole Organization
+                      </label>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="space-y-2">
+                  <Label class="text-sm font-medium">
+                    Select {filterType === 'driver' ? 'Driver' : filterType === 'client' ? 'Client' : 'Option'}
+                  </Label>
+                  <div class="flex gap-3">
+                    <select 
+                      bind:value={selectedId}
+                      disabled={filterType === 'organization'}
+                      class="w-full px-3 py-2 border rounded-md disabled:opacity-50"
+                    >
+                      <option value="">{filterType === 'organization' ? 'Not applicable' : `Choose a ${filterType}...`}</option>
+                      {#if filterType !== 'organization'}
+                        {#each getFilterOptions() as option}
+                          <option value={option.value}>{option.label}</option>
+                        {/each}
+                      {/if}
+                    </select>
+                    <Button
+                      onclick={submitForm}
+                      disabled={(filterType !== 'organization' && !selectedId) || isLoading}
+                      class="whitespace-nowrap"
+                    >
+                      {#if isLoading}
+                        <LoaderIcon class="h-4 w-4 mr-2 animate-spin" />
+                        Loading...
+                      {:else}
+                        <SearchIcon class="h-4 w-4 mr-2" />
+                        Load Rides
+                      {/if}
+                    </Button>
+                  </div>
+                </div>
+
+                <div class="space-y-2">
+                  <Label class="text-sm font-medium">Date Range (Optional)</Label>
+                  <div class="flex gap-3">
+                    <div class="flex-1">
+                      <Label class="text-xs text-gray-500">From</Label>
+                      <input
+                        type="date"
+                        bind:value={fromDate}
+                        class="w-full px-3 py-2 border rounded-md text-sm"
+                      />
+                    </div>
+                    <div class="flex-1">
+                      <Label class="text-xs text-gray-500">To</Label>
+                      <input
+                        type="date"
+                        bind:value={toDate}
+                        class="w-full px-3 py-2 border rounded-md text-sm"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Additional Hours/Miles (only for Driver reports) -->
+                {#if filterType === 'driver'}
+                  <div class="space-y-2">
+                    <Label class="text-sm font-medium">Additional Hours/Miles (Optional)</Label>
+                    <p class="text-xs text-muted-foreground">Add extra hours or miles not tracked in rides</p>
+                    <div class="grid grid-cols-2 gap-3">
+                      <div>
+                        <Label class="text-xs text-gray-500">Additional Hours</Label>
+                        <Input
+                          type="number"
+                          bind:value={additionalHours}
+                          min="0"
+                          step="0.25"
+                          placeholder="0.00"
+                          class="text-sm"
+                        />
+                      </div>
+                      <div>
+                        <Label class="text-xs text-gray-500">Additional Miles</Label>
+                        <Input
+                          type="number"
+                          bind:value={additionalMiles}
+                          min="0"
+                          step="0.1"
+                          placeholder="0.0"
+                          class="text-sm"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                {/if}
+              </CardContent>
+            </Card>
+
+            <!-- Summary Card -->
+            <Card>
+              <CardHeader class="pb-2">
+                <div class="flex items-center justify-between">
+                  <div class="flex items-center gap-2">
+                    <div class="p-2 rounded-lg bg-primary/10">
+                      <ClockIcon class="h-5 w-5" />
+                    </div>
+                    <p class="text-sm font-medium text-gray-600">Summary</p>
+                  </div>
+                  <div class="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
+                    {rides.length} rides
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent class="pt-0">
+                <div class="space-y-4">
+                  <div>
+                    <div class="text-xs text-gray-500 mb-1">Total Hours</div>
+                    <div class="text-3xl font-bold">
+                      {totalHours.toFixed(2)} hrs
+                    </div>
+                  </div>
+
+                  <div>
+                    <div class="text-xs text-gray-500 mb-1">Total Miles</div>
+                    <div class="text-2xl font-bold text-blue-600">
+                      {totalMiles.toFixed(1)} mi
+                    </div>
+                  </div>
+
+                  {#if rides.length > 0}
+                    <div>
+                      <div class="text-xs text-gray-500 mb-1">Donations</div>
+                      <div class="text-xl font-bold text-green-600">
+                        ${totalDonations.toLocaleString()}
+                      </div>
+                    </div>
+                  {/if}
+                </div>
+              </CardContent>
+            </Card>
           </div>
+
+          <!-- Hidden Form -->
+          <form
+            bind:this={formElement}
+            method="POST"
+            action="?/fetchRides"
+            use:enhance={() => {
+              isLoading = true;
+              return async ({ update }) => {
+                isLoading = false;
+                await update();
+              };
+            }}
+            style="display: none;"
+          >
+            <input type="hidden" name="filterType" value={filterType} />
+            <input type="hidden" name="selectedId" value={selectedId} />
+            <input type="hidden" name="fromDate" value={fromDate} />
+            <input type="hidden" name="toDate" value={toDate} />
+          </form>
+
+          <!-- Results -->
+          {#if hasSearched}
+            <Card>
+              <CardHeader class="flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle>Report Results</CardTitle>
+                  <p class="text-sm text-gray-600">
+                    {rides.length} completed ride{rides.length !== 1 ? 's' : ''} found
+                  </p>
+                </div>
+                {#if rides.length > 0}
+                  <div class="flex gap-2">
+                    {#if filterType === 'driver'}
+                      <Button variant="outline" onclick={exportUserCSV} size="sm">
+                        <DownloadIcon class="h-4 w-4 mr-2" />
+                        User CSV
+                      </Button>
+                    {:else if filterType === 'client'}
+                      <Button variant="outline" onclick={exportClientCSV} size="sm">
+                        <DownloadIcon class="h-4 w-4 mr-2" />
+                        Client CSV
+                      </Button>
+                    {:else}
+                      <!-- Organization - show both -->
+                      <Button variant="outline" onclick={exportUserCSV} size="sm">
+                        <DownloadIcon class="h-4 w-4 mr-2" />
+                        User CSV
+                      </Button>
+                      <Button variant="outline" onclick={exportClientCSV} size="sm">
+                        <UserIcon class="h-4 w-4 mr-2" />
+                        Client CSV
+                      </Button>
+                    {/if}
+                  </div>
+                {/if}
+              </CardHeader>
+              
+              {#if rides.length > 0}
+                <CardContent class="space-y-4">
+                  <!-- Filename customization -->
+                  <div class="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                    <Label class="text-sm font-medium mb-2 block">Export Filename</Label>
+                    <Input
+                      bind:value={exportFileName}
+                      placeholder={generateDefaultFileName()}
+                      class="text-sm"
+                    />
+                    <p class="text-xs text-gray-500 mt-1">Customize the filename for your export (without extension)</p>
+                  </div>
+
+                  <div class="flex items-center gap-4">
+                    <div class="flex items-center gap-2">
+                      <SearchIcon class="h-4 w-4 text-gray-500" />
+                      <Input
+                        placeholder="Search rides..."
+                        bind:value={globalFilter}
+                        class="max-w-sm"
+                      />
+                    </div>
+                    <div class="flex items-center gap-2">
+                      <CarIcon class="h-4 w-4 text-gray-500" />
+                      <select
+                        bind:value={driverFilter}
+                        class="px-3 py-2 border rounded-md text-sm min-w-[150px]"
+                      >
+                        <option value="">All Drivers</option>
+                        {#each getUniqueDriverOptions() as driverName}
+                          <option value={driverName}>{driverName}</option>
+                        {/each}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div class="rounded-md border overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead class="cursor-pointer" onclick={() => handleSort('appointment_time')}>
+                            Date {sortColumn === 'appointment_time' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
+                          </TableHead>
+                          <TableHead class="cursor-pointer" onclick={() => handleSort('driver_name')}>
+                            Driver {sortColumn === 'driver_name' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
+                          </TableHead>
+                          <TableHead class="cursor-pointer" onclick={() => handleSort('client_name')}>
+                            Client {sortColumn === 'client_name' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
+                          </TableHead>
+                          <TableHead>Purpose</TableHead>
+                          <TableHead>Destination</TableHead>
+                          <TableHead class="cursor-pointer" onclick={() => handleSort('hours')}>
+                            Hours {sortColumn === 'hours' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
+                          </TableHead>
+                          <TableHead class="cursor-pointer" onclick={() => handleSort('miles_driven')}>
+                            Miles {sortColumn === 'miles_driven' ? (sortDirection === 'asc' ? '↑' : '↓') : ''}
+                          </TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {#each getFilteredRides() as ride}
+                          <TableRow>
+                            <TableCell>{formatDateShort(ride.appointment_time)}</TableCell>
+                            <TableCell>{ride.driver_name || 'Unknown'}</TableCell>
+                            <TableCell>{ride.client_name || 'Unknown'}</TableCell>
+                            <TableCell>{ride.purpose || 'N/A'}</TableCell>
+                            <TableCell class="max-w-[200px] truncate">{ride.destination_name || 'N/A'}</TableCell>
+                            <TableCell>{ride.hours ? `${ride.hours.toFixed(2)} hrs` : '0 hrs'}</TableCell>
+                            <TableCell>{ride.miles_driven ? `${ride.miles_driven.toFixed(1)} mi` : '0 mi'}</TableCell>
+                          </TableRow>
+                        {/each}
+                      </TableBody>
+                    </Table>
+                  </div>
+
+                  <div class="text-sm text-gray-600 text-center">
+                    Showing {getFilteredRides().length} of {rides.length} result(s)
+                  </div>
+                </CardContent>
+              {:else}
+                <CardContent>
+                  <div class="text-center py-8">
+                    <FileTextIcon class="h-12 w-12 mx-auto text-gray-400" />
+                    <h3 class="mt-4 text-lg font-medium">No completed rides found</h3>
+                    <p class="text-gray-600">
+                      No completed rides were found for the selected {filterType}.
+                    </p>
+                  </div>
+                </CardContent>
+              {/if}
+            </Card>
+          {/if}
+
+          {#if isLoading}
+            <Card>
+              <CardContent class="py-8">
+                <div class="text-center">
+                  <LoaderIcon class="h-8 w-8 mx-auto animate-spin text-blue-600" />
+                  <p class="mt-2 text-gray-600">Loading rides...</p>
+                </div>
+              </CardContent>
+            </Card>
+          {/if}
         </div>
       {/if}
+    </div>
+  </div>
 </RoleGuard>
