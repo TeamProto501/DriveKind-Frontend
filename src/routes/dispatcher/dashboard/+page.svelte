@@ -5,24 +5,34 @@
 	import type { PageData } from './$types';
 	import { 
 		Car, 
-		Users, 
 		Calendar, 
 		MapPin, 
 		Clock, 
-		CheckCircle,
 		AlertCircle,
-		Plus,
-		Search,
-		Filter,
 		ArrowRight,
 		Phone,
-		User
+		User,
+		Navigation,
+		Send
 	} from '@lucide/svelte';
 	
 	let { data }: { data: PageData } = $props();
 	
-	// Filter to show only requested rides (already filtered by server)
-	const requestedRides = $derived(data.rides || []);
+	// Sort rides: rides without driver requests first, then those with pending requests
+	const sortedRides = $derived(() => {
+		const rides = data.rides || [];
+		return [...rides].sort((a, b) => {
+			// Rides without driver_user_id come first (not yet sent to any driver)
+			const aHasDriver = a.driver_user_id != null;
+			const bHasDriver = b.driver_user_id != null;
+			
+			if (!aHasDriver && bHasDriver) return -1;
+			if (aHasDriver && !bHasDriver) return 1;
+			
+			// Then sort by appointment time
+			return new Date(a.appointment_time).getTime() - new Date(b.appointment_time).getTime();
+		});
+	});
 	
 	// Get status badge color
 	function getStatusColor(status: string) {
@@ -45,18 +55,6 @@
 		return 'Unknown Client';
 	}
 	
-	function getDriverName(ride: any) {
-		if (ride.drivers) {
-			return `${ride.drivers.first_name} ${ride.drivers.last_name}`;
-		}
-		return 'Unassigned';
-	}
-	
-	function formatDateTime(timestamp: string) {
-		if (!timestamp) return 'N/A';
-		return new Date(timestamp).toLocaleString();
-	}
-	
 	function formatDate(timestamp: string) {
 		if (!timestamp) return 'N/A';
 		return new Date(timestamp).toLocaleDateString();
@@ -70,11 +68,14 @@
 	function getClientPhone(ride: any) {
 		return ride.clients?.primary_phone || 'No phone';
 	}
+	
+	function hasDriverRequest(ride: any) {
+		return ride.driver_user_id != null;
+	}
 </script>
 
 <RoleGuard requiredRoles={['Dispatcher']}>
 	<div class="min-h-screen bg-gray-50">
-		<!-- Breadcrumbs -->
 		<Breadcrumbs />
 		
 		<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -84,11 +85,10 @@
 					<div>
 						<h1 class="text-3xl font-bold text-gray-900">Dispatcher Dashboard</h1>
 						<p class="text-gray-600 mt-2">
-							Manage ride requests, assign drivers, and monitor trip progress.
+							Manage ride requests, assign drivers, and coordinate transportation.
 						</p>
 					</div>
 					
-					<!-- Dispatcher Badge -->
 					<div class="flex items-center space-x-2 px-4 py-2 bg-green-100 rounded-full">
 						<Car class="w-5 h-5 text-green-600" />
 						<span class="text-sm font-medium text-green-800">Dispatcher</span>
@@ -96,99 +96,76 @@
 				</div>
 			</div>
 			
-			<!-- Quick Stats -->
-			<div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+			<!-- Quick Action Cards -->
+			<div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+				<!-- Rides Card -->
 				<button 
-					onclick={() => goto('/dispatcher/rides?tab=requested')}
-					class="bg-white p-6 rounded-lg border border-gray-200 shadow-sm hover:shadow-md hover:border-blue-300 transition-all duration-200 cursor-pointer text-left w-full"
+					onclick={() => goto('/dispatcher/rides')}
+					class="bg-white p-6 rounded-lg border border-gray-200 shadow-sm hover:shadow-md hover:border-blue-300 transition-all duration-200 cursor-pointer text-left w-full group"
 				>
-					<div class="flex items-center">
-						<div class="p-2 bg-blue-100 rounded-lg">
-							<AlertCircle class="w-6 h-6 text-blue-600" />
+					<div class="flex items-center justify-between">
+						<div class="flex items-center">
+							<div class="p-3 bg-blue-100 rounded-lg">
+								<Car class="w-8 h-8 text-blue-600" />
+							</div>
+							<div class="ml-4">
+								<h3 class="text-lg font-semibold text-gray-900 group-hover:text-blue-600 transition-colors">
+									Ride Management
+								</h3>
+								<p class="text-sm text-gray-500">View and manage all rides</p>
+							</div>
 						</div>
-						<div class="ml-4">
-							<p class="text-sm font-medium text-gray-500">Pending Requests</p>
-							<p class="text-2xl font-semibold text-gray-900">{data.rideCounts?.pending || 0}</p>
+						<div class="text-right">
+							<p class="text-3xl font-bold text-blue-600">{data.rideCounts?.pending || 0}</p>
+							<p class="text-xs text-gray-500">Pending</p>
 						</div>
 					</div>
 				</button>
 				
+				<!-- Destinations Card -->
 				<button 
-					onclick={() => goto('/dispatcher/rides?tab=active')}
-					class="bg-white p-6 rounded-lg border border-gray-200 shadow-sm hover:shadow-md hover:border-green-300 transition-all duration-200 cursor-pointer text-left w-full"
+					onclick={() => goto('/dispatcher/destinations')}
+					class="bg-white p-6 rounded-lg border border-gray-200 shadow-sm hover:shadow-md hover:border-green-300 transition-all duration-200 cursor-pointer text-left w-full group"
 				>
-					<div class="flex items-center">
-						<div class="p-2 bg-green-100 rounded-lg">
-							<CheckCircle class="w-6 h-6 text-green-600" />
+					<div class="flex items-center justify-between">
+						<div class="flex items-center">
+							<div class="p-3 bg-green-100 rounded-lg">
+								<Navigation class="w-8 h-8 text-green-600" />
+							</div>
+							<div class="ml-4">
+								<h3 class="text-lg font-semibold text-gray-900 group-hover:text-green-600 transition-colors">
+									Destinations
+								</h3>
+								<p class="text-sm text-gray-500">Manage frequent locations</p>
+							</div>
 						</div>
-						<div class="ml-4">
-							<p class="text-sm font-medium text-gray-500">Assigned Rides</p>
-							<p class="text-2xl font-semibold text-gray-900">{data.rideCounts?.assigned || 0}</p>
-						</div>
-					</div>
-				</button>
-				
-				<button 
-					onclick={() => goto('/dispatcher/rides?tab=active')}
-					class="bg-white p-6 rounded-lg border border-gray-200 shadow-sm hover:shadow-md hover:border-orange-300 transition-all duration-200 cursor-pointer text-left w-full"
-				>
-					<div class="flex items-center">
-						<div class="p-2 bg-orange-100 rounded-lg">
-							<Clock class="w-6 h-6 text-orange-600" />
-						</div>
-						<div class="ml-4">
-							<p class="text-sm font-medium text-gray-500">In Progress</p>
-							<p class="text-2xl font-semibold text-gray-900">{data.rideCounts?.inProgress || 0}</p>
-						</div>
-					</div>
-				</button>
-				
-				<button 
-					onclick={() => goto('/dispatcher/drivers')}
-					class="bg-white p-6 rounded-lg border border-gray-200 shadow-sm hover:shadow-md hover:border-purple-300 transition-all duration-200 cursor-pointer text-left w-full"
-				>
-					<div class="flex items-center">
-						<div class="p-2 bg-purple-100 rounded-lg">
-							<Users class="w-6 h-6 text-purple-600" />
-						</div>
-						<div class="ml-4">
-							<p class="text-sm font-medium text-gray-500">Active Drivers</p>
-							<p class="text-2xl font-semibold text-gray-900">{data.activeDrivers || 0}</p>
-						</div>
+						<ArrowRight class="w-5 h-5 text-gray-400 group-hover:translate-x-1 transition-transform" />
 					</div>
 				</button>
 			</div>
 			
-			<!-- Main Content -->
+			<!-- Ride Requests List -->
 			<div class="bg-white rounded-lg border border-gray-200 shadow-sm">
-				<!-- Header with Actions -->
 				<div class="px-6 py-4 border-b border-gray-200">
 					<div class="flex items-center justify-between">
+						<div>
+							<h2 class="text-lg font-semibold text-gray-900">Ride Requests</h2>
+							<p class="text-sm text-gray-500">Unassigned rides awaiting driver assignment</p>
+						</div>
+						
 						<button 
 							onclick={() => goto('/dispatcher/rides')}
-							class="flex items-center gap-2 text-lg font-medium text-gray-900 hover:text-blue-600 transition-colors duration-200 cursor-pointer group"
+							class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors duration-200 flex items-center space-x-2"
 						>
-							<span>Ride Requests</span>
-							<ArrowRight class="w-4 h-4 group-hover:translate-x-1 transition-transform duration-200" />
+							<Car class="w-4 h-4" />
+							<span>View All Rides</span>
 						</button>
-						
-						<div class="flex items-center space-x-3">
-							<!-- View All Rides Button -->
-							<button 
-								onclick={() => goto('/dispatcher/rides')}
-								class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors duration-200 flex items-center space-x-2"
-							>
-								<Car class="w-4 h-4" />
-								<span>View All Rides</span>
-							</button>
-						</div>
 					</div>
 				</div>
 				
-				<!-- Ride Requests List (Same format as Ride Management Requested tab) -->
-				{#if requestedRides.length > 0}
+				{#if sortedRides().length > 0}
 					<div class="divide-y divide-gray-200">
-						{#each requestedRides as ride}
+						{#each sortedRides() as ride}
 							<div class="p-6 hover:bg-gray-50 transition-colors">
 								<div class="space-y-3">
 									<div class="flex items-center gap-3">
@@ -199,6 +176,17 @@
 										{#if ride.purpose}
 											<span class="px-2 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-800">
 												{ride.purpose}
+											</span>
+										{/if}
+										{#if hasDriverRequest(ride)}
+											<span class="px-2 py-1 text-xs font-medium rounded-full bg-yellow-100 text-yellow-800 flex items-center gap-1">
+												<Send class="w-3 h-3" />
+												Request Sent
+											</span>
+										{:else}
+											<span class="px-2 py-1 text-xs font-medium rounded-full bg-red-100 text-red-800 flex items-center gap-1">
+												<AlertCircle class="w-3 h-3" />
+												Needs Driver
 											</span>
 										{/if}
 									</div>
@@ -212,18 +200,14 @@
 											<Calendar class="w-4 h-4 text-gray-400" />
 											{formatDate(ride.appointment_time)} at {formatTime(ride.appointment_time)}
 										</div>
-										<div class="flex items-center gap-2">
-											<User class="w-4 h-4 text-gray-400" />
-											Driver: {getDriverName(ride)}
-										</div>
-										<div class="flex items-center gap-2">
+										<div class="flex items-center gap-2 md:col-span-2">
 											<MapPin class="w-4 h-4 text-gray-400" />
-											Destination: {ride.destination_name}
+											Destination: {ride.destination_name || 'Not specified'}
 										</div>
 									</div>
 									
 									{#if ride.notes}
-										<div class="text-sm">
+										<div class="text-sm text-gray-600">
 											<span class="font-medium">Notes:</span> {ride.notes}
 										</div>
 									{/if}
@@ -232,60 +216,14 @@
 						{/each}
 					</div>
 				{:else}
-					<!-- Empty State -->
 					<div class="p-12 text-center">
 						<Car class="w-12 h-12 mx-auto text-gray-400 mb-4" />
-						<h3 class="text-lg font-semibold text-gray-900 mb-2">No rides found</h3>
+						<h3 class="text-lg font-semibold text-gray-900 mb-2">No pending ride requests</h3>
 						<p class="text-gray-600">
-							No requested rides at this time.
+							All ride requests have been assigned to drivers.
 						</p>
 					</div>
 				{/if}
-			</div>
-			
-			<!-- Quick Actions -->
-			<div class="mt-8 grid grid-cols-1 md:grid-cols-3 gap-6">
-				<a href="/dispatcher/requests/create" class="group p-6 bg-white rounded-lg border border-gray-200 hover:border-gray-300 hover:shadow-md transition-all duration-200">
-					<div class="flex items-center space-x-3">
-						<div class="p-2 rounded-lg bg-blue-500 text-white">
-							<Plus class="w-6 h-6" />
-						</div>
-						<div>
-							<h3 class="font-medium text-gray-900 group-hover:text-blue-600 transition-colors duration-200">
-								Create Ride Request
-							</h3>
-							<p class="text-sm text-gray-500">Add new ride requests for clients</p>
-						</div>
-					</div>
-				</a>
-				
-				<a href="/dispatcher/schedule" class="group p-6 bg-white rounded-lg border border-gray-200 hover:border-gray-300 hover:shadow-md transition-all duration-200">
-					<div class="flex items-center space-x-3">
-						<div class="p-2 rounded-lg bg-green-500 text-white">
-							<Calendar class="w-6 h-6" />
-						</div>
-						<div>
-							<h3 class="font-medium text-gray-900 group-hover:text-blue-600 transition-colors duration-200">
-								Manage Schedule
-							</h3>
-							<p class="text-sm text-gray-500">View and manage driver schedules</p>
-						</div>
-					</div>
-				</a>
-				
-				<a href="/dispatcher/drivers" class="group p-6 bg-white rounded-lg border border-gray-200 hover:border-gray-300 hover:shadow-md transition-all duration-200">
-					<div class="flex items-center space-x-3">
-						<div class="p-2 rounded-lg bg-purple-500 text-white">
-							<Users class="w-6 h-6" />
-						</div>
-						<div>
-							<h3 class="font-medium text-gray-900 group-hover:text-blue-600 transition-colors duration-200">
-								Driver Management
-							</h3>
-							<p class="text-sm text-gray-500">Manage driver accounts and availability</p>
-						</div>
-					</div>
-				</a>
 			</div>
 		</div>
 	</div>
