@@ -46,6 +46,9 @@
   let additionalHours = $state<number>(0);
   let additionalMiles = $state<number>(0);
 
+  // Export filename customization
+  let exportFileName = $state('');
+
   let globalFilter = $state('');
   let driverFilter = $state('');
   let sortColumn = $state<string>('appointment_time');
@@ -55,6 +58,7 @@
 
   const firstName = data.userProfile?.first_name || 'User';
   const lastName = data.userProfile?.last_name || 'Report';
+  const organizationName = data.organization?.name || 'Organization';
   const isAdmin = data.isAdmin || false;
 
   // Get user's available roles
@@ -65,6 +69,27 @@
   // Set default role
   if (availableRoles.length > 0 && !selectedRole) {
     selectedRole = availableRoles[0];
+  }
+
+  // Generate default filename based on selection
+  function generateDefaultFileName() {
+    const today = new Date();
+    const dateStr = `${String(today.getMonth() + 1).padStart(2, '0')}${String(today.getDate()).padStart(2, '0')}${today.getFullYear()}`;
+    
+    if (filterType === 'driver' && selectedId) {
+      const driver = data.drivers.find(d => d.user_id === selectedId);
+      if (driver) {
+        return `${driver.first_name}_${driver.last_name} Monthly Report_${dateStr}`;
+      }
+    } else if (filterType === 'client' && selectedId) {
+      const client = data.clients.find(c => c.client_id.toString() === selectedId);
+      if (client) {
+        return `${client.first_name}_${client.last_name} Monthly Report_${dateStr}`;
+      }
+    } else if (filterType === 'organization') {
+      return `${organizationName.replace(/\s+/g, '_')} Monthly Report_${dateStr}`;
+    }
+    return `Report_${dateStr}`;
   }
 
   // Handle personal rides response
@@ -85,6 +110,8 @@
     if (form?.success && form.rides) {
       rides = form.rides;
       hasSearched = true;
+      // Generate default filename when results load
+      exportFileName = generateDefaultFileName();
       if (form.message) {
         if (form.rides.length === 0) {
           toastStore.info(form.message);
@@ -252,8 +279,8 @@
     toastStore.success('Personal report exported');
   };
 
-  // Organization Volunteer CSV Export
-  const exportVolunteerCSV = () => {
+  // User CSV Export (for Driver reports) - renamed from Volunteer CSV
+  const exportUserCSV = () => {
     if (rides.length === 0 && !additionalHours && !additionalMiles) {
       toastStore.error('No data to export');
       return;
@@ -282,15 +309,15 @@
 
     const headers = ['Volunteer Name', '# Hours', '# Clients', '# one-way rides', 'Total # of miles', 'Position'];
     const rows = Array.from(volunteerMap.values()).map(v => {
-      const totalHours = v.hours + (additionalHours || 0);
-      const totalMiles = v.miles + (additionalMiles || 0);
+      const volTotalHours = v.hours + (additionalHours || 0);
+      const volTotalMiles = v.miles + (additionalMiles || 0);
       
       return [
         `"${v.name}"`,
-        totalHours.toFixed(2),
+        volTotalHours.toFixed(2),
         v.clients.size,
         v.rides,
-        totalMiles.toFixed(1),
+        volTotalMiles.toFixed(1),
         '"Driver"'
       ];
     });
@@ -301,46 +328,135 @@
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `volunteer-hours-${new Date().toISOString().split('T')[0]}.csv`;
+    const fileName = exportFileName || generateDefaultFileName();
+    a.download = `${fileName.replace(/\s+/g, '_')}.csv`;
     a.click();
     window.URL.revokeObjectURL(url);
     
-    toastStore.success('Volunteer report exported');
+    toastStore.success('User report exported');
   };
 
-  const exportRidesCSV = () => {
+  // Client CSV Export (for Client reports) - Demographics Report
+  const exportClientCSV = () => {
     if (rides.length === 0) {
       toastStore.error('No data to export');
       return;
     }
 
-    const headers = ['Date', 'Driver', 'Client', 'Purpose', 'Pickup', 'Destination', 'Hours', 'Miles', 'Donation'];
-    const csvContent = [
-      headers.join(','),
-      ...rides.map(ride => {
-        return [
-          `"${ride.appointment_time ? new Date(ride.appointment_time).toLocaleDateString() : 'Unknown'}"`,
-          `"${ride.driver_name || 'Unknown'}"`,
-          `"${ride.client_name || 'Unknown'}"`,
-          `"${ride.purpose || 'N/A'}"`,
-          `"${ride.alt_pickup_address || 'From Home'}"`,
-          `"${ride.destination_name || 'N/A'}"`,
-          ride.hours || 0,
-          ride.miles_driven || 0,
-          ride.donation_amount || 0
-        ].join(',');
-      })
-    ].join('\n');
+    // Get unique clients from rides
+    const uniqueClientIds = new Set<number>();
+    rides.forEach(ride => {
+      if (ride.client_id) {
+        uniqueClientIds.add(ride.client_id);
+      }
+    });
 
+    // Get client details from data.clients
+    const clientsInReport = data.clients.filter(c => uniqueClientIds.has(c.client_id));
+
+    // Calculate demographics
+    let maleCount = 0;
+    let femaleCount = 0;
+    let nonBinaryCount = 0;
+    let unknownGenderCount = 0;
+
+    let livesAloneYes = 0;
+    let livesAloneNo = 0;
+    let livesAloneUnknown = 0;
+
+    let ageUnder40 = 0;
+    let age40to54 = 0;
+    let age55to59 = 0;
+    let age60to64 = 0;
+    let age65to74 = 0;
+    let age75to84 = 0;
+    let ageOver85 = 0;
+    let ageUnknown = 0;
+
+    const today = new Date();
+    const currentYear = today.getFullYear();
+
+    clientsInReport.forEach(client => {
+      // Gender count
+      const gender = (client.gender || '').toLowerCase();
+      if (gender === 'male' || gender === 'm') {
+        maleCount++;
+      } else if (gender === 'female' || gender === 'f') {
+        femaleCount++;
+      } else if (gender === 'non-binary' || gender === 'nonbinary' || gender === 'nb') {
+        nonBinaryCount++;
+      } else {
+        unknownGenderCount++;
+      }
+
+      // Lives alone count
+      if (client.lives_alone === true) {
+        livesAloneYes++;
+      } else if (client.lives_alone === false) {
+        livesAloneNo++;
+      } else {
+        livesAloneUnknown++;
+      }
+
+      // Age range count
+      if (client.date_of_birth) {
+        const birthDate = new Date(client.date_of_birth);
+        const age = currentYear - birthDate.getFullYear();
+        
+        if (age < 40) {
+          ageUnder40++;
+        } else if (age >= 40 && age <= 54) {
+          age40to54++;
+        } else if (age >= 55 && age <= 59) {
+          age55to59++;
+        } else if (age >= 60 && age <= 64) {
+          age60to64++;
+        } else if (age >= 65 && age <= 74) {
+          age65to74++;
+        } else if (age >= 75 && age <= 84) {
+          age75to84++;
+        } else if (age >= 85) {
+          ageOver85++;
+        } else {
+          ageUnknown++;
+        }
+      } else {
+        ageUnknown++;
+      }
+    });
+
+    const totalClients = clientsInReport.length;
+
+    // Create CSV content
+    const csvLines = [
+      `Station Name,${organizationName}`,
+      `Report Period,${fromDate || 'N/A'} to ${toDate || 'N/A'}`,
+      ``,
+      `1. Unduplicated Clients by Gender`,
+      `Male,Female,Non-Binary,Unknown,TOTAL`,
+      `${maleCount},${femaleCount},${nonBinaryCount},${unknownGenderCount},${totalClients}`,
+      ``,
+      `2. Lives Alone`,
+      `Yes,No,Unknown,TOTAL`,
+      `${livesAloneYes},${livesAloneNo},${livesAloneUnknown},${totalClients}`,
+      ``,
+      `3. Age Range`,
+      `Under 40,40-54,55-59,60-64,65-74,75-84,Over 85,Unknown,TOTAL`,
+      `${ageUnder40},${age40to54},${age55to59},${age60to64},${age65to74},${age75to84},${ageOver85},${ageUnknown},${totalClients}`
+    ];
+
+    const csvContent = csvLines.join('\n');
+    
     const blob = new Blob([csvContent], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `rides-report-${new Date().toISOString().split('T')[0]}.csv`;
+    const fileName = exportFileName || generateDefaultFileName();
+    a.download = `${fileName.replace(/\s+/g, '_')}.csv`;
     a.click();
     window.URL.revokeObjectURL(url);
     
-    toastStore.success('Rides report exported');
+    toastStore.success('Client demographics report exported');
   };
 
   $effect(() => {
@@ -357,6 +473,7 @@
     toDate = '';
     additionalHours = 0;
     additionalMiles = 0;
+    exportFileName = '';
     globalFilter = '';
     driverFilter = '';
     sortColumn = 'appointment_time';
@@ -666,35 +783,37 @@
                   </div>
                 </div>
 
-                <!-- Additional Hours/Miles -->
-                <div class="space-y-2">
-                  <Label class="text-sm font-medium">Additional Hours/Miles (Optional)</Label>
-                  <p class="text-xs text-muted-foreground">Add extra hours or miles not tracked in rides</p>
-                  <div class="grid grid-cols-2 gap-3">
-                    <div>
-                      <Label class="text-xs text-gray-500">Additional Hours</Label>
-                      <Input
-                        type="number"
-                        bind:value={additionalHours}
-                        min="0"
-                        step="0.25"
-                        placeholder="0.00"
-                        class="text-sm"
-                      />
-                    </div>
-                    <div>
-                      <Label class="text-xs text-gray-500">Additional Miles</Label>
-                      <Input
-                        type="number"
-                        bind:value={additionalMiles}
-                        min="0"
-                        step="0.1"
-                        placeholder="0.0"
-                        class="text-sm"
-                      />
+                <!-- Additional Hours/Miles (only for Driver reports) -->
+                {#if filterType === 'driver'}
+                  <div class="space-y-2">
+                    <Label class="text-sm font-medium">Additional Hours/Miles (Optional)</Label>
+                    <p class="text-xs text-muted-foreground">Add extra hours or miles not tracked in rides</p>
+                    <div class="grid grid-cols-2 gap-3">
+                      <div>
+                        <Label class="text-xs text-gray-500">Additional Hours</Label>
+                        <Input
+                          type="number"
+                          bind:value={additionalHours}
+                          min="0"
+                          step="0.25"
+                          placeholder="0.00"
+                          class="text-sm"
+                        />
+                      </div>
+                      <div>
+                        <Label class="text-xs text-gray-500">Additional Miles</Label>
+                        <Input
+                          type="number"
+                          bind:value={additionalMiles}
+                          min="0"
+                          step="0.1"
+                          placeholder="0.0"
+                          class="text-sm"
+                        />
+                      </div>
                     </div>
                   </div>
-                </div>
+                {/if}
               </CardContent>
             </Card>
 
@@ -798,20 +917,44 @@
                 </div>
                 {#if rides.length > 0}
                   <div class="flex gap-2">
-                    <Button variant="outline" onclick={exportRidesCSV} size="sm">
-                      <DownloadIcon class="h-4 w-4 mr-2" />
-                      Rides CSV
-                    </Button>
-                    <Button variant="outline" onclick={exportVolunteerCSV} size="sm">
-                      <UserIcon class="h-4 w-4 mr-2" />
-                      Volunteer CSV
-                    </Button>
+                    {#if filterType === 'driver'}
+                      <Button variant="outline" onclick={exportUserCSV} size="sm">
+                        <DownloadIcon class="h-4 w-4 mr-2" />
+                        User CSV
+                      </Button>
+                    {:else if filterType === 'client'}
+                      <Button variant="outline" onclick={exportClientCSV} size="sm">
+                        <DownloadIcon class="h-4 w-4 mr-2" />
+                        Client CSV
+                      </Button>
+                    {:else}
+                      <!-- Organization - show both -->
+                      <Button variant="outline" onclick={exportUserCSV} size="sm">
+                        <DownloadIcon class="h-4 w-4 mr-2" />
+                        User CSV
+                      </Button>
+                      <Button variant="outline" onclick={exportClientCSV} size="sm">
+                        <UserIcon class="h-4 w-4 mr-2" />
+                        Client CSV
+                      </Button>
+                    {/if}
                   </div>
                 {/if}
               </CardHeader>
               
               {#if rides.length > 0}
                 <CardContent class="space-y-4">
+                  <!-- Filename customization -->
+                  <div class="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                    <Label class="text-sm font-medium mb-2 block">Export Filename</Label>
+                    <Input
+                      bind:value={exportFileName}
+                      placeholder={generateDefaultFileName()}
+                      class="text-sm"
+                    />
+                    <p class="text-xs text-gray-500 mt-1">Customize the filename for your export (without extension)</p>
+                  </div>
+
                   <div class="flex items-center gap-4">
                     <div class="flex items-center gap-2">
                       <SearchIcon class="h-4 w-4 text-gray-500" />
