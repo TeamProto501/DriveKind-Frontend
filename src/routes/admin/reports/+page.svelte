@@ -31,6 +31,7 @@
   let personalClients = $state<number>(0);
   let personalRides = $state<number>(0);
   let isLoadingPersonalRides = $state(false);
+  let personalExportFileName = $state('');
 
   // Organization Reporting State
   let filterType = $state<'driver' | 'client' | 'organization'>('driver');
@@ -46,15 +47,27 @@
   let additionalHours = $state<number>(0);
   let additionalMiles = $state<number>(0);
 
+  // Export filename customization
+  let exportFileName = $state('');
+
   let globalFilter = $state('');
-  let driverFilter = $state('');
   let sortColumn = $state<string>('appointment_time');
   let sortDirection = $state<'asc' | 'desc'>('desc');
+  
+  // Column filters for results table
+  let filterDriver = $state('');
+  let filterClient = $state('');
+  let filterPurpose = $state('');
+  let filterDestination = $state('');
+  let filterDateFrom = $state('');
+  let filterDateTo = $state('');
+  let showFilters = $state(false);
 
   let formElement: HTMLFormElement;
 
   const firstName = data.userProfile?.first_name || 'User';
   const lastName = data.userProfile?.last_name || 'Report';
+  const organizationName = data.organization?.name || 'Organization';
   const isAdmin = data.isAdmin || false;
 
   // Get user's available roles
@@ -65,6 +78,34 @@
   // Set default role
   if (availableRoles.length > 0 && !selectedRole) {
     selectedRole = availableRoles[0];
+  }
+
+  // Generate default filename based on selection
+  function generateDefaultFileName() {
+    const today = new Date();
+    const dateStr = `${String(today.getMonth() + 1).padStart(2, '0')}${String(today.getDate()).padStart(2, '0')}${today.getFullYear()}`;
+    
+    if (filterType === 'driver' && selectedId) {
+      const driver = data.drivers.find(d => d.user_id === selectedId);
+      if (driver) {
+        return `${driver.first_name}_${driver.last_name} Monthly Report_${dateStr}`;
+      }
+    } else if (filterType === 'client' && selectedId) {
+      const client = data.clients.find(c => c.client_id.toString() === selectedId);
+      if (client) {
+        return `${client.first_name}_${client.last_name} Monthly Report_${dateStr}`;
+      }
+    } else if (filterType === 'organization') {
+      return `${organizationName.replace(/\s+/g, '_')} Monthly Report_${dateStr}`;
+    }
+    return `Report_${dateStr}`;
+  }
+
+  // Generate default filename for personal report
+  function generatePersonalFileName() {
+    const today = new Date();
+    const dateStr = `${String(today.getMonth() + 1).padStart(2, '0')}${String(today.getDate()).padStart(2, '0')}${today.getFullYear()}`;
+    return `${firstName}_${lastName} Monthly Report_${dateStr}`;
   }
 
   // Handle personal rides response
@@ -85,6 +126,8 @@
     if (form?.success && form.rides) {
       rides = form.rides;
       hasSearched = true;
+      // Generate default filename when results load
+      exportFileName = generateDefaultFileName();
       if (form.message) {
         if (form.rides.length === 0) {
           toastStore.info(form.message);
@@ -156,18 +199,67 @@
   const getUniqueDriverOptions = () => {
     const uniqueDrivers = new Set<string>();
     rides.forEach(ride => {
-      uniqueDrivers.add(ride.driver_name || 'Unknown Driver');
+      if (ride.driver_name) uniqueDrivers.add(ride.driver_name);
     });
     return Array.from(uniqueDrivers).sort();
+  };
+
+  const getUniqueClientOptions = () => {
+    const uniqueClients = new Set<string>();
+    rides.forEach(ride => {
+      if (ride.client_name) uniqueClients.add(ride.client_name);
+    });
+    return Array.from(uniqueClients).sort();
+  };
+
+  const getUniquePurposeOptions = () => {
+    const uniquePurposes = new Set<string>();
+    rides.forEach(ride => {
+      if (ride.purpose) uniquePurposes.add(ride.purpose);
+    });
+    return Array.from(uniquePurposes).sort();
+  };
+
+  const getUniqueDestinationOptions = () => {
+    const uniqueDestinations = new Set<string>();
+    rides.forEach(ride => {
+      if (ride.destination_name) uniqueDestinations.add(ride.destination_name);
+    });
+    return Array.from(uniqueDestinations).sort();
   };
 
   const getFilteredRides = () => {
     let filtered = rides;
 
-    if (driverFilter) {
-      filtered = filtered.filter(ride => ride.driver_name === driverFilter);
+    // Apply column filters
+    if (filterDriver) {
+      filtered = filtered.filter(ride => ride.driver_name === filterDriver);
+    }
+    
+    if (filterClient) {
+      filtered = filtered.filter(ride => ride.client_name === filterClient);
+    }
+    
+    if (filterPurpose) {
+      filtered = filtered.filter(ride => ride.purpose === filterPurpose);
+    }
+    
+    if (filterDestination) {
+      filtered = filtered.filter(ride => ride.destination_name === filterDestination);
+    }
+    
+    if (filterDateFrom) {
+      const fromTimestamp = new Date(filterDateFrom).getTime();
+      filtered = filtered.filter(ride => new Date(ride.appointment_time).getTime() >= fromTimestamp);
+    }
+    
+    if (filterDateTo) {
+      const toDate = new Date(filterDateTo);
+      toDate.setDate(toDate.getDate() + 1);
+      filtered = filtered.filter(ride => new Date(ride.appointment_time).getTime() < toDate.getTime());
     }
 
+    // Apply global search
     if (globalFilter) {
       const searchLower = globalFilter.toLowerCase();
       filtered = filtered.filter(ride => 
@@ -175,7 +267,8 @@
         ride.client_name?.toLowerCase().includes(searchLower) ||
         ride.alt_pickup_address?.toLowerCase().includes(searchLower) ||
         ride.destination_name?.toLowerCase().includes(searchLower) ||
-        ride.dropoff_address?.toLowerCase().includes(searchLower)
+        ride.dropoff_address?.toLowerCase().includes(searchLower) ||
+        ride.purpose?.toLowerCase().includes(searchLower)
       );
     }
 
@@ -193,6 +286,21 @@
       return 0;
     });
   };
+
+  const clearAllFilters = () => {
+    globalFilter = '';
+    filterDriver = '';
+    filterClient = '';
+    filterPurpose = '';
+    filterDestination = '';
+    filterDateFrom = '';
+    filterDateTo = '';
+  };
+
+  const hasActiveFilters = $derived(
+    globalFilter || filterDriver || filterClient || filterPurpose || 
+    filterDestination || filterDateFrom || filterDateTo
+  );
 
   const handleSort = (column: string) => {
     if (sortColumn === column) {
@@ -245,15 +353,16 @@
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `personal-report-${new Date().toISOString().split('T')[0]}.csv`;
+    const fileName = personalExportFileName || generatePersonalFileName();
+    a.download = `${fileName.replace(/\s+/g, '_')}.csv`;
     a.click();
     window.URL.revokeObjectURL(url);
     
     toastStore.success('Personal report exported');
   };
 
-  // Organization Volunteer CSV Export
-  const exportVolunteerCSV = () => {
+  // User CSV Export (for Driver reports) - renamed from Volunteer CSV
+  const exportUserCSV = () => {
     if (rides.length === 0 && !additionalHours && !additionalMiles) {
       toastStore.error('No data to export');
       return;
@@ -282,15 +391,15 @@
 
     const headers = ['Volunteer Name', '# Hours', '# Clients', '# one-way rides', 'Total # of miles', 'Position'];
     const rows = Array.from(volunteerMap.values()).map(v => {
-      const totalHours = v.hours + (additionalHours || 0);
-      const totalMiles = v.miles + (additionalMiles || 0);
+      const volTotalHours = v.hours + (additionalHours || 0);
+      const volTotalMiles = v.miles + (additionalMiles || 0);
       
       return [
         `"${v.name}"`,
-        totalHours.toFixed(2),
+        volTotalHours.toFixed(2),
         v.clients.size,
         v.rides,
-        totalMiles.toFixed(1),
+        volTotalMiles.toFixed(1),
         '"Driver"'
       ];
     });
@@ -301,15 +410,142 @@
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `volunteer-hours-${new Date().toISOString().split('T')[0]}.csv`;
+    const fileName = exportFileName || generateDefaultFileName();
+    a.download = `${fileName.replace(/\s+/g, '_')}.csv`;
     a.click();
     window.URL.revokeObjectURL(url);
     
-    toastStore.success('Volunteer report exported');
+    toastStore.success('User report exported');
   };
 
-  const exportRidesCSV = () => {
+  // Client CSV Export (for Client reports) - Demographics Report
+  const exportClientCSV = () => {
     if (rides.length === 0) {
+      toastStore.error('No data to export');
+      return;
+    }
+
+    // Get unique clients from rides
+    const uniqueClientIds = new Set<number>();
+    rides.forEach(ride => {
+      if (ride.client_id) {
+        uniqueClientIds.add(ride.client_id);
+      }
+    });
+
+    // Get client details from data.clients
+    const clientsInReport = data.clients.filter(c => uniqueClientIds.has(c.client_id));
+
+    // Calculate demographics
+    let maleCount = 0;
+    let femaleCount = 0;
+    let nonBinaryCount = 0;
+    let unknownGenderCount = 0;
+
+    let livesAloneYes = 0;
+    let livesAloneNo = 0;
+    let livesAloneUnknown = 0;
+
+    let ageUnder40 = 0;
+    let age40to54 = 0;
+    let age55to59 = 0;
+    let age60to64 = 0;
+    let age65to74 = 0;
+    let age75to84 = 0;
+    let ageOver85 = 0;
+    let ageUnknown = 0;
+
+    const today = new Date();
+    const currentYear = today.getFullYear();
+
+    clientsInReport.forEach(client => {
+      // Gender count
+      const gender = (client.gender || '').toLowerCase();
+      if (gender === 'male' || gender === 'm') {
+        maleCount++;
+      } else if (gender === 'female' || gender === 'f') {
+        femaleCount++;
+      } else if (gender === 'non-binary' || gender === 'nonbinary' || gender === 'nb') {
+        nonBinaryCount++;
+      } else {
+        unknownGenderCount++;
+      }
+
+      // Lives alone count
+      if (client.lives_alone === true) {
+        livesAloneYes++;
+      } else if (client.lives_alone === false) {
+        livesAloneNo++;
+      } else {
+        livesAloneUnknown++;
+      }
+
+      // Age range count
+      if (client.date_of_birth) {
+        const birthDate = new Date(client.date_of_birth);
+        const age = currentYear - birthDate.getFullYear();
+        
+        if (age < 40) {
+          ageUnder40++;
+        } else if (age >= 40 && age <= 54) {
+          age40to54++;
+        } else if (age >= 55 && age <= 59) {
+          age55to59++;
+        } else if (age >= 60 && age <= 64) {
+          age60to64++;
+        } else if (age >= 65 && age <= 74) {
+          age65to74++;
+        } else if (age >= 75 && age <= 84) {
+          age75to84++;
+        } else if (age >= 85) {
+          ageOver85++;
+        } else {
+          ageUnknown++;
+        }
+      } else {
+        ageUnknown++;
+      }
+    });
+
+    const totalClients = clientsInReport.length;
+
+    // Create CSV content
+    const csvLines = [
+      `Station Name,${organizationName}`,
+      `Report Period,${fromDate || 'N/A'} to ${toDate || 'N/A'}`,
+      ``,
+      `1. Unduplicated Clients by Gender`,
+      `Male,Female,Non-Binary,Unknown,TOTAL`,
+      `${maleCount},${femaleCount},${nonBinaryCount},${unknownGenderCount},${totalClients}`,
+      ``,
+      `2. Lives Alone`,
+      `Yes,No,Unknown,TOTAL`,
+      `${livesAloneYes},${livesAloneNo},${livesAloneUnknown},${totalClients}`,
+      ``,
+      `3. Age Range`,
+      `Under 40,40-54,55-59,60-64,65-74,75-84,Over 85,Unknown,TOTAL`,
+      `${ageUnder40},${age40to54},${age55to59},${age60to64},${age65to74},${age75to84},${ageOver85},${ageUnknown},${totalClients}`
+    ];
+
+    const csvContent = csvLines.join('\n');
+    
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const fileName = exportFileName || generateDefaultFileName();
+    a.download = `${fileName.replace(/\s+/g, '_')}.csv`;
+    a.click();
+    window.URL.revokeObjectURL(url);
+    
+    toastStore.success('Client demographics report exported');
+  };
+
+  // Table Results CSV Export - exports the current filtered/searched view
+  const exportTableResultsCSV = () => {
+    const filteredRides = getFilteredRides();
+    
+    if (filteredRides.length === 0) {
       toastStore.error('No data to export');
       return;
     }
@@ -317,7 +553,7 @@
     const headers = ['Date', 'Driver', 'Client', 'Purpose', 'Pickup', 'Destination', 'Hours', 'Miles', 'Donation'];
     const csvContent = [
       headers.join(','),
-      ...rides.map(ride => {
+      ...filteredRides.map(ride => {
         return [
           `"${ride.appointment_time ? new Date(ride.appointment_time).toLocaleDateString() : 'Unknown'}"`,
           `"${ride.driver_name || 'Unknown'}"`,
@@ -336,11 +572,12 @@
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `rides-report-${new Date().toISOString().split('T')[0]}.csv`;
+    const fileName = exportFileName || generateDefaultFileName();
+    a.download = `${fileName.replace(/\s+/g, '_')}_Table_Results.csv`;
     a.click();
     window.URL.revokeObjectURL(url);
     
-    toastStore.success('Rides report exported');
+    toastStore.success(`Exported ${filteredRides.length} rides to CSV`);
   };
 
   $effect(() => {
@@ -357,8 +594,15 @@
     toDate = '';
     additionalHours = 0;
     additionalMiles = 0;
+    exportFileName = '';
     globalFilter = '';
-    driverFilter = '';
+    filterDriver = '';
+    filterClient = '';
+    filterPurpose = '';
+    filterDestination = '';
+    filterDateFrom = '';
+    filterDateTo = '';
+    showFilters = false;
     sortColumn = 'appointment_time';
     sortDirection = 'desc';
   });
@@ -541,6 +785,17 @@
               </div>
             {/if}
 
+            <!-- Filename customization for personal report -->
+            <div class="bg-gray-50 rounded-lg p-4 border border-gray-200">
+              <Label class="text-sm font-medium mb-2 block">Export Filename</Label>
+              <Input
+                bind:value={personalExportFileName}
+                placeholder={generatePersonalFileName()}
+                class="text-sm"
+              />
+              <p class="text-xs text-gray-500 mt-1">Customize the filename for your export (without extension)</p>
+            </div>
+
             <!-- Generate Button -->
             <Button onclick={exportPersonalReportCSV} class="w-full">
               <DownloadIcon class="w-5 h-5 mr-2" />
@@ -666,35 +921,37 @@
                   </div>
                 </div>
 
-                <!-- Additional Hours/Miles -->
-                <div class="space-y-2">
-                  <Label class="text-sm font-medium">Additional Hours/Miles (Optional)</Label>
-                  <p class="text-xs text-muted-foreground">Add extra hours or miles not tracked in rides</p>
-                  <div class="grid grid-cols-2 gap-3">
-                    <div>
-                      <Label class="text-xs text-gray-500">Additional Hours</Label>
-                      <Input
-                        type="number"
-                        bind:value={additionalHours}
-                        min="0"
-                        step="0.25"
-                        placeholder="0.00"
-                        class="text-sm"
-                      />
-                    </div>
-                    <div>
-                      <Label class="text-xs text-gray-500">Additional Miles</Label>
-                      <Input
-                        type="number"
-                        bind:value={additionalMiles}
-                        min="0"
-                        step="0.1"
-                        placeholder="0.0"
-                        class="text-sm"
-                      />
+                <!-- Additional Hours/Miles (only for Driver reports) -->
+                {#if filterType === 'driver'}
+                  <div class="space-y-2">
+                    <Label class="text-sm font-medium">Additional Hours/Miles (Optional)</Label>
+                    <p class="text-xs text-muted-foreground">Add extra hours or miles not tracked in rides</p>
+                    <div class="grid grid-cols-2 gap-3">
+                      <div>
+                        <Label class="text-xs text-gray-500">Additional Hours</Label>
+                        <Input
+                          type="number"
+                          bind:value={additionalHours}
+                          min="0"
+                          step="0.25"
+                          placeholder="0.00"
+                          class="text-sm"
+                        />
+                      </div>
+                      <div>
+                        <Label class="text-xs text-gray-500">Additional Miles</Label>
+                        <Input
+                          type="number"
+                          bind:value={additionalMiles}
+                          min="0"
+                          step="0.1"
+                          placeholder="0.0"
+                          class="text-sm"
+                        />
+                      </div>
                     </div>
                   </div>
-                </div>
+                {/if}
               </CardContent>
             </Card>
 
@@ -798,42 +1055,147 @@
                 </div>
                 {#if rides.length > 0}
                   <div class="flex gap-2">
-                    <Button variant="outline" onclick={exportRidesCSV} size="sm">
+                    <Button variant="outline" onclick={exportTableResultsCSV} size="sm">
                       <DownloadIcon class="h-4 w-4 mr-2" />
-                      Rides CSV
+                      Table Results CSV
                     </Button>
-                    <Button variant="outline" onclick={exportVolunteerCSV} size="sm">
-                      <UserIcon class="h-4 w-4 mr-2" />
-                      Volunteer CSV
-                    </Button>
+                    {#if filterType === 'driver'}
+                      <Button variant="outline" onclick={exportUserCSV} size="sm">
+                        <DownloadIcon class="h-4 w-4 mr-2" />
+                        User Report CSV
+                      </Button>
+                    {:else if filterType === 'client'}
+                      <Button variant="outline" onclick={exportClientCSV} size="sm">
+                        <DownloadIcon class="h-4 w-4 mr-2" />
+                        Client Report CSV
+                      </Button>
+                    {:else}
+                      <!-- Organization - show both -->
+                      <Button variant="outline" onclick={exportUserCSV} size="sm">
+                        <DownloadIcon class="h-4 w-4 mr-2" />
+                        User Report CSV
+                      </Button>
+                      <Button variant="outline" onclick={exportClientCSV} size="sm">
+                        <UserIcon class="h-4 w-4 mr-2" />
+                        Client Report CSV
+                      </Button>
+                    {/if}
                   </div>
                 {/if}
               </CardHeader>
               
               {#if rides.length > 0}
                 <CardContent class="space-y-4">
+                  <!-- Filename customization -->
+                  <div class="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                    <Label class="text-sm font-medium mb-2 block">Export Filename</Label>
+                    <Input
+                      bind:value={exportFileName}
+                      placeholder={generateDefaultFileName()}
+                      class="text-sm"
+                    />
+                    <p class="text-xs text-gray-500 mt-1">Customize the filename for your export (without extension)</p>
+                  </div>
+
                   <div class="flex items-center gap-4">
                     <div class="flex items-center gap-2">
                       <SearchIcon class="h-4 w-4 text-gray-500" />
                       <Input
-                        placeholder="Search rides..."
+                        placeholder="Search all columns..."
                         bind:value={globalFilter}
                         class="max-w-sm"
                       />
                     </div>
-                    <div class="flex items-center gap-2">
-                      <CarIcon class="h-4 w-4 text-gray-500" />
-                      <select
-                        bind:value={driverFilter}
-                        class="px-3 py-2 border rounded-md text-sm min-w-[150px]"
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onclick={() => showFilters = !showFilters}
+                    >
+                      {showFilters ? 'Hide Filters' : 'Show Filters'}
+                    </Button>
+                    {#if hasActiveFilters}
+                      <Button 
+                        variant="ghost" 
+                        size="sm"
+                        onclick={clearAllFilters}
+                        class="text-red-600 hover:text-red-700"
                       >
-                        <option value="">All Drivers</option>
-                        {#each getUniqueDriverOptions() as driverName}
-                          <option value={driverName}>{driverName}</option>
-                        {/each}
-                      </select>
-                    </div>
+                        Clear All Filters
+                      </Button>
+                    {/if}
                   </div>
+
+                  <!-- Expanded Filters -->
+                  {#if showFilters}
+                    <div class="bg-gray-50 rounded-lg p-4 border border-gray-200 space-y-4">
+                      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <div>
+                          <Label class="text-xs text-gray-500 mb-1 block">Driver</Label>
+                          <select
+                            bind:value={filterDriver}
+                            class="w-full px-3 py-2 border rounded-md text-sm"
+                          >
+                            <option value="">All Drivers</option>
+                            {#each getUniqueDriverOptions() as driverName}
+                              <option value={driverName}>{driverName}</option>
+                            {/each}
+                          </select>
+                        </div>
+                        <div>
+                          <Label class="text-xs text-gray-500 mb-1 block">Client</Label>
+                          <select
+                            bind:value={filterClient}
+                            class="w-full px-3 py-2 border rounded-md text-sm"
+                          >
+                            <option value="">All Clients</option>
+                            {#each getUniqueClientOptions() as clientName}
+                              <option value={clientName}>{clientName}</option>
+                            {/each}
+                          </select>
+                        </div>
+                        <div>
+                          <Label class="text-xs text-gray-500 mb-1 block">Purpose</Label>
+                          <select
+                            bind:value={filterPurpose}
+                            class="w-full px-3 py-2 border rounded-md text-sm"
+                          >
+                            <option value="">All Purposes</option>
+                            {#each getUniquePurposeOptions() as purpose}
+                              <option value={purpose}>{purpose}</option>
+                            {/each}
+                          </select>
+                        </div>
+                        <div>
+                          <Label class="text-xs text-gray-500 mb-1 block">Destination</Label>
+                          <select
+                            bind:value={filterDestination}
+                            class="w-full px-3 py-2 border rounded-md text-sm"
+                          >
+                            <option value="">All Destinations</option>
+                            {#each getUniqueDestinationOptions() as destination}
+                              <option value={destination}>{destination}</option>
+                            {/each}
+                          </select>
+                        </div>
+                        <div>
+                          <Label class="text-xs text-gray-500 mb-1 block">Date From</Label>
+                          <input
+                            type="date"
+                            bind:value={filterDateFrom}
+                            class="w-full px-3 py-2 border rounded-md text-sm"
+                          />
+                        </div>
+                        <div>
+                          <Label class="text-xs text-gray-500 mb-1 block">Date To</Label>
+                          <input
+                            type="date"
+                            bind:value={filterDateTo}
+                            class="w-full px-3 py-2 border rounded-md text-sm"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  {/if}
 
                   <div class="rounded-md border overflow-x-auto">
                     <Table>

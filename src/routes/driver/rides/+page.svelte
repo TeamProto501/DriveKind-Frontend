@@ -15,7 +15,8 @@
     Search,
     XCircle,
     Edit,
-    AlertCircle
+    AlertCircle,
+    DollarSign
   } from "@lucide/svelte";
   import { invalidateAll } from '$app/navigation';
   import type { PageData } from './$types';
@@ -40,7 +41,10 @@
     miles_driven: '',
     hours: '',
     notes: '',
-    completion_status: ''
+    completion_status: '',
+    donation: false,
+    donation_type: '',
+    donation_amount: ''
   });
 
   function getStatusColor(status: string) {
@@ -246,7 +250,10 @@
       miles_driven: ride.miles_driven?.toString() || '',
       hours: ride.hours?.toString() || '',
       notes: ride.notes || '',
-      completion_status: ride.completion_status || ''
+      completion_status: ride.completion_status || '',
+      donation: !!ride.donation,
+      donation_type: ride.donation_type || '',
+      donation_amount: ride.donation_amount?.toString() || ''
     };
     showEditModal = true;
   }
@@ -263,6 +270,10 @@
       alert('Hours must be a valid number');
       return;
     }
+    if (editForm.donation && editForm.donation_amount && isNaN(Number(editForm.donation_amount))) {
+      alert('Donation amount must be a valid number');
+      return;
+    }
 
     isUpdating = true;
     try {
@@ -271,7 +282,10 @@
         miles_driven: editForm.miles_driven ? parseFloat(editForm.miles_driven) : null,
         hours: editForm.hours ? parseFloat(editForm.hours) : null,
         notes: editForm.notes || null,
-        completion_status: editForm.completion_status || null
+        completion_status: editForm.completion_status || null,
+        donation: editForm.donation,
+        donation_type: editForm.donation ? (editForm.donation_type || null) : null,
+        donation_amount: editForm.donation ? (editForm.donation_amount ? parseFloat(editForm.donation_amount) : 0) : 0
       };
 
       const resp = await fetch(`/driver/rides/edit`, {
@@ -298,12 +312,25 @@
     }
   }
 
+  // Clear donation fields when donation is unchecked
+  $effect(() => {
+    if (!editForm.donation) {
+      editForm.donation_amount = '';
+      editForm.donation_type = '';
+    }
+  });
+
   const COMPLETION_STATUS_OPTIONS = [
     "Completed Round Trip",
     "Completed One Way To",
     "Completed One Way From",
     "Cancelled by Client",
     "Cancelled by Driver"
+  ];
+
+  const DONATION_TYPE_OPTIONS = [
+    "Cash",
+    "Envelope"
   ];
 </script>
 
@@ -444,6 +471,17 @@
                     <Car class="w-4 h-4" />{ride.riders} passenger{ride.riders > 1 ? 's' : ''}
                   </div>
                 {/if}
+
+                <!-- Show donation info on completed rides -->
+                {#if ride.donation && (ride.status === "Completed" || ride.status === "Cancelled")}
+                  <div class="flex items-center gap-2">
+                    <DollarSign class="w-4 h-4 text-green-600" />
+                    <span class="text-green-700">
+                      Donation: ${ride.donation_amount || 0}
+                      {#if ride.donation_type}({ride.donation_type}){/if}
+                    </span>
+                  </div>
+                {/if}
               </div>
 
               <!-- Limitations: now shown on ALL rides, not just Pending -->
@@ -523,7 +561,7 @@
   <!-- ======= DRIVER EDIT MODAL ======= -->
   {#if showEditModal && selectedRideForEdit}
     <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div class="bg-white rounded-lg p-6 max-w-lg w-full mx-4">
+      <div class="bg-white rounded-lg p-6 max-w-lg w-full mx-4 max-h-[90vh] overflow-y-auto">
         <div class="mb-4">
           <h2 class="text-xl font-semibold">Edit Ride Details</h2>
           <p class="text-sm text-gray-600 mt-1">
@@ -582,6 +620,60 @@
               <p class="text-xs text-green-600 mt-1">Current: {selectedRideForEdit.completion_status}</p>
             {:else}
               <p class="text-xs text-gray-500 mt-1">Not yet set</p>
+            {/if}
+          </div>
+
+          <!-- Donation Section -->
+          <div class="border-t pt-4">
+            <div class="flex items-center gap-2 mb-3">
+              <input
+                id="edit_donation"
+                type="checkbox"
+                bind:checked={editForm.donation}
+                class="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+              />
+              <label for="edit_donation" class="text-sm font-medium text-gray-700">
+                Donation received
+              </label>
+            </div>
+
+            {#if editForm.donation}
+              <div class="grid grid-cols-2 gap-3">
+                <div>
+                  <label for="edit_donation_type" class="block text-sm font-medium text-gray-700 mb-1">
+                    Donation Type
+                  </label>
+                  <select
+                    id="edit_donation_type"
+                    bind:value={editForm.donation_type}
+                    class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="">— Select type —</option>
+                    {#each DONATION_TYPE_OPTIONS as dtype}
+                      <option value={dtype}>{dtype}</option>
+                    {/each}
+                  </select>
+                </div>
+                <div>
+                  <label for="edit_donation_amount" class="block text-sm font-medium text-gray-700 mb-1">
+                    Amount ($)
+                  </label>
+                  <Input
+                    id="edit_donation_amount"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    bind:value={editForm.donation_amount}
+                    placeholder="0.00"
+                  />
+                </div>
+              </div>
+              {#if selectedRideForEdit.donation_amount}
+                <p class="text-xs text-green-600 mt-2">
+                  Current: ${selectedRideForEdit.donation_amount}
+                  {#if selectedRideForEdit.donation_type}({selectedRideForEdit.donation_type}){/if}
+                </p>
+              {/if}
             {/if}
           </div>
 

@@ -19,6 +19,11 @@
   let selectedDayRides = $state<any[]>([]);
   let selectedDate = $state<string>('');
   
+  // Unavailability sidebar state
+  let showUnavailSidePanel = $state(false);
+  let selectedUnavailability = $state<any[]>([]);
+  let selectedUnavailDate = $state<string>('');
+  
   let sortedSelectedDayRides = $derived(
     [...selectedDayRides].sort((a, b) => 
       new Date(a.appointment_time).getTime() - new Date(b.appointment_time).getTime()
@@ -29,9 +34,7 @@
     if (!len) return 0;
     const s = String(len).toLowerCase();
 
-    // hours
     const hMatch = s.match(/(\d+)\s*(?:h|hr|hrs|hour|hours)/);
-    // minutes
     const mMatch = s.match(/(\d+)\s*(?:m|min|mins|minute|minutes)/);
 
     const h = hMatch ? parseInt(hMatch[1], 10) : 0;
@@ -73,7 +76,6 @@
     return grouped;
   }
   
-  // Transform unavailability events
   function groupUnavailabilityByDate(unavailData: any[]) {
     const grouped = new Map<string, any[]>();
     unavailData
@@ -97,10 +99,16 @@
           const driverName = `${item.staff_profiles?.first_name || ''} ${item.staff_profiles?.last_name || ''}`.trim();
           
           if (item.all_day) {
+            // For all-day events, use the date string format and set end to next day
+            const startDate = item.unavailable_date;
+            const endDate = new Date(item.unavailable_date);
+            endDate.setDate(endDate.getDate() + 1);
+            
             return {
               id: `unavail-${item.id}`,
-              title: `🚫 ${driverName}`,
-              start: item.unavailable_date,
+              title: `🚫 ${driverName} (All Day)`,
+              start: startDate,
+              end: endDate.toISOString().split('T')[0],
               allDay: true,
               backgroundColor: '#ef4444',
               borderColor: '#dc2626',
@@ -116,8 +124,9 @@
           return {
             id: `unavail-${item.id}`,
             title: `🚫 ${driverName}`,
-            start: `${item.unavailable_date}T${item.start_time}`,
-            end: `${item.unavailable_date}T${item.end_time}`,
+            start: `${item.unavailable_date}T${item.start_time || '00:00:00'}`,
+            end: `${item.unavailable_date}T${item.end_time || '23:59:59'}`,
+            allDay: false,
             backgroundColor: '#ef4444',
             borderColor: '#dc2626',
             extendedProps: {
@@ -139,10 +148,15 @@
           const driverName = `${item.staff_profiles?.first_name || ''} ${item.staff_profiles?.last_name || ''}`.trim();
           
           if (item.all_day) {
+            // For all-day events in week/month view
+            const endDate = new Date(item.unavailable_date);
+            endDate.setDate(endDate.getDate() + 1);
+            
             summaryEvents.push({
               id: `unavail-${item.id}`,
-              title: `🚫 ${driverName}`,
+              title: `🚫 ${driverName} (All Day)`,
               start: item.unavailable_date,
+              end: endDate.toISOString().split('T')[0],
               allDay: true,
               backgroundColor: '#ef4444',
               borderColor: '#dc2626',
@@ -156,8 +170,9 @@
             summaryEvents.push({
               id: `unavail-${item.id}`,
               title: `🚫 ${driverName}`,
-              start: `${item.unavailable_date}T${item.start_time}`,
-              end: `${item.unavailable_date}T${item.end_time}`,
+              start: `${item.unavailable_date}T${item.start_time || '00:00:00'}`,
+              end: `${item.unavailable_date}T${item.end_time || '23:59:59'}`,
+              allDay: false,
               backgroundColor: '#ef4444',
               borderColor: '#dc2626',
               extendedProps: {
@@ -169,10 +184,14 @@
           }
         } else {
           // Multiple unavailability on same day - create summary
+          const endDate = new Date(dateStr);
+          endDate.setDate(endDate.getDate() + 1);
+          
           summaryEvents.push({
             id: `unavail-summary-${dateStr}`,
             title: `🚫 ${dayUnavail.length} Unavailable`,
             start: dateStr,
+            end: endDate.toISOString().split('T')[0],
             allDay: true,
             backgroundColor: '#ef4444',
             borderColor: '#dc2626',
@@ -190,13 +209,11 @@
     }
   }
 
-  // Update the calls to include isDayView parameter
   let myUnavailabilityEvents = $derived(transformUnavailabilityEvents(data.myUnavailability, currentCalendarView === 'timeGridDay'));
   let allUnavailabilityEvents = $derived(transformUnavailabilityEvents(data.allUnavailability, currentCalendarView === 'timeGridDay'));
   
   function transformRidesToEvents(rides: any[], isDayView = false) {
     if (isDayView) {
-      // For day view, show rides at their actual time
       const groupedByTime = groupRidesByTimeSlot(rides);
       const events: any[] = [];
       
@@ -220,18 +237,16 @@
           borderColor = '#7c3aed';
         }
 
-        // Calculate end time (start + 1 hour default)
         const startTime = new Date(firstRide.appointment_time);
-        const endTime = new Date(startTime.getTime() + 60 * 60 * 1000); // Add 1 hour
+        const endTime = new Date(startTime.getTime() + 60 * 60 * 1000);
         
         if (timeRides.length === 1) {
-          const mins = minutesFromEstimated(firstRide.estimated_appointment_length);
           events.push({
             id: `ride-${firstRide.ride_id}`,
             title: `🚗 ${clientName} → ${firstRide.destination_name}`,
             start: startTime.toISOString(),
             end: endTime.toISOString(),
-            allDay: false, // CRITICAL: must be false
+            allDay: false,
             backgroundColor,
             borderColor,
             extendedProps: {
@@ -245,7 +260,7 @@
             title: `🚗 ${timeRides.length} Rides`,
             start: startTime.toISOString(),
             end: endTime.toISOString(),
-            allDay: false, // CRITICAL: must be false
+            allDay: false,
             backgroundColor,
             borderColor,
             extendedProps: {
@@ -259,7 +274,6 @@
       
       return events;
     } else {
-      // For month/week view, show at specific times
       return rides.map((ride: any) => {
         const clientName = ride.clients 
           ? `${ride.clients.first_name} ${ride.clients.last_name}`
@@ -279,17 +293,15 @@
           borderColor = '#7c3aed';
         }
 
-        // Calculate end time (start + 1 hour default)
         const startTime = new Date(ride.appointment_time);
         const endTime = new Date(startTime.getTime() + 60 * 60 * 1000);
         
-        const mins = minutesFromEstimated(ride.estimated_appointment_length);
         return {
           id: `ride-${ride.ride_id}`,
           title: `🚗 ${clientName}`,
           start: startTime.toISOString(),
           end: endTime.toISOString(),
-          allDay: false, // CRITICAL: must be false
+          allDay: false,
           backgroundColor,
           borderColor,
           extendedProps: {
@@ -330,7 +342,6 @@
 
   let myRideEvents = $derived(transformRidesToEvents(data.myRides, isTimedView));
   let allRidesDetailEvents = $derived(transformRidesToEvents(data.allRides || [], isTimedView));
-
   let allRidesSummaryEvents = $derived(createDailySummaryEvents(data.allRides || []));
   
   let displayEvents = $derived.by(() => {
@@ -361,28 +372,22 @@
         selectedDate = props.date || new Date(info.event.start).toISOString().split('T')[0];
         selectedDayRides = props.rides;
         showSidePanel = true;
+        showUnavailSidePanel = false;
       } else if (props.type === 'unavailability-group') {
-        // Show list of unavailable drivers
-        const unavailList = props.unavailabilities
-          .map((u: any) => {
-            const name = `${u.staff_profiles?.first_name || ''} ${u.staff_profiles?.last_name || ''}`.trim();
-            const reason = u.reason || 'No reason provided';
-            const time = u.all_day ? 'All day' : `${u.start_time} - ${u.end_time}`;
-            return `• ${name} (${time})\n  Reason: ${reason}`;
-          })
-          .join('\n\n');
-        
-        alert(`Driver Unavailability - ${formatDate(props.date)}\n\n${unavailList}`);
+        selectedUnavailDate = props.date;
+        selectedUnavailability = props.unavailabilities;
+        showUnavailSidePanel = true;
+        showSidePanel = false;
       } else if (props.type === 'unavailability') {
-        const name = props.unavailData ? 
-          `${props.unavailData.staff_profiles?.first_name || ''} ${props.unavailData.staff_profiles?.last_name || ''}`.trim() : 
-          'Driver';
-        const reason = props.reason || 'No reason provided';
-        alert(`${name} - Unavailable\n\nReason: ${reason}`);
+        selectedUnavailDate = props.unavailData?.unavailable_date || new Date(info.event.start).toISOString().split('T')[0];
+        selectedUnavailability = [props.unavailData];
+        showUnavailSidePanel = true;
+        showSidePanel = false;
       } else if (props.type === 'ride') {
         selectedDate = new Date(props.rideData.appointment_time).toISOString().split('T')[0];
         selectedDayRides = [props.rideData];
         showSidePanel = true;
+        showUnavailSidePanel = false;
       }
     },
     viewDidMount: (view: any) => {
@@ -404,6 +409,12 @@
     showSidePanel = false;
     selectedDayRides = [];
     selectedDate = '';
+  }
+  
+  function closeUnavailSidePanel() {
+    showUnavailSidePanel = false;
+    selectedUnavailability = [];
+    selectedUnavailDate = '';
   }
   
   function editRide(rideId: number) {
@@ -520,12 +531,10 @@
 
       <!-- Calendar Grid with Side Panel -->
       <div class="flex gap-6">
-        <!-- Calendar -->
         <div class="flex-1 bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <Calendar plugins={[TimeGrid, DayGrid, Interaction]} {options} />
         </div>
 
-        <!-- Side Panel for Rides -->
         {#if showSidePanel}
           <div class="w-96 bg-white rounded-lg shadow-lg border border-gray-200 flex flex-col max-h-[700px]">
             <div class="px-6 py-4 border-b flex items-center justify-between">
@@ -617,6 +626,80 @@
                       Edit Ride
                     </button>
                   {/if}
+                </div>
+              {/each}
+            </div>
+          </div>
+        {/if}
+
+        <!-- Unavailability Side Panel -->
+        {#if showUnavailSidePanel}
+          <div class="w-96 bg-white rounded-lg shadow-lg border border-gray-200 flex flex-col max-h-[700px]">
+            <div class="px-6 py-4 border-b flex items-center justify-between">
+              <div>
+                <h3 class="text-lg font-semibold text-gray-900">Unavailability</h3>
+                <p class="text-sm text-gray-600">{formatDate(selectedUnavailDate)}</p>
+              </div>
+              <button onclick={closeUnavailSidePanel} class="p-2 hover:bg-gray-100 rounded-lg transition-colors">
+                <X class="w-5 h-5" />
+              </button>
+            </div>
+
+            <div class="flex-1 overflow-y-auto p-4 space-y-3">
+              {#each selectedUnavailability as unavail}
+                <div class="border border-red-200 rounded-lg p-4 bg-red-50">
+                  <div class="flex items-start justify-between mb-3">
+                    <div class="flex-1">
+                      <div class="font-medium text-gray-900 text-lg">
+                        {unavail.staff_profiles ? `${unavail.staff_profiles.first_name} ${unavail.staff_profiles.last_name}` : 'Unknown Driver'}
+                      </div>
+                    </div>
+                    <span class="px-2 py-1 text-xs rounded-full bg-red-100 text-red-800 font-medium">
+                      Unavailable
+                    </span>
+                  </div>
+
+                  <div class="space-y-3 text-sm">
+                    <!-- Time -->
+                    <div class="flex items-center gap-2 text-gray-600">
+                      <Clock class="w-4 h-4 flex-shrink-0 text-red-500" />
+                      {#if unavail.all_day}
+                        <span class="font-medium">All Day</span>
+                      {:else}
+                        <span class="font-medium">
+                          {unavail.start_time || '00:00'} – {unavail.end_time || '23:59'}
+                        </span>
+                      {/if}
+                    </div>
+
+                    <!-- Reason -->
+                    {#if unavail.reason}
+                      <div class="flex items-start gap-2 text-gray-600">
+                        <div class="w-4 h-4 flex-shrink-0 mt-0.5 text-red-500">
+                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 01.865-.501 48.172 48.172 0 003.423-.379c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0012 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018z" />
+                          </svg>
+                        </div>
+                        <div class="flex-1">
+                          <div class="text-xs text-gray-500 mb-1">Reason</div>
+                          <div class="text-gray-900">{unavail.reason}</div>
+                        </div>
+                      </div>
+                    {:else}
+                      <div class="text-xs text-gray-500 italic">No reason provided</div>
+                    {/if}
+
+                    <!-- Recurring indicator -->
+                    {#if unavail.recurring || unavail.is_recurring_instance}
+                      <div class="flex items-center gap-2 text-xs text-purple-600 bg-purple-50 px-2 py-1 rounded">
+                        <CalendarIcon class="w-3 h-3" />
+                        <span>Recurring</span>
+                        {#if unavail.recurrence_pattern}
+                          <span class="text-purple-500">({unavail.recurrence_pattern})</span>
+                        {/if}
+                      </div>
+                    {/if}
+                  </div>
                 </div>
               {/each}
             </div>

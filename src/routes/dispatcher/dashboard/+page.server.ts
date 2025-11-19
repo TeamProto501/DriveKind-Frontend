@@ -26,6 +26,7 @@ export const load: PageServerLoad = async (event) => {
 				session,
 				rides: [],
 				profile: null,
+				rideCounts: { pending: 0, assigned: 0, inProgress: 0, completed: 0 },
 				error: 'Profile not found. Please contact your administrator.'
 			};
 		}
@@ -40,17 +41,20 @@ export const load: PageServerLoad = async (event) => {
 				session,
 				rides: [],
 				profile,
+				rideCounts: { pending: 0, assigned: 0, inProgress: 0, completed: 0 },
 				error: 'Access denied. Dispatcher role required.'
 			};
 		}
 
-		// Get only "Requested" rides for the organization (matching the Requested tab in ride management)
+		// Get only "Requested" rides for the organization
+		// Include driver_user_id to determine if a driver request has been sent
 		const { data: rides, error: ridesError } = await supabase
 			.from('rides')
 			.select(`
 				ride_id,
 				org_id,
 				client_id,
+				driver_user_id,
 				alt_pickup_address,
 				dropoff_address,
 				appointment_time,
@@ -66,10 +70,6 @@ export const load: PageServerLoad = async (event) => {
 					first_name,
 					last_name,
 					primary_phone
-				),
-				drivers:driver_user_id (
-					first_name,
-					last_name
 				)
 			`)
 			.eq('org_id', profile.org_id)
@@ -93,33 +93,24 @@ export const load: PageServerLoad = async (event) => {
 			completed: allRides?.filter(r => r.status === 'Completed').length || 0
 		};
 
-		// Get active drivers count
-		const { data: drivers } = await supabase
-			.from('staff_profiles')
-			.select('user_id')
-			.eq('org_id', profile.org_id)
-			.contains('role', ['Driver']);
-
 		return {
 			session,
 			rides: rides || [],
 			profile,
 			rideCounts,
-			activeDrivers: drivers?.length || 0,
 			error: null
 		};
 
 	} catch (error) {
 		console.error('Error in dispatcher dashboard page load:', error);
 		if (error instanceof Response) {
-			throw error; // Re-throw redirects
+			throw error;
 		}
 		return {
 			session: null,
 			rides: [],
 			profile: null,
 			rideCounts: { pending: 0, assigned: 0, inProgress: 0, completed: 0 },
-			activeDrivers: 0,
 			error: 'Failed to load dashboard data'
 		};
 	}
