@@ -445,12 +445,8 @@
     editingVehicleTypeValue = "";
   }
 
-  function addVehicleType(e?: Event) {
+  function addVehicleType() {
     console.log('=== addVehicleType START ===');
-    if (e) {
-      e.preventDefault();
-      e.stopPropagation();
-    }
     console.log('newVehicleType value:', newVehicleType);
     console.log('current vehicleTypes:', vehicleTypes);
     
@@ -483,12 +479,8 @@
     console.log('=== addVehicleType END ===');
   }
 
-  function removeVehicleType(index: number, e?: Event) {
+  function removeVehicleType(index: number) {
     console.log('=== removeVehicleType START ===');
-    if (e) {
-      e.preventDefault();
-      e.stopPropagation();
-    }
     console.log('Index to remove:', index);
     console.log('Current vehicleTypes:', vehicleTypes);
     console.log('vehicleTypes length:', vehicleTypes.length);
@@ -1075,29 +1067,21 @@
                     </Button>
                   {:else}
                     <span class="flex-1 text-sm font-medium">{type}</span>
-                    <Button 
-                      size="sm" 
-                      variant="outline" 
-                      type="button"
-                      onclick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        startEditVehicleType(index);
-                      }}
-                    >
-                      <Pencil class="w-3 h-3" />
-                    </Button>
                     <button
                       type="button"
-                      class="inline-flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-md text-sm font-medium outline-none transition-all focus-visible:ring-[3px] disabled:pointer-events-none disabled:opacity-50 h-8 gap-1.5 rounded-md px-2.5 bg-destructive shadow-xs hover:bg-destructive/90 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40 dark:bg-destructive/60 text-white"
-                      onclick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        console.log('Delete button clicked, index:', index);
-                        removeVehicleType(index, e);
-                      }}
+                      class="inline-flex items-center gap-1 px-3 py-1.5 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50"
+                      onclick={() => startEditVehicleType(index)}
                     >
-                      <Trash2 class="w-3 h-3" />
+                      <Pencil class="w-4 h-4" />
+                      <span>Edit</span>
+                    </button>
+                    <button
+                      type="button"
+                      class="inline-flex items-center gap-1 px-3 py-1.5 rounded-md border border-red-300 text-red-700 hover:bg-red-50"
+                      onclick={() => removeVehicleType(index)}
+                    >
+                      <Trash2 class="w-4 h-4" />
+                      <span>Delete</span>
                     </button>
                   {/if}
                 </div>
@@ -1119,18 +1103,22 @@
                 onkeydown={(e) => { 
                   if (e.key === 'Enter') {
                     e.preventDefault();
-                    addVehicleType(e);
+                    addVehicleType();
                   }
                 }}
               />
-              <Button 
+              <button
                 type="button"
-                onclick={addVehicleType}
+                class="inline-flex items-center gap-1 px-3 py-1.5 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                onclick={() => {
+                  console.log('Add button clicked, newVehicleType:', newVehicleType);
+                  addVehicleType();
+                }}
                 disabled={!newVehicleType || !newVehicleType.trim()}
               >
                 <Plus class="w-4 h-4" />
-                Add
-              </Button>
+                <span>Add</span>
+              </button>
             </div>
             <p class="mt-1 text-xs text-gray-500">Enter any vehicle type name (e.g., Minivan, Electric Car, Hybrid, etc.)</p>
           </div>
