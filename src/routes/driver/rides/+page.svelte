@@ -22,6 +22,7 @@
   import type { PageData } from './$types';
   import RideCompletionModal from '$lib/components/RideCompletionModal.svelte';
   import { validateRideCompletion, sanitizeInput } from '$lib/utils/validation';
+  import { supabase } from '$lib/supabase';
 
   let { data }: { data: PageData } = $props();
 
@@ -205,13 +206,16 @@
   }
 
   async function acceptRideWithVehicle(rideId: number, vehicleId: number) {
-    if (!data.session?.access_token) {
-      alert('Session expired. Please refresh the page and try again.');
+    if (!vehicleId) {
+      alert('Please select a vehicle before accepting the ride.');
       return;
     }
     
-    if (!vehicleId) {
-      alert('Please select a vehicle before accepting the ride.');
+    // Get access token from client-side Supabase session
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    
+    if (sessionError || !session?.access_token) {
+      alert('Session expired. Please refresh the page and try again.');
       return;
     }
     
@@ -221,7 +225,7 @@
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${data.session.access_token}`
+          'Authorization': `Bearer ${session.access_token}`
         },
         body: JSON.stringify({ vehicle_id: vehicleId })
       });
@@ -257,7 +261,10 @@
 
   // Decline
   async function declineRide(rideId: number) {
-    if (!data.session?.access_token) {
+    // Get access token from client-side Supabase session
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    
+    if (sessionError || !session?.access_token) {
       alert('Session expired. Please refresh the page and try again.');
       return;
     }
@@ -268,7 +275,7 @@
         method: 'POST',
         headers: {
           // no content-type since no body
-          'Authorization': `Bearer ${data.session.access_token}`
+          'Authorization': `Bearer ${session.access_token}`
         }
       });
 
