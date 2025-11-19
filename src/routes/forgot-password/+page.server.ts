@@ -31,8 +31,12 @@ export const actions: Actions = {
       return fail(400, { error: 'Please enter a valid email address' });
     }
 
+    // Get the full reset password URL
+    const resetUrl = `${event.url.origin}/reset-password`;
+    console.log('Sending password reset email with redirect URL:', resetUrl);
+    
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${event.url.origin}/reset-password`,
+      redirectTo: resetUrl,
     });
 
     if (error) {
