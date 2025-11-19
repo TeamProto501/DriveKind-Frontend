@@ -14,6 +14,11 @@
   let showConfirmPassword = $state(false);
   let hasValidToken = $state(data.hasValidToken || false);
   let error = $state(data.error || null);
+  
+  // If server already validated the token, we're good
+  if (data.hasValidToken) {
+    hasValidToken = true;
+  }
 
   // Handle hash fragments on client side (Supabase sends tokens as hash fragments)
   onMount(async () => {
@@ -71,15 +76,16 @@
         error = 'Invalid reset link format. Please request a new password reset link.';
       }
     } else {
-      // No hash fragments - check if we already have a valid session
+      // No hash fragments - check if we already have a valid session (might have been set by server-side code exchange)
       console.log('No hash fragments, checking existing session...');
       const { data: { session } } = await supabase.auth.getSession();
       if (session) {
         console.log('Found existing session');
         hasValidToken = true;
-      } else {
+      } else if (!data.hasValidToken) {
+        // Only show error if server didn't already validate
         console.error('No session found and no hash fragments');
-        error = 'Invalid or expired reset token. Please click the link from your email or request a new password reset link.';
+        error = data.error || 'Invalid or expired reset token. Please click the link from your email or request a new password reset link.';
       }
     }
   });

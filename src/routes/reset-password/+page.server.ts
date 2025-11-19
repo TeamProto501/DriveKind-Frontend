@@ -3,10 +3,54 @@ import type { Actions, PageServerLoad } from './$types';
 import { createSupabaseServerClient } from '$lib/supabase.server';
 
 export const load: PageServerLoad = async (event) => {
-  // Don't check session on server - hash fragments are only available on client
-  // The client-side code will handle the token verification
+  const supabase = createSupabaseServerClient(event);
+  
+  // Check if there's a code parameter (from Supabase redirect)
+  const code = event.url.searchParams.get('code');
+  const urlError = event.url.searchParams.get('error');
+  
+  // If there's a code, try to exchange it for a session
+  if (code) {
+    const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+    
+    if (error) {
+      console.error('Error exchanging code:', error);
+      return {
+        hasValidToken: false,
+        error: 'Invalid or expired reset token. Please request a new password reset link.',
+      };
+    }
+    
+    if (data?.session) {
+      return {
+        hasValidToken: true,
+      };
+    }
+  }
+  
+  // Check if there's already a valid session
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
+  if (session) {
+    return {
+      hasValidToken: true,
+    };
+  }
+
+  // If there's an error parameter, show it
+  if (urlError) {
+    return {
+      hasValidToken: false,
+      error: 'Invalid or expired reset token. Please request a new password reset link.',
+    };
+  }
+
+  // No valid session - user needs to request a new reset link
   return {
-    hasValidToken: false, // Will be set to true on client after processing hash
+    hasValidToken: false,
+    error: null, // Don't show error yet - let client-side code check for hash fragments
   };
 };
 
