@@ -212,36 +212,42 @@
     }
     
     // Get access token from client-side Supabase session
-    // Try to get a fresh session first
     let { data: { session }, error: sessionError } = await supabase.auth.getSession();
     
-    // If no session or error, try to refresh
-    if (sessionError || !session?.access_token) {
-      console.log('Session missing or expired, attempting to refresh...');
+    // If there's a session error or no session at all, we can't proceed
+    if (sessionError) {
+      console.error('Session error:', sessionError);
+      alert('Session error. Please refresh the page and try again.');
+      return;
+    }
+    
+    // If we have a session but no access token, try to refresh (only if session exists)
+    if (session && !session.access_token) {
+      console.log('Session exists but access token missing, attempting to refresh...');
       const { data: { session: refreshedSession }, error: refreshError } = await supabase.auth.refreshSession();
       
       if (refreshError) {
         console.error('Refresh error:', refreshError);
-        alert('Session expired. Please refresh the page and try again.');
+        // If refresh fails, the session is likely expired - redirect to login
+        alert('Session expired. Please refresh the page and log in again.');
+        window.location.href = '/login';
         return;
       }
       
-      if (!refreshedSession?.access_token) {
-        console.error('No access token after refresh');
-        alert('Session expired. Please refresh the page and try again.');
-        return;
+      if (refreshedSession?.access_token) {
+        session = refreshedSession;
       }
-      
-      session = refreshedSession;
+    }
+    
+    // If still no session or no access token, we can't proceed
+    if (!session || !session.access_token) {
+      console.error('No valid session or access token available');
+      alert('Session expired. Please refresh the page and log in again.');
+      window.location.href = '/login';
+      return;
     }
     
     const token = session.access_token;
-    
-    if (!token) {
-      console.error('No access token available');
-      alert('Session expired. Please refresh the page and try again.');
-      return;
-    }
     
     isUpdating = true;
     try {
@@ -258,7 +264,8 @@
       if (!resp.ok) {
         // If 401, session might have expired during the request
         if (resp.status === 401) {
-          alert('Session expired. Please refresh the page and try again.');
+          alert('Session expired. Please refresh the page and log in again.');
+          window.location.href = '/login';
           return;
         }
         
