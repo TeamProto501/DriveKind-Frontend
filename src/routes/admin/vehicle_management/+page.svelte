@@ -146,10 +146,9 @@
   let newVehicleType = $state("");
   let vehicleTypesWithIds = $state<Array<{vehicle_type_id: number, type_name: string}>>([]);
   
-  // Sync vehicleTypesWithIds when data changes
+  // Load vehicle types with IDs on mount and when org changes
   $effect(() => {
-    if (data?.vehicleTypes) {
-      // Load full vehicle types data with IDs from server
+    if (viewerOrgId) {
       loadVehicleTypesWithIds();
     }
   });
@@ -163,12 +162,28 @@
         .eq('org_id', viewerOrgId)
         .order('type_name', { ascending: true });
       
-      if (error) throw error;
+      if (error) {
+        console.error('Error loading vehicle types:', error);
+        // Fallback to data from server if available
+        if (data?.vehicleTypes) {
+          vehicleTypes = data.vehicleTypes;
+          vehicleTypesWithIds = data.vehicleTypes.map((name, idx) => ({
+            vehicle_type_id: idx + 1,
+            type_name: name
+          }));
+        }
+        return;
+      }
+      
       vehicleTypesWithIds = data || [];
       // Also update the simple array for dropdowns
       vehicleTypes = data?.map(vt => vt.type_name) || [];
     } catch (err) {
       console.error('Error loading vehicle types:', err);
+      // Fallback to data from server if available
+      if (data?.vehicleTypes) {
+        vehicleTypes = data.vehicleTypes;
+      }
     }
   }
 
@@ -1043,11 +1058,14 @@
         </div>
 
         <Dialog.Footer class="mt-6">
-          <Button
-            variant="outline"
+          <button
+            type="button"
+            class="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 disabled:opacity-60"
             onclick={() => (showDeleteModal = false)}
-            disabled={isDeleting}>Cancel</Button
+            disabled={isDeleting}
           >
+            Cancel
+          </button>
           <button
             type="button"
             class="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-60 disabled:cursor-not-allowed"
