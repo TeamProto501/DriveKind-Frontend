@@ -6,6 +6,9 @@
   export let enableEdit: boolean = false;
   export let onEdit: ((row: any) => void) | null = null;
 
+  // Optional delete callback for an extra button
+  export let onDelete: ((row: any) => void) | null = null;
+
   // Optional: explicit column order / subset
   export let columns: string[] | null = null;
 
@@ -63,7 +66,7 @@
               {formatLabel(key)}
             </Table.Head>
           {/each}
-          {#if enableEdit}
+          {#if enableEdit && (onEdit || onDelete)}
             <Table.Head class="px-4 py-2 font-medium whitespace-nowrap">
               Actions
             </Table.Head>
@@ -83,15 +86,28 @@
               {#each keys as key}
                 <Table.Cell>{row[key] ?? "-"}</Table.Cell>
               {/each}
-              {#if enableEdit && onEdit}
+              {#if enableEdit && (onEdit || onDelete)}
                 <Table.Cell>
-                  <button
-                    type="button"
-                    class="text-blue-600 hover:underline text-sm"
-                    on:click={() => onEdit(row)}
-                  >
-                    Edit
-                  </button>
+                  <div class="flex items-center gap-2">
+                    {#if onEdit}
+                      <button
+                        type="button"
+                        class="text-blue-600 hover:underline text-sm"
+                        on:click={() => onEdit(row)}
+                      >
+                        Edit
+                      </button>
+                    {/if}
+                    {#if onDelete}
+                      <button
+                        type="button"
+                        class="text-red-600 hover:underline text-sm"
+                        on:click={() => onDelete(row)}
+                      >
+                        Delete
+                      </button>
+                    {/if}
+                  </div>
                 </Table.Cell>
               {/if}
             </Table.Row>
@@ -99,7 +115,7 @@
         {:else}
           <Table.Row>
             <Table.Cell
-              colspan={keys.length + (enableEdit ? 1 : 0) + (showIndex ? 1 : 0)}
+              colspan={keys.length + (enableEdit && (onEdit || onDelete) ? 1 : 0) + (showIndex ? 1 : 0)}
               class="text-center py-8 text-gray-500"
             >
               No Data
