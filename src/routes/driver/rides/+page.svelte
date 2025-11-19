@@ -43,6 +43,11 @@
     completion_status: ''
   });
 
+  // Vehicle selection for ride acceptance
+  let showVehicleSelectionModal = $state(false);
+  let selectedRideForAcceptance = $state<any>(null);
+  let selectedVehicleId = $state<number | null>(null);
+
   function getStatusColor(status: string) {
     switch (status) {
       case "Scheduled": return "bg-blue-100 text-blue-800";

@@ -174,13 +174,37 @@ export const load: PageServerLoad = async (event) => {
     }
   }
 
-  // 6) Final list is pending (requests) + assigned
-  const rides = [...pendingRides, ...(assignedRides || [])];
+  // 6) Get driver's active vehicles for vehicle selection
+  const { data: activeVehicles } = await supabase
+    .from('vehicles')
+    .select('vehicle_id, type_of_vehicle_enum, vehicle_color, nondriver_seats, active')
+    .eq('user_id', session.user.id)
+    .eq('active', true)
+    .order('vehicle_id', { ascending: true });
+
+  // 7) For each pending ride, determine which vehicles are eligible
+  // A vehicle is eligible if it's active and has enough seats for the ride
+  const ridesWithEligibleVehicles = (pendingRides || []).map((ride: any) => {
+    const eligibleVehicles = (activeVehicles || []).filter((vehicle: any) => {
+      // Check if vehicle has enough seats (riders + 1 for driver)
+      const requiredSeats = (ride.riders || 0) + 1;
+      const vehicleSeats = (vehicle.nondriver_seats || 0) + 1; // +1 for driver
+      return vehicleSeats >= requiredSeats;
+    });
+    return {
+      ...ride,
+      eligibleVehicles
+    };
+  });
+
+  // 8) Final list is pending (with eligible vehicles) + assigned
+  const rides = [...ridesWithEligibleVehicles, ...(assignedRides || [])];
 
   return {
     session,
     rides,
     profile,
+    activeVehicles: activeVehicles || [],
     error: null
   };
 };
