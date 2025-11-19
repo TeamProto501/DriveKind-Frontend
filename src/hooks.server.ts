@@ -8,6 +8,8 @@ const PUBLIC_ROUTES = [
 	'/register',
 	'/auth/callback',
 	'/auth/logout',
+	'/forgot-password',
+	'/reset-password',
 ];
 
 // Check if a route is public (doesn't require authentication)
