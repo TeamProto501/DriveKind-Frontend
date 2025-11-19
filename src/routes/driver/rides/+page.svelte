@@ -211,52 +211,21 @@
       return;
     }
     
-    // Get access token from client-side Supabase session (same approach as declineRide)
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-    
-    console.log('Session check:', { 
-      hasSession: !!session, 
-      hasToken: !!session?.access_token, 
-      error: sessionError,
-      sessionKeys: session ? Object.keys(session) : null
-    });
-    
-    if (sessionError) {
-      console.error('Session error:', sessionError);
-      alert('Session error. Please refresh the page and try again.');
-      return;
-    }
-    
-    if (!session) {
-      console.error('No session found');
-      alert('Session expired. Please refresh the page and try again.');
-      return;
-    }
-    
-    if (!session.access_token) {
-      console.error('No access token in session');
-      alert('Session expired. Please refresh the page and try again.');
-      return;
-    }
-    
     isUpdating = true;
     try {
-      console.log('Calling backend API:', `${API_BASE}/rides/${rideId}/accept`, { vehicle_id: vehicleId });
-      const resp = await fetch(`${API_BASE}/rides/${rideId}/accept`, {
+      // Use SvelteKit server endpoint (server-side auth, no client session needed)
+      const resp = await fetch(`/driver/rides/accept/${rideId}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`
         },
         body: JSON.stringify({ vehicle_id: vehicleId })
       });
       
-      console.log('Response status:', resp.status);
-      
       if (!resp.ok) {
-        const msg = await readError(resp);
-        console.error('Accept failed:', resp.status, msg);
-        alert(`Failed to accept ride (${resp.status}): ${msg || 'Unknown error'}`);
+        const data = await resp.json();
+        console.error('Accept failed:', resp.status, data.error);
+        alert(`Failed to accept ride: ${data.error || 'Unknown error'}`);
       } else {
         showVehicleSelectionModal = false;
         selectedRideForAcceptance = null;
