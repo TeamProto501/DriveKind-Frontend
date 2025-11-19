@@ -106,7 +106,8 @@ export const load: PageServerLoad = async (event) => {
       // Clients in this org (for Client column + dropdown)
       const { data: clientData, error: clientError } = await supabase
         .from("clients")
-        .select("client_id, org_id, first_name, last_name")
+        // ⭐⭐⭐ ADDED primary_phone HERE — THE ONLY CHANGE ⭐⭐⭐
+        .select("client_id, org_id, first_name, last_name, primary_phone")
         .eq("org_id", orgId);
 
       if (clientError) {
@@ -218,7 +219,7 @@ export const actions: Actions = {
     return { data: rows };
   },
 
-  // Update an existing call (still via backend API)
+  // Update an existing call (backend API)
   updateCall: async (event) => {
     const formData = await event.request.formData();
 
@@ -272,7 +273,7 @@ export const actions: Actions = {
     }
   },
 
-  // Delete a single call (directly via Supabase, org-scoped)
+  // Delete a single call (directly via Supabase)
   deleteCall: async (event) => {
     const formData = await event.request.formData();
     const callIdStr = formData.get("call_id") as string | null;
@@ -318,7 +319,7 @@ export const actions: Actions = {
     return { success: true, deletedId: call_id };
   },
 
-  // Create a new call (directly via Supabase, org-scoped)
+  // Create a new call (directly via Supabase)
   createCall: async (event) => {
     const supabase = createSupabaseServerClient(event);
     const formData = await event.request.formData();
@@ -365,7 +366,7 @@ export const actions: Actions = {
     let caller_last_name =
       (formData.get("caller_last_name") as string) || null;
 
-    // If a client is selected, override caller_* with the client's name
+    // If client selected, override caller name
     if (client_id !== null) {
       const { data: client, error: clientError } = await supabase
         .from("clients")
@@ -379,7 +380,7 @@ export const actions: Actions = {
       }
     }
 
-    // Enforce rule: if no client selected, require caller first + last
+    // Enforce manual caller name if no client
     if (!client_id && (!caller_first_name || !caller_last_name)) {
       return {
         success: false,
