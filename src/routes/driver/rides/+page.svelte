@@ -214,13 +214,56 @@
     // Get access token from client-side Supabase session
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();
     
-    if (sessionError || !session?.access_token) {
-      alert('Session expired. Please refresh the page and try again.');
+    if (sessionError) {
+      console.error('Session error:', sessionError);
+      alert('Session error. Please refresh the page and try again.');
+      return;
+    }
+    
+    if (!session?.access_token) {
+      console.error('No access token in session');
+      // Try to refresh the session
+      const { data: { session: refreshedSession }, error: refreshError } = await supabase.auth.refreshSession();
+      if (refreshError || !refreshedSession?.access_token) {
+        alert('Session expired. Please refresh the page and try again.');
+        return;
+      }
+      // Use refreshed session
+      const token = refreshedSession.access_token;
+      
+      isUpdating = true;
+      try {
+        const resp = await fetch(`${API_BASE}/rides/${rideId}/accept`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ vehicle_id: vehicleId })
+        });
+        if (!resp.ok) {
+          const msg = await readError(resp);
+          console.error('Accept failed:', resp.status, msg);
+          alert(`Failed to accept ride (${resp.status}): ${msg || 'Unknown error'}`);
+        } else {
+          showVehicleSelectionModal = false;
+          selectedRideForAcceptance = null;
+          selectedVehicleId = null;
+          await invalidateAll();
+          alert('Ride accepted! It now appears in your Scheduled tab.');
+        }
+      } catch (e) {
+        console.error(e);
+        alert('Error accepting ride. Please try again.');
+      } finally {
+        isUpdating = false;
+      }
       return;
     }
     
     isUpdating = true;
     try {
+      console.log('Calling backend API:', `${API_BASE}/rides/${rideId}/accept`, { vehicle_id: vehicleId });
       const resp = await fetch(`${API_BASE}/rides/${rideId}/accept`, {
         method: 'POST',
         headers: {
@@ -241,8 +284,8 @@
         alert('Ride accepted! It now appears in your Scheduled tab.');
       }
     } catch (e) {
-      console.error(e);
-      alert('Error accepting ride. Please try again.');
+      console.error('Network error:', e);
+      alert('Error accepting ride. Please check your connection and try again.');
     } finally {
       isUpdating = false;
     }
