@@ -80,11 +80,18 @@ export const load: PageServerLoad = async (event) => {
       dropoff_address2,
       completion_status,
       donation_amount,
+      assigned_vehicle,
       clients:client_id (
         first_name,
         last_name,
         primary_phone,
         other_limitations
+      ),
+      vehicles:assigned_vehicle (
+        vehicle_id,
+        type_of_vehicle_enum,
+        vehicle_color,
+        nondriver_seats
       )
     `)
     .eq('driver_user_id', user.id)
@@ -158,11 +165,18 @@ export const load: PageServerLoad = async (event) => {
         dropoff_address2,
         completion_status,
         donation_amount,
+        assigned_vehicle,
         clients:client_id (
           first_name,
           last_name,
           primary_phone,
           other_limitations
+        ),
+        vehicles:assigned_vehicle (
+          vehicle_id,
+          type_of_vehicle_enum,
+          vehicle_color,
+          nondriver_seats
         )
       `)
       .in('ride_id', freshPendingIds);

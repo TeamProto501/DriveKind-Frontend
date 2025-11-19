@@ -492,6 +492,16 @@
                     <Car class="w-4 h-4" />{ride.riders} passenger{ride.riders > 1 ? 's' : ''}
                   </div>
                 {/if}
+
+                {#if ride.assigned_vehicle && ride.vehicles}
+                  <div class="flex items-center gap-2">
+                    <Car class="w-4 h-4" />
+                    <div>
+                      <span class="font-medium">Assigned Vehicle:</span>
+                      <span class="ml-1">{ride.vehicles.type_of_vehicle_enum} - {ride.vehicles.vehicle_color}</span>
+                    </div>
+                  </div>
+                {/if}
               </div>
 
               <!-- Limitations: now shown on ALL rides, not just Pending -->

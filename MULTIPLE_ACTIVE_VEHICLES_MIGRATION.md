@@ -29,13 +29,14 @@ COMMENT ON COLUMN public.rides.assigned_vehicle IS 'The vehicle chosen by the dr
 5. ✅ Added vehicle selection UI when driver has multiple eligible vehicles
 6. ✅ Updated acceptRide to require vehicle selection and send vehicle_id to backend
 7. ✅ Show eligible vehicles count in ride card
+8. ✅ Updated ride queries to include `assigned_vehicle` and vehicle details (via Supabase join)
+9. ✅ Display assigned vehicle in driver ride cards throughout lifecycle
 
 ### Pending (Backend API):
-8. ⏳ Update `/rides/:rideId/accept` endpoint to accept `vehicle_id` in request body
-9. ⏳ Update `/rides/:rideId/accept` endpoint to save `assigned_vehicle` to database
-10. ⏳ Update ride matching logic (backend) to check if driver has at least one eligible active vehicle
-11. ⏳ Update ride queries to include `assigned_vehicle` and vehicle details
-12. ⏳ Update ride display throughout app to show assigned vehicle
+10. ⏳ Update `/rides/:rideId/accept` endpoint to accept `vehicle_id` in request body
+11. ⏳ Update `/rides/:rideId/accept` endpoint to save `assigned_vehicle` to database
+12. ⏳ Update ride matching logic (backend) to check if driver has at least one eligible active vehicle
+13. ⏳ Update ride display in dispatcher/admin views to show assigned vehicle
 
 ## Ride Matching Logic Changes
 
