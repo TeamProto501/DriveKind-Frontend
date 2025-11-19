@@ -710,7 +710,7 @@
         <Dialog.Header>
           <Dialog.Title>Select Vehicle</Dialog.Title>
           <Dialog.Description>
-            You have multiple vehicles that work for this ride. Please select which vehicle you'll use.
+            Please select which vehicle you'll use.
           </Dialog.Description>
         </Dialog.Header>
 
