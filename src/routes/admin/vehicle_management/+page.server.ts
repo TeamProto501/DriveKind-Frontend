@@ -184,15 +184,7 @@ export const actions = {
       return fail(400, { error: `Invalid vehicle type. Must be one of: ${vehicleTypes.join(', ')}` });
     }
 
-    // If setting to Active, deactivate other vehicles for same user
-    if (active && owner_user_id) {
-      await supabase
-        .from('vehicles')
-        .update({ active: false })
-        .eq('org_id', profile.org_id)
-        .eq('user_id', owner_user_id)
-        .neq('vehicle_id', vehicle_id);
-    }
+    // REMOVED: No longer deactivating other vehicles - allow multiple active vehicles
 
     const { error } = await supabase
       .from('vehicles')
