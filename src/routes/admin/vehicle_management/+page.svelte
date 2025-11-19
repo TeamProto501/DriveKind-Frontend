@@ -445,7 +445,11 @@
     editingVehicleTypeValue = "";
   }
 
-  function addVehicleType() {
+  function addVehicleType(e?: Event) {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
     console.log('addVehicleType called, newVehicleType:', newVehicleType);
     const trimmed = newVehicleType.trim();
     if (!trimmed) {
@@ -463,7 +467,11 @@
     console.log('Updated vehicleTypes:', vehicleTypes);
   }
 
-  function removeVehicleType(index: number) {
+  function removeVehicleType(index: number, e?: Event) {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
     console.log('removeVehicleType called, index:', index);
     const typeToRemove = vehicleTypes[index];
     console.log('Type to remove:', typeToRemove);
@@ -1049,11 +1057,7 @@
                       size="sm" 
                       variant="destructive" 
                       type="button"
-                      onclick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        removeVehicleType(index);
-                      }}
+                      onclick={(e) => removeVehicleType(index, e)}
                     >
                       <Trash2 class="w-3 h-3" />
                     </Button>
@@ -1077,19 +1081,17 @@
                 onkeydown={(e) => { 
                   if (e.key === 'Enter') {
                     e.preventDefault();
-                    addVehicleType();
+                    addVehicleType(e);
                   }
                 }}
               />
               <Button 
                 type="button"
-                onclick={(e) => {
-                  e.preventDefault();
-                  addVehicleType();
-                }} 
-                disabled={!newVehicleType.trim()}
+                onclick={addVehicleType}
+                disabled={!newVehicleType || !newVehicleType.trim()}
               >
                 <Plus class="w-4 h-4" />
+                Add
               </Button>
             </div>
             <p class="mt-1 text-xs text-gray-500">Enter any vehicle type name (e.g., Minivan, Electric Car, Hybrid, etc.)</p>
