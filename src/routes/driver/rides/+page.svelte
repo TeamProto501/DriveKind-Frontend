@@ -330,9 +330,7 @@
 
   const DONATION_TYPE_OPTIONS = [
     "Cash",
-    "Check",
-    "Credit Card",
-    "Other"
+    "Envelope"
   ];
 </script>
 
