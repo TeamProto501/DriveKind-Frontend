@@ -2,35 +2,42 @@
   import type { PageData, ActionData } from "./$types";
   import { PhoneCall, FileText, X } from "@lucide/svelte";
   import Table from "./table.svelte";
+  import { invalidateAll } from "$app/navigation";
+  import { onMount } from "svelte";
 
-  export let data: PageData;
-  export let form: ActionData | null = null;
+  let { data = $bindable(), form = $bindable() }: { data: PageData; form: ActionData | null } = $props();
+
+  // Invalidate data when component mounts after navigation
+  onMount(() => {
+    invalidateAll();
+  });
 
   // -----------------------------
   // TAB / HEADER STATE
   // -----------------------------
-  let activeTab: "audits" | "calls" = "audits";
-  $: activeTab = ((data.tab as "audits" | "calls") ?? "audits");
+  let activeTab = $derived((data.tab as "audits" | "calls") ?? "audits");
 
-  $: headerTitle = activeTab === "audits" ? "Audit Logs" : "Call Log";
+  let headerTitle = $derived(activeTab === "audits" ? "Audit Logs" : "Call Log");
 
-  $: headerDescription =
+  let headerDescription = $derived(
     activeTab === "audits"
       ? "View activity logs captured by the audit logger."
-      : "View and edit logged calls. Dispatcher and Client are resolved from their respective tables.";
+      : "View and edit logged calls. Dispatcher and Client are resolved from their respective tables."
+  );
 
   // -----------------------------
   // AUDITS TAB STATE
   // -----------------------------
-  let search = "";
+  let search = $state("");
 
-  $: previewRows =
-    form && "data" in form && (form as any).data ? (form as any).data : null;
+  let previewRows = $derived(
+    form && "data" in form && (form as any).data ? (form as any).data : null
+  );
 
-  $: auditRowsRaw = activeTab === "audits" ? (data.data ?? []) : [];
-  $: auditRowsBase = previewRows ?? auditRowsRaw;
+  let auditRowsRaw = $derived(activeTab === "audits" ? (data.data ?? []) : []);
+  let auditRowsBase = $derived(previewRows ?? auditRowsRaw);
 
-  $: filteredAuditRows =
+  let filteredAuditRows = $derived(
     search.trim().length === 0
       ? auditRowsBase
       : auditRowsBase.filter((row: any) =>
@@ -38,7 +45,8 @@
             .join(" ")
             .toLowerCase()
             .includes(search.toLowerCase())
-        );
+        )
+  );
 
   // -----------------------------
   // CALLS TAB DATA SHAPING
@@ -107,59 +115,50 @@
   // -----------------------------
 
   // Base arrays
-  let staffProfiles: StaffProfile[] = [];
-  let clients: ClientRow[] = [];
+  let staffProfiles = $derived(((data as any).staffProfiles ?? []) as StaffProfile[]);
+  let clients = $derived(((data as any).clients ?? []) as ClientRow[]);
 
   // Filtered versions (still org-scoped)
-  let filteredStaff: StaffProfile[] = [];
-  let filteredClients: ClientRow[] = [];
+  let filteredStaff = $derived(staffProfiles);
+  let filteredClients = $derived(clients);
 
   // Maps for quick lookup by id
-  let staffById = new Map<string, StaffProfile>();
-  let clientById = new Map<number, ClientRow>();
-
-  // Always reflect the latest `data` from the server
-  $: staffProfiles = ((data as any).staffProfiles ?? []) as StaffProfile[];
-  $: clients = ((data as any).clients ?? []) as ClientRow[];
-
-  // Already org-scoped on the server
-  $: filteredStaff = staffProfiles;
-  $: filteredClients = clients;
-
-  // Rebuild maps whenever staff/clients change
-  $: {
-    staffById = new Map<string, StaffProfile>();
+  let staffById = $derived.by(() => {
+    const map = new Map<string, StaffProfile>();
     for (const sp of filteredStaff) {
-      if (sp.user_id) staffById.set(sp.user_id, sp);
+      if (sp.user_id) map.set(sp.user_id, sp);
     }
-  }
+    return map;
+  });
 
-  $: {
-    clientById = new Map<number, ClientRow>();
+  let clientById = $derived.by(() => {
+    const map = new Map<number, ClientRow>();
     for (const c of filteredClients) {
-      if (c.client_id != null) clientById.set(c.client_id, c);
+      if (c.client_id != null) map.set(c.client_id, c);
     }
-  }
+    return map;
+  });
 
   // Options for dropdowns (reactive)
-  let dispatcherOptions: { value: string; label: string }[] = [];
-  let clientOptions: { value: string; label: string }[] = [];
+  let dispatcherOptions = $derived(
+    filteredStaff.map((sp) => {
+      const name = `${sp.first_name ?? ""} ${sp.last_name ?? ""}`.trim();
+      return {
+        value: sp.user_id,
+        label: name || sp.user_id
+      };
+    })
+  );
 
-  $: dispatcherOptions = filteredStaff.map((sp) => {
-    const name = `${sp.first_name ?? ""} ${sp.last_name ?? ""}`.trim();
-    return {
-      value: sp.user_id,
-      label: name || sp.user_id
-    };
-  });
-
-  $: clientOptions = filteredClients.map((c) => {
-    const name = `${c.first_name ?? ""} ${c.last_name ?? ""}`.trim();
-    return {
-      value: String(c.client_id),
-      label: name || `Client #${c.client_id}`
-    };
-  });
+  let clientOptions = $derived(
+    filteredClients.map((c) => {
+      const name = `${c.first_name ?? ""} ${c.last_name ?? ""}`.trim();
+      return {
+        value: String(c.client_id),
+        label: name || `Client #${c.client_id}`
+      };
+    })
+  );
 
   // Helpers for time formatting
   function formatCallTime(dt: string | null): string | null {
@@ -197,88 +196,93 @@
   const nowLocal = getNowLocal();
 
   // Raw rows from server (calls), only when calls tab
-  $: rawCallRows =
-    activeTab === "calls" ? ((data.data as CallRowFromServer[]) ?? []) : [];
+  let rawCallRows = $derived(
+    activeTab === "calls" ? ((data.data as CallRowFromServer[]) ?? []) : []
+  );
 
   // Sort by call_time descending
-  $: sortedCallRows = [...rawCallRows].sort(
-    (a, b) => toMillis(b.call_time) - toMillis(a.call_time)
+  let sortedCallRows = $derived(
+    [...rawCallRows].sort(
+      (a, b) => toMillis(b.call_time) - toMillis(a.call_time)
+    )
   );
 
   // Build display rows:
   // - Dispatcher name from staff_profiles
   // - Client name from clients
   // - Caller name: prefer client name if client is selected
-  let displayCallRows: DisplayCallRow[] = [];
+  let displayCallRows = $derived.by(() => {
+    return sortedCallRows.map((row) => {
+      const dispatcher = row.user_id ? staffById.get(row.user_id) : undefined;
+      const dispatcherName = dispatcher
+        ? `${dispatcher.first_name ?? ""} ${dispatcher.last_name ?? ""}`.trim()
+        : row.user_id ?? "";
 
-  $: displayCallRows = sortedCallRows.map((row) => {
-    const dispatcher = row.user_id ? staffById.get(row.user_id) : undefined;
-    const dispatcherName = dispatcher
-      ? `${dispatcher.first_name ?? ""} ${dispatcher.last_name ?? ""}`.trim()
-      : row.user_id ?? "";
+      const client =
+        row.client_id != null ? clientById.get(row.client_id) : undefined;
+      const clientName = client
+        ? `${client.first_name ?? ""} ${client.last_name ?? ""}`.trim()
+        : row.client_id != null
+        ? String(row.client_id)
+        : "";
 
-    const client =
-      row.client_id != null ? clientById.get(row.client_id) : undefined;
-    const clientName = client
-      ? `${client.first_name ?? ""} ${client.last_name ?? ""}`.trim()
-      : row.client_id != null
-      ? String(row.client_id)
-      : "";
+      const manualCallerName = `${row.caller_first_name ?? ""} ${
+        row.caller_last_name ?? ""
+      }`.trim();
 
-    const manualCallerName = `${row.caller_first_name ?? ""} ${
-      row.caller_last_name ?? ""
-    }`.trim();
+      // If a client is selected, that name takes precedence over the manual one
+      const callerName = clientName || manualCallerName;
 
-    // If a client is selected, that name takes precedence over the manual one
-    const callerName = clientName || manualCallerName;
+      return {
+        call_id: row.call_id,
+        dispatcher: dispatcherName,
+        client: clientName,
+        caller_name: callerName,
+        call_time: formatCallTime(row.call_time),
+        phone_number: row.phone_number,
+        call_type: row.call_type,
+        other_type: row.other_type,
+        forwarded_to_name: row.forwarded_to_name,
 
-    return {
-      call_id: row.call_id,
-      dispatcher: dispatcherName,
-      client: clientName,
-      caller_name: callerName,
-      call_time: formatCallTime(row.call_time),
-      phone_number: row.phone_number,
-      call_type: row.call_type,
-      other_type: row.other_type,
-      forwarded_to_name: row.forwarded_to_name,
-
-      call_time_raw: row.call_time,
-      user_id: row.user_id,
-      client_id: row.client_id,
-      org_id: row.org_id,
-      caller_first_name: row.caller_first_name,
-      caller_last_name: row.caller_last_name,
-    };
+        call_time_raw: row.call_time,
+        user_id: row.user_id,
+        client_id: row.client_id,
+        org_id: row.org_id,
+        caller_first_name: row.caller_first_name,
+        caller_last_name: row.caller_last_name,
+      };
+    });
   });
 
   // -----------------------------
   // EDIT MODAL STATE / HELPERS
   // -----------------------------
-  let showEditModal = false;
-  let editRow: DisplayCallRow | null = null;
-  let editCallTimeLocal = "";
-  let editCallType = "";
+  let showEditModal = $state(false);
+  let editRow: DisplayCallRow | null = $state(null);
+  let editCallTimeLocal = $state("");
+  let editCallType = $state("");
 
   // For dropdown bindings
-  let selectedDispatcherId: string = "";
-  let selectedClientId: string = ""; // "" = no client selected
+  let selectedDispatcherId = $state("");
+  let selectedClientId = $state(""); // "" = no client selected
 
   // phone-number behavior
-  let useClientPhone = false;
-  $: clientPhoneForEdit =
+  let useClientPhone = $state(false);
+  let clientPhoneForEdit = $derived(
     selectedClientId && clientById.get(Number(selectedClientId))
       ? clientById.get(Number(selectedClientId))!.primary_phone ?? ""
-      : "";
+      : ""
+  );
 
   // If you want the input to be locked when using client phone:
-  $: phoneLockedToClient =
-    !!selectedClientId && !!clientPhoneForEdit && useClientPhone;
+  let phoneLockedToClient = $derived(
+    !!selectedClientId && !!clientPhoneForEdit && useClientPhone
+  );
 
   // caller name requirements:
   // - if NO client selected -> fields required
   // - if client selected -> fields auto-filled & disabled
-  $: callerLockedToClient = !!selectedClientId;
+  let callerLockedToClient = $derived(!!selectedClientId);
 
   function toLocalInputValue(isoOrSql: string | null): string {
     if (!isoOrSql) return "";
@@ -383,8 +387,8 @@
   // -----------------------------
   // DELETE MODAL STATE
   // -----------------------------
-  let showDeleteModal = false;
-  let deleteRow: DisplayCallRow | null = null;
+  let showDeleteModal = $state(false);
+  let deleteRow: DisplayCallRow | null = $state(null);
 
   function openDelete(row: DisplayCallRow) {
     deleteRow = row;
@@ -399,19 +403,19 @@
   // -----------------------------
   // CREATE CALL MODAL STATE
   // -----------------------------
-  let showCreateModal = false;
+  let showCreateModal = $state(false);
 
-  let newSelectedDispatcherId: string = "";
-  let newSelectedClientId: string = "";
-  let newCallTimeLocal: string = "";
-  let newPhoneNumber: string = "";
-  let newCallType: string = "";
-  let newOtherType: string = "";
-  let newForwardedToName: string = "";
-  let newCallerFirstName: string = "";
-  let newCallerLastName: string = "";
+  let newSelectedDispatcherId = $state("");
+  let newSelectedClientId = $state("");
+  let newCallTimeLocal = $state("");
+  let newPhoneNumber = $state("");
+  let newCallType = $state("");
+  let newOtherType = $state("");
+  let newForwardedToName = $state("");
+  let newCallerFirstName = $state("");
+  let newCallerLastName = $state("");
 
-  $: newCallerLockedToClient = !!newSelectedClientId;
+  let newCallerLockedToClient = $derived(!!newSelectedClientId);
 
   function openCreate() {
     newSelectedDispatcherId = "";
@@ -575,7 +579,7 @@
         <button
           type="button"
           class="inline-flex items-center rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700"
-          on:click={openCreate}
+          onclick={openCreate}
         >
           + Add Call
         </button>
@@ -613,7 +617,7 @@
           <button
             type="button"
             class="text-gray-400 hover:text-gray-600"
-            on:click={closeEdit}
+            onclick={closeEdit}
           >
             <X class="h-5 w-5" />
           </button>
@@ -652,7 +656,7 @@
               <select
                 name="client_id"
                 bind:value={selectedClientId}
-                on:change={handleClientChange}
+                onchange={handleClientChange}
                 class="mt-1 block w-full rounded-md border border-gray-300 px-2 py-1 text-sm bg-white"
               >
                 <option value="">
@@ -697,7 +701,7 @@
                   <input
                     type="checkbox"
                     bind:checked={useClientPhone}
-                    on:change={handleUseClientPhoneChange}
+                    onchange={handleUseClientPhoneChange}
                   />
                   <span>Use client phone ({clientPhoneForEdit})</span>
                 </label>
@@ -787,7 +791,7 @@
             <button
               type="button"
               class="rounded-md border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-              on:click={closeEdit}
+              onclick={closeEdit}
             >
               Cancel
             </button>
@@ -814,7 +818,7 @@
           <button
             type="button"
             class="text-gray-400 hover:text-gray-600"
-            on:click={closeDelete}
+            onclick={closeDelete}
           >
             <X class="h-5 w-5" />
           </button>
@@ -832,7 +836,7 @@
           <button
             type="button"
             class="rounded-md border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-            on:click={closeDelete}
+            onclick={closeDelete}
           >
             Cancel
           </button>
@@ -858,7 +862,7 @@
           <button
             type="button"
             class="text-gray-400 hover:text-gray-600"
-            on:click={closeCreate}
+            onclick={closeCreate}
           >
             <X class="h-5 w-5" />
           </button>
@@ -893,7 +897,7 @@
               <select
                 name="client_id"
                 bind:value={newSelectedClientId}
-                on:change={handleNewClientChange}
+                onchange={handleNewClientChange}
                 class="mt-1 block w-full rounded-md border border-gray-300 px-2 py-1 text-sm bg-white"
               >
                 <option value="">
@@ -1021,7 +1025,7 @@
             <button
               type="button"
               class="rounded-md border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-              on:click={closeCreate}
+              onclick={closeCreate}
             >
               Cancel
             </button>
