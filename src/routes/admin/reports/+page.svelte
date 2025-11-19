@@ -541,6 +541,45 @@
     toastStore.success('Client demographics report exported');
   };
 
+  // Table Results CSV Export - exports the current filtered/searched view
+  const exportTableResultsCSV = () => {
+    const filteredRides = getFilteredRides();
+    
+    if (filteredRides.length === 0) {
+      toastStore.error('No data to export');
+      return;
+    }
+
+    const headers = ['Date', 'Driver', 'Client', 'Purpose', 'Pickup', 'Destination', 'Hours', 'Miles', 'Donation'];
+    const csvContent = [
+      headers.join(','),
+      ...filteredRides.map(ride => {
+        return [
+          `"${ride.appointment_time ? new Date(ride.appointment_time).toLocaleDateString() : 'Unknown'}"`,
+          `"${ride.driver_name || 'Unknown'}"`,
+          `"${ride.client_name || 'Unknown'}"`,
+          `"${ride.purpose || 'N/A'}"`,
+          `"${ride.alt_pickup_address || 'From Home'}"`,
+          `"${ride.destination_name || 'N/A'}"`,
+          ride.hours || 0,
+          ride.miles_driven || 0,
+          ride.donation_amount || 0
+        ].join(',');
+      })
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const fileName = exportFileName || generateDefaultFileName();
+    a.download = `${fileName.replace(/\s+/g, '_')}_Table_Results.csv`;
+    a.click();
+    window.URL.revokeObjectURL(url);
+    
+    toastStore.success(`Exported ${filteredRides.length} rides to CSV`);
+  };
+
   $effect(() => {
     filterType;
     if (filterType !== 'organization') {
@@ -1016,25 +1055,29 @@
                 </div>
                 {#if rides.length > 0}
                   <div class="flex gap-2">
+                    <Button variant="outline" onclick={exportTableResultsCSV} size="sm">
+                      <DownloadIcon class="h-4 w-4 mr-2" />
+                      Table Results CSV
+                    </Button>
                     {#if filterType === 'driver'}
                       <Button variant="outline" onclick={exportUserCSV} size="sm">
                         <DownloadIcon class="h-4 w-4 mr-2" />
-                        User CSV
+                        User Report CSV
                       </Button>
                     {:else if filterType === 'client'}
                       <Button variant="outline" onclick={exportClientCSV} size="sm">
                         <DownloadIcon class="h-4 w-4 mr-2" />
-                        Client CSV
+                        Client Report CSV
                       </Button>
                     {:else}
                       <!-- Organization - show both -->
                       <Button variant="outline" onclick={exportUserCSV} size="sm">
                         <DownloadIcon class="h-4 w-4 mr-2" />
-                        User CSV
+                        User Report CSV
                       </Button>
                       <Button variant="outline" onclick={exportClientCSV} size="sm">
                         <UserIcon class="h-4 w-4 mr-2" />
-                        Client CSV
+                        Client Report CSV
                       </Button>
                     {/if}
                   </div>
