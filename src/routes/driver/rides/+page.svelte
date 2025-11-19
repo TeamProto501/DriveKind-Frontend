@@ -212,52 +212,34 @@
     }
     
     // Get access token from client-side Supabase session
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    // Try to get a fresh session first
+    let { data: { session }, error: sessionError } = await supabase.auth.getSession();
     
-    if (sessionError) {
-      console.error('Session error:', sessionError);
-      alert('Session error. Please refresh the page and try again.');
-      return;
-    }
-    
-    if (!session?.access_token) {
-      console.error('No access token in session');
-      // Try to refresh the session
+    // If no session or error, try to refresh
+    if (sessionError || !session?.access_token) {
+      console.log('Session missing or expired, attempting to refresh...');
       const { data: { session: refreshedSession }, error: refreshError } = await supabase.auth.refreshSession();
-      if (refreshError || !refreshedSession?.access_token) {
+      
+      if (refreshError) {
+        console.error('Refresh error:', refreshError);
         alert('Session expired. Please refresh the page and try again.');
         return;
       }
-      // Use refreshed session
-      const token = refreshedSession.access_token;
       
-      isUpdating = true;
-      try {
-        const resp = await fetch(`${API_BASE}/rides/${rideId}/accept`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify({ vehicle_id: vehicleId })
-        });
-        if (!resp.ok) {
-          const msg = await readError(resp);
-          console.error('Accept failed:', resp.status, msg);
-          alert(`Failed to accept ride (${resp.status}): ${msg || 'Unknown error'}`);
-        } else {
-          showVehicleSelectionModal = false;
-          selectedRideForAcceptance = null;
-          selectedVehicleId = null;
-          await invalidateAll();
-          alert('Ride accepted! It now appears in your Scheduled tab.');
-        }
-      } catch (e) {
-        console.error(e);
-        alert('Error accepting ride. Please try again.');
-      } finally {
-        isUpdating = false;
+      if (!refreshedSession?.access_token) {
+        console.error('No access token after refresh');
+        alert('Session expired. Please refresh the page and try again.');
+        return;
       }
+      
+      session = refreshedSession;
+    }
+    
+    const token = session.access_token;
+    
+    if (!token) {
+      console.error('No access token available');
+      alert('Session expired. Please refresh the page and try again.');
       return;
     }
     
@@ -268,11 +250,18 @@
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({ vehicle_id: vehicleId })
       });
+      
       if (!resp.ok) {
+        // If 401, session might have expired during the request
+        if (resp.status === 401) {
+          alert('Session expired. Please refresh the page and try again.');
+          return;
+        }
+        
         const msg = await readError(resp);
         console.error('Accept failed:', resp.status, msg);
         alert(`Failed to accept ride (${resp.status}): ${msg || 'Unknown error'}`);
