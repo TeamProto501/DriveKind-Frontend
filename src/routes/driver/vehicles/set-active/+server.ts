@@ -32,19 +32,7 @@ export const POST: RequestHandler = async (event) => {
       return json({ error: 'You do not have permission to update this vehicle' }, { status: 403 });
     }
 
-    // First, deactivate all other vehicles for this user
-    const { error: deactivateError } = await supabase
-      .from('vehicles')
-      .update({ active: false })
-      .eq('user_id', session.user.id)
-      .neq('vehicle_id', vehicle_id);
-
-    if (deactivateError) {
-      console.error('Error deactivating other vehicles:', deactivateError);
-      return json({ error: `Failed to deactivate other vehicles: ${deactivateError.message}` }, { status: 500 });
-    }
-
-    // Then activate the selected vehicle
+    // Toggle the active status of the selected vehicle (allow multiple active vehicles)
     const { data: vehicle, error: activateError } = await supabase
       .from('vehicles')
       .update({ active: true })

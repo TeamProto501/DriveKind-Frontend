@@ -79,7 +79,11 @@
   }
 
   // --- Normalize active vehicle ---
+  // REMOVED: No longer enforcing single active vehicle
+  // Drivers can now have multiple active vehicles
   async function normalizeActives() {
+    // This function is kept for compatibility but no longer enforces single active vehicle
+    // If no vehicles are active and there's at least one vehicle, activate the first one
     if (!uid) return;
     const { data, error } = await supabase
       .from("vehicles")
@@ -90,28 +94,9 @@
     if (error || !data || data.length === 0) return;
     const list = data as { vehicle_id: number; active: boolean | null }[];
 
-    if (list.length === 1) {
-      if (!list[0].active) {
-        // Use server endpoint to set active
-        try {
-          await fetch("/driver/vehicles/set-active", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ vehicle_id: list[0].vehicle_id }),
-          });
-        } catch (e) {
-          console.error("Failed to normalize active vehicle:", e);
-        }
-      }
-      return;
-    }
-
-    const actives = list
-      .filter((v) => !!v.active)
-      .map((v) => v.vehicle_id)
-      .sort((a, b) => a - b);
-    if (actives.length === 0) {
-      // Use server endpoint to set active
+    const actives = list.filter((v) => !!v.active);
+    if (actives.length === 0 && list.length > 0) {
+      // If no vehicles are active, activate the first one as a default
       try {
         await fetch("/driver/vehicles/set-active", {
           method: "POST",
@@ -119,21 +104,7 @@
           body: JSON.stringify({ vehicle_id: list[0].vehicle_id }),
         });
       } catch (e) {
-        console.error("Failed to normalize active vehicle:", e);
-      }
-      return;
-    }
-    if (actives.length > 1) {
-      const keep = actives[0];
-      // Use server endpoint to set active (this will deactivate others)
-      try {
-        await fetch("/driver/vehicles/set-active", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ vehicle_id: keep }),
-        });
-      } catch (e) {
-        console.error("Failed to normalize active vehicle:", e);
+        console.error("Failed to set default active vehicle:", e);
       }
     }
   }
