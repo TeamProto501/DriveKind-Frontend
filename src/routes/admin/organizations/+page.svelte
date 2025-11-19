@@ -56,7 +56,10 @@
   const HOUR_OPTS = Array.from({ length: 24 }, (_, i) =>
     String(i).padStart(2, "0")
   ); // '00'..'23'
-
+  const HOUR_OPTS_12 = Array.from({ length: 12 }, (_, i) =>
+    String(i === 0 ? 12 : i).padStart(2, "0")
+  ); // '12', '01'..'11'
+  const PERIOD_OPTS = ["AM", "PM"];
   // ---------- Helpers ----------
   function ordinal(n: number) {
     const s = ["th", "st", "nd", "rd"];
@@ -78,7 +81,7 @@
       })
       .filter(Boolean);
   }
-  function usernameExample(
+  /* function usernameExample(
     code: string | null | undefined,
     first = "John",
     last = "Doe"
@@ -98,11 +101,37 @@
       const ex = `${firstPart}${lastPart}`;
       return `Format “F${n}L${k}”: first ${n} of first + first ${k} of last. Example: ${first} ${last} → ${ex}`;
     }
-    return "";
-  }
+    return "";  
+  } */
 
   // Working hours UI <-> compact string
-  type DayHours = { open: boolean; start: string; end: string }; // '07'..'18'
+  type DayHours = {
+    open: boolean;
+    start: string;
+    end: string;
+    startHour: string;
+    startPeriod: string;
+    endHour: string;
+    endPeriod: string;
+  }; // '07'..'18'
+  function militaryTo12Hour(military: string): {
+    hour: string;
+    period: string;
+  } {
+    const h = parseInt(military, 10);
+    if (h === 0) return { hour: "12", period: "AM" };
+    if (h < 12) return { hour: String(h).padStart(2, "0"), period: "AM" };
+    if (h === 12) return { hour: "12", period: "PM" };
+    return { hour: String(h - 12).padStart(2, "0"), period: "PM" };
+  }
+  function hourTo24(hour: string, period: string): string {
+    const h = parseInt(hour, 10);
+    if (period === "AM") {
+      return h === 12 ? "00" : String(h).padStart(2, "0");
+    } else {
+      return h === 12 ? "12" : String(h + 12).padStart(2, "0");
+    }
+  }
   type WorkingHoursUI = Record<
     "Su" | "Mo" | "Tu" | "We" | "Th" | "Fr" | "Sa",
     DayHours
@@ -110,13 +139,69 @@
 
   function defaultWorkingHoursUI(): WorkingHoursUI {
     const d: WorkingHoursUI = {
-      Su: { open: false, start: "09", end: "17" },
-      Mo: { open: true, start: "09", end: "17" },
-      Tu: { open: true, start: "09", end: "17" },
-      We: { open: true, start: "09", end: "17" },
-      Th: { open: true, start: "09", end: "17" },
-      Fr: { open: true, start: "09", end: "17" },
-      Sa: { open: false, start: "09", end: "17" },
+      Su: {
+        open: false,
+        start: "09",
+        end: "17",
+        startHour: "09",
+        startPeriod: "AM",
+        endHour: "05",
+        endPeriod: "PM",
+      },
+      Mo: {
+        open: true,
+        start: "09",
+        end: "17",
+        startHour: "09",
+        startPeriod: "AM",
+        endHour: "05",
+        endPeriod: "PM",
+      },
+      Tu: {
+        open: true,
+        start: "09",
+        end: "17",
+        startHour: "09",
+        startPeriod: "AM",
+        endHour: "05",
+        endPeriod: "PM",
+      },
+      We: {
+        open: true,
+        start: "09",
+        end: "17",
+        startHour: "09",
+        startPeriod: "AM",
+        endHour: "05",
+        endPeriod: "PM",
+      },
+      Th: {
+        open: true,
+        start: "09",
+        end: "17",
+        startHour: "09",
+        startPeriod: "AM",
+        endHour: "05",
+        endPeriod: "PM",
+      },
+      Fr: {
+        open: true,
+        start: "09",
+        end: "17",
+        startHour: "09",
+        startPeriod: "AM",
+        endHour: "05",
+        endPeriod: "PM",
+      },
+      Sa: {
+        open: false,
+        start: "09",
+        end: "17",
+        startHour: "09",
+        startPeriod: "AM",
+        endHour: "05",
+        endPeriod: "PM",
+      },
     };
     return d;
   }
@@ -135,7 +220,19 @@
         string,
         string,
       ];
-      if (ui[code]) ui[code] = { open: true, start, end };
+      if (ui[code]) {
+        const startTime = militaryTo12Hour(start);
+        const endTime = militaryTo12Hour(end);
+        ui[code] = {
+          open: true,
+          start,
+          end,
+          startHour: startTime.hour,
+          startPeriod: startTime.period,
+          endHour: endTime.hour,
+          endPeriod: endTime.period,
+        };
+      }
     }
     return ui;
   }
@@ -190,7 +287,7 @@
     secondary_contact_state: "",
     secondary_contact_zipcode: "",
     // Login / username
-    username_format: "",
+    //username_format: "",
     user_initial_password: "",
     // Meta (read only)
     org_creation_date: "",
@@ -262,7 +359,7 @@
     secondary_contact_city: "Secondary Contact City",
     secondary_contact_state: "Secondary Contact State",
     secondary_contact_zipcode: "Secondary Contact Zip",
-    username_format: "Username Format",
+    //username_format: "Username Format",
     user_initial_password: "Initial Password",
   };
   let fieldErrors = $state<Record<string, string>>({});
@@ -287,7 +384,7 @@
         "primary_contact_zipcode",
       ],
       4: [], // secondary optional
-      5: ["username_format", "user_initial_password"],
+      5: ["user_initial_password"],
       6: [], // review
     };
     const keys = requiredByStep[stepIdx] ?? [];
@@ -617,13 +714,13 @@
       delete payload.org_creation_date;
       delete payload.first_ride_date;
       delete payload.last_activity_in_portal;
-
+      console.log("Updating org_id:", editingOrg.org_id);
+      console.log("Payload:", payload);
       const { error } = await supabase
         .from("organization")
         .update(payload)
         .eq("org_id", editingOrg.org_id)
-        .select()
-        .single();
+        .select();
 
       if (error) {
         showEditMessage(
@@ -1179,26 +1276,72 @@
                             />
                           </td>
                           <td class="px-3 py-2">
-                            <select
-                              class="border rounded px-2 py-1"
-                              bind:value={whAdd[d.code].start}
-                              disabled={!whAdd[d.code].open}
-                            >
-                              {#each HOUR_OPTS as h}<option value={h}
-                                  >{h}:00</option
-                                >{/each}
-                            </select>
+                            <div class="flex gap-1">
+                              <select
+                                class="border rounded px-2 py-1"
+                                bind:value={whAdd[d.code].startHour}
+                                disabled={!whAdd[d.code].open}
+                                onchange={() => {
+                                  whAdd[d.code].start = hourTo24(
+                                    whAdd[d.code].startHour,
+                                    whAdd[d.code].startPeriod
+                                  );
+                                }}
+                              >
+                                {#each HOUR_OPTS_12 as h}<option value={h}
+                                    >{h}</option
+                                  >{/each}
+                              </select>
+                              <select
+                                class="border rounded px-2 py-1"
+                                bind:value={whAdd[d.code].startPeriod}
+                                onchange={() => {
+                                  whAdd[d.code].start = hourTo24(
+                                    whAdd[d.code].startHour,
+                                    whAdd[d.code].startPeriod
+                                  );
+                                }}
+                                disabled={!whAdd[d.code].open}
+                              >
+                                {#each PERIOD_OPTS as p}<option value={p}
+                                    >{p}</option
+                                  >{/each}
+                              </select>
+                            </div>
                           </td>
                           <td class="px-3 py-2">
-                            <select
-                              class="border rounded px-2 py-1"
-                              bind:value={whAdd[d.code].end}
-                              disabled={!whAdd[d.code].open}
-                            >
-                              {#each HOUR_OPTS as h}<option value={h}
-                                  >{h}:00</option
-                                >{/each}
-                            </select>
+                            <div class="flex gap-1">
+                              <select
+                                class="border rounded px-2 py-1"
+                                bind:value={whAdd[d.code].endHour}
+                                onchange={() => {
+                                  whAdd[d.code].end = hourTo24(
+                                    whAdd[d.code].endHour,
+                                    whAdd[d.code].endPeriod
+                                  );
+                                }}
+                                disabled={!whAdd[d.code].open}
+                              >
+                                {#each HOUR_OPTS_12 as h}<option value={h}
+                                    >{h}</option
+                                  >{/each}
+                              </select>
+                              <select
+                                class="border rounded px-2 py-1"
+                                bind:value={whAdd[d.code].endPeriod}
+                                onchange={() => {
+                                  whAdd[d.code].end = hourTo24(
+                                    whAdd[d.code].endHour,
+                                    whAdd[d.code].endPeriod
+                                  );
+                                }}
+                                disabled={!whAdd[d.code].open}
+                              >
+                                {#each PERIOD_OPTS as p}<option value={p}
+                                    >{p}</option
+                                  >{/each}
+                              </select>
+                            </div>
                           </td>
                         </tr>
                       {/each}
@@ -1461,7 +1604,7 @@
           <!-- STEP 5: Login -->
           {#if addStep === 5}
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
+              <!--  <div>
                 <label class="block text-sm font-medium"
                   >{labelWithRequired(
                     "Username Format",
@@ -1479,7 +1622,7 @@
                 <p class="mt-1 text-xs text-gray-500">
                   {usernameExample(form.username_format, "John", "Doe")}
                 </p>
-              </div>
+              </div> -->
               <div>
                 <label class="block text-sm font-medium"
                   >{labelWithRequired(
@@ -1542,10 +1685,10 @@
                 <span class="font-medium">Primary Contact:</span>
                 {form.primary_contact_name} ({form.primary_contact_email})
               </p>
-              <p>
+              <!--  <p>
                 <span class="font-medium">Username Format:</span>
                 {form.username_format}
-              </p>
+              </p> -->
             </div>
           {/if}
 
@@ -1763,26 +1906,72 @@
                             /></td
                           >
                           <td class="px-3 py-2">
-                            <select
-                              class="border rounded px-2 py-1"
-                              bind:value={whEdit[d.code].start}
-                              disabled={!whEdit[d.code].open}
-                            >
-                              {#each HOUR_OPTS as h}<option value={h}
-                                  >{h}:00</option
-                                >{/each}
-                            </select>
+                            <div class="flex gap-1">
+                              <select
+                                class="border rounded px-2 py-1"
+                                bind:value={whEdit[d.code].startHour}
+                                onchange={() => {
+                                  whEdit[d.code].start = hourTo24(
+                                    whEdit[d.code].startHour,
+                                    whEdit[d.code].startPeriod
+                                  );
+                                }}
+                                disabled={!whEdit[d.code].open}
+                              >
+                                {#each HOUR_OPTS_12 as h}<option value={h}
+                                    >{h}</option
+                                  >{/each}
+                              </select>
+                              <select
+                                class="border rounded px-2 py-1"
+                                bind:value={whEdit[d.code].startPeriod}
+                                onchange={() => {
+                                  whEdit[d.code].start = hourTo24(
+                                    whEdit[d.code].startHour,
+                                    whEdit[d.code].startPeriod
+                                  );
+                                }}
+                                disabled={!whEdit[d.code].open}
+                              >
+                                {#each PERIOD_OPTS as p}<option value={p}
+                                    >{p}</option
+                                  >{/each}
+                              </select>
+                            </div>
                           </td>
                           <td class="px-3 py-2">
-                            <select
-                              class="border rounded px-2 py-1"
-                              bind:value={whEdit[d.code].end}
-                              disabled={!whEdit[d.code].open}
-                            >
-                              {#each HOUR_OPTS as h}<option value={h}
-                                  >{h}:00</option
-                                >{/each}
-                            </select>
+                            <div class="flex gap-1">
+                              <select
+                                class="border rounded px-2 py-1"
+                                bind:value={whEdit[d.code].endHour}
+                                onchange={() => {
+                                  whEdit[d.code].end = hourTo24(
+                                    whEdit[d.code].endHour,
+                                    whEdit[d.code].endPeriod
+                                  );
+                                }}
+                                disabled={!whEdit[d.code].open}
+                              >
+                                {#each HOUR_OPTS_12 as h}<option value={h}
+                                    >{h}</option
+                                  >{/each}
+                              </select>
+                              <select
+                                class="border rounded px-2 py-1"
+                                bind:value={whEdit[d.code].endPeriod}
+                                onchange={() => {
+                                  whEdit[d.code].end = hourTo24(
+                                    whEdit[d.code].endHour,
+                                    whEdit[d.code].endPeriod
+                                  );
+                                }}
+                                disabled={!whEdit[d.code].open}
+                              >
+                                {#each PERIOD_OPTS as p}<option value={p}
+                                    >{p}</option
+                                  >{/each}
+                              </select>
+                            </div>
                           </td>
                         </tr>
                       {/each}
@@ -2042,7 +2231,7 @@
 
           {#if editStep === 5}
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
+              <!-- <div>
                 <label class="block text-sm font-medium"
                   >{labelWithRequired(
                     "Username Format",
@@ -2060,7 +2249,7 @@
                 <p class="mt-1 text-xs text-gray-500">
                   {usernameExample(form.username_format, "John", "Doe")}
                 </p>
-              </div>
+              </div> -->
               <div>
                 <label class="block text-sm font-medium"
                   >{labelWithRequired(
@@ -2120,10 +2309,10 @@
                 <span class="font-medium">Primary Contact:</span>
                 {form.primary_contact_name} ({form.primary_contact_email})
               </p>
-              <p>
+              <!-- <p>
                 <span class="font-medium">Username Format:</span>
                 {form.username_format}
-              </p>
+              </p> -->
             </div>
           {/if}
 

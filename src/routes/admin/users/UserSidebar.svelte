@@ -164,8 +164,10 @@
       town_preference: user.town_preference || "",
       allergens: user.allergens || "",
       driver_other_limitations: user.driver_other_limitations || "",
-      cannot_handle_mobility_devices: Array.isArray((user as any).cannot_handle_mobility_devices) 
-        ? (user as any).cannot_handle_mobility_devices 
+      cannot_handle_mobility_devices: Array.isArray(
+        (user as any).cannot_handle_mobility_devices
+      )
+        ? (user as any).cannot_handle_mobility_devices
         : [],
       primary_is_cell: user.primary_is_cell,
       primary_can_text: user.primary_can_text,
@@ -182,7 +184,7 @@
       if (!form.email || !form.email.trim()) errs.push("Email is required.");
       if (!form.primary_phone || !form.primary_phone.trim())
         errs.push("Primary phone is required.");
-      if (createMode && !tempPassword) 
+      if (createMode && !tempPassword)
         errs.push("Temporary password is required for new users.");
       if (createMode && tempPassword && tempPassword.length < 6)
         errs.push("Password must be at least 6 characters.");
@@ -203,13 +205,14 @@
       if (!form.state || !form.state.trim()) errs.push("State is required.");
       if (form.state && form.state.length > 2)
         errs.push("Use 2-letter state code.");
-      if (!form.zipcode || !String(form.zipcode).trim()) errs.push("ZIP is required.");
+      if (!form.zipcode || !String(form.zipcode).trim())
+        errs.push("ZIP is required.");
       if (form.zipcode && !/^\d{5}(-\d{4})?$/.test(String(form.zipcode)))
         errs.push("ZIP code looks invalid.");
     }
     return errs;
   }
-  
+
   function next() {
     const e = validateStep(step);
     if (e.length) {
@@ -219,7 +222,7 @@
     errorMessage = null;
     step = Math.min(3, step + 1);
   }
-  
+
   function back() {
     step = Math.max(1, step - 1);
     errorMessage = null;
@@ -250,7 +253,7 @@
 
     saving = true;
     errorMessage = null;
-    
+
     try {
       if (createMode) {
         const payload = {
@@ -371,7 +374,9 @@
           </div>
           {#if user.active === false}
             <div class="mt-2">
-              <span class="inline-flex items-center px-2 py-1 rounded-full text-xs bg-red-100 text-red-800">
+              <span
+                class="inline-flex items-center px-2 py-1 rounded-full text-xs bg-red-100 text-red-800"
+              >
                 Inactive
               </span>
             </div>
@@ -466,18 +471,20 @@
               <div class="text-xs text-gray-500">Allergens</div>
               <div class="font-medium">{user.allergens || "—"}</div>
             </div>
-            <div>
-              <div class="text-xs text-gray-500">Other Driver Limitations</div>
-              <div class="font-medium">
-                {user.driver_other_limitations || "—"}
-              </div>
-            </div>
             {#if normalizeRoles(user.role).includes("Driver")}
               <div>
-                <div class="text-xs text-gray-500">Cannot Handle Mobility Devices</div>
+                <div class="text-xs text-gray-500">
+                  Cannot Handle Mobility Devices
+                </div>
                 <div class="font-medium">
-                  {Array.isArray((user as any).cannot_handle_mobility_devices) && (user as any).cannot_handle_mobility_devices.length > 0
-                    ? (user as any).cannot_handle_mobility_devices.map((d: string) => d.charAt(0).toUpperCase() + d.slice(1)).join(", ")
+                  {Array.isArray(
+                    (user as any).cannot_handle_mobility_devices
+                  ) && (user as any).cannot_handle_mobility_devices.length > 0
+                    ? (user as any).cannot_handle_mobility_devices
+                        .map(
+                          (d: string) => d.charAt(0).toUpperCase() + d.slice(1)
+                        )
+                        .join(", ")
                     : "None"}
                 </div>
               </div>
@@ -507,8 +514,10 @@
               title={`Go to step ${s}`}
               onclick={() => goToUserStep(s)}
               class="w-8 h-8 rounded-full flex items-center justify-center text-sm transition-colors
-                    {step === s ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}"
-              aria-current={step === s ? 'step' : undefined}
+                    {step === s
+                ? 'bg-blue-600 text-white'
+                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}"
+              aria-current={step === s ? "step" : undefined}
               aria-label={`Step ${s}`}
             >
               {s}
@@ -518,7 +527,9 @@
                 type="button"
                 aria-label={`Jump toward step ${s + 1}`}
                 onclick={() => goToUserStep(s + 1)}
-                class="w-8 h-[2px] rounded {step > s ? 'bg-blue-600' : 'bg-gray-200 hover:bg-gray-300'}"
+                class="w-8 h-[2px] rounded {step > s
+                  ? 'bg-blue-600'
+                  : 'bg-gray-200 hover:bg-gray-300'}"
               />
             {/if}
           </div>
@@ -527,44 +538,44 @@
 
       {#if step === 1}
         <div class="space-y-3">
-    <div>
+          <div>
             <label class="block text-base font-medium">First Name *</label
             ><input
               required
               class="mt-1 w-full border rounded px-3 py-2 text-base"
               bind:value={form.first_name}
             />
-    </div>
-    <div>
+          </div>
+          <div>
             <label class="block text-base font-medium">Last Name *</label><input
               required
               class="mt-1 w-full border rounded px-3 py-2 text-base"
               bind:value={form.last_name}
             />
-    </div>
-    <div>
+          </div>
+          <div>
             <label class="block text-base font-medium">Email *</label>
-      <input 
+            <input
               required
               class="mt-1 w-full border rounded px-3 py-2 text-base"
-        type="email" 
-        bind:value={form.email} 
-        disabled={!createMode && !!user}
+              type="email"
+              bind:value={form.email}
+              disabled={!createMode && !!user}
             />
             {#if !createMode && user}<p class="text-xs text-gray-500 mt-1">
                 Email cannot be changed after creation
               </p>{/if}
-    </div>
-    {#if createMode}
-      <div>
+          </div>
+          {#if createMode}
+            <div>
               <label class="block text-base font-medium"
                 >Temporary Password *</label
               >
-        <input 
+              <input
                 required
                 class="mt-1 w-full border rounded px-3 py-2 text-base"
-          type="password" 
-          bind:value={tempPassword} 
+                type="password"
+                bind:value={tempPassword}
                 placeholder="Minimum 6 characters"
                 autocomplete="new-password"
               />
@@ -593,8 +604,8 @@
               {:else if tempPassword && tempPasswordConfirm && tempPassword === tempPasswordConfirm}
                 <p class="text-xs text-green-600 mt-1">✓ Passwords match</p>
               {/if}
-      </div>
-    {/if}
+            </div>
+          {/if}
           <div>
             <label class="block text-base font-medium">Primary Phone *</label
             ><input
@@ -603,15 +614,15 @@
               bind:value={form.primary_phone}
             />
           </div>
-    <div>
+          <div>
             <label class="block text-base font-medium">Secondary Phone</label
             ><input
               class="mt-1 w-full border rounded px-3 py-2 text-base"
               bind:value={form.secondary_phone}
             />
-    </div>
+          </div>
 
-    <div>
+          <div>
             <label class="block text-base font-medium">Roles *</label>
             <div class="mt-2 grid grid-cols-2 gap-2">
               {#each visibleRoles as r}
@@ -626,10 +637,10 @@
                     }}
                   />
                   <span>{r}</span>
-          </label>
-        {/each}
-      </div>
-    </div>
+                </label>
+              {/each}
+            </div>
+          </div>
         </div>
       {/if}
 
@@ -655,7 +666,7 @@
               <option value="Female">Female</option>
               <option value="Other">Other</option>
             </select>
-    </div>
+          </div>
           <div>
             <label class="block text-base font-medium"
               >Contact Preference *</label
@@ -715,49 +726,86 @@
         <div class="space-y-3">
           <!-- REACTIVATE BUTTON FOR INACTIVE USERS -->
           {#if !createMode && user && user.active === false}
-            <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
+            <div
+              class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4"
+            >
               <div class="flex items-start gap-3">
                 <div class="flex-shrink-0">
-                  <svg class="w-5 h-5 text-yellow-600" fill="currentColor" viewBox="0 0 20 20">
-                    <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                  <svg
+                    class="w-5 h-5 text-yellow-600"
+                    fill="currentColor"
+                    viewBox="0 0 20 20"
+                  >
+                    <path
+                      fill-rule="evenodd"
+                      d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
+                      clip-rule="evenodd"
+                    />
                   </svg>
                 </div>
                 <div class="flex-1">
-                  <h4 class="text-sm font-medium text-yellow-800 mb-1">User is Deactivated</h4>
-                  <p class="text-sm text-yellow-700 mb-3">This user account is currently inactive. Click below to reactivate this user.</p>
+                  <h4 class="text-sm font-medium text-yellow-800 mb-1">
+                    User is Deactivated
+                  </h4>
+                  <p class="text-sm text-yellow-700 mb-3">
+                    This user account is currently inactive. Click below to
+                    reactivate this user.
+                  </p>
                   <button
                     type="button"
                     onclick={async () => {
                       if (!user) return;
-                      if (!confirm(`Reactivate ${user.first_name} ${user.last_name}?`)) return;
-                      
+                      if (
+                        !confirm(
+                          `Reactivate ${user.first_name} ${user.last_name}?`
+                        )
+                      )
+                        return;
+
                       try {
-                        const response = await fetch(`${import.meta.env.VITE_API_URL}/staff-profiles/${user.user_id}`, {
-                          method: 'PUT',
-                          headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${session.access_token}`
-                          },
-                          body: JSON.stringify({ active: true })
-                        });
+                        const response = await fetch(
+                          `${import.meta.env.VITE_API_URL}/staff-profiles/${user.user_id}`,
+                          {
+                            method: "PUT",
+                            headers: {
+                              "Content-Type": "application/json",
+                              Authorization: `Bearer ${session.access_token}`,
+                            },
+                            body: JSON.stringify({ active: true }),
+                          }
+                        );
 
                         if (!response.ok) {
                           const errorData = await response.json();
-                          throw new Error(errorData.error || 'Failed to reactivate user');
+                          throw new Error(
+                            errorData.error || "Failed to reactivate user"
+                          );
                         }
 
-                        toastStore.success('User reactivated successfully');
-                        dispatch('updated');
-                        dispatch('close');
+                        toastStore.success("User reactivated successfully");
+                        dispatch("updated");
+                        dispatch("close");
                       } catch (error: any) {
-                        console.error('Reactivate error:', error);
-                        toastStore.error(`Failed to reactivate user: ${error.message}`);
+                        console.error("Reactivate error:", error);
+                        toastStore.error(
+                          `Failed to reactivate user: ${error.message}`
+                        );
                       }
                     }}
                     class="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium"
                   >
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    <svg
+                      class="w-4 h-4"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                      />
                     </svg>
                     Reactivate User
                   </button>
@@ -817,7 +865,7 @@
               class="mt-1 w-full border rounded px-3 py-2 text-base"
               bind:value={form.destination_limitation}
             />
-      </div>
+          </div>
           <div>
             <label class="block text-base font-medium">Town Preference</label
             ><input
@@ -832,15 +880,6 @@
               class="mt-1 w-full border rounded px-3 py-2 text-base"
               bind:value={form.allergens}
             />
-      </div>
-          <div>
-            <label class="block text-base font-medium"
-              >Other Driver Limitations</label
-            ><textarea
-              rows="2"
-              class="mt-1 w-full border rounded px-3 py-2 text-base"
-              bind:value={form.driver_other_limitations}
-            />
           </div>
           {#if form.role && (Array.isArray(form.role) ? form.role.includes("Driver") : form.role === "Driver")}
             <div>
@@ -848,11 +887,14 @@
                 >Cannot Handle Mobility Devices</label
               >
               <p class="text-xs text-gray-500 mb-2">
-                Select mobility devices this driver cannot handle. These drivers will be excluded from rides with clients using these devices.
+                Select mobility devices this driver cannot handle. These drivers
+                will be excluded from rides with clients using these devices.
               </p>
               <div class="space-y-2">
-                {#each ["cane", "light walker", "roll-leader"] as device}
-                  {@const isSelected = form.cannot_handle_mobility_devices?.includes(device) || false}
+                {#each ["cane", "crutches", "light walker", "rollator"] as device}
+                  {@const isSelected =
+                    form.cannot_handle_mobility_devices?.includes(device) ||
+                    false}
                   <label class="flex items-center gap-2 cursor-pointer">
                     <input
                       type="checkbox"
@@ -862,17 +904,29 @@
                           form.cannot_handle_mobility_devices = [];
                         }
                         if (e.currentTarget.checked) {
-                          if (!form.cannot_handle_mobility_devices.includes(device)) {
-                            form.cannot_handle_mobility_devices = [...form.cannot_handle_mobility_devices, device];
+                          if (
+                            !form.cannot_handle_mobility_devices.includes(
+                              device
+                            )
+                          ) {
+                            form.cannot_handle_mobility_devices = [
+                              ...form.cannot_handle_mobility_devices,
+                              device,
+                            ];
                           }
                         } else {
-                          form.cannot_handle_mobility_devices = form.cannot_handle_mobility_devices.filter((d: string) => d !== device);
+                          form.cannot_handle_mobility_devices =
+                            form.cannot_handle_mobility_devices.filter(
+                              (d: string) => d !== device
+                            );
                         }
                         form = form;
                       }}
                       class="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
                     />
-                    <span class="text-sm text-gray-700 capitalize">{device}</span>
+                    <span class="text-sm text-gray-700 capitalize"
+                      >{device}</span
+                    >
                   </label>
                 {/each}
               </div>
@@ -887,9 +941,8 @@
   {#if createMode || mode === "edit"}
     <div class="px-6 py-4 border-t flex items-center justify-between">
       <div>
-        {#if step > 1}<button
-            onclick={back}
-            class="px-4 py-2 rounded-lg border">Back</button
+        {#if step > 1}<button onclick={back} class="px-4 py-2 rounded-lg border"
+            >Back</button
           >{/if}
       </div>
       <div class="flex gap-2">
@@ -898,20 +951,20 @@
           class="px-4 py-2 rounded-lg border">Cancel</button
         >
         {#if step < 3}
-    <button 
+          <button
             onclick={next}
             class="px-4 py-2 rounded-lg bg-blue-600 text-white">Next</button
-    >
+          >
         {:else}
-    <button 
-      onclick={saveUser} 
-      disabled={saving} 
+          <button
+            onclick={saveUser}
+            disabled={saving}
             class="px-4 py-2 rounded-lg bg-blue-600 text-white disabled:opacity-50"
-    >
+          >
             {saving ? "Saving..." : createMode ? "Create User" : "Save Changes"}
-    </button>
+          </button>
         {/if}
       </div>
-  </div>
+    </div>
   {/if}
 </div>

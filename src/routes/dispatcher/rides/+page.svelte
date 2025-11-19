@@ -3,21 +3,23 @@
   import { Card } from "$lib/components/ui/card";
   import { Input } from "$lib/components/ui/input";
   import Textarea from "$lib/components/ui/textarea.svelte";
-  import {
-    Car,
-    Clock,
-    MapPin,
-    User,
-    Phone,
-    Calendar,
-    Search,
-    Plus,
-    Edit,
-    AlertCircle,
-    UserCheck,
-    CheckCircle,
-    FileText
-  } from "@lucide/svelte";
+import {
+  Car,
+  Clock,
+  MapPin,
+  User,
+  Phone,
+  Calendar,
+  Search,
+  Plus,
+  Edit,
+  AlertCircle,
+  UserCheck,
+  CheckCircle,
+  FileText,
+  ChevronDown,
+  ChevronUp
+} from "@lucide/svelte";
   import { invalidateAll } from "$app/navigation";
   import { onMount } from "svelte";
   import type { PageData } from "./$types";
@@ -32,13 +34,13 @@
     sanitizeInput,
     combineValidations,
   } from "$lib/utils/validation";
-  import { page } from "$app/stores"; 
+  import { page } from "$app/stores";
 
   let { data }: { data: PageData } = $props();
 
   let searchTerm = $state("");
   let activeTab = $state("requested");
-  
+
   let isUpdating = $state(false);
   let showCreateModal = $state(false);
   let showEditModal = $state(false);
@@ -50,6 +52,12 @@
   const dispatcherName = $derived(() =>
     data?.profile ? `${data.profile.first_name} ${data.profile.last_name}` : ""
   );
+
+  const minDaysInAdvance = $derived(() => {
+    const v = (data as any)?.organization
+      ?.min_days_in_advance_for_ride_requests;
+    return typeof v === "number" && v > 0 ? v : 0;
+  });
 
   const isEditing = $derived(() => !!selectedRide && showEditModal);
   const userOrgId: number | null = data?.profile?.org_id ?? null;
@@ -91,10 +99,13 @@
     if (!data.rides) return [];
     return data.rides.filter((ride: any) => {
       // Dispatcher filter (My Rides vs All Rides)
-      if (showOnlyMyRides && ride.dispatcher_user_id !== data.profile?.user_id) {
+      if (
+        showOnlyMyRides &&
+        ride.dispatcher_user_id !== data.profile?.user_id
+      ) {
         return false;
       }
-      
+
       const clientName = ride.clients
         ? `${ride.clients.first_name} ${ride.clients.last_name}`
         : "Unknown Client";
@@ -111,14 +122,16 @@
             .toLowerCase()
             .includes(searchTerm.toLowerCase())) ||
         driverName.toLowerCase().includes(searchTerm.toLowerCase());
-      
+
       let matchesTab = false;
       if (activeTab === "requested") matchesTab = ride.status === "Requested";
       else if (activeTab === "active")
-        matchesTab = ["Scheduled", "Assigned", "In Progress"].includes(ride.status);
+        matchesTab = ["Scheduled", "Assigned", "In Progress"].includes(
+          ride.status
+        );
       else if (activeTab === "completed")
         matchesTab = ["Completed", "Cancelled"].includes(ride.status);
-      
+
       return matches && matchesTab;
     });
   });
@@ -155,6 +168,118 @@
         return "bg-gray-100 text-gray-800";
     }
   }
+  function parseDaysOff(
+    daysOffStr: string | null
+  ): { month: number; day: number; year?: number }[] {
+    if (!daysOffStr) return [];
+
+    const dates: { month: number; day: number; year?: number }[] = [];
+    const parts = daysOffStr
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+    for (const part of parts) {
+      try {
+        const segments = part.split("/");
+
+        if (segments.length === 2) {
+          // Format: "7/4", "12/25" - recurring every year
+          const month = parseInt(segments[0], 10) - 1;
+          const day = parseInt(segments[1], 10);
+          dates.push({ month, day });
+        } else if (segments.length === 3) {
+          // Format: "4/5/25" or "4/5/2025" - specific year
+          const month = parseInt(segments[0], 10) - 1;
+          const day = parseInt(segments[1], 10);
+          let year = parseInt(segments[2], 10);
+
+          if (year < 100) {
+            year += 2000;
+          }
+
+          dates.push({ month, day, year });
+        }
+      } catch (e) {
+        console.warn(`Failed to parse date: ${part}`, e);
+      }
+    }
+
+    return dates;
+  }
+
+  // Check if a date is in the organization's days-off
+  function isDateOff(dateStr: string): boolean {
+    if (!dateStr) {
+      return false;
+    }
+
+    const orgDaysOff = (data as any)?.organization?.["days-off"];
+
+    if (!orgDaysOff) {
+      return false;
+    }
+
+    const daysOff = parseDaysOff(orgDaysOff);
+
+    const inputDate = new Date(dateStr);
+
+    const result = daysOff.some((offDate) => {
+      const monthMatch = inputDate.getMonth() === offDate.month;
+      const dayMatch = inputDate.getDate() === offDate.day;
+
+      if (offDate.year !== undefined) {
+        return (
+          monthMatch && dayMatch && inputDate.getFullYear() === offDate.year
+        );
+      }
+
+      return monthMatch && dayMatch;
+    });
+
+    return result;
+  }
+// Validate appointment time against organization days-off
+function validateAppointmentTime(dateStr: string): string | null {
+  if (!dateStr) {
+    return null;
+  }
+
+  const result = isDateOff(dateStr);
+
+  if (result) {
+    const date = new Date(dateStr);
+    const formattedDate = date.toLocaleDateString();
+
+    return `Your organization is closed on ${formattedDate}. Please select a different date.`;
+  }
+
+  return null;
+}
+
+function validateMinDays(localDateTime: string, label: string): string | null {
+  const min = minDaysInAdvance(); // call the derived value
+  if (!localDateTime || !min) return null;
+
+  const dt = new Date(localDateTime);
+  if (Number.isNaN(dt.getTime())) {
+    return `${label} is invalid.`;
+  }
+
+  const now = new Date();
+  const diffMs = dt.getTime() - now.getTime();
+  const diffDays = diffMs / (1000 * 60 * 60 * 24);
+
+  if (diffDays < min) {
+    if (min === 1) {
+      return `${label} must be at least 1 day in advance.`;
+    }
+    return `${label} must be at least ${min} days in advance.`;
+  }
+
+  return null;
+}
+
 
   function getTripTypeColor(completionStatus: string) {
     switch (completionStatus) {
@@ -168,18 +293,21 @@
         return "bg-gray-100 text-gray-800";
     }
   }
-  
+
   const formatDate = (ts: string) => {
-    if (!ts) return '';
+    if (!ts) return "";
     // Strip 'Z' to prevent UTC interpretation
-    const cleaned = ts.replace(/Z$/, '');
+    const cleaned = ts.replace(/Z$/, "");
     return new Date(cleaned).toLocaleDateString();
   };
   const formatTime = (ts: string) => {
-    if (!ts) return '';
+    if (!ts) return "";
     // Strip 'Z' to prevent UTC interpretation
-    const cleaned = ts.replace(/Z$/, '');
-    return new Date(cleaned).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    const cleaned = ts.replace(/Z$/, "");
+    return new Date(cleaned).toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
   };
   const getClientName = (ride: any) =>
     ride.clients
@@ -197,11 +325,13 @@
   let clientQueryEdit = $state("");
   let showClientListCreate = $state(false);
   let showClientListEdit = $state(false);
+  let expandedClientDetailsCreate = $state<{ [key: number]: boolean }>({});
+  let expandedClientDetailsEdit = $state<{ [key: number]: boolean }>({});
 
   function norm(s: unknown) {
     return (s ?? "").toString().toLowerCase().trim();
   }
-  
+
   function fullName(c: any) {
     return `${c.first_name ?? ""} ${c.last_name ?? ""}`.trim();
   }
@@ -278,11 +408,21 @@
     }
   }
 
+  function toggleClientDetailsCreate(clientId: number) {
+    expandedClientDetailsCreate[clientId] =
+      !expandedClientDetailsCreate[clientId];
+  }
+
+  function toggleClientDetailsEdit(clientId: number) {
+    expandedClientDetailsEdit[clientId] =
+      !expandedClientDetailsEdit[clientId];
+  }
+
   /* ---------------- Estimated length parsing/formatting ---------------- */
   function plural(n: number, one: string, many: string) {
     return `${n} ${n === 1 ? one : many}`;
   }
-  
+
   function parseEstimatedLen(raw: unknown): { h: number; m: number } | null {
     if (raw == null) return null;
     const s = String(raw).trim().toLowerCase();
@@ -296,7 +436,7 @@
         return { h, m: mi };
       return null;
     }
-    
+
     m = s.match(
       /^(\d+(?:\.\d+)?)\s*(h|hr|hrs|hour|hours)\s*(\d+)?\s*(m|min|mins|minute|minutes)?$/
     );
@@ -307,21 +447,21 @@
       if (m[3]) totalMinutes += parseInt(m[3], 10);
       return { h: Math.floor(totalMinutes / 60), m: totalMinutes % 60 };
     }
-    
+
     m = s.match(/^(\d+)\s*(m|min|mins|minute|minutes)$/);
     if (m) {
       const mins = parseInt(m[1], 10);
       if (!Number.isFinite(mins)) return null;
       return { h: Math.floor(mins / 60), m: mins % 60 };
     }
-    
+
     m = s.match(/^(\d+)$/);
     if (m) {
       const mins = parseInt(m[1], 10);
       if (!Number.isFinite(mins)) return null;
       return { h: Math.floor(mins / 60), m: mins % 60 };
     }
-    
+
     return null;
   }
 
@@ -447,7 +587,7 @@
     rideForm.dropoff_state = dest.state ?? "";
     rideForm.dropoff_zipcode = dest.zipcode ?? "";
   }
-  
+
   function resetDestinationSelection() {
     selectedDestinationId = "";
   }
@@ -507,7 +647,7 @@
     rideForm.alt_pickup_state = client.state ?? "";
     rideForm.alt_pickup_zipcode = client.zip_code ?? "";
   }
-  
+
   $effect(() => {
     if (rideForm.pickup_from_home && rideForm.client_id)
       applyClientAddressToPickup();
@@ -529,20 +669,20 @@
 
   function toLocalDateTimeInput(ts: string | null | undefined) {
     if (!ts) return "";
-    
+
     // Strip 'Z' to treat as local time, not UTC
-    const cleaned = ts.replace(/Z$/, '');
+    const cleaned = ts.replace(/Z$/, "");
     const d = new Date(cleaned);
-    
+
     if (isNaN(d.getTime())) return "";
-    
+
     // Get local time components
     const year = d.getFullYear();
     const month = String(d.getMonth() + 1).padStart(2, "0");
     const day = String(d.getDate()).padStart(2, "0");
     const hours = String(d.getHours()).padStart(2, "0");
     const minutes = String(d.getMinutes()).padStart(2, "0");
-    
+
     return `${year}-${month}-${day}T${hours}:${minutes}`;
   }
 
@@ -550,7 +690,7 @@
     if (!v) return null;
     // Datetime-local gives us "YYYY-MM-DDTHH:MM"
     // Just append :00 for seconds (NO 'Z'!)
-    return v.includes(':') && v.split(':').length === 2 ? `${v}:00` : v;
+    return v.includes(":") && v.split(":").length === 2 ? `${v}:00` : v;
   };
 
   const toISOorNull = (v: string) => {
@@ -600,10 +740,10 @@
       call_id: (ride.call_id ?? "").toString(),
       completion_status: ride.completion_status ?? "Completed Round Trip",
     };
-    
+
     if (rideForm.pickup_from_home && rideForm.client_id)
       applyClientAddressToPickup();
-    
+
     stepErrors = [];
     editStep = 1;
 
@@ -626,32 +766,32 @@
   }
 
   function openForceAcceptModal(ride: any) {
-    console.log('Opening force accept modal for ride:', ride.ride_id);
-    
+    console.log("Opening force accept modal for ride:", ride.ride_id);
+
     if (!data.session?.access_token) {
-      alert('Session expired. Please refresh the page and try again.');
+      alert("Session expired. Please refresh the page and try again.");
       return;
     }
-    
+
     selectedRideForForceAccept = ride;
-    driverSearchForForce = '';
+    driverSearchForForce = "";
     showForceAcceptModal = true;
   }
 
   /* ---------------- diagnostics + payload helpers ---------------- */
   const DEBUG = true;
-  
+
   function isBlank(v: any) {
     if (v === 0 || v === "0") return false;
     if (v === null || v === undefined) return true;
     if (typeof v === "number") return Number.isNaN(v);
     return String(v).trim() === "";
   }
-  
+
   function has(v: any) {
     return !isBlank(v);
   }
-  
+
   function numFromStr(s: string, fallback: number | null): number | null {
     if (!has(s)) return fallback;
     const n = parseFloat(s as any);
@@ -727,7 +867,7 @@
           ? form.status
           : (base.status ?? "Requested")
         : "Requested",
-      
+
       notes: has(form.notes) ? sanitizeInput(form.notes) : (base.notes ?? null),
 
       miles_driven: numFromStr(form.miles_driven, base.miles_driven ?? null),
@@ -764,7 +904,7 @@
       call_id: has(form.call_id)
         ? parseInt(form.call_id, 10)
         : (base.call_id ?? null),
-      
+
       round_trip: form.completion_status === "Completed Round Trip",
       completion_status: has(form.completion_status)
         ? form.completion_status
@@ -796,7 +936,7 @@
       errs.push("Appointment time is required when pickup time is set.");
       return errs;
     }
-    
+
     const appt = new Date(apptLocal);
     const pick = new Date(pickupLocal);
     if (Number.isNaN(appt.getTime())) errs.push("Appointment time is invalid.");
@@ -841,6 +981,34 @@
       errs.push(
         ...pickupWindowErrors(rideForm.appointment_time, rideForm.pickup_time)
       );
+      console.log("🔍 Validating appointment time:", rideForm.appointment_time);
+
+      // Org days-off rule
+      if (rideForm.appointment_time) {
+        const daysOffError = validateAppointmentTime(rideForm.appointment_time);
+        if (daysOffError) {
+          errs.push(daysOffError);
+        }
+      }
+
+      // Min days in advance – appointment
+      if (rideForm.appointment_time) {
+        const minErr = validateMinDays(
+          rideForm.appointment_time,
+          "Appointment time"
+        );
+        if (minErr) {
+          errs.push(minErr);
+        }
+      }
+
+      // Min days in advance – pickup (if set)
+      if (rideForm.pickup_time) {
+        const minErr = validateMinDays(rideForm.pickup_time, "Pickup time");
+        if (minErr) {
+          errs.push(minErr);
+        }
+      }
 
       stepErrors = errs;
       return errs.length === 0;
@@ -922,21 +1090,21 @@
   function nextCreate() {
     if (validateStep(createStep)) createStep = Math.min(3, createStep + 1);
   }
-  
+
   function prevCreate() {
     createStep = Math.max(1, createStep - 1);
     stepErrors = [];
   }
-  
+
   function nextEdit() {
     if (validateStep(editStep)) editStep = Math.min(4, editStep + 1);
   }
-  
+
   function prevEdit() {
     editStep = Math.max(1, editStep - 1);
     stepErrors = [];
   }
-  
+
   function goToCreateStep(target: number) {
     if (target <= createStep) {
       createStep = Math.max(1, Math.min(3, target));
@@ -969,7 +1137,7 @@
       alert("Cannot create ride:\n• " + errs.join("\n• "));
       return;
     }
-    
+
     const payload = buildPayload(rideForm);
     const missing = listMissingRequiredFields(payload, true);
     if (missing.length) {
@@ -984,7 +1152,7 @@
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      
+
       if (r.ok) {
         showCreateModal = false;
         await invalidateAll();
@@ -1012,7 +1180,7 @@
 
   async function updateRide() {
     if (!selectedRide) return;
-    
+
     const errs = pickupWindowErrors(
       rideForm.appointment_time,
       rideForm.pickup_time
@@ -1021,7 +1189,7 @@
       alert("Cannot update ride:\n• " + errs.join("\n• "));
       return;
     }
-    
+
     const payload = buildPayload(rideForm);
     const missing = listMissingRequiredFields(payload, false);
     if (missing.length) {
@@ -1039,7 +1207,7 @@
           body: JSON.stringify(payload),
         }
       );
-      
+
       if (r.ok) {
         showEditModal = false;
         selectedRide = null;
@@ -1127,51 +1295,63 @@
         }
       }
     }
-    
+
     // Check if create parameter is present (from navbar button)
-    const createParam = $page.url.searchParams.get('create');
-    if (createParam === 'true') {
+    const createParam = $page.url.searchParams.get("create");
+    if (createParam === "true") {
       setTimeout(() => {
         openCreateModal();
       }, 100);
-      
+
       // Clean up URL by removing the parameter
       const url = new URL(window.location.href);
-      url.searchParams.delete('create');
-      window.history.replaceState({}, '', url.toString());
+      url.searchParams.delete("create");
+      window.history.replaceState({}, "", url.toString());
     }
   });
 
   async function forceAcceptRide(driverId: string) {
     if (!selectedRideForForceAccept) return;
-    
-    console.log('Force accepting ride:', selectedRideForForceAccept.ride_id, 'for driver:', driverId);
-    
+
+    console.log(
+      "Force accepting ride:",
+      selectedRideForForceAccept.ride_id,
+      "for driver:",
+      driverId
+    );
+
     isUpdating = true;
     try {
-      const response = await fetch(`/dispatcher/rides/force-accept/${selectedRideForForceAccept.ride_id}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ driver_user_id: driverId })
-      });
+      const response = await fetch(
+        `/dispatcher/rides/force-accept/${selectedRideForForceAccept.ride_id}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ driver_user_id: driverId }),
+        }
+      );
 
       const result = await response.json();
-      
+
       if (response.ok && result.success) {
         showForceAcceptModal = false;
         selectedRideForForceAccept = null;
-        driverSearchForForce = '';
+        driverSearchForForce = "";
         await invalidateAll();
-        alert('Ride force accepted successfully! The driver has been assigned and the ride is now scheduled.');
+        alert(
+          "Ride force accepted successfully! The driver has been assigned and the ride is now scheduled."
+        );
       } else {
-        console.error('Failed to force accept ride:', result);
-        alert(`Failed to force accept ride: ${result.error || 'Unknown error'}`);
+        console.error("Failed to force accept ride:", result);
+        alert(
+          `Failed to force accept ride: ${result.error || "Unknown error"}`
+        );
       }
     } catch (error) {
-      console.error('Error force accepting ride:', error);
-      alert('Error force accepting ride. Please try again.');
+      console.error("Error force accepting ride:", error);
+      alert("Error force accepting ride. Please try again.");
     } finally {
       isUpdating = false;
     }
@@ -1179,12 +1359,14 @@
 
   let showForceAcceptModal = $state(false);
   let selectedRideForForceAccept: any = null;
-  let driverSearchForForce = $state('');
+  let driverSearchForForce = $state("");
 
   let filteredDriversForForce = $derived(() => {
     if (!driverSearchForForce) return data.drivers || [];
-    return (data.drivers || []).filter(driver => 
-      `${driver.first_name} ${driver.last_name}`.toLowerCase().includes(driverSearchForForce.toLowerCase())
+    return (data.drivers || []).filter((driver) =>
+      `${driver.first_name} ${driver.last_name}`
+        .toLowerCase()
+        .includes(driverSearchForForce.toLowerCase())
     );
   });
 </script>
@@ -1227,13 +1409,16 @@
         <div class="flex space-x-8 px-6">
           <button
             onclick={() => (activeTab = "requested")}
-            class="py-4 px-1 border-b-2 font-medium text-sm transition-colors {activeTab === 'requested'
+            class="py-4 px-1 border-b-2 font-medium text-sm transition-colors {activeTab ===
+            'requested'
               ? 'border-blue-500 text-blue-600'
               : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}"
           >
-            Requested 
+            Requested
             {#if rideCounts().requested > 0}
-              <span class="ml-2 py-0.5 px-2 rounded-full text-xs bg-gray-100 text-gray-600">
+              <span
+                class="ml-2 py-0.5 px-2 rounded-full text-xs bg-gray-100 text-gray-600"
+              >
                 {rideCounts().requested}
               </span>
             {/if}
@@ -1241,13 +1426,16 @@
 
           <button
             onclick={() => (activeTab = "active")}
-            class="py-4 px-1 border-b-2 font-medium text-sm transition-colors {activeTab === 'active'
+            class="py-4 px-1 border-b-2 font-medium text-sm transition-colors {activeTab ===
+            'active'
               ? 'border-blue-500 text-blue-600'
               : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}"
           >
-            Scheduled/In Progress 
+            Scheduled/In Progress
             {#if rideCounts().active > 0}
-              <span class="ml-2 py-0.5 px-2 rounded-full text-xs bg-blue-100 text-blue-600">
+              <span
+                class="ml-2 py-0.5 px-2 rounded-full text-xs bg-blue-100 text-blue-600"
+              >
                 {rideCounts().active}
               </span>
             {/if}
@@ -1255,13 +1443,16 @@
 
           <button
             onclick={() => (activeTab = "completed")}
-            class="py-4 px-1 border-b-2 font-medium text-sm transition-colors {activeTab === 'completed'
+            class="py-4 px-1 border-b-2 font-medium text-sm transition-colors {activeTab ===
+            'completed'
               ? 'border-blue-500 text-blue-600'
               : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}"
           >
-            Completed/Cancelled 
+            Completed/Cancelled
             {#if rideCounts().completed > 0}
-              <span class="ml-2 py-0.5 px-2 rounded-full text-xs bg-green-100 text-green-600">
+              <span
+                class="ml-2 py-0.5 px-2 rounded-full text-xs bg-green-100 text-green-600"
+              >
                 {rideCounts().completed}
               </span>
             {/if}
@@ -1275,23 +1466,29 @@
         <div class="flex items-center gap-4 mb-4">
           <div class="flex items-center gap-2">
             <button
-              onclick={() => showOnlyMyRides = true}
-              class="px-4 py-2 rounded-lg text-sm font-medium transition-colors {showOnlyMyRides ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}"
+              onclick={() => (showOnlyMyRides = true)}
+              class="px-4 py-2 rounded-lg text-sm font-medium transition-colors {showOnlyMyRides
+                ? 'bg-blue-600 text-white'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}"
             >
               My Ride Requests
             </button>
             <button
-              onclick={() => showOnlyMyRides = false}
-              class="px-4 py-2 rounded-lg text-sm font-medium transition-colors {!showOnlyMyRides ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}"
+              onclick={() => (showOnlyMyRides = false)}
+              class="px-4 py-2 rounded-lg text-sm font-medium transition-colors {!showOnlyMyRides
+                ? 'bg-blue-600 text-white'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}"
             >
               All Ride Requests
             </button>
           </div>
         </div>
-        
+
         <!-- Search Bar -->
         <div class="relative">
-          <Search class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+          <Search
+            class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4"
+          />
           <input
             type="text"
             placeholder="Search rides..."
@@ -1312,23 +1509,36 @@
                     {getClientName(ride)}
                   </h3>
                   <span
-                    class="px-2 py-1 text-xs font-medium rounded-full {getStatusColor(ride.status)}"
+                    class="px-2 py-1 text-xs font-medium rounded-full {getStatusColor(
+                      ride.status
+                    )}"
                   >
                     {ride.status.toUpperCase()}
                   </span>
-                  <span class="px-2 py-1 text-xs font-medium rounded-full {getTripTypeColor(ride.completion_status || 'Completed Round Trip')}">
-                    {ride.completion_status === 'Completed Round Trip' ? 'Round Trip' : 
-                    ride.completion_status === 'Completed One Way To' ? 'One Way To' :
-                    ride.completion_status === 'Completed One Way From' ? 'One Way From' : 
-                    ride.completion_status || 'Round Trip'}
+                  <span
+                    class="px-2 py-1 text-xs font-medium rounded-full {getTripTypeColor(
+                      ride.completion_status || 'Completed Round Trip'
+                    )}"
+                  >
+                    {ride.completion_status === "Completed Round Trip"
+                      ? "Round Trip"
+                      : ride.completion_status === "Completed One Way To"
+                        ? "One Way To"
+                        : ride.completion_status === "Completed One Way From"
+                          ? "One Way From"
+                          : ride.completion_status || "Round Trip"}
                   </span>
-                  <span class="px-2 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-800">
+                  <span
+                    class="px-2 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-800"
+                  >
                     {ride.purpose}
                   </span>
                 </div>
 
                 <!-- 2 columns × 3 rows -->
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-600">
+                <div
+                  class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-600"
+                >
                   <!-- Row 1 -->
                   <div class="flex items-center gap-2">
                     <Phone class="w-4 h-4 text-gray-400" />
@@ -1339,7 +1549,9 @@
                       <FileText class="w-4 h-4 text-gray-400 mt-0.5" />
                       <div class="min-w-0">
                         <span class="font-medium">Notes:</span>
-                        <span class="ml-1 whitespace-pre-wrap break-words">{ride.notes}</span>
+                        <span class="ml-1 whitespace-pre-wrap break-words"
+                          >{ride.notes}</span
+                        >
                       </div>
                     </div>
                   {/if}
@@ -1347,13 +1559,15 @@
                   <!-- Row 2 -->
                   <div class="flex items-center gap-2">
                     <Calendar class="w-4 h-4 text-gray-400" />
-                    {formatDate(ride.appointment_time)} at {formatTime(ride.appointment_time)}
+                    {formatDate(ride.appointment_time)} at {formatTime(
+                      ride.appointment_time
+                    )}
                   </div>
                   <div class="flex items-center gap-2">
                     <MapPin class="w-4 h-4 text-gray-400" />
                     <div>
                       <span class="font-medium">Destination:</span>
-                      <span class="ml-1">{ride.destination_name || '—'}</span>
+                      <span class="ml-1">{ride.destination_name || "—"}</span>
                     </div>
                   </div>
 
@@ -1369,7 +1583,9 @@
                     <AlertCircle class="w-4 h-4 text-gray-400 mt-0.5" />
                     <div>
                       <span class="font-medium">Limitations:</span>
-                      <span class="ml-1">{ride.clients?.other_limitations || 'None'}</span>
+                      <span class="ml-1"
+                        >{ride.clients?.other_limitations || "None"}</span
+                      >
                     </div>
                   </div>
                 </div>
@@ -1433,7 +1649,9 @@
 <!-- ======= CREATE MODAL ======= -->
 {#if showCreateModal}
   <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-    <div class="bg-white rounded-lg p-6 max-w-3xl max-h-[90vh] overflow-y-auto w-full mx-4">
+    <div
+      class="bg-white rounded-lg p-6 max-w-3xl max-h-[90vh] overflow-y-auto w-full mx-4"
+    >
       <div class="mb-4">
         <h2 class="text-xl font-semibold">Create New Ride Request</h2>
         <p class="text-sm text-gray-600">
@@ -1449,8 +1667,11 @@
               type="button"
               title={`Go to step ${s}`}
               onclick={() => goToCreateStep(s)}
-              class="w-8 h-8 rounded-full flex items-center justify-center text-sm transition-colors cursor-pointer {createStep === s ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}"
-              aria-current={createStep === s ? 'step' : undefined}
+              class="w-8 h-8 rounded-full flex items-center justify-center text-sm transition-colors cursor-pointer {createStep ===
+              s
+                ? 'bg-blue-600 text-white'
+                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}"
+              aria-current={createStep === s ? "step" : undefined}
               aria-label={`Step ${s}`}
             >
               {s}
@@ -1460,7 +1681,9 @@
                 type="button"
                 aria-label={`Jump toward step ${s + 1}`}
                 onclick={() => goToCreateStep(s + 1)}
-                class="w-8 h-[2px] rounded {createStep > s ? 'bg-blue-600' : 'bg-gray-200 hover:bg-gray-300'}"
+                class="w-8 h-[2px] rounded {createStep > s
+                  ? 'bg-blue-600'
+                  : 'bg-gray-200 hover:bg-gray-300'}"
               />
             {/if}
           </div>
@@ -1468,7 +1691,9 @@
       </div>
 
       {#if stepErrors.length}
-        <div class="mb-4 bg-red-50 border border-red-200 text-red-800 rounded-lg p-3 text-base">
+        <div
+          class="mb-4 bg-red-50 border border-red-200 text-red-800 rounded-lg p-3 text-base"
+        >
           <div class="font-medium mb-1">Please fix the following:</div>
           <ul class="list-disc ml-5">
             {#each stepErrors as e}<li>{e}</li>{/each}
@@ -1495,39 +1720,66 @@
                 />
                 <input type="hidden" value={rideForm.client_id} />
                 {#if showClientListCreate}
-                  <div class="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow max-h-64 overflow-y-auto">
+                  <div
+                    class="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow max-h-64 overflow-y-auto"
+                  >
                     {#each filteredClientList(clientQueryCreate) as c}
                       <button
                         type="button"
                         class="w-full text-left px-3 py-2 hover:bg-gray-50"
                         onclick={() => selectClientById(c.client_id, false)}
                       >
-                        <div class="font-medium">
-                          {c.first_name} {c.last_name}
+                        <div class="flex items-center justify-between gap-2">
+                          <div class="font-medium">
+                            {c.first_name} {c.last_name}
+                          </div>
+                            <!-- svelte-ignore a11y_click_events_have_key_events -->
+                            <!-- svelte-ignore a11y_no_static_element_interactions -->
+                            <span
+                              class="ml-2 p-1 rounded-full hover:bg-gray-100 text-gray-500 cursor-pointer"
+                              onclick={(event) => {
+                                event.stopPropagation();
+                                toggleClientDetailsCreate(c.client_id);
+                              }}
+                              aria-label={expandedClientDetailsCreate[c.client_id]
+                                ? "Hide client details"
+                                : "Show client details"}
+                            >
+                              {#if expandedClientDetailsCreate[c.client_id]}
+                                <ChevronUp class="w-4 h-4" />
+                              {:else}
+                                <ChevronDown class="w-4 h-4" />
+                              {/if}
+                            </span>
                         </div>
-                        <div class="text-xs text-gray-500">
-                          {c.primary_phone || "—"}{c.email ? ` • ${c.email}` : ""}
-                        </div>
-                        <div class="text-[11px] text-gray-400">
-                          {formatAddress(c) || "—"}
-                        </div>
-                        {#if c.mobility_assistance_enum}
-                          <div class="mt-1 text-[11px] text-blue-600 flex items-start gap-1">
-                            <span class="font-medium">Mobility Device:</span>
-                            <span class="capitalize">{c.mobility_assistance_enum}</span>
+
+                        {#if expandedClientDetailsCreate[c.client_id]}
+                          <div class="mt-1 text-xs text-gray-500">
+                            {c.primary_phone || "—"}{c.email ? ` • ${c.email}` : ""}
+                          </div>
+                          <div class="text-[11px] text-gray-400">
+                            {formatAddress(c) || "—"}
+                          </div>
+                          {#if c.mobility_assistance_enum}
+                            <div class="mt-1 text-[11px] text-blue-600 flex items-start gap-1">
+                              <span class="font-medium">Mobility Device:</span>
+                              <span class="capitalize">{c.mobility_assistance_enum}</span>
+                            </div>
+                          {/if}
+                          <div class="mt-1 text-[11px] text-gray-600 flex items-start gap-1">
+                            <AlertCircle class="w-3 h-3 mt-0.5 text-gray-400" />
+                            <span>
+                              <span class="font-medium">Limitations:</span>
+                              {c.other_limitations || "None"}
+                            </span>
                           </div>
                         {/if}
-                        <div class="mt-1 text-[11px] text-gray-600 flex items-start gap-1">
-                          <AlertCircle class="w-3 h-3 mt-0.5 text-gray-400" />
-                          <span>
-                            <span class="font-medium">Limitations:</span>
-                            {c.other_limitations || 'None'}
-                          </span>
-                        </div>
                       </button>
                     {/each}
                     {#if filteredClientList(clientQueryCreate).length === 0}
-                      <div class="px-3 py-2 text-sm text-gray-500">No matches</div>
+                      <div class="px-3 py-2 text-sm text-gray-500">
+                        No matches
+                      </div>
                     {/if}
                   </div>
                 {/if}
@@ -1559,7 +1811,8 @@
                 {#each filteredCalls() as call}
                   <option value={String(call.call_id)}>
                     {call.call_id} • {new Date(call.call_time).toLocaleString()}
-                    • {call.call_type} • {call.caller_first_name} {call.caller_last_name}
+                    • {call.call_type} • {call.caller_first_name}
+                    {call.caller_last_name}
                   </option>
                 {/each}
               </select>
@@ -1575,9 +1828,15 @@
                 bind:value={rideForm.appointment_time}
                 aria-label="Appointment Time"
               />
-              <p class="text-xs text-gray-500 mt-1">
-                Date &amp; time of the appointment.
-              </p>
+              {#if isDateOff(rideForm.appointment_time)}
+                <p class="text-xs text-red-600 mt-1">
+                  ⚠️ Your organization is closed on this date
+                </p>
+              {:else}
+                <p class="text-xs text-gray-500 mt-1">
+                  Date &amp; time of the appointment.
+                </p>
+              {/if}
             </div>
             <div>
               <label for="pickup_time">Pickup Time</label>
@@ -1610,7 +1869,8 @@
               <label for="pickup_from_home">Pickup from client's home</label>
             </div>
             <p class="text-xs text-gray-500 mt-1">
-              If checked, pickup address is auto-filled from the client and locked.
+              If checked, pickup address is auto-filled from the client and
+              locked.
             </p>
           </div>
 
@@ -1672,18 +1932,24 @@
           </div>
 
           <div class="mt-6">
-            <label for="saved_destination_create">Use a saved destination</label>
+            <label for="saved_destination_create">Use a saved destination</label
+            >
             <select
               id="saved_destination_create"
               bind:value={selectedDestinationId}
-              onchange={(e) => applyDestinationToDropoff((e.target as HTMLSelectElement).value)}
+              onchange={(e) =>
+                applyDestinationToDropoff(
+                  (e.target as HTMLSelectElement).value
+                )}
               class="w-full px-3 py-2 border border-gray-300 rounded-lg"
             >
               <option value="">— Select saved destination (optional) —</option>
               {#each filteredDestinations() as d}
                 <option value={String(d.destination_id)}>
                   {d.location_name || "(No name)"} • {d.address}
-                  {d.city ? `, ${d.city}` : ""}{d.state ? `, ${d.state}` : ""}{d.zipcode ? ` ${d.zipcode}` : ""}
+                  {d.city ? `, ${d.city}` : ""}{d.state
+                    ? `, ${d.state}`
+                    : ""}{d.zipcode ? ` ${d.zipcode}` : ""}
                 </option>
               {/each}
             </select>
@@ -1693,13 +1959,21 @@
           </div>
 
           <div class="mt-6">
-            <label class="text-sm font-semibold text-gray-700">Dropoff Location</label>
-            <p class="text-xs text-gray-500">Where the client will be dropped off.</p>
+            <label class="text-sm font-semibold text-gray-700"
+              >Dropoff Location</label
+            >
+            <p class="text-xs text-gray-500">
+              Where the client will be dropped off.
+            </p>
           </div>
 
           <div class="mt-3 grid gap-3">
             <div>
-              <label for="destination_name">Destination Name <span class="text-gray-500 font-normal">(optional)</span></label>
+              <label for="destination_name"
+                >Destination Name <span class="text-gray-500 font-normal"
+                  >(optional)</span
+                ></label
+              >
               <Input
                 id="destination_name"
                 bind:value={rideForm.destination_name}
@@ -1736,7 +2010,11 @@
                 />
               </div>
               <div>
-                <label for="dropoff_state">Dropoff State <span class="text-gray-500 font-normal">(optional)</span></label>
+                <label for="dropoff_state"
+                  >Dropoff State <span class="text-gray-500 font-normal"
+                    >(optional)</span
+                  ></label
+                >
                 <Input
                   id="dropoff_state"
                   bind:value={rideForm.dropoff_state}
@@ -1744,7 +2022,11 @@
                 />
               </div>
               <div>
-                <label for="dropoff_zipcode">Dropoff ZIP <span class="text-gray-500 font-normal">(optional)</span></label>
+                <label for="dropoff_zipcode"
+                  >Dropoff ZIP <span class="text-gray-500 font-normal"
+                    >(optional)</span
+                  ></label
+                >
                 <Input
                   id="dropoff_zipcode"
                   bind:value={rideForm.dropoff_zipcode}
@@ -1762,7 +2044,11 @@
 
           <div class="grid gap-3 md:grid-cols-3">
             <div>
-              <label for="ride_type_create" class="block text-sm font-medium text-gray-700">Ride Type *</label>
+              <label
+                for="ride_type_create"
+                class="block text-sm font-medium text-gray-700"
+                >Ride Type *</label
+              >
               <select
                 id="ride_type_create"
                 bind:value={rideForm.completion_status}
@@ -1777,7 +2063,10 @@
               </p>
             </div>
             <div>
-              <label for="purpose" class="block text-sm font-medium text-gray-700">Purpose</label>
+              <label
+                for="purpose"
+                class="block text-sm font-medium text-gray-700">Purpose</label
+              >
               <Input
                 id="purpose"
                 bind:value={rideForm.purpose}
@@ -1785,7 +2074,11 @@
               />
             </div>
             <div>
-              <label for="riders" class="block text-sm font-medium text-gray-700"># of additional passengers (excluding client)</label>
+              <label
+                for="riders"
+                class="block text-sm font-medium text-gray-700"
+                ># of additional passengers (excluding client)</label
+              >
               <Input
                 id="riders"
                 type="number"
@@ -1797,7 +2090,11 @@
 
           <div class="grid gap-3 md:grid-cols-2 mt-3">
             <div>
-              <label for="estimated_appointment_length" class="block text-sm font-medium text-gray-700">Estimated appointment length</label>
+              <label
+                for="estimated_appointment_length"
+                class="block text-sm font-medium text-gray-700"
+                >Estimated appointment length</label
+              >
               <div class="flex gap-2 items-end">
                 <div class="flex-1">
                   <label for="est_hours">Hours</label>
@@ -1828,7 +2125,9 @@
 
           <!-- Notes (create) -->
           <div class="mt-3">
-            <label for="notes" class="block text-sm font-medium text-gray-700">Notes for driver</label>
+            <label for="notes" class="block text-sm font-medium text-gray-700"
+              >Notes for driver</label
+            >
             <Textarea
               id="notes"
               bind:value={rideForm.notes}
@@ -1836,7 +2135,9 @@
               rows={3}
               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
-            <p class="text-xs text-gray-500 mt-1">These notes will show on the ride and on completed rides.</p>
+            <p class="text-xs text-gray-500 mt-1">
+              These notes will show on the ride and on completed rides.
+            </p>
           </div>
         </div>
       {/if}
@@ -1883,7 +2184,9 @@
 <!-- ======= EDIT MODAL ======= -->
 {#if showEditModal}
   <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-    <div class="bg-white rounded-lg p-6 max-w-3xl max-h-[90vh] overflow-y-auto w-full mx-4">
+    <div
+      class="bg-white rounded-lg p-6 max-w-3xl max-h-[90vh] overflow-y-auto w-full mx-4"
+    >
       <div class="mb-4">
         <h2 class="text-xl font-semibold">Edit Ride</h2>
         <p class="text-sm text-gray-600">
@@ -1899,8 +2202,11 @@
               type="button"
               title={`Go to step ${s}`}
               onclick={() => goToEditStep(s)}
-              class="w-8 h-8 rounded-full flex items-center justify-center text-sm transition-colors cursor-pointer {editStep === s ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}"
-              aria-current={editStep === s ? 'step' : undefined}
+              class="w-8 h-8 rounded-full flex items-center justify-center text-sm transition-colors cursor-pointer {editStep ===
+              s
+                ? 'bg-blue-600 text-white'
+                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}"
+              aria-current={editStep === s ? "step" : undefined}
               aria-label={`Step ${s}`}
             >
               {s}
@@ -1910,7 +2216,9 @@
                 type="button"
                 aria-label={`Jump toward step ${s + 1}`}
                 onclick={() => goToEditStep(s + 1)}
-                class="w-8 h-[2px] rounded {editStep > s ? 'bg-blue-600' : 'bg-gray-200 hover:bg-gray-300'}"
+                class="w-8 h-[2px] rounded {editStep > s
+                  ? 'bg-blue-600'
+                  : 'bg-gray-200 hover:bg-gray-300'}"
               />
             {/if}
           </div>
@@ -1918,7 +2226,9 @@
       </div>
 
       {#if stepErrors.length}
-        <div class="mb-4 bg-red-50 border border-red-200 text-red-800 rounded-lg p-3 text-base">
+        <div
+          class="mb-4 bg-red-50 border border-red-200 text-red-800 rounded-lg p-3 text-base"
+        >
           <div class="font-medium mb-1">Please fix the following:</div>
           <ul class="list-disc ml-5">
             {#each stepErrors as e}<li>{e}</li>{/each}
@@ -1943,43 +2253,71 @@
                   class="w-full"
                 />
                 <input type="hidden" value={rideForm.client_id} />
-                {#if showClientListEdit}
-                  <div class="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow max-h-64 overflow-y-auto">
-                    {#each filteredClientList(clientQueryEdit) as c}
-                      <button
-                        type="button"
-                        class="w-full text-left px-3 py-2 hover:bg-gray-50"
-                        onclick={() => selectClientById(c.client_id, true)}
-                      >
-                        <div class="font-medium">
-                          {c.first_name} {c.last_name}
-                        </div>
-                        <div class="text-xs text-gray-500">
-                          {c.primary_phone || "—"}{c.email ? ` • ${c.email}` : ""}
-                        </div>
-                        <div class="text-[11px] text-gray-400">
-                          {formatAddress(c) || "—"}
-                        </div>
-                        {#if c.mobility_assistance_enum}
-                          <div class="mt-1 text-[11px] text-blue-600 flex items-start gap-1">
-                            <span class="font-medium">Mobility Device:</span>
-                            <span class="capitalize">{c.mobility_assistance_enum}</span>
+                  {#if showClientListEdit}
+                    <div
+                      class="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow max-h-64 overflow-y-auto"
+                    >
+                      {#each filteredClientList(clientQueryEdit) as c}
+                        <button
+                          type="button"
+                          class="w-full text-left px-3 py-2 hover:bg-gray-50"
+                          onclick={() => selectClientById(c.client_id, true)}
+                        >
+                          <div class="flex items-center justify-between gap-2">
+                            <div class="font-medium">
+                              {c.first_name} {c.last_name}
+                            </div>
+                            <!-- svelte-ignore a11y_click_events_have_key_events -->
+                            <!-- svelte-ignore a11y_no_static_element_interactions -->
+                            <span
+                              class="ml-2 p-1 rounded-full hover:bg-gray-100 text-gray-500 cursor-pointer"
+                              onclick={(event) => {
+                                event.stopPropagation();
+                                toggleClientDetailsEdit(c.client_id);
+                              }}
+                              aria-label={expandedClientDetailsEdit[c.client_id]
+                                ? "Hide client details"
+                                : "Show client details"}
+                            >
+                              {#if expandedClientDetailsEdit[c.client_id]}
+                                <ChevronUp class="w-4 h-4" />
+                              {:else}
+                                <ChevronDown class="w-4 h-4" />
+                              {/if}
+                            </span>
                           </div>
-                        {/if}
-                        <div class="mt-1 text-[11px] text-gray-600 flex items-start gap-1">
-                          <AlertCircle class="w-3 h-3 mt-0.5 text-gray-400" />
-                          <span>
-                            <span class="font-medium">Limitations:</span>
-                            {c.other_limitations || 'None'}
-                          </span>
+
+                          {#if expandedClientDetailsEdit[c.client_id]}
+                            <div class="mt-1 text-xs text-gray-500">
+                              {c.primary_phone || "—"}{c.email ? ` • ${c.email}` : ""}
+                            </div>
+                            <div class="text-[11px] text-gray-400">
+                              {formatAddress(c) || "—"}
+                            </div>
+                            {#if c.mobility_assistance_enum}
+                              <div class="mt-1 text-[11px] text-blue-600 flex items-start gap-1">
+                                <span class="font-medium">Mobility Device:</span>
+                                <span class="capitalize">{c.mobility_assistance_enum}</span>
+                              </div>
+                            {/if}
+                            <div class="mt-1 text-[11px] text-gray-600 flex items-start gap-1">
+                              <AlertCircle class="w-3 h-3 mt-0.5 text-gray-400" />
+                              <span>
+                                <span class="font-medium">Limitations:</span>
+                                {c.other_limitations || "None"}
+                              </span>
+                            </div>
+                          {/if}
+                        </button>
+                      {/each}
+
+                      {#if filteredClientList(clientQueryEdit).length === 0}
+                        <div class="px-3 py-2 text-sm text-gray-500">
+                          No matches
                         </div>
-                      </button>
-                    {/each}
-                    {#if filteredClientList(clientQueryEdit).length === 0}
-                      <div class="px-3 py-2 text-sm text-gray-500">No matches</div>
-                    {/if}
-                  </div>
-                {/if}
+                      {/if}
+                    </div>
+                  {/if}
               </div>
             </div>
 
@@ -2004,7 +2342,8 @@
                 {#each filteredCalls() as call}
                   <option value={String(call.call_id)}>
                     {call.call_id} • {new Date(call.call_time).toLocaleString()}
-                    • {call.call_type} • {call.caller_first_name} {call.caller_last_name}
+                    • {call.call_type} • {call.caller_first_name}
+                    {call.caller_last_name}
                   </option>
                 {/each}
               </select>
@@ -2020,9 +2359,15 @@
                 bind:value={rideForm.appointment_time}
                 aria-label="Appointment Time"
               />
-              <p class="text-xs text-gray-500 mt-1">
-                Date &amp; time of the appointment.
-              </p>
+              {#if isDateOff(rideForm.appointment_time)}
+                <p class="text-xs text-red-600 mt-1">
+                  ⚠️ Your organization is closed on this date
+                </p>
+              {:else}
+                <p class="text-xs text-gray-500 mt-1">
+                  Date &amp; time of the appointment.
+                </p>
+              {/if}
             </div>
 
             <div class="mt-3">
@@ -2072,7 +2417,8 @@
               <label for="e_pickup_from_home">Pickup from client's home</label>
             </div>
             <p class="text-xs text-gray-500 mt-1">
-              If checked, pickup address is auto-filled from the client and locked.
+              If checked, pickup address is auto-filled from the client and
+              locked.
             </p>
           </div>
 
@@ -2138,14 +2484,19 @@
             <select
               id="saved_destination_edit"
               bind:value={selectedDestinationId}
-              onchange={(e) => applyDestinationToDropoff((e.target as HTMLSelectElement).value)}
+              onchange={(e) =>
+                applyDestinationToDropoff(
+                  (e.target as HTMLSelectElement).value
+                )}
               class="w-full px-3 py-2 border border-gray-300 rounded-lg"
             >
               <option value="">— Select saved destination (optional) —</option>
               {#each filteredDestinations() as d}
                 <option value={String(d.destination_id)}>
                   {d.location_name || "(No name)"} • {d.address}
-                  {d.city ? `, ${d.city}` : ""}{d.state ? `, ${d.state}` : ""}{d.zipcode ? ` ${d.zipcode}` : ""}
+                  {d.city ? `, ${d.city}` : ""}{d.state
+                    ? `, ${d.state}`
+                    : ""}{d.zipcode ? ` ${d.zipcode}` : ""}
                 </option>
               {/each}
             </select>
@@ -2155,8 +2506,12 @@
           </div>
 
           <div class="mt-6">
-            <label class="text-sm font-semibold text-gray-700">Dropoff Location</label>
-            <p class="text-xs text-gray-500">Where the client will be dropped off.</p>
+            <label class="text-sm font-semibold text-gray-700"
+              >Dropoff Location</label
+            >
+            <p class="text-xs text-gray-500">
+              Where the client will be dropped off.
+            </p>
           </div>
 
           <div class="mt-3 grid gap-3">
@@ -2168,7 +2523,7 @@
                 placeholder="e.g., RGH Medical Center"
               />
             </div>
-            
+
             <div class="grid gap-3 md:grid-cols-2">
               <div>
                 <label for="e_dropoff_address">Dropoff Street Address *</label>
@@ -2187,7 +2542,7 @@
                 />
               </div>
             </div>
-            
+
             <div class="grid gap-3 md:grid-cols-3">
               <div>
                 <label for="e_dropoff_city">Dropoff City *</label>
@@ -2224,7 +2579,10 @@
 
           <div class="grid gap-3 md:grid-cols-3">
             <div>
-              <label for="e_purpose" class="block text-sm font-medium text-gray-700">Purpose</label>
+              <label
+                for="e_purpose"
+                class="block text-sm font-medium text-gray-700">Purpose</label
+              >
               <Input
                 id="e_purpose"
                 bind:value={rideForm.purpose}
@@ -2232,7 +2590,11 @@
               />
             </div>
             <div>
-              <label for="e_est_len" class="block text-sm font-medium text-gray-700">Estimated appointment length</label>
+              <label
+                for="e_est_len"
+                class="block text-sm font-medium text-gray-700"
+                >Estimated appointment length</label
+              >
               <div class="flex gap-2 items-end">
                 <div class="flex-1">
                   <label for="est_hours">Hours</label>
@@ -2260,7 +2622,11 @@
               </div>
             </div>
             <div>
-              <label for="e_riders" class="block text-sm font-medium text-gray-700"># of additional passengers (excluding client)</label>
+              <label
+                for="e_riders"
+                class="block text-sm font-medium text-gray-700"
+                ># of additional passengers (excluding client)</label
+              >
               <Input
                 id="e_riders"
                 type="number"
@@ -2272,7 +2638,10 @@
 
           <div class="mt-3 grid gap-3 md:grid-cols-2">
             <div>
-              <label for="e_status" class="block text-sm font-medium text-gray-700">Status</label>
+              <label
+                for="e_status"
+                class="block text-sm font-medium text-gray-700">Status</label
+              >
               <select
                 id="e_status"
                 bind:value={rideForm.status}
@@ -2281,18 +2650,25 @@
                 {#each STATUS_OPTIONS as s}<option value={s}>{s}</option>{/each}
               </select>
               <p class="text-xs text-gray-500 mt-1">
-                Status is automatically managed but can be manually adjusted if needed.
+                Status is automatically managed but can be manually adjusted if
+                needed.
               </p>
             </div>
             <div>
-              <label for="e_completion_status" class="block text-sm font-medium text-gray-700">Completion status</label>
+              <label
+                for="e_completion_status"
+                class="block text-sm font-medium text-gray-700"
+                >Completion status</label
+              >
               <select
                 id="e_completion_status"
                 bind:value={rideForm.completion_status}
                 class="w-full px-3 py-2 border border-gray-300 rounded-lg"
               >
                 <option value="">—</option>
-                {#each COMPLETION_STATUS_OPTIONS as s}<option value={s}>{s}</option>{/each}
+                {#each COMPLETION_STATUS_OPTIONS as s}<option value={s}
+                    >{s}</option
+                  >{/each}
               </select>
               <p class="text-xs text-gray-500 mt-1">
                 Type of completion (round trip, one-way, etc.)
@@ -2308,7 +2684,11 @@
 
           <div class="grid gap-4 md:grid-cols-2">
             <div>
-              <label for="e_miles" class="block text-sm font-medium text-gray-700">Miles driven</label>
+              <label
+                for="e_miles"
+                class="block text-sm font-medium text-gray-700"
+                >Miles driven</label
+              >
               <Input
                 id="e_miles"
                 type="number"
@@ -2316,11 +2696,17 @@
                 bind:value={rideForm.miles_driven}
                 placeholder="e.g., 12.5"
               />
-              <p class="text-xs text-gray-500 mt-1">Total miles for this ride.</p>
+              <p class="text-xs text-gray-500 mt-1">
+                Total miles for this ride.
+              </p>
             </div>
 
             <div>
-              <label for="e_hours" class="block text-sm font-medium text-gray-700">Hours worked</label>
+              <label
+                for="e_hours"
+                class="block text-sm font-medium text-gray-700"
+                >Hours worked</label
+              >
               <Input
                 id="e_hours"
                 type="number"
@@ -2328,11 +2714,17 @@
                 bind:value={rideForm.hours}
                 placeholder="e.g., 1.5"
               />
-              <p class="text-xs text-gray-500 mt-1">Driving and waiting time combined.</p>
+              <p class="text-xs text-gray-500 mt-1">
+                Driving and waiting time combined.
+              </p>
             </div>
 
             <div class="mt-4">
-              <label for="e_completion_status_step4" class="block text-sm font-medium text-gray-700">Completion Status</label>
+              <label
+                for="e_completion_status_step4"
+                class="block text-sm font-medium text-gray-700"
+                >Completion Status</label
+              >
               <select
                 id="e_completion_status_step4"
                 bind:value={rideForm.completion_status}
@@ -2393,7 +2785,11 @@
 
             <!-- Notes (edit/completion) -->
             <div class="mt-4 md:col-span-2">
-              <label for="e_completion_notes" class="block text-sm font-medium text-gray-700">Completion Notes</label>
+              <label
+                for="e_completion_notes"
+                class="block text-sm font-medium text-gray-700"
+                >Completion Notes</label
+              >
               <Textarea
                 id="e_completion_notes"
                 bind:value={rideForm.notes}
@@ -2401,7 +2797,9 @@
                 rows={3}
                 class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               />
-              <p class="text-xs text-gray-500 mt-1">These notes will appear on completed rides.</p>
+              <p class="text-xs text-gray-500 mt-1">
+                These notes will appear on completed rides.
+              </p>
             </div>
           </div>
         </div>
@@ -2455,73 +2853,79 @@
 />
 
 {#if showForceAcceptModal}
-    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div class="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-        <div class="mb-4">
-          <h2 class="text-xl font-semibold">Force Accept Ride</h2>
-          <p class="text-sm text-gray-600">
-            Select a driver to force accept this ride. This will bypass the driver's acceptance and immediately schedule the ride.
-          </p>
-        </div>
-        
-        <!-- Driver Search -->
-        <div class="mb-4">
-          <div class="relative">
-            <Search class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
-            <input
-              type="text"
-              bind:value={driverSearchForForce}
-              placeholder="Search drivers..."
-              class="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
-            />
-          </div>
-        </div>
-        
-        <!-- Driver List -->
-        <div class="space-y-2 mb-6 max-h-64 overflow-y-auto">
-          {#each filteredDriversForForce() as driver}
-            <div class="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50 transition-colors">
-              <div>
-                <div class="font-medium text-gray-900">
-                  {driver.first_name} {driver.last_name}
-                </div>
-                <div class="text-sm text-gray-500">Driver</div>
-              </div>
-              <button
-                onclick={() => forceAcceptRide(driver.user_id)}
-                disabled={isUpdating}
-                class="px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-white rounded-lg text-sm transition-colors disabled:opacity-50 flex items-center gap-1"
-              >
-                <CheckCircle class="w-4 h-4" />
-                Force Accept
-              </button>
-            </div>
-          {/each}
-          
-          {#if filteredDriversForForce().length === 0}
-            <div class="text-center py-8 text-gray-500">
-              <User class="w-12 h-12 mx-auto mb-2 text-gray-400" />
-              <p>No drivers found</p>
-              {#if driverSearchForForce}
-                <p class="text-sm">Try adjusting your search</p>
-              {/if}
-            </div>
-          {/if}
-        </div>
+  <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+    <div class="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+      <div class="mb-4">
+        <h2 class="text-xl font-semibold">Force Accept Ride</h2>
+        <p class="text-sm text-gray-600">
+          Select a driver to force accept this ride. This will bypass the
+          driver's acceptance and immediately schedule the ride.
+        </p>
+      </div>
 
-        <!-- Actions -->
-        <div class="flex justify-end gap-2">
-          <button
-            onclick={() => {
-              showForceAcceptModal = false;
-              selectedRideForForceAccept = null;
-              driverSearchForForce = '';
-            }}
-            class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
-          >
-            Cancel
-          </button>
+      <!-- Driver Search -->
+      <div class="mb-4">
+        <div class="relative">
+          <Search
+            class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4"
+          />
+          <input
+            type="text"
+            bind:value={driverSearchForForce}
+            placeholder="Search drivers..."
+            class="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+          />
         </div>
       </div>
+
+      <!-- Driver List -->
+      <div class="space-y-2 mb-6 max-h-64 overflow-y-auto">
+        {#each filteredDriversForForce() as driver}
+          <div
+            class="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            <div>
+              <div class="font-medium text-gray-900">
+                {driver.first_name}
+                {driver.last_name}
+              </div>
+              <div class="text-sm text-gray-500">Driver</div>
+            </div>
+            <button
+              onclick={() => forceAcceptRide(driver.user_id)}
+              disabled={isUpdating}
+              class="px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-white rounded-lg text-sm transition-colors disabled:opacity-50 flex items-center gap-1"
+            >
+              <CheckCircle class="w-4 h-4" />
+              Force Accept
+            </button>
+          </div>
+        {/each}
+
+        {#if filteredDriversForForce().length === 0}
+          <div class="text-center py-8 text-gray-500">
+            <User class="w-12 h-12 mx-auto mb-2 text-gray-400" />
+            <p>No drivers found</p>
+            {#if driverSearchForForce}
+              <p class="text-sm">Try adjusting your search</p>
+            {/if}
+          </div>
+        {/if}
+      </div>
+
+      <!-- Actions -->
+      <div class="flex justify-end gap-2">
+        <button
+          onclick={() => {
+            showForceAcceptModal = false;
+            selectedRideForForceAccept = null;
+            driverSearchForForce = "";
+          }}
+          class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+        >
+          Cancel
+        </button>
+      </div>
     </div>
-  {/if}
+  </div>
+{/if}

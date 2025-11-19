@@ -8,7 +8,7 @@
   export let createMode: boolean = false;
   export let session: any = undefined;
   export let orgId: number;
-
+  export let minimumAge: number = 0;
   const dispatch = createEventDispatcher();
 
   type Client = {
@@ -35,7 +35,7 @@
     service_animal: boolean;
     oxygen: boolean;
     client_status_enum: "Active" | "Inactive" | "Temporary Thru";
-    mobility_assistance_enum?: "cane" | "light walker" | "roll-leader" | null;
+    mobility_assistance_enum?: "cane" | "crutches" | "light walker" | "rollator" | null;
     residence_enum:
       | "house"
       | "apartment"
@@ -58,7 +58,7 @@
   };
 
   const statusOptions = ["Active", "Inactive", "Temporary Thru"] as const;
-  const mobilityOptions = ["", "cane", "light walker", "roll-leader"] as const;
+  const mobilityOptions = ["", "cane", "crutches", "light walker", "rollator"] as const;
   const genderOptions = ["Male", "Female", "Other"] as const;
   const residenceOptions = [
     "house",
@@ -77,6 +77,22 @@
   let saving = false;
   let errorMessage: string | null = null;
 
+  function calculateAge(birthDate: string): number {
+    const today = new Date();
+    const birth = new Date(birthDate);
+
+    let age = today.getFullYear() - birth.getFullYear();
+    const monthDiff = today.getMonth() - birth.getMonth();
+
+    if (
+      monthDiff < 0 ||
+      (monthDiff === 0 && today.getDate() < birth.getDate())
+    ) {
+      age--;
+    }
+
+    return age;
+  }
   function initForm(): Client {
     if (!client || createMode) {
       return {
@@ -132,7 +148,24 @@
       if (!form.last_name.trim()) e.push("Last name is required.");
       // Email is optional - removed from validation
       if (!form.primary_phone.trim()) e.push("Primary phone is required.");
-      if (!form.date_of_birth) e.push("Date of birth is required.");
+      if (!form.date_of_birth) {
+        e.push("Date of birth is required.");
+      } else {
+        const birthDate = new Date(form.date_of_birth);
+        const today = new Date();
+        if (isNaN(birthDate.getTime())) {
+          e.push("Invalid date of birth");
+        } else if (birthDate > today) {
+          e.push(`Date of birth cannot be in the future ${minimumAge}`);
+        } else if (minimumAge > 0) {
+          const age = calculateAge(form.date_of_birth);
+          if (age < minimumAge) {
+            e.push(
+              `Client must be at least ${minimumAge} years old. Current age: ${age}.`
+            );
+          }
+        }
+      }
       if (!form.gender) e.push("Gender is required.");
       if (!form.contact_pref) e.push("Contact preference is required.");
     }
@@ -618,6 +651,7 @@
         <div class="space-y-3">
           <div class="grid grid-cols-2 gap-3">
             <div>
+              <!-- svelte-ignore a11y_label_has_associated_control -->
               <label class="block text-base font-medium"
                 >Mobility Assistance</label
               >
@@ -631,6 +665,7 @@
               </select>
             </div>
             <div>
+              <!-- svelte-ignore a11y_label_has_associated_control -->
               <label class="block text-base font-medium">Residence *</label>
               <select
                 required
@@ -652,6 +687,7 @@
             >
           </div>
           <div>
+            <!-- svelte-ignore a11y_label_has_associated_control -->
             <label class="block text-base font-medium"
               >Service Animal Size</label
             >
@@ -690,6 +726,39 @@
                 class="mt-1 w-full border rounded px-3 py-2 text-base"
                 bind:value={form.other_limitations}
               />
+            </div>
+          </div>
+
+          <!-- Emergency Contact (optional) -->
+          <div class="border-t pt-3 space-y-3">
+            <h3 class="text-base font-semibold">Emergency Contact</h3>
+            <div class="grid grid-cols-1 gap-3">
+              <div>
+                <label class="block text-base font-medium">Name</label>
+                <input
+                  class="mt-1 w-full border rounded px-3 py-2 text-base"
+                  bind:value={form.emergency_contact_name}
+                  placeholder="e.g., Jane Doe"
+                />
+              </div>
+              <div class="grid grid-cols-2 gap-3">
+                <div>
+                  <label class="block text-base font-medium">Relationship</label>
+                  <input
+                    class="mt-1 w-full border rounded px-3 py-2 text-base"
+                    bind:value={form.emergency_contact_relationship}
+                    placeholder="e.g., Daughter, Neighbor"
+                  />
+                </div>
+                <div>
+                  <label class="block text-base font-medium">Phone</label>
+                  <input
+                    class="mt-1 w-full border rounded px-3 py-2 text-base"
+                    bind:value={form.emergency_contact_phone}
+                    placeholder="e.g., 555-123-4567"
+                  />
+                </div>
+              </div>
             </div>
           </div>
         </div>
