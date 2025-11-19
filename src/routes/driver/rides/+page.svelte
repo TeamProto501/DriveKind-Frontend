@@ -4,6 +4,7 @@
   import { Badge } from "$lib/components/ui/badge";
   import { Card, CardContent } from "$lib/components/ui/card";
   import { Input } from "$lib/components/ui/input";
+  import * as Dialog from "$lib/components/ui/dialog/index.js";
   import {
     Calendar,
     Car,
@@ -181,26 +182,57 @@
     catch { try { return await resp.text(); } catch { return ''; } }
   }
 
-  // Accept
-  async function acceptRide(rideId: number) {
+  // Accept - with vehicle selection if multiple eligible vehicles
+  function openAcceptModal(ride: any) {
+    selectedRideForAcceptance = ride;
+    selectedVehicleId = null;
+    
+    // If no eligible vehicles, show error
+    if (!ride.eligibleVehicles || ride.eligibleVehicles.length === 0) {
+      alert('No eligible vehicles for this ride. Please activate a vehicle with enough seats.');
+      return;
+    }
+    
+    // If only one eligible vehicle, auto-select it and accept
+    if (ride.eligibleVehicles.length === 1) {
+      selectedVehicleId = ride.eligibleVehicles[0].vehicle_id;
+      void acceptRideWithVehicle(ride.ride_id, ride.eligibleVehicles[0].vehicle_id);
+      return;
+    }
+    
+    // Show vehicle selection modal if multiple vehicles
+    showVehicleSelectionModal = true;
+  }
+
+  async function acceptRideWithVehicle(rideId: number, vehicleId: number) {
     if (!data.session?.access_token) {
       alert('Session expired. Please refresh the page and try again.');
       return;
     }
+    
+    if (!vehicleId) {
+      alert('Please select a vehicle before accepting the ride.');
+      return;
+    }
+    
     isUpdating = true;
     try {
       const resp = await fetch(`${API_BASE}/rides/${rideId}/accept`, {
         method: 'POST',
         headers: {
-          // no content-type since no body
+          'Content-Type': 'application/json',
           'Authorization': `Bearer ${data.session.access_token}`
-        }
+        },
+        body: JSON.stringify({ vehicle_id: vehicleId })
       });
       if (!resp.ok) {
         const msg = await readError(resp);
         console.error('Accept failed:', resp.status, msg);
         alert(`Failed to accept ride (${resp.status}): ${msg || 'Unknown error'}`);
       } else {
+        showVehicleSelectionModal = false;
+        selectedRideForAcceptance = null;
+        selectedVehicleId = null;
         await invalidateAll();
         alert('Ride accepted! It now appears in your Scheduled tab.');
       }
@@ -209,6 +241,17 @@
       alert('Error accepting ride. Please try again.');
     } finally {
       isUpdating = false;
+    }
+  }
+
+  // Legacy function for backward compatibility
+  async function acceptRide(rideId: number) {
+    // Find the ride to check eligible vehicles
+    const ride = data.rides?.find((r: any) => r.ride_id === rideId);
+    if (ride) {
+      openAcceptModal(ride);
+    } else {
+      alert('Ride not found.');
     }
   }
 
@@ -473,7 +516,19 @@
 
             <div class="flex gap-2 ml-4">
               {#if ride.status === "Pending"}
-                <Button size="sm" onclick={() => acceptRide(ride.ride_id)} disabled={isUpdating}>
+                <!-- Show eligible vehicles info -->
+                {#if ride.eligibleVehicles && ride.eligibleVehicles.length > 0}
+                  <div class="text-xs text-gray-600 mb-2 mr-4">
+                    {ride.eligibleVehicles.length === 1 
+                      ? `1 vehicle: ${ride.eligibleVehicles[0].type_of_vehicle_enum} (${ride.eligibleVehicles[0].vehicle_color})`
+                      : `${ride.eligibleVehicles.length} vehicles available`}
+                  </div>
+                {:else if ride.eligibleVehicles && ride.eligibleVehicles.length === 0}
+                  <div class="text-xs text-red-600 mb-2 mr-4">
+                    No eligible vehicles (need {ride.riders + 1} seats)
+                  </div>
+                {/if}
+                <Button size="sm" onclick={() => openAcceptModal(ride)} disabled={isUpdating || (ride.eligibleVehicles && ride.eligibleVehicles.length === 0)}>
                   <CheckCircle class="w-4 h-4 mr-1" />Accept
                 </Button>
                 <Button variant="outline" size="sm" onclick={() => declineRide(ride.ride_id)} disabled={isUpdating}>
@@ -630,4 +685,70 @@
     onSubmit={submitCompletion}
     isSubmitting={isUpdating}
   />
+
+  <!-- Vehicle Selection Modal for Ride Acceptance -->
+  {#if showVehicleSelectionModal && selectedRideForAcceptance}
+    <Dialog.Root bind:open={showVehicleSelectionModal}>
+      <Dialog.Content class="sm:max-w-md bg-white">
+        <Dialog.Header>
+          <Dialog.Title>Select Vehicle</Dialog.Title>
+          <Dialog.Description>
+            You have multiple vehicles that work for this ride. Please select which vehicle you'll use.
+          </Dialog.Description>
+        </Dialog.Header>
+
+        <div class="space-y-3 mt-4">
+          {#each selectedRideForAcceptance.eligibleVehicles || [] as vehicle}
+            <button
+              type="button"
+              class="w-full p-4 border-2 rounded-lg text-left transition-colors {selectedVehicleId === vehicle.vehicle_id 
+                ? 'border-blue-600 bg-blue-50' 
+                : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'}"
+              onclick={() => selectedVehicleId = vehicle.vehicle_id}
+            >
+              <div class="flex items-center justify-between">
+                <div>
+                  <div class="font-medium text-gray-900">
+                    {vehicle.type_of_vehicle_enum} - {vehicle.vehicle_color}
+                  </div>
+                  <div class="text-sm text-gray-600 mt-1">
+                    {vehicle.nondriver_seats + 1} total seats ({vehicle.nondriver_seats} passengers)
+                  </div>
+                </div>
+                {#if selectedVehicleId === vehicle.vehicle_id}
+                  <CheckCircle class="w-5 h-5 text-blue-600" />
+                {/if}
+              </div>
+            </button>
+          {/each}
+        </div>
+
+        <Dialog.Footer class="mt-6">
+          <Button
+            variant="outline"
+            onclick={() => {
+              showVehicleSelectionModal = false;
+              selectedRideForAcceptance = null;
+              selectedVehicleId = null;
+            }}
+            disabled={isUpdating}
+          >
+            Cancel
+          </Button>
+          <Button
+            onclick={() => {
+              if (selectedVehicleId) {
+                void acceptRideWithVehicle(selectedRideForAcceptance.ride_id, selectedVehicleId);
+              } else {
+                alert('Please select a vehicle');
+              }
+            }}
+            disabled={isUpdating || !selectedVehicleId}
+          >
+            {isUpdating ? 'Accepting...' : 'Accept Ride'}
+          </Button>
+        </Dialog.Footer>
+      </Dialog.Content>
+    </Dialog.Root>
+  {/if}
 </div>
