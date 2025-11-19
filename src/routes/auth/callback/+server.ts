@@ -32,12 +32,31 @@ export const GET: RequestHandler = async (event) => {
 			throw redirect(303, `/reset-password?code=${code}&type=recovery`);
 		}
 
-		// For other flows (sign up, email confirmation), check if we have a session
+		// For other flows (magic link, sign up, email confirmation), check if we have a session
 		if (data?.session) {
-			// Check if user needs to set password (recovery flow)
-			// For now, if we have a session from a recovery code, go to reset-password
-			// Otherwise, redirect to home
-			throw redirect(303, '/');
+			// Magic link or other auth flows - redirect to role-based home
+			const { data: profile } = await supabase
+				.from('staff_profiles')
+				.select('role')
+				.eq('user_id', data.session.user.id)
+				.single();
+
+			const roles = Array.isArray(profile?.role) ? profile.role : [];
+			
+			// Get role-based home page
+			let homePage = '/';
+			if (roles.includes('Super Admin') || roles.includes('Admin')) {
+				homePage = '/admin/dash';
+			} else if (roles.includes('Dispatcher')) {
+				homePage = '/dispatcher/dashboard';
+			} else if (roles.includes('Driver')) {
+				homePage = '/driver/rides';
+			} else if (roles.includes('Volunteer')) {
+				homePage = '/calendar';
+			}
+
+			console.log('Magic link login successful, redirecting to:', homePage);
+			throw redirect(303, homePage);
 		}
 	}
 
