@@ -1367,15 +1367,15 @@ function validateMinDays(localDateTime: string, label: string): string | null {
 
 <div class="min-h-screen bg-gray-50 p-6">
   <div class="max-w-7xl mx-auto space-y-6">
-    <!-- Header -->
+  <!-- Header -->
     <div class="bg-white rounded-lg shadow-sm border p-6">
-      <div class="flex items-center justify-between">
-        <div>
+  <div class="flex items-center justify-between">
+    <div>
           <h1 class="text-2xl font-bold text-gray-900">Ride Management</h1>
           <p class="text-gray-600 mt-1">
             Manage and track ride requests and assignments
           </p>
-        </div>
+    </div>
         <button
           onclick={openCreateModal}
           class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors"
@@ -1384,7 +1384,7 @@ function validateMinDays(localDateTime: string, label: string): string | null {
           New Ride Request
         </button>
       </div>
-    </div>
+  </div>
 
     <!-- Error -->
     {#if data.error}
@@ -1475,24 +1475,24 @@ function validateMinDays(localDateTime: string, label: string): string | null {
         </div>
 
         <!-- Search Bar -->
-        <div class="relative">
+          <div class="relative">
           <Search
             class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4"
           />
           <input
             type="text"
-            placeholder="Search rides..."
-            bind:value={searchTerm}
+              placeholder="Search rides..." 
+              bind:value={searchTerm}
             class="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-          />
+            />
+          </div>
         </div>
-      </div>
 
-      <!-- Rides List -->
+  <!-- Rides List -->
       <div class="divide-y divide-gray-200">
-        {#each filteredRides() as ride}
+    {#each filteredRides() as ride}
           <div class="p-6 hover:bg-gray-50 transition-colors">
-            <div class="flex items-start justify-between">
+          <div class="flex items-start justify-between">
               <div class="space-y-3 flex-1">
                 <div class="flex items-center gap-3">
                   <h3 class="text-lg font-semibold text-gray-900">
@@ -1523,17 +1523,17 @@ function validateMinDays(localDateTime: string, label: string): string | null {
                   >
                     {ride.purpose}
                   </span>
-                </div>
-
+              </div>
+              
                 <!-- 2 columns × 3 rows -->
                 <div
                   class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-600"
                 >
                   <!-- Row 1 -->
-                  <div class="flex items-center gap-2">
+                <div class="flex items-center gap-2">
                     <Phone class="w-4 h-4 text-gray-400" />
                     {getClientPhone(ride)}
-                  </div>
+                </div>
                   {#if ride.status === "Completed" && ride.notes && ride.notes.trim()}
                     <div class="flex items-start gap-2">
                       <FileText class="w-4 h-4 text-gray-400 mt-0.5" />
@@ -1547,27 +1547,27 @@ function validateMinDays(localDateTime: string, label: string): string | null {
                   {/if}
 
                   <!-- Row 2 -->
-                  <div class="flex items-center gap-2">
+                <div class="flex items-center gap-2">
                     <Calendar class="w-4 h-4 text-gray-400" />
                     {formatDate(ride.appointment_time)} at {formatTime(
                       ride.appointment_time
                     )}
-                  </div>
-                  <div class="flex items-center gap-2">
+                </div>
+                <div class="flex items-center gap-2">
                     <MapPin class="w-4 h-4 text-gray-400" />
                     <div>
                       <span class="font-medium">Destination:</span>
                       <span class="ml-1">{ride.destination_name || "—"}</span>
-                    </div>
+                </div>
                   </div>
 
                   <!-- Row 3 -->
-                  <div class="flex items-center gap-2">
+                <div class="flex items-center gap-2">
                     <User class="w-4 h-4 text-gray-400" />
                     <div>
                       <span class="font-medium">Driver:</span>
                       <span class="ml-1">{getDriverName(ride)}</span>
-                    </div>
+                </div>
                   </div>
                   <div class="flex items-start gap-2">
                     <AlertCircle class="w-4 h-4 text-gray-400 mt-0.5" />
@@ -1652,7 +1652,7 @@ function validateMinDays(localDateTime: string, label: string): string | null {
       <!-- Stepper (CREATE) -->
       <div class="flex items-center justify-center gap-3 mb-4 select-none">
         {#each [1, 2, 3] as s}
-          <div class="flex items-center gap-2">
+                <div class="flex items-center gap-2">
             <button
               type="button"
               title={`Go to step ${s}`}
@@ -1676,7 +1676,7 @@ function validateMinDays(localDateTime: string, label: string): string | null {
                   : 'bg-gray-200 hover:bg-gray-300'}"
               />
             {/if}
-          </div>
+                </div>
         {/each}
       </div>
 
@@ -1850,20 +1850,20 @@ function validateMinDays(localDateTime: string, label: string): string | null {
           <h3 class="font-semibold mb-3">Pickup &amp; Dropoff</h3>
 
           <div class="mb-3">
-            <div class="flex items-center gap-2">
+                <div class="flex items-center gap-2">
               <input
                 id="pickup_from_home"
                 type="checkbox"
                 bind:checked={rideForm.pickup_from_home}
               />
               <label for="pickup_from_home">Pickup from client's home</label>
-            </div>
+                </div>
             <p class="text-xs text-gray-500 mt-1">
               If checked, pickup address is auto-filled from the client and
               locked.
             </p>
-          </div>
-
+              </div>
+              
           <div class="grid gap-3">
             <div>
               <label for="alt_pickup_address">Pickup Street Address</label>
@@ -2026,7 +2026,7 @@ function validateMinDays(localDateTime: string, label: string): string | null {
             </div>
           </div>
         </div>
-      {/if}
+              {/if}
 
       {#if createStep === 3}
         <div class="border rounded-lg p-4 mb-2">
@@ -2076,8 +2076,8 @@ function validateMinDays(localDateTime: string, label: string): string | null {
                 bind:value={rideForm.riders}
               />
             </div>
-          </div>
-
+            </div>
+            
           <div class="grid gap-3 md:grid-cols-2 mt-3">
             <div>
               <label
@@ -2143,7 +2143,7 @@ function validateMinDays(localDateTime: string, label: string): string | null {
             </button>
           {/if}
         </div>
-        <div class="flex gap-2">
+            <div class="flex gap-2">
           <button
             onclick={() => (showCreateModal = false)}
             class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
@@ -2166,8 +2166,8 @@ function validateMinDays(localDateTime: string, label: string): string | null {
               {isUpdating ? "Creating..." : "Create Ride"}
             </button>
           {/if}
-        </div>
-      </div>
+            </div>
+          </div>
     </div>
   </div>
 {/if}
@@ -2212,8 +2212,8 @@ function validateMinDays(localDateTime: string, label: string): string | null {
               />
             {/if}
           </div>
-        {/each}
-      </div>
+    {/each}
+  </div>
 
       {#if stepErrors.length}
         <div
@@ -2224,7 +2224,7 @@ function validateMinDays(localDateTime: string, label: string): string | null {
             {#each stepErrors as e}<li>{e}</li>{/each}
           </ul>
         </div>
-      {/if}
+  {/if}
 
       {#if editStep === 1}
         <div class="border rounded-lg p-4 mb-2">
@@ -2275,7 +2275,7 @@ function validateMinDays(localDateTime: string, label: string): string | null {
                                 <ChevronDown class="w-4 h-4" />
                               {/if}
                             </span>
-                          </div>
+</div>
 
                           {#if expandedClientDetailsEdit[c.client_id]}
                             <div class="mt-1 text-xs text-gray-500">

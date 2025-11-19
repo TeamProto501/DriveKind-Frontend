@@ -521,7 +521,7 @@
       const formData = new FormData();
       formData.append('vehicle_types', JSON.stringify(currentVehicleTypes));
 
-      const response = await fetch('?/updateVehicleTypes', {
+      const response = await fetch('/admin/vehicle_management?/updateVehicleTypes', {
         method: 'POST',
         headers: {
           'accept': 'application/json'
@@ -1007,13 +1007,14 @@
             onclick={() => (showDeleteModal = false)}
             disabled={isDeleting}>Cancel</Button
           >
-          <Button
-            class="bg-red-600 text-white"
-            onclick={confirmDelete}
+          <button
+            type="button"
+            class="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-60 disabled:cursor-not-allowed"
+            onclick={() => confirmDelete()}
             disabled={isDeleting}
           >
             {isDeleting ? "Deleting…" : "Delete"}
-          </Button>
+          </button>
         </Dialog.Footer>
       </Dialog.Content>
     </Dialog.Root>

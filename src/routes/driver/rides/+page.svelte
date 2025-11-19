@@ -373,8 +373,8 @@
     </div>
 
     <CardContent class="p-6 border-b">
-      <div class="relative">
-        <Search class="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+          <div class="relative">
+            <Search class="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
         <Input placeholder="Search rides..." bind:value={searchTerm} class="pl-10" />
       </div>
     </CardContent>
@@ -391,7 +391,7 @@
                 <Badge class={getStatusColor(ride.status)}>{ride.status.toUpperCase()}</Badge>
                 {#if ride.purpose}<Badge variant="outline">{ride.purpose}</Badge>{/if}
               </div>
-
+              
               <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-muted-foreground">
                 <div class="flex items-center gap-2">
                   <Phone class="w-4 h-4" />{getClientPhone(ride)}
@@ -434,13 +434,13 @@
                 {/if}
 
                 {#if ride.round_trip}
-                  <div class="flex items-center gap-2">
+                <div class="flex items-center gap-2">
                     <Car class="w-4 h-4" />Round trip
-                  </div>
+                </div>
                 {/if}
 
                 {#if ride.riders > 0}
-                  <div class="flex items-center gap-2">
+                <div class="flex items-center gap-2">
                     <Car class="w-4 h-4" />{ride.riders} passenger{ride.riders > 1 ? 's' : ''}
                   </div>
                 {/if}
@@ -458,14 +458,14 @@
                   </span>
                 </div>
               </div>
-
+              
               {#if ride.notes}
                 <div class="text-sm">
                   <span class="font-medium">Notes:</span> {ride.notes}
                 </div>
               {/if}
             </div>
-
+            
             <div class="flex gap-2 ml-4">
               {#if ride.status === "Pending"}
                 <Button size="sm" onclick={() => acceptRide(ride.ride_id)} disabled={isUpdating}>
@@ -495,7 +495,7 @@
                   disabled={isUpdating}
                 >
                   <Edit class="w-4 h-4 mr-1" />Edit
-                </Button>
+              </Button>
               {/if}
             </div>
           </div>
