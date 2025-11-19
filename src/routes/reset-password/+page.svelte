@@ -19,17 +19,32 @@
   onMount(async () => {
     // Check if there are hash fragments in the URL
     const hash = window.location.hash.substring(1);
+    console.log('Reset password page - hash:', hash);
+    
     if (hash) {
       const hashParams = new URLSearchParams(hash);
       const accessToken = hashParams.get('access_token');
       const type = hashParams.get('type');
+      const refreshToken = hashParams.get('refresh_token');
 
-      if (accessToken && type === 'recovery') {
-        // Supabase SSR client should automatically handle this, but let's verify
-        // Wait a bit for Supabase to process the hash fragments
-        setTimeout(async () => {
-          const { data: { session } } = await supabase.auth.getSession();
+      console.log('Token params:', { accessToken: !!accessToken, type, refreshToken: !!refreshToken });
+
+      if (accessToken && type === 'recovery' && refreshToken) {
+        // Exchange the tokens for a session
+        try {
+          const { data: { session }, error: sessionError } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken,
+          });
+
+          if (sessionError) {
+            console.error('Session error:', sessionError);
+            error = 'Invalid or expired reset token. Please request a new password reset link.';
+            return;
+          }
+
           if (session) {
+            console.log('Session created successfully');
             hasValidToken = true;
             error = null;
             // Remove hash from URL
@@ -38,10 +53,15 @@
           } else {
             error = 'Invalid or expired reset token. Please request a new password reset link.';
           }
-        }, 500);
+        } catch (e) {
+          console.error('Error setting session:', e);
+          error = 'Invalid or expired reset token. Please request a new password reset link.';
+        }
+      } else {
+        error = 'Invalid reset link. Please request a new password reset link.';
       }
-    } else if (!hasValidToken && !error) {
-      // No hash fragments and no session - check if we have a valid session
+    } else {
+      // No hash fragments - check if we already have a valid session
       const { data: { session } } = await supabase.auth.getSession();
       if (session) {
         hasValidToken = true;

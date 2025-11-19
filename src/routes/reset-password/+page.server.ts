@@ -3,25 +3,10 @@ import type { Actions, PageServerLoad } from './$types';
 import { createSupabaseServerClient } from '$lib/supabase.server';
 
 export const load: PageServerLoad = async (event) => {
-  const supabase = createSupabaseServerClient(event);
-
-  // Check if there's a valid session (user might have already been authenticated via the reset link)
-  // Note: Hash fragments are handled on the client side by Supabase SSR
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-
-  // If user has a session, they likely came from a valid reset link
-  // (Supabase automatically creates a session when hash fragments are processed)
-  if (session) {
-    return {
-      hasValidToken: true,
-    };
-  }
-
-  // No valid session - user needs to request a new reset link
+  // Don't check session on server - hash fragments are only available on client
+  // The client-side code will handle the token verification
   return {
-    error: 'Invalid or expired reset token. Please request a new password reset link.',
+    hasValidToken: false, // Will be set to true on client after processing hash
   };
 };
 
