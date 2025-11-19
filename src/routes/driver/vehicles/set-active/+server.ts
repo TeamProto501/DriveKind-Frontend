@@ -20,7 +20,7 @@ export const POST: RequestHandler = async (event) => {
     // Verify the vehicle belongs to the current user
     const { data: existingVehicle, error: fetchError } = await supabase
       .from('vehicles')
-      .select('vehicle_id, user_id')
+      .select('vehicle_id, user_id, active')
       .eq('vehicle_id', vehicle_id)
       .single();
 
@@ -33,9 +33,12 @@ export const POST: RequestHandler = async (event) => {
     }
 
     // Toggle the active status of the selected vehicle (allow multiple active vehicles)
+    const currentActive = existingVehicle.active ?? false;
+    const newActiveStatus = !currentActive;
+    
     const { data: vehicle, error: activateError } = await supabase
       .from('vehicles')
-      .update({ active: true })
+      .update({ active: newActiveStatus })
       .eq('vehicle_id', vehicle_id)
       .eq('user_id', session.user.id)
       .select()
