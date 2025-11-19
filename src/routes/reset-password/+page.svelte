@@ -34,9 +34,10 @@
     const type = urlParams.get('type');
     
     // If we have a code parameter and server-side exchange failed, try client-side
-    if (code && type === 'recovery' && !data.hasValidToken) {
+    // Note: We check for code even without type='recovery' since we're on the reset-password page
+    if (code && !data.hasValidToken) {
       isProcessing = true;
-      console.log('Attempting client-side code exchange...');
+      console.log('Attempting client-side code exchange...', { code, type });
       try {
         const { data: exchangeData, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
         
@@ -60,6 +61,7 @@
           await invalidateAll();
           return;
         } else {
+          console.log('Code exchanged but no session returned');
           isProcessing = false;
         }
       } catch (e) {

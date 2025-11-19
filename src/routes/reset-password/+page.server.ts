@@ -13,28 +13,43 @@ export const load: PageServerLoad = async (event) => {
   console.log('Reset password page load - code:', !!code, 'type:', type, 'error:', urlError);
   
   // If there's a code, try to exchange it for a session
+  // We try server-side first, but if it fails, client-side will handle it
   if (code) {
-    console.log('Attempting to exchange code for session...');
-    const { data, error } = await supabase.auth.exchangeCodeForSession(code);
-    
-    if (error) {
-      console.error('Error exchanging code:', error);
-      console.error('Error details:', JSON.stringify(error, null, 2));
-      // Don't return error immediately - let client-side handle it with hash fragments
-      // The code might be for PKCE flow which needs client-side handling
+    console.log('Attempting server-side code exchange...');
+    try {
+      const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+      
+      if (error) {
+        console.error('Server-side code exchange error:', error);
+        console.error('Error details:', JSON.stringify(error, null, 2));
+        // Don't return error immediately - let client-side handle it
+        // The code might be for PKCE flow which needs client-side handling
+        return {
+          hasValidToken: false,
+          error: null, // Let client-side code try to handle it
+        };
+      }
+      
+      if (data?.session) {
+        console.log('Server-side code exchange successful, session created');
+        return {
+          hasValidToken: true,
+        };
+      } else {
+        console.log('Server-side code exchanged but no session returned');
+        // Let client-side try
+        return {
+          hasValidToken: false,
+          error: null,
+        };
+      }
+    } catch (e) {
+      console.error('Exception during server-side code exchange:', e);
+      // Let client-side try
       return {
         hasValidToken: false,
-        error: null, // Let client-side code try to handle it
+        error: null,
       };
-    }
-    
-    if (data?.session) {
-      console.log('Code exchanged successfully, session created');
-      return {
-        hasValidToken: true,
-      };
-    } else {
-      console.log('Code exchanged but no session returned');
     }
   }
   
