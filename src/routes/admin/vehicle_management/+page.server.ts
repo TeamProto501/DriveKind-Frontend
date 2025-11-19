@@ -108,14 +108,13 @@ export const actions = {
     const nondriver_seats = parseInt(formData.get('nondriver_seats') as string);
     const active = formData.get('active') === 'true';
 
-    // Validate vehicle type against organization's vehicle_types
-    const { data: org } = await supabase
-      .from('organization')
-      .select('vehicle_types')
-      .eq('org_id', profile.org_id)
-      .single();
+    // Validate vehicle type against organization's vehicle_types table
+    const { data: vehicleTypesData } = await supabase
+      .from('vehicle_types')
+      .select('type_name')
+      .eq('org_id', profile.org_id);
 
-    const vehicleTypes = org?.vehicle_types || ['SUV', 'Sedan', 'Van', 'Truck', 'Coupe'];
+    const vehicleTypes = vehicleTypesData?.map(vt => vt.type_name) || ['SUV', 'Sedan', 'Van', 'Truck', 'Coupe'];
     if (!vehicleTypes.includes(type_of_vehicle_enum)) {
       return fail(400, { error: `Invalid vehicle type. Must be one of: ${vehicleTypes.join(', ')}` });
     }
@@ -179,14 +178,13 @@ export const actions = {
     const nondriver_seats = parseInt(formData.get('nondriver_seats') as string);
     const active = formData.get('active') === 'true';
 
-    // Validate vehicle type against organization's vehicle_types
-    const { data: org } = await supabase
-      .from('organization')
-      .select('vehicle_types')
-      .eq('org_id', profile.org_id)
-      .single();
+    // Validate vehicle type against organization's vehicle_types table
+    const { data: vehicleTypesData } = await supabase
+      .from('vehicle_types')
+      .select('type_name')
+      .eq('org_id', profile.org_id);
 
-    const vehicleTypes = org?.vehicle_types || ['SUV', 'Sedan', 'Van', 'Truck', 'Coupe'];
+    const vehicleTypes = vehicleTypesData?.map(vt => vt.type_name) || ['SUV', 'Sedan', 'Van', 'Truck', 'Coupe'];
     if (!vehicleTypes.includes(type_of_vehicle_enum)) {
       return fail(400, { error: `Invalid vehicle type. Must be one of: ${vehicleTypes.join(', ')}` });
     }
