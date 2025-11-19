@@ -211,64 +211,26 @@
       return;
     }
     
-    // Get access token from client-side Supabase session
-    let { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    // Get access token from client-side Supabase session (same approach as declineRide)
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
     
-    // If there's a session error or no session at all, we can't proceed
-    if (sessionError) {
-      console.error('Session error:', sessionError);
-      alert('Session error. Please refresh the page and try again.');
+    if (sessionError || !session?.access_token) {
+      alert('Session expired. Please refresh the page and try again.');
       return;
     }
-    
-    // If we have a session but no access token, try to refresh (only if session exists)
-    if (session && !session.access_token) {
-      console.log('Session exists but access token missing, attempting to refresh...');
-      const { data: { session: refreshedSession }, error: refreshError } = await supabase.auth.refreshSession();
-      
-      if (refreshError) {
-        console.error('Refresh error:', refreshError);
-        // If refresh fails, the session is likely expired - redirect to login
-        alert('Session expired. Please refresh the page and log in again.');
-        window.location.href = '/login';
-        return;
-      }
-      
-      if (refreshedSession?.access_token) {
-        session = refreshedSession;
-      }
-    }
-    
-    // If still no session or no access token, we can't proceed
-    if (!session || !session.access_token) {
-      console.error('No valid session or access token available');
-      alert('Session expired. Please refresh the page and log in again.');
-      window.location.href = '/login';
-      return;
-    }
-    
-    const token = session.access_token;
     
     isUpdating = true;
     try {
-      console.log('Calling backend API:', `${API_BASE}/rides/${rideId}/accept`, { vehicle_id: vehicleId });
       const resp = await fetch(`${API_BASE}/rides/${rideId}/accept`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          'Authorization': `Bearer ${session.access_token}`
         },
         body: JSON.stringify({ vehicle_id: vehicleId })
       });
       
       if (!resp.ok) {
-        // If 401, session might have expired during the request
-        if (resp.status === 401) {
-          alert('Session expired. Please refresh the page and log in again.');
-          window.location.href = '/login';
-          return;
-        }
-        
         const msg = await readError(resp);
         console.error('Accept failed:', resp.status, msg);
         alert(`Failed to accept ride (${resp.status}): ${msg || 'Unknown error'}`);
@@ -281,7 +243,7 @@
       }
     } catch (e) {
       console.error('Network error:', e);
-      alert('Error accepting ride. Please check your connection and try again.');
+      alert('Error accepting ride. Please try again.');
     } finally {
       isUpdating = false;
     }
