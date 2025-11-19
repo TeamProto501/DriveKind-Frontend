@@ -89,7 +89,7 @@ export const actions = {
     const { data: profile } = await supabase
       .from('staff_profiles')
       .select('org_id, role')
-      .eq('user_id', session.user.id)
+      .eq('user_id', user.id)
       .single();
 
     if (!profile?.org_id) {
@@ -107,6 +107,18 @@ export const actions = {
     const vehicle_color = formData.get('vehicle_color') as string;
     const nondriver_seats = parseInt(formData.get('nondriver_seats') as string);
     const active = formData.get('active') === 'true';
+
+    // Validate vehicle type against organization's vehicle_types
+    const { data: org } = await supabase
+      .from('organization')
+      .select('vehicle_types')
+      .eq('org_id', profile.org_id)
+      .single();
+
+    const vehicleTypes = org?.vehicle_types || ['SUV', 'Sedan', 'Van', 'Truck', 'Coupe'];
+    if (!vehicleTypes.includes(type_of_vehicle_enum)) {
+      return fail(400, { error: `Invalid vehicle type. Must be one of: ${vehicleTypes.join(', ')}` });
+    }
 
     // If creating as Active, first deactivate all other vehicles for this user
     if (active) {
