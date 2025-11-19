@@ -126,30 +126,72 @@ export const load: PageServerLoad = async (event) => {
     };
   }
 
-  // ----- AUDITS TAB (old behavior via backend API) -----
-  console.log('Fetching audits from API');
-  const res = await authenticatedFetchServer(
-    API_BASE_URL + "/audit-log/dash",
-    {},
-    event
-  );
+  // ----- AUDITS TAB (now using Supabase SDK instead of backend API) -----
+  console.log('Fetching audits from Supabase');
+  const supabase = createSupabaseServerClient(event);
 
-  const text = await res.text();
-  console.log('API response text:', text);
-  let raw: any;
-  try {
-    raw = JSON.parse(text);
-  } catch {
-    raw = text;
+  const {
+    data: { session },
+    error: sessionError,
+  } = await supabase.auth.getSession();
+
+  if (sessionError) {
+    console.error("Error getting session for audits:", sessionError);
   }
-  console.log('Parsed raw data:', raw);
 
-  const rows = getRows(raw);
-  console.log('Rows:', rows);
+  if (!session) {
+    console.log('No session found for audits, returning empty data');
+    return { 
+      data: [], 
+      tab: "audits", 
+      staffProfiles: [], 
+      clients: [],
+      error: "Not authenticated."
+    };
+  }
 
-  console.log('Returning for audits tab:', { data: rows, tab: "audits", staffProfiles: [], clients: [] });
+  // Get user's org_id
+  const { data: profile, error: profileError } = await supabase
+    .from("staff_profiles")
+    .select("org_id")
+    .eq("user_id", session.user.id)
+    .single();
+
+  if (profileError) {
+    console.error("Error loading staff profile for audits:", profileError);
+  }
+
+  const orgId = profile?.org_id ?? null;
+  console.log('Profile for audits:', profile, 'OrgId:', orgId);
+
+  let audits: any[] = [];
+
+  if (orgId !== null) {
+    console.log('Fetching audit_log for orgId:', orgId);
+    const { data: auditData, error: auditError } = await supabase
+      .from("transactions_audit_log")
+      .select("*")
+      .eq("org_id", orgId)
+      .order("timestamp", { ascending: false });
+
+    if (auditError) {
+      console.error("Error loading audit_log:", auditError);
+      return {
+        data: [],
+        tab: "audits",
+        staffProfiles: [],
+        clients: [],
+        error: `Failed to fetch audits: ${auditError.message}`,
+      };
+    } else {
+      audits = auditData ?? [];
+    }
+    console.log('Audit data:', audits);
+  }
+
+  console.log('Returning for audits tab:', { data: audits, tab: "audits", staffProfiles: [], clients: [] });
   return {
-    data: rows,
+    data: audits,
     tab: "audits",
     staffProfiles: [],
     clients: [],
