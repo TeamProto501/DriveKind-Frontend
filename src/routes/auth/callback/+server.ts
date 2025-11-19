@@ -28,7 +28,8 @@ export const GET: RequestHandler = async (event) => {
 		// Password reset codes have type='recovery' or we can check the session
 		if (type === 'recovery') {
 			console.log('Recovery type detected, redirecting to reset-password');
-			throw redirect(303, '/reset-password');
+			// Pass the code along so reset-password can use it
+			throw redirect(303, `/reset-password?code=${code}&type=recovery`);
 		}
 
 		// For other flows (sign up, email confirmation), check if we have a session
