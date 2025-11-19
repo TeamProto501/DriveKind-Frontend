@@ -8,22 +8,22 @@ export const load: PageServerLoad = async (event) => {
 
   // 1) Auth
   const {
-    data: { session },
-    error: sessionError
-  } = await supabase.auth.getSession();
+    data: { user },
+    error: userError
+  } = await supabase.auth.getUser();
 
-  if (sessionError || !session) throw redirect(302, '/login');
+  if (userError || !user) throw redirect(302, '/login');
 
   // 2) Profile (need org + role)
   const { data: profile, error: profileError } = await supabase
     .from('staff_profiles')
     .select('user_id, org_id, first_name, last_name, role')
-    .eq('user_id', session.user.id)
+    .eq('user_id', user.id)
     .single();
 
   if (profileError || !profile) {
     return {
-      session,
+      session: { user },
       rides: [],
       profile: null,
       error: 'Profile not found. Please contact your administrator.'
@@ -38,7 +38,7 @@ export const load: PageServerLoad = async (event) => {
 
   if (!isDriver) {
     return {
-      session,
+      session: { user },
       rides: [],
       profile,
       error: 'Access denied. Driver role required.'
@@ -87,13 +87,13 @@ export const load: PageServerLoad = async (event) => {
         other_limitations
       )
     `)
-    .eq('driver_user_id', session.user.id)
+    .eq('driver_user_id', user.id)
     .order('appointment_time', { ascending: true });
 
   if (ridesError) {
     console.error('Error loading rides:', ridesError);
     return {
-      session,
+      session: { user },
       rides: [],
       profile,
       error: `Failed to load rides: ${ridesError.message}`
@@ -104,7 +104,7 @@ export const load: PageServerLoad = async (event) => {
   const { data: requestRows, error: requestErr } = await supabase
     .from('ride_requests')
     .select('ride_id, driver_id, org_id, denied')
-    .eq('driver_id', session.user.id)
+    .eq('driver_id', user.id)
     .eq('org_id', profile.org_id);
 
   if (requestErr) {
@@ -178,7 +178,7 @@ export const load: PageServerLoad = async (event) => {
   const { data: activeVehicles } = await supabase
     .from('vehicles')
     .select('vehicle_id, type_of_vehicle_enum, vehicle_color, nondriver_seats, active')
-    .eq('user_id', session.user.id)
+    .eq('user_id', user.id)
     .eq('active', true)
     .order('vehicle_id', { ascending: true });
 
@@ -201,7 +201,7 @@ export const load: PageServerLoad = async (event) => {
   const rides = [...ridesWithEligibleVehicles, ...(assignedRides || [])];
 
   return {
-    session,
+    session: { user },
     rides,
     profile,
     activeVehicles: activeVehicles || [],
