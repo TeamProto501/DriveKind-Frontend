@@ -446,45 +446,77 @@
   }
 
   function addVehicleType(e?: Event) {
+    console.log('=== addVehicleType START ===');
     if (e) {
       e.preventDefault();
       e.stopPropagation();
     }
-    console.log('addVehicleType called, newVehicleType:', newVehicleType);
-    const trimmed = newVehicleType.trim();
+    console.log('newVehicleType value:', newVehicleType);
+    console.log('current vehicleTypes:', vehicleTypes);
+    
+    const trimmed = newVehicleType?.trim() || '';
+    console.log('trimmed value:', trimmed);
+    
     if (!trimmed) {
+      console.log('Empty value, showing toast');
       setToast("Vehicle type cannot be empty", false);
       return;
     }
+    
     // Check for duplicates (case-insensitive)
-    if (vehicleTypes.some(t => t.toLowerCase() === trimmed.toLowerCase())) {
+    const isDuplicate = vehicleTypes.some(t => t.toLowerCase() === trimmed.toLowerCase());
+    console.log('Is duplicate?', isDuplicate);
+    
+    if (isDuplicate) {
+      console.log('Duplicate found, showing toast');
       setToast("Vehicle type already exists", false);
       return;
     }
+    
     console.log('Adding vehicle type:', trimmed);
-    vehicleTypes = [...vehicleTypes, trimmed];
+    const newArray = [...vehicleTypes, trimmed];
+    console.log('New array:', newArray);
+    vehicleTypes = newArray;
     newVehicleType = "";
-    console.log('Updated vehicleTypes:', vehicleTypes);
+    console.log('State updated. vehicleTypes:', vehicleTypes);
+    console.log('newVehicleType cleared:', newVehicleType);
+    console.log('=== addVehicleType END ===');
   }
 
   function removeVehicleType(index: number, e?: Event) {
+    console.log('=== removeVehicleType START ===');
     if (e) {
       e.preventDefault();
       e.stopPropagation();
     }
-    console.log('removeVehicleType called, index:', index);
+    console.log('Index to remove:', index);
+    console.log('Current vehicleTypes:', vehicleTypes);
+    console.log('vehicleTypes length:', vehicleTypes.length);
+    
+    if (index < 0 || index >= vehicleTypes.length) {
+      console.log('Invalid index!');
+      return;
+    }
+    
     const typeToRemove = vehicleTypes[index];
     console.log('Type to remove:', typeToRemove);
+    
     // Check if any vehicles are using this type
     const vehiclesUsingType = vehicles.filter(v => v.type_of_vehicle_enum === typeToRemove);
     console.log('Vehicles using this type:', vehiclesUsingType.length);
+    
     if (vehiclesUsingType.length > 0) {
+      console.log('Cannot remove - vehicles using it');
       setToast(`Cannot remove "${typeToRemove}" - ${vehiclesUsingType.length} vehicle(s) are using it`, false);
       return;
     }
+    
     console.log('Removing vehicle type, current types:', vehicleTypes);
-    vehicleTypes = vehicleTypes.filter((_, i) => i !== index);
-    console.log('Updated vehicleTypes:', vehicleTypes);
+    const newArray = vehicleTypes.filter((_, i) => i !== index);
+    console.log('New array after filter:', newArray);
+    vehicleTypes = newArray;
+    console.log('State updated. vehicleTypes:', vehicleTypes);
+    console.log('=== removeVehicleType END ===');
   }
 
   async function saveVehicleTypes() {
