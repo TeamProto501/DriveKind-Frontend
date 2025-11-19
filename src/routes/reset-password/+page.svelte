@@ -17,9 +17,12 @@
 
   // Handle hash fragments on client side (Supabase sends tokens as hash fragments)
   onMount(async () => {
+    console.log('Reset password page loaded');
+    console.log('Current URL:', window.location.href);
+    console.log('Hash:', window.location.hash);
+    
     // Check if there are hash fragments in the URL
     const hash = window.location.hash.substring(1);
-    console.log('Reset password page - hash:', hash);
     
     if (hash) {
       const hashParams = new URLSearchParams(hash);
@@ -27,11 +30,16 @@
       const type = hashParams.get('type');
       const refreshToken = hashParams.get('refresh_token');
 
-      console.log('Token params:', { accessToken: !!accessToken, type, refreshToken: !!refreshToken });
+      console.log('Token params found:', { 
+        hasAccessToken: !!accessToken, 
+        type, 
+        hasRefreshToken: !!refreshToken 
+      });
 
       if (accessToken && type === 'recovery' && refreshToken) {
         // Exchange the tokens for a session
         try {
+          console.log('Attempting to set session with recovery tokens...');
           const { data: { session }, error: sessionError } = await supabase.auth.setSession({
             access_token: accessToken,
             refresh_token: refreshToken,
@@ -39,18 +47,19 @@
 
           if (sessionError) {
             console.error('Session error:', sessionError);
-            error = 'Invalid or expired reset token. Please request a new password reset link.';
+            error = `Invalid or expired reset token: ${sessionError.message}. Please request a new password reset link.`;
             return;
           }
 
           if (session) {
-            console.log('Session created successfully');
+            console.log('Session created successfully, user:', session.user?.email);
             hasValidToken = true;
             error = null;
             // Remove hash from URL
             window.history.replaceState(null, '', window.location.pathname + window.location.search);
             await invalidateAll();
           } else {
+            console.error('No session returned after setSession');
             error = 'Invalid or expired reset token. Please request a new password reset link.';
           }
         } catch (e) {
@@ -58,15 +67,19 @@
           error = 'Invalid or expired reset token. Please request a new password reset link.';
         }
       } else {
-        error = 'Invalid reset link. Please request a new password reset link.';
+        console.error('Missing required token parameters:', { accessToken: !!accessToken, type, refreshToken: !!refreshToken });
+        error = 'Invalid reset link format. Please request a new password reset link.';
       }
     } else {
       // No hash fragments - check if we already have a valid session
+      console.log('No hash fragments, checking existing session...');
       const { data: { session } } = await supabase.auth.getSession();
       if (session) {
+        console.log('Found existing session');
         hasValidToken = true;
       } else {
-        error = 'Invalid or expired reset token. Please request a new password reset link.';
+        console.error('No session found and no hash fragments');
+        error = 'Invalid or expired reset token. Please click the link from your email or request a new password reset link.';
       }
     }
   });
