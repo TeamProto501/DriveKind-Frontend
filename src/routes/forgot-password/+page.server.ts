@@ -16,7 +16,7 @@ export const load: PageServerLoad = async (event) => {
 };
 
 export const actions: Actions = {
-  resetPassword: async (event) => {
+  sendMagicLink: async (event) => {
     const supabase = createSupabaseServerClient(event);
     const formData = await event.request.formData();
 
@@ -31,29 +31,28 @@ export const actions: Actions = {
       return fail(400, { error: 'Please enter a valid email address' });
     }
 
-    // Redirect directly to reset-password page
-    // The reset-password page will handle both code exchange (query params) and hash fragments
-    const resetPasswordUrl = `${event.url.origin}/reset-password`;
-    console.log('Sending password reset email with redirect URL:', resetPasswordUrl);
-    console.log('Event URL origin:', event.url.origin);
+    // Send magic link - redirect to auth callback which will handle the login
+    const callbackUrl = `${event.url.origin}/auth/callback`;
     
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: resetPasswordUrl,
-      // Add email options to ensure proper redirect
-      emailRedirectTo: resetPasswordUrl,
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
+      options: {
+        emailRedirectTo: callbackUrl,
+      }
     });
 
     if (error) {
-      console.error('Password reset error:', error);
+      console.error('Magic link error:', error);
+      // Don't reveal if email exists or not for security
       return {
         success: true,
-        message: 'If an account with that email exists, a password reset link has been sent.',
+        message: 'If an account with that email exists, a magic link has been sent. Click the link to sign in.',
       };
     }
 
     return {
       success: true,
-      message: 'If an account with that email exists, a password reset link has been sent.',
+      message: 'If an account with that email exists, a magic link has been sent. Click the link to sign in.',
     };
   },
 };
