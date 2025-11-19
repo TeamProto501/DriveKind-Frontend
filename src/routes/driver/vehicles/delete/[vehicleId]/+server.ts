@@ -4,9 +4,9 @@ import { createSupabaseServerClient } from '$lib/supabase.server';
 export const POST: RequestHandler = async (event) => {
   try {
     const supabase = createSupabaseServerClient(event);
-    const { data: { session } } = await supabase.auth.getSession();
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
 
-    if (!session) {
+    if (userError || !user) {
       return json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -26,7 +26,7 @@ export const POST: RequestHandler = async (event) => {
       return json({ error: 'Vehicle not found' }, { status: 404 });
     }
 
-    if (existingVehicle.user_id !== session.user.id) {
+    if (existingVehicle.user_id !== user.id) {
       return json({ error: 'You do not have permission to delete this vehicle' }, { status: 403 });
     }
 
@@ -34,7 +34,7 @@ export const POST: RequestHandler = async (event) => {
       .from('vehicles')
       .delete()
       .eq('vehicle_id', vehicleId)
-      .eq('user_id', session.user.id);
+      .eq('user_id', user.id);
 
     if (deleteError) {
       console.error('Error deleting vehicle:', deleteError);
