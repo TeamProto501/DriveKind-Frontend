@@ -4,9 +4,9 @@ import { createSupabaseServerClient } from '$lib/supabase.server';
 
 export const load: PageServerLoad = async (event) => {
   const supabase = createSupabaseServerClient(event);
-  const { data: { session } } = await supabase.auth.getSession();
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
 
-  if (!session) {
+  if (authError || !user) {
     throw redirect(302, '/login');
   }
 
@@ -14,16 +14,17 @@ export const load: PageServerLoad = async (event) => {
   const { data: profile } = await supabase
     .from('staff_profiles')
     .select('org_id, role')
-    .eq('user_id', session.user.id)
+    .eq('user_id', user.id)
     .single();
 
   if (!profile?.org_id) {
     return {
-      session,
+      session: { user },
       profile,
       roles: [],
       vehicles: [],
       driverOptions: [],
+      vehicleTypes: ['SUV', 'Sedan', 'Van', 'Truck', 'Coupe'],
       error: 'No org found'
     };
   }
@@ -56,21 +57,32 @@ export const load: PageServerLoad = async (event) => {
     .eq('org_id', profile.org_id)
     .contains('role', ['Driver']);
 
+  // Get vehicle_types from organization
+  const { data: org } = await supabase
+    .from('organization')
+    .select('vehicle_types')
+    .eq('org_id', profile.org_id)
+    .single();
+
+  // Default vehicle types if not set (excluding Motorcycle)
+  const vehicleTypes = org?.vehicle_types || ['SUV', 'Sedan', 'Van', 'Truck', 'Coupe'];
+
   return {
-    session,
+    session: { user },
     profile,
     roles: Array.isArray(profile.role) ? profile.role : [],
     vehicles: vehiclesWithProfiles,
-    driverOptions: drivers || []
+    driverOptions: drivers || [],
+    vehicleTypes
   };
 };
 
 export const actions = {
   create: async (event) => {
     const supabase = createSupabaseServerClient(event);
-    const { data: { session } } = await supabase.auth.getSession();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
 
-    if (!session) {
+    if (authError || !user) {
       return fail(401, { error: 'Unauthorized' });
     }
 
@@ -126,16 +138,16 @@ export const actions = {
 
   update: async (event) => {
     const supabase = createSupabaseServerClient(event);
-    const { data: { session } } = await supabase.auth.getSession();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
 
-    if (!session) {
+    if (authError || !user) {
       return fail(401, { error: 'Unauthorized' });
     }
 
     const { data: profile } = await supabase
       .from('staff_profiles')
       .select('org_id, role')
-      .eq('user_id', session.user.id)
+      .eq('user_id', user.id)
       .single();
 
     if (!profile?.org_id) {
@@ -154,6 +166,18 @@ export const actions = {
     const vehicle_color = formData.get('vehicle_color') as string;
     const nondriver_seats = parseInt(formData.get('nondriver_seats') as string);
     const active = formData.get('active') === 'true';
+
+    // Validate vehicle type against organization's vehicle_types
+    const { data: org } = await supabase
+      .from('organization')
+      .select('vehicle_types')
+      .eq('org_id', profile.org_id)
+      .single();
+
+    const vehicleTypes = org?.vehicle_types || ['SUV', 'Sedan', 'Van', 'Truck', 'Coupe'];
+    if (!vehicleTypes.includes(type_of_vehicle_enum)) {
+      return fail(400, { error: `Invalid vehicle type. Must be one of: ${vehicleTypes.join(', ')}` });
+    }
 
     // If setting to Active, deactivate other vehicles for same user
     if (active && owner_user_id) {
@@ -186,16 +210,16 @@ export const actions = {
 
   delete: async (event) => {
     const supabase = createSupabaseServerClient(event);
-    const { data: { session } } = await supabase.auth.getSession();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
 
-    if (!session) {
+    if (authError || !user) {
       return fail(401, { error: 'Unauthorized' });
     }
 
     const { data: profile } = await supabase
       .from('staff_profiles')
       .select('org_id, role')
-      .eq('user_id', session.user.id)
+      .eq('user_id', user.id)
       .single();
 
     if (!profile?.org_id) {
@@ -222,5 +246,68 @@ export const actions = {
     }
 
     return { success: true };
+  },
+
+  updateVehicleTypes: async (event) => {
+    const supabase = createSupabaseServerClient(event);
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      return fail(401, { error: 'Unauthorized' });
+    }
+
+    const { data: profile } = await supabase
+      .from('staff_profiles')
+      .select('org_id, role')
+      .eq('user_id', user.id)
+      .single();
+
+    if (!profile?.org_id) {
+      return fail(400, { error: 'No organization found' });
+    }
+
+    const roles = Array.isArray(profile.role) ? profile.role : [];
+    if (!roles.includes('Admin') && !roles.includes('Super Admin')) {
+      return fail(403, { error: 'Permission denied' });
+    }
+
+    const formData = await event.request.formData();
+    const vehicleTypesJson = formData.get('vehicle_types') as string;
+    
+    if (!vehicleTypesJson) {
+      return fail(400, { error: 'vehicle_types is required' });
+    }
+
+    let vehicleTypes: string[];
+    try {
+      vehicleTypes = JSON.parse(vehicleTypesJson);
+      if (!Array.isArray(vehicleTypes)) {
+        return fail(400, { error: 'vehicle_types must be an array' });
+      }
+    } catch (e) {
+      return fail(400, { error: 'Invalid JSON format for vehicle_types' });
+    }
+
+    // Validate that vehicle types are non-empty strings
+    if (vehicleTypes.some(t => typeof t !== 'string' || !t.trim())) {
+      return fail(400, { error: 'All vehicle types must be non-empty strings' });
+    }
+
+    // Remove duplicates (case-insensitive) and trim
+    const uniqueTypes = Array.from(new Set(vehicleTypes.map(t => t.trim()).filter(t => t.length > 0)));
+
+    const { data: updatedOrg, error } = await supabase
+      .from('organization')
+      .update({ vehicle_types: uniqueTypes })
+      .eq('org_id', profile.org_id)
+      .select('vehicle_types')
+      .single();
+
+    if (error) {
+      console.error('Update vehicle types error:', error);
+      return fail(500, { error: error.message });
+    }
+
+    return { success: true, vehicleTypes: updatedOrg.vehicle_types };
   }
 } satisfies Actions;
