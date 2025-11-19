@@ -6,22 +6,24 @@ To ensure password reset emails redirect to the correct page, you need to config
 
 ### 1. Site URL Configuration
 
-**IMPORTANT:** The Site URL must be set correctly, otherwise Supabase will construct invalid redirect URLs.
+**CRITICAL:** The Site URL must be set correctly, otherwise Supabase will construct invalid redirect URLs.
 
 1. Go to your Supabase Dashboard
 2. Navigate to **Authentication** → **URL Configuration**
-3. Set the **Site URL** to your production URL with protocol:
-   - ✅ Correct: `https://drivekind.info`
-   - ❌ Wrong: `drivekind.info` (missing protocol)
-   - ❌ Wrong: `https://drivekind.info/` (trailing slash can cause issues)
-4. Add the following to the **Redirect URLs** list (make sure they match exactly):
+3. **Set the Site URL** to your production URL:
+   - ✅ **Correct:** `https://drivekind.info` (no trailing slash, with https://)
+   - ❌ **Wrong:** `drivekind.info` (missing protocol)
+   - ❌ **Wrong:** `https://drivekind.info/` (trailing slash can cause issues)
+   - ❌ **Wrong:** Empty/not set (will cause the error you're seeing)
+4. **Add the following to the Redirect URLs** list (make sure they match exactly):
    - `https://drivekind.info/auth/callback` (required - handles code exchange)
    - `https://drivekind.info/reset-password` (optional - for direct hash fragment flow)
    - For local development: `http://localhost:5173/auth/callback` and `http://localhost:5173/reset-password`
 
-**Note:** If you're still getting redirected to `https://ymwkzttrfelewpprcdtn.supabase.co/drivekind.info`, it means the Site URL is likely set incorrectly or the redirect URL format is wrong. Make sure:
-- Site URL is `https://drivekind.info` (no trailing slash)
-- Redirect URLs include the full protocol and domain
+**Important:** If you're seeing `https://ymwkzttrfelewpprcdtn.supabase.co/drivekind.info`, it means:
+- The Site URL is either empty or set incorrectly
+- Supabase is trying to construct the URL but failing
+- Make sure Site URL is set to `https://drivekind.info` (exactly, no trailing slash)
 
 ### 2. Email Template
 
