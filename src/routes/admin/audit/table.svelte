@@ -16,19 +16,6 @@
     currentPage * pageSize
   );
 
-  const getActionClass = (action: string) => {
-    switch (action) {
-      case "INSERT":
-        return "text-green-600 font-semibold";
-      case "UPDATE":
-        return "text-blue-600 font-semibold";
-      case "DELETE":
-        return "text-red-600 font-semibold";
-      default:
-        return "text-gray-600";
-    }
-  };
-
   $: keys = items[0] ? Object.keys(items[0]) : [];
 
   const formatLabel = (k: string) =>

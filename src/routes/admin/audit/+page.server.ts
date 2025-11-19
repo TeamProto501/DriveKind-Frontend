@@ -1,3 +1,4 @@
+// src/routes/admin/audit/+page.server.ts
 import { authenticatedFetchServer, API_BASE_URL } from "$lib/api.server";
 import type { PageServerLoad, Actions } from "./$types";
 
@@ -11,7 +12,7 @@ function flattenCalls(data: any[]): any[] {
   return data.map((item) => {
     const flattened: any = { ...item };
 
-    // Optional: if your API joins staff_profiles, map to staff_name
+    // If the API joins staff_profiles, turn that into a simple staff_name
     if (item.staff_profiles) {
       const first = item.staff_profiles.first_name ?? "";
       const last = item.staff_profiles.last_name ?? "";
@@ -19,9 +20,9 @@ function flattenCalls(data: any[]): any[] {
       delete flattened.staff_profiles;
     }
 
-    // Calls table columns are left as-is:
+    // Calls table columns (leave names as they are in the DB / API):
     // call_id, user_id, org_id, call_time, call_type,
-    // other_type, client_id, phone_number, forwarded_to,
+    // other_type, client_id, phone_number, forwarded_to_name,
     // caller_first_name, caller_last_name
 
     return flattened;
@@ -63,6 +64,7 @@ export const load: PageServerLoad = async (event) => {
       raw = text;
     }
 
+    // /audit-log/dash returns { success, data, count }
     const rows = getRows(raw);
     return { data: rows, tab: "audits" };
   }
@@ -96,7 +98,7 @@ export const actions: Actions = {
     );
 
     const text = await res.text();
-    return { success: true, text };
+    return { success: res.ok, text };
   },
 
   previewByRange: async (event) => {
@@ -147,16 +149,16 @@ export const actions: Actions = {
       dateTimeLocal.replace("T", " ") + ":00";
 
     const body: any = {
-      // not editable, but passed in case your API wants them
+      // Not really edited, but passed through if your API wants them
       user_id: formData.get("user_id") || null,
       client_id: formData.get("client_id") || null,
       call_type: formData.get("call_type") || null,
 
-      // editable fields
+      // Editable fields – NOTE the column names here:
       call_time: call_time_local ? formatToSQL(call_time_local) : null,
       other_type: formData.get("other_type") || null,
       phone_number: formData.get("phone_number") || null,
-      forwarded_to: formData.get("forwarded_to") || null,
+      forwarded_to_name: formData.get("forwarded_to_name") || null,
       caller_first_name: formData.get("caller_first_name") || null,
       caller_last_name: formData.get("caller_last_name") || null,
       // org_id intentionally not sent
@@ -166,7 +168,7 @@ export const actions: Actions = {
       const res = await authenticatedFetchServer(
         API_BASE_URL + `/calls/${call_id}`,
         {
-          method: "PUT", // change to PATCH / different URL if your API uses that
+          method: "PUT",
           headers: {
             "Content-Type": "application/json",
           },
