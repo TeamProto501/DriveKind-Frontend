@@ -325,7 +325,9 @@
     "secondary_contact_city",
     "secondary_contact_state",
     "secondary_contact_zipcode",
+    "org_website", // <--- NEW: website is optional
   ]);
+
   function isRequired(key: string) {
     return !OPTIONAL_KEYS.has(key);
   }
@@ -368,7 +370,7 @@
     // step-specific requireds to reduce overwhelm
     fieldErrors = {};
     const requiredByStep: Record<number, string[]> = {
-      0: ["name", "org_status", "org_website", "org_email", "org_phone"],
+      0: ["name", "org_status", "org_email", "org_phone"],
       1: ["org_address", "org_city", "org_state", "org_zip_code"],
       2: [
         "rides_phone_number",
@@ -624,6 +626,43 @@
   }
 
   // ---------- CRUD ----------
+  function getOrgStatus(org: OrgRow): "Active" | "Inactive" {
+    const raw = (org.org_status_enum ?? org.org_status ?? org.status ?? "") as string;
+    const s = String(raw).trim().toLowerCase();
+    return s === "active" ? "Active" : "Inactive";
+  }
+
+  async function toggleOrgStatus(org: OrgRow) {
+    const current = getOrgStatus(org);
+    const next = current === "Active" ? "Inactive" : "Active";
+
+    try {
+      const { error } = await supabase
+        .from("organization")
+        .update({ org_status_enum: next })
+        .eq("org_id", org.org_id);
+
+      if (error) {
+        showEditMessage(
+          "Failed to update organization status: " + error.message,
+          false
+        );
+        return;
+      }
+
+      showEditMessage(
+        `Organization marked as ${next}.`,
+        true
+      );
+      await refreshOrganizations();
+    } catch (e: any) {
+      showEditMessage(
+        "Failed to update organization status: " + (e?.message ?? "Unknown error"),
+        false
+      );
+    }
+  }
+
   async function addOrganization(e: Event) {
     e.preventDefault();
     // final step validation
@@ -982,10 +1021,19 @@
                         <Edit class="w-4 h-4 mr-1" /> Edit
                       </button>
                       <button
-                        onclick={() => openDeleteModal(org)}
-                        class="inline-flex items-center px-3 py-2 rounded-md text-white bg-red-600 hover:bg-red-700"
+                        onclick={() => toggleOrgStatus(org)}
+                        class={
+                          "inline-flex items-center px-3 py-2 rounded-md text-white " +
+                          (getOrgStatus(org) === "Active"
+                            ? "bg-red-600 hover:bg-red-700"
+                            : "bg-green-600 hover:bg-green-700")
+                        }
                       >
-                        <Trash2 class="w-4 h-4 mr-1" /> Delete
+                        {#if getOrgStatus(org) === "Active"}
+                          <X class="w-4 h-4 mr-1" /> Deactivate
+                        {:else}
+                          <Save class="w-4 h-4 mr-1" /> Activate
+                        {/if}
                       </button>
                     </div>
                   </td>
