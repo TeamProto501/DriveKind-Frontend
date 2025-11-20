@@ -40,6 +40,8 @@
     allergens?: string;
     driver_other_limitations?: string;
     cannot_handle_mobility_devices?: string[];
+    // NEW: optional max weekly rides (int4 on staff_profiles)
+    max_weekly_rides?: number | "" | null;
   };
 
   type StaffProfile = StaffForm & {
@@ -132,6 +134,8 @@
         cannot_handle_mobility_devices: [],
         primary_is_cell: true,
         primary_can_text: true,
+        // NEW: default to null (no limit)
+        max_weekly_rides: null,
       };
     }
     const r = Array.isArray(user.role)
@@ -171,6 +175,9 @@
         : [],
       primary_is_cell: user.primary_is_cell,
       primary_can_text: user.primary_can_text,
+      // NEW: load existing value (if any)
+      max_weekly_rides:
+        (user as any).max_weekly_rides ?? null,
     };
   }
   $: form = initForm();
@@ -251,6 +258,17 @@
       return;
     }
 
+    // Normalize max_weekly_rides to number | null before sending
+    let normalizedMaxWeekly: number | null = null;
+    if (
+      form.max_weekly_rides !== undefined &&
+      form.max_weekly_rides !== null &&
+      form.max_weekly_rides !== ""
+    ) {
+      const parsed = Number(form.max_weekly_rides);
+      normalizedMaxWeekly = Number.isNaN(parsed) ? null : parsed;
+    }
+
     saving = true;
     errorMessage = null;
 
@@ -264,6 +282,7 @@
           profileData: {
             ...form,
             role: form.role,
+            max_weekly_rides: normalizedMaxWeekly,
           },
         };
 
@@ -299,7 +318,11 @@
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({ ...form, role: form.role }),
+          body: JSON.stringify({
+            ...form,
+            role: form.role,
+            max_weekly_rides: normalizedMaxWeekly,
+          }),
         });
 
         if (!res.ok) {
@@ -489,6 +512,13 @@
                 </div>
               </div>
             {/if}
+            <!-- Optional display of max_weekly_rides in read-only view -->
+            <div>
+              <div class="text-xs text-gray-500">Max Weekly Rides</div>
+              <div class="font-medium">
+                {(user as any).max_weekly_rides ?? "No limit"}
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -857,6 +887,25 @@
               /> Can accept service animals</label
             >
           </div>
+
+          <!-- NEW: Max weekly rides input -->
+          <div>
+            <label class="block text-base font-medium"
+              >Max Weekly Rides</label
+            >
+            <input
+              class="mt-1 w-full border rounded px-3 py-2 text-base"
+              type="number"
+              min="0"
+              bind:value={form.max_weekly_rides}
+              placeholder="Leave blank for no limit"
+            />
+            <p class="text-xs text-gray-500 mt-1">
+              Optional. Maximum number of rides this staff member may drive per
+              week.
+            </p>
+          </div>
+
           <div>
             <label class="block text-base font-medium"
               >Destination Limitation</label
