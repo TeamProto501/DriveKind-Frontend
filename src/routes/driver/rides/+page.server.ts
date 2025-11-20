@@ -14,10 +14,10 @@ export const load: PageServerLoad = async (event) => {
 
   if (userError || !user) throw redirect(302, '/login');
 
-  // 2) Profile (need org + role)
+  // 2) Profile (need org + role + max_weekly_rides)
   const { data: profile, error: profileError } = await supabase
     .from('staff_profiles')
-    .select('user_id, org_id, first_name, last_name, role')
+    .select('user_id, org_id, first_name, last_name, role, max_weekly_rides')
     .eq('user_id', user.id)
     .single();
 
@@ -197,10 +197,8 @@ export const load: PageServerLoad = async (event) => {
     .order('vehicle_id', { ascending: true });
 
   // 7) For each pending ride, determine which vehicles are eligible
-  // A vehicle is eligible if it's active and has enough seats for the ride
   const ridesWithEligibleVehicles = (pendingRides || []).map((ride: any) => {
     const eligibleVehicles = (activeVehicles || []).filter((vehicle: any) => {
-      // Check if vehicle has enough seats (riders + 1 for driver)
       const requiredSeats = (ride.riders || 0) + 1;
       const vehicleSeats = (vehicle.nondriver_seats || 0) + 1; // +1 for driver
       return vehicleSeats >= requiredSeats;

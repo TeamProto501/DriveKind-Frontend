@@ -35,6 +35,15 @@
   let searchTerm = $state("");
   let activeTab = $state("requests"); // requests | scheduled | active | completed
   let isUpdating = $state(false);
+
+  // ---- Driver weekly rides preference ----
+  let maxWeeklyRides = $state(
+    data.profile?.max_weekly_rides != null
+      ? String(data.profile.max_weekly_rides)
+      : ""
+  );
+  let isSavingMaxWeekly = $state(false);
+
   let showCompletionModal = $state(false);
   let selectedRideForCompletion = $state<any>(null);
   let showEditModal = $state(false);
@@ -185,6 +194,53 @@
   async function readError(resp: Response) {
     try { const j = await resp.json(); return j?.error || j?.message || JSON.stringify(j); }
     catch { try { return await resp.text(); } catch { return ''; } }
+  }
+
+  // ---- Save max_weekly_rides for this driver ----
+  async function saveMaxWeeklyRides() {
+    const raw = maxWeeklyRides.trim();
+    let value: number | null = null;
+
+    // blank = no limit
+    if (raw !== "") {
+      const parsed = parseInt(raw, 10);
+      if (Number.isNaN(parsed) || parsed < 0) {
+        alert(
+          "Please enter a non-negative whole number for max weekly rides, or leave it blank for no limit."
+        );
+        return;
+      }
+      value = parsed;
+    }
+
+    if (!data.profile) {
+      alert("Profile not loaded. Please refresh the page.");
+      return;
+    }
+
+    isSavingMaxWeekly = true;
+    try {
+      // Directly update staff_profiles via Supabase (no external API)
+      const { error } = await supabase
+        .from("staff_profiles")
+        .update({ max_weekly_rides: value })
+        .eq("user_id", data.profile.user_id);
+
+      if (error) {
+        console.error("Update max_weekly_rides failed:", error);
+        alert(`Failed to update weekly ride limit: ${error.message}`);
+        return;
+      }
+
+      alert("Weekly ride limit updated.");
+      maxWeeklyRides = value != null ? String(value) : "";
+      await invalidateAll();
+    } catch (e) {
+      console.error(e);
+      alert("Error updating weekly ride limit. Please try again.");
+    } finally {
+      isSavingMaxWeekly = false;
+    }
   }
 
   // Accept - with vehicle selection if multiple eligible vehicles
@@ -394,6 +450,39 @@
     </div>
   </div>
 
+  {#if data.profile}
+    <Card>
+      <CardContent class="p-4 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+        <div>
+          <h2 class="text-lg font-semibold flex items-center gap-2">
+            <Car class="w-5 h-5 text-blue-600" />
+            Weekly Ride Limit
+          </h2>
+          <p class="text-sm text-muted-foreground">
+            Set the maximum number of rides you prefer to drive each week. Leave blank for no limit.
+          </p>
+        </div>
+
+        <div class="flex items-center gap-2 mt-2 md:mt-0">
+          <Input
+            type="number"
+            min="0"
+            class="w-28"
+            placeholder="No limit"
+            bind:value={maxWeeklyRides}
+          />
+          <Button
+            size="sm"
+            onclick={saveMaxWeeklyRides}
+            disabled={isSavingMaxWeekly}
+          >
+            {isSavingMaxWeekly ? "Saving..." : "Save"}
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  {/if}
+
   {#if data.error}
     <Card class="border-red-200 bg-red-50">
       <CardContent class="p-4">
@@ -448,8 +537,8 @@
     </div>
 
     <CardContent class="p-6 border-b">
-          <div class="relative">
-            <Search class="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+      <div class="relative">
+        <Search class="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
         <Input placeholder="Search rides..." bind:value={searchTerm} class="pl-10" />
       </div>
     </CardContent>
@@ -515,15 +604,15 @@
                 {/if}
 
                 {#if ride.riders > 0}
-                <div class="flex items-center gap-2">
+                  <div class="flex items-center gap-2">
                     <Car class="w-4 h-4" />{ride.riders} passenger{ride.riders > 1 ? 's' : ''}
-                </div>
+                  </div>
                 {/if}
 
                 <!-- Show assigned vehicle -->
                 {#if ride.assigned_vehicle && ride.vehicles}
-                <div class="flex items-center gap-2">
-                  <Car class="w-4 h-4" />
+                  <div class="flex items-center gap-2">
+                    <Car class="w-4 h-4" />
                     <div>
                       <span class="font-medium">Assigned Vehicle:</span>
                       <span class="ml-1">{ride.vehicles.type_of_vehicle_enum} - {ride.vehicles.vehicle_color}</span>
@@ -604,7 +693,7 @@
                   disabled={isUpdating}
                 >
                   <Edit class="w-4 h-4 mr-1" />Edit
-              </Button>
+                </Button>
               {/if}
             </div>
           </div>
