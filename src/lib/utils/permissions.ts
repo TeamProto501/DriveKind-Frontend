@@ -410,7 +410,7 @@ export function getVisibleUserTabs(roles: Role[] | null | undefined): {
  * Determine if user should only see clients tab (hide other tabs)
  */
 export function shouldOnlyShowClientsTab(roles: Role[] | null | undefined): boolean {
-  return hasRole(roles, ['New Client Enroller', 'WSPS Dispatcher Add-on', 'BPSR Dispatcher Add-on']) 
+  return hasRole(roles, ['New Client Enroller', 'WSPS Dispatcher Add-on', 'BPSR Dispatcher Add-on', 'Bri Pen Driver Add-on'])
     && !hasRole(roles, ['Super Admin', 'Admin', 'List Manager', 'Report View Only']);
 }
 
@@ -421,7 +421,7 @@ export function isReadOnly(roles: Role[] | null | undefined, context: 'clients' 
   if (hasRole(roles, ['Super Admin', 'Admin'])) return false;
   
   if (context === 'clients') {
-    return hasRole(roles, ['Report View Only']);
+    return hasRole(roles, ['Report View Only', 'Bri Pen Driver Add-on']);
   }
   
   if (context === 'users') {

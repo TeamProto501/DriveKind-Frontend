@@ -109,7 +109,7 @@
     if (hasRole(["Report Manager"]) && !hasRole(["Admin", "Super Admin"])) {
       return "Reports";
     }
-    if (hasRole(["List Manager"]) && !hasRole(["Admin", "Super Admin"])) {
+    if (hasRole(["List Manager", "Bri Pen Driver Add-on"]) && !hasRole(["Admin", "Super Admin"])) {
       return "Management";
     }
     return "Admin";
@@ -225,7 +225,8 @@
         "Report View Only",
         "New Client Enroller",
         "WSPS Dispatcher Add-on",
-        "BPSR Dispatcher Add-on"
+        "BPSR Dispatcher Add-on",
+        "Bri Pen Driver Add-on"
       ])) {
         adminItems.push({ label: "User & Client Management", href: "/admin/users" });
       }

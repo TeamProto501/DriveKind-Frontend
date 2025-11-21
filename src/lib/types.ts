@@ -6,7 +6,14 @@ export type RoleEnum =
   | "Dispatcher"
   | "Driver"
   | "Volunteer"
-  | "Client";
+  | "Client"
+  | 'New Client Enroller'
+  | 'Report View Only'
+  | 'List Manager'
+  | 'Report Manager'
+  | 'WSPS Dispatcher Add-on'
+  | 'BPSR Dispatcher Add-on'
+  | 'Bri Pen Driver Add-on';
 
 export type RideType = "Medical" | "Tax" | "Shopping" | "Social" | "Other";
 export type RideStatus = "Pending" | "Assigned" | "In Progress" | "Completed" | "Cancelled";
