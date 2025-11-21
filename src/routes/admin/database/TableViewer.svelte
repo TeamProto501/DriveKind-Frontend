@@ -3,7 +3,15 @@
   import { Loader2, AlertCircle, Download, Search, X, Filter, Plus, ChevronUp, ChevronDown, ChevronsUpDown } from '@lucide/svelte';
   import { exportToCSV } from '$lib/utils/csvExport';
   
-  let { tableName, orgId }: { tableName: string, orgId: number } = $props();
+  let { 
+    tableName, 
+    orgId,
+    canExport = true 
+  }: { 
+    tableName: string; 
+    orgId: number;
+    canExport?: boolean;
+  } = $props();
   
   let allRecords = $state([]);
   let displayedRecords = $state([]);
@@ -190,6 +198,11 @@
   }
   
   async function handleExport() {
+    if (!canExport) {
+      alert('You don\'t have permission to export data');
+      return;
+    }
+
     exporting = true;
     
     try {
@@ -351,19 +364,25 @@
         {/if}
       </div>
       
-      <button
-        onclick={handleExport}
-        disabled={exporting}
-        class="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
-      >
-        {#if exporting}
-          <Loader2 class="w-4 h-4 animate-spin" />
-          Exporting...
-        {:else}
-          <Download class="w-4 h-4" />
-          Export {filters.length > 0 ? 'Filtered' : 'All'} to CSV
-        {/if}
-      </button>
+      {#if canExport}
+        <button
+          onclick={handleExport}
+          disabled={exporting}
+          class="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
+        >
+          {#if exporting}
+            <Loader2 class="w-4 h-4 animate-spin" />
+            Exporting...
+          {:else}
+            <Download class="w-4 h-4" />
+            Export {filters.length > 0 ? 'Filtered' : 'All'} to CSV
+          {/if}
+        </button>
+      {:else}
+        <div class="text-xs text-gray-500 bg-gray-100 px-3 py-2 rounded-lg">
+          Export disabled (View Only)
+        </div>
+      {/if}
     </div>
     
    <!-- Table -->
