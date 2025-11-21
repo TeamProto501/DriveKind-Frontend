@@ -50,8 +50,15 @@
       : []
   );
 
-  const formatLabel = (k: string) =>
-    k.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  const formatLabel = (k: string) => {
+    if (k === "transaction_id") return "ID";
+    if (k === "action_enum") return "Action";
+    if (k === "table_name_enum") return "Table";
+
+    return k
+      .replace(/_/g, " ")
+      .replace(/\b\w/g, (c) => c.toUpperCase());
+  };
 
   function handlePageChange(page: number) {
     currentPage = page;

@@ -1,7 +1,7 @@
 // src/routes/admin/audit/+page.server.ts
 import { authenticatedFetchServer, API_BASE_URL } from "$lib/api.server";
 import { createSupabaseServerClient } from "$lib/supabase.server";
-import { redirect } from "@sveltejs/kit"; // 👈 add this
+import { redirect } from "@sveltejs/kit";
 import type { PageServerLoad, Actions } from "./$types";
 
 function getRows(raw: any): any[] {
@@ -66,7 +66,6 @@ export const load: PageServerLoad = async (event) => {
     let clients: any[] = [];
 
     if (orgId !== null) {
-  // Fetching calls for org-scoped view
       // Calls for this org
       const { data: callData, error: callError } = await supabase
         .from("calls")
@@ -80,10 +79,8 @@ export const load: PageServerLoad = async (event) => {
       if (!callError) {
         calls = callData ?? [];
       }
-      // console.log('Calls data:', calls, 'Error:', callError);
 
-      // Staff in this org (for Dispatcher column + dropdown)
-  // Fetch staff profiles for dropdowns
+      // Staff in this org (for Dispatcher column and dropdown)
       const { data: staffData, error: staffError } = await supabase
         .from("staff_profiles")
         .select("user_id, org_id, first_name, last_name")
@@ -93,11 +90,9 @@ export const load: PageServerLoad = async (event) => {
         staffProfiles = staffData ?? [];
       }
 
-      // Clients in this org (for Client column + dropdown)
-  // Fetch clients for this org
+      // Clients in this org (for Client column and dropdown)
       const { data: clientData, error: clientError } = await supabase
         .from("clients")
-        // ⭐⭐⭐ ADDED primary_phone HERE — THE ONLY CHANGE ⭐⭐⭐
         .select("client_id, org_id, first_name, last_name, primary_phone")
         .eq("org_id", orgId);
 
@@ -106,7 +101,6 @@ export const load: PageServerLoad = async (event) => {
       }
     }
 
-    // console.log('Returning for calls tab:', { data: calls, tab: "calls", staffProfiles, clients });
     return {
       data: calls,
       tab: "calls",
@@ -115,7 +109,7 @@ export const load: PageServerLoad = async (event) => {
     };
   }
 
-  // ----- AUDITS TAB (now using Supabase SDK instead of backend API) -----
+  // ----- AUDITS TAB (Supabase SDK, org-scoped) -----
   const supabase = createSupabaseServerClient(event);
 
   const {
@@ -151,9 +145,10 @@ export const load: PageServerLoad = async (event) => {
   const orgId = profile?.org_id ?? null;
 
   let audits: any[] = [];
+  let staffProfiles: any[] = [];
 
   if (orgId !== null) {
-  // Fetch audit log for this org
+    // Fetch audit log for this org
     const { data: auditData, error: auditError } = await supabase
       .from("transactions_audit_log")
       .select("*")
@@ -170,13 +165,23 @@ export const load: PageServerLoad = async (event) => {
       };
     }
     audits = auditData ?? [];
+
+    // Fetch staff profiles so we can resolve dispatcher names
+    const { data: staffData, error: staffError } = await supabase
+      .from("staff_profiles")
+      .select("user_id, org_id, first_name, last_name")
+      .eq("org_id", orgId);
+
+    if (!staffError) {
+      staffProfiles = staffData ?? [];
+    }
   }
 
   // returning audits tab data
   return {
     data: audits,
     tab: "audits",
-    staffProfiles: [],
+    staffProfiles,
     clients: [],
   };
 };
@@ -262,14 +267,14 @@ export const actions: Actions = {
     }
     const call_id = Number(callIdStr);
 
-    // Auth + org scoping (same pattern as createCall / deleteCall)
+    // Auth and org scoping
     const {
       data: { user },
       error: userError
     } = await supabase.auth.getUser();
 
     if (userError || !user) {
-      console.error(`updateCall auth error: ${userError?.message || 'No user'}`);
+      console.error(`updateCall auth error: ${userError?.message || "No user"}`);
       return { success: false, error: "Not authenticated." };
     }
 
@@ -280,13 +285,12 @@ export const actions: Actions = {
       .single();
 
     if (profileError || !profile?.org_id) {
-      console.error(`updateCall profile error: ${profileError?.message || 'No org_id'}`);
+      console.error(`updateCall profile error: ${profileError?.message || "No org_id"}`);
       return { success: false, error: "Could not determine user org." };
     }
 
-  const orgId = profile.org_id;
-  // Log the incoming update attempt for debugging (scoped)
-  console.log(`updateCall called: call_id=${call_id}, orgId=${orgId}`);
+    const orgId = profile.org_id;
+    console.log(`updateCall called: call_id=${call_id}, orgId=${orgId}`);
 
     const call_time_local = formData.get("call_time") as string | null;
     const formatToSQL = (dateTimeLocal: string) =>
@@ -297,7 +301,6 @@ export const actions: Actions = {
       clientIdRaw && clientIdRaw.trim() !== "" ? Number(clientIdRaw) : null;
 
     const updatePayload: Record<string, any> = {
-      // 👇 this now reads directly from the <select name="user_id">
       user_id: (formData.get("user_id") as string) || null,
       client_id,
       call_type: (formData.get("call_type") as string) || null,
@@ -321,9 +324,8 @@ export const actions: Actions = {
       return { success: false, error: updateError.message };
     }
 
-  // Log success and go back to Calls tab after a successful edit
-  console.log(`updateCall successful: call_id=${call_id}, orgId=${orgId}`);
-  throw redirect(303, "/admin/audit?tab=calls");
+    console.log(`updateCall successful: call_id=${call_id}, orgId=${orgId}`);
+    throw redirect(303, "/admin/audit?tab=calls");
   },
 
   // Delete a single call (directly via Supabase, org-scoped)
@@ -357,9 +359,8 @@ export const actions: Actions = {
       return { success: false, error: "Could not determine user org." };
     }
 
-  const orgId = profile.org_id;
-  // Log the incoming delete attempt for debugging (scoped)
-  console.log(`deleteCall called: call_id=${call_id}, orgId=${orgId}`);
+    const orgId = profile.org_id;
+    console.log(`deleteCall called: call_id=${call_id}, orgId=${orgId}`);
 
     const { error: deleteError } = await supabase
       .from("calls")
@@ -372,9 +373,8 @@ export const actions: Actions = {
       return { success: false, error: deleteError.message };
     }
 
-  // Log success and always land back on calls
-  console.log(`deleteCall successful: call_id=${call_id}, orgId=${orgId}`);
-  throw redirect(303, "/admin/audit?tab=calls");
+    console.log(`deleteCall successful: call_id=${call_id}, orgId=${orgId}`);
+    throw redirect(303, "/admin/audit?tab=calls");
   },
 
   // Create a new call (directly via Supabase, org-scoped)
@@ -468,7 +468,7 @@ export const actions: Actions = {
     }
 
     const createdId = insertData?.[0]?.call_id ?? null;
-    // ✅ After creating, also land on calls
+    // After creating, land on calls
     throw redirect(303, "/admin/audit?tab=calls");
   },
 };

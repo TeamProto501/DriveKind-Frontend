@@ -37,17 +37,6 @@
   let auditRowsRaw = $derived(activeTab === "audits" ? (data.data ?? []) : []);
   let auditRowsBase = $derived(previewRows ?? auditRowsRaw);
 
-  let filteredAuditRows = $derived(
-    search.trim().length === 0
-      ? auditRowsBase
-      : auditRowsBase.filter((row: any) =>
-          Object.values(row ?? {})
-            .join(" ")
-            .toLowerCase()
-            .includes(search.toLowerCase())
-        )
-  );
-
   // -----------------------------
   // CALLS TAB DATA SHAPING
   // -----------------------------
@@ -137,6 +126,64 @@
       if (c.client_id != null) map.set(c.client_id, c);
     }
     return map;
+  });
+
+    // For audits: show dispatcher name instead of user id
+  let filteredAuditRows = $derived.by(() => {
+    const baseRows = Array.isArray(auditRowsBase) ? auditRowsBase : [];
+
+    // Build staff map so we can resolve user names
+    const staffProfilesForAudits = ((data as any).staffProfiles ?? []) as StaffProfile[];
+    const staffMap = new Map<string, StaffProfile>();
+    for (const sp of staffProfilesForAudits) {
+      if (sp.user_id) staffMap.set(sp.user_id, sp);
+    }
+
+    // 1) Enrich rows:
+    //    - convert user_id → user_name
+    //    - format timestamp for display
+    //    - drop org_id from display
+    const enriched = baseRows.map((row: any) => {
+      if (!row) return row;
+
+      const uid = row.user_id as string | null | undefined;
+
+      // Always drop org_id so it never appears in the table
+      const { org_id: _dropOrg, user_id: _dropUserId, ...rest } = row;
+
+      // Friendly timestamp format, but keep same key name "timestamp"
+      const formattedTimestamp = row.timestamp
+        ? formatCallTime(row.timestamp)
+        : row.timestamp;
+
+      if (!uid) {
+        return {
+          ...rest,
+          timestamp: formattedTimestamp,
+        };
+      }
+
+      const sp = staffMap.get(uid);
+      const name =
+        sp ? `${sp.first_name ?? ""} ${sp.last_name ?? ""}`.trim() || uid : uid;
+
+      return {
+        ...rest,
+        timestamp: formattedTimestamp,
+        user_name: name,
+      };
+    });
+
+    // 2) Apply search on the enriched rows, so user_name is searchable
+    const term = search.trim().toLowerCase();
+    if (!term) return enriched;
+
+    return enriched.filter((row: any) =>
+      Object.values(row ?? {})
+        .join(" ")
+        .toLowerCase()
+        .includes(term)
+    );
   });
 
   // Options for dropdowns (reactive)
@@ -281,7 +328,7 @@
 
   // caller name requirements:
   // - if NO client selected -> fields required
-  // - if client selected -> fields auto-filled & disabled
+  // - if client selected -> fields auto-filled and disabled
   let callerLockedToClient = $derived(!!selectedClientId);
 
   function toLocalInputValue(isoOrSql: string | null): string {
@@ -345,7 +392,7 @@
   }
 
   // Handle client select changes:
-  // - if blank, keep caller name editable & keep manual phone state
+  // - if blank, keep caller name editable and keep manual phone state
   // - if client chosen, auto-populate caller name AND phone number
   function handleClientChange(event: Event) {
     const select = event.target as HTMLSelectElement;
@@ -568,7 +615,20 @@
         <h2 class="mb-2 text-base font-semibold text-gray-900">
           Activity Logs
         </h2>
-        <Table data={filteredAuditRows} />
+        <Table
+          data={filteredAuditRows}
+          showIndex={false}
+          columns={[
+            "transaction_id",
+            "timestamp",
+            "user_name",
+            "action_enum",
+            "table_name_enum",
+            "field_name",
+            "old_value",
+            "new_value"
+          ]}
+        />
       </div>
     </div>
   {:else}
@@ -641,7 +701,7 @@
                 class="mt-1 block w-full rounded-md border border-gray-300 px-2 py-1 text-sm bg-white"
               >
                 <option value="">
-                  — Select dispatcher —
+                  - Select dispatcher -
                 </option>
                 {#each dispatcherOptions as opt}
                   <option value={opt.value}>{opt.label}</option>
@@ -660,7 +720,7 @@
                 class="mt-1 block w-full rounded-md border border-gray-300 px-2 py-1 text-sm bg-white"
               >
                 <option value="">
-                  — No client selected —
+                  - No client selected -
                 </option>
                 {#each clientOptions as opt}
                   <option value={opt.value}>{opt.label}</option>
@@ -717,7 +777,7 @@
                 class="mt-1 block w-full rounded-md border border-gray-300 px-2 py-1 text-sm bg-white"
               >
                 <option value="">
-                  — Select call type —
+                  - Select call type -
                 </option>
                 {#each CALL_TYPE_OPTIONS as opt}
                   <option value={opt}>{opt}</option>
@@ -882,7 +942,7 @@
                 class="mt-1 block w-full rounded-md border border-gray-300 px-2 py-1 text-sm bg-white"
               >
                 <option value="">
-                  — Select dispatcher —
+                  - Select dispatcher -
                 </option>
                 {#each dispatcherOptions as opt}
                   <option value={opt.value}>{opt.label}</option>
@@ -901,7 +961,7 @@
                 class="mt-1 block w-full rounded-md border border-gray-300 px-2 py-1 text-sm bg-white"
               >
                 <option value="">
-                  — No client selected —
+                  - No client selected -
                 </option>
                 {#each clientOptions as opt}
                   <option value={opt.value}>{opt.label}</option>
@@ -949,7 +1009,7 @@
                 class="mt-1 block w-full rounded-md border border-gray-300 px-2 py-1 text-sm bg-white"
               >
                 <option value="">
-                  — Select call type —
+                  - Select call type -
                 </option>
                 {#each CALL_TYPE_OPTIONS as opt}
                   <option value={opt}>{opt}</option>
