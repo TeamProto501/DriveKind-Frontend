@@ -18,11 +18,28 @@
   import ClockIcon from "@lucide/svelte/icons/clock";
   import FileTextIcon from "@lucide/svelte/icons/file-text";
   import type { RideReportData } from './+page.server';
+  import {
+    canAccessPersonalReports,
+    canAccessOrgReports,
+    canExportReports
+  } from '$lib/utils/permissions';
 
   let { data, form }: { data: PageData; form?: ActionData } = $props();
 
-  // Tab state
-  let activeTab = $state<'personal' | 'organization'>('personal');
+  // Get user roles
+  const userRoles = Array.isArray(data.userProfile?.role) 
+    ? data.userProfile.role 
+    : data.userProfile?.role ? [data.userProfile.role] : [];
+
+  // Permission checks
+  const hasPersonalAccess = canAccessPersonalReports(userRoles);
+  const hasOrgAccess = canAccessOrgReports(userRoles);
+  const canExport = canExportReports(userRoles);
+
+  // Tab state - default based on permissions
+  let activeTab = $state<'personal' | 'organization'>(
+    hasPersonalAccess ? 'personal' : hasOrgAccess ? 'organization' : 'personal'
+  );
 
   // Personal Report State
   let selectedRole = $state<string>('');
@@ -68,7 +85,6 @@
   const firstName = data.userProfile?.first_name || 'User';
   const lastName = data.userProfile?.last_name || 'Report';
   const organizationName = data.organization?.name || 'Organization';
-  const isAdmin = data.isAdmin || false;
 
   // Get user's available roles
   const availableRoles = Array.isArray(data.userProfile?.role) 
@@ -126,7 +142,6 @@
     if (form?.success && form.rides) {
       rides = form.rides;
       hasSearched = true;
-      // Generate default filename when results load
       exportFileName = generateDefaultFileName();
       if (form.message) {
         if (form.rides.length === 0) {
@@ -167,6 +182,10 @@
   };
 
   const submitForm = () => {
+    if (!hasOrgAccess) {
+      toastStore.error('You don\'t have permission to run organization reports');
+      return;
+    }
     if (!selectedId && filterType !== 'organization') {
       toastStore.error('Please select a filter option');
       return;
@@ -231,7 +250,6 @@
   const getFilteredRides = () => {
     let filtered = rides;
 
-    // Apply column filters
     if (filterDriver) {
       filtered = filtered.filter(ride => ride.driver_name === filterDriver);
     }
@@ -259,7 +277,6 @@
       filtered = filtered.filter(ride => new Date(ride.appointment_time).getTime() < toDate.getTime());
     }
 
-    // Apply global search
     if (globalFilter) {
       const searchLower = globalFilter.toLowerCase();
       filtered = filtered.filter(ride => 
@@ -326,6 +343,11 @@
 
   // Personal Report CSV Export
   const exportPersonalReportCSV = () => {
+    if (!canExport) {
+      toastStore.error('You don\'t have permission to export reports');
+      return;
+    }
+
     if (personalHours === 0 && personalMiles === 0) {
       toastStore.error('Please enter hours or miles to export');
       return;
@@ -361,8 +383,13 @@
     toastStore.success('Personal report exported');
   };
 
-  // User CSV Export (for Driver reports) - renamed from Volunteer CSV
+  // User CSV Export (for Driver reports)
   const exportUserCSV = () => {
+    if (!canExport) {
+      toastStore.error('You don\'t have permission to export reports');
+      return;
+    }
+
     if (rides.length === 0 && !additionalHours && !additionalMiles) {
       toastStore.error('No data to export');
       return;
@@ -418,14 +445,18 @@
     toastStore.success('User report exported');
   };
 
-  // Client CSV Export (for Client reports) - Demographics Report
+  // Client CSV Export (for Client reports)
   const exportClientCSV = () => {
+    if (!canExport) {
+      toastStore.error('You don\'t have permission to export reports');
+      return;
+    }
+
     if (rides.length === 0) {
       toastStore.error('No data to export');
       return;
     }
 
-    // Get unique clients from rides
     const uniqueClientIds = new Set<number>();
     rides.forEach(ride => {
       if (ride.client_id) {
@@ -433,10 +464,8 @@
       }
     });
 
-    // Get client details from data.clients
     const clientsInReport = data.clients.filter(c => uniqueClientIds.has(c.client_id));
 
-    // Calculate demographics
     let maleCount = 0;
     let femaleCount = 0;
     let nonBinaryCount = 0;
@@ -459,7 +488,6 @@
     const currentYear = today.getFullYear();
 
     clientsInReport.forEach(client => {
-      // Gender count
       const gender = (client.gender || '').toLowerCase();
       if (gender === 'male' || gender === 'm') {
         maleCount++;
@@ -471,7 +499,6 @@
         unknownGenderCount++;
       }
 
-      // Lives alone count
       if (client.lives_alone === true) {
         livesAloneYes++;
       } else if (client.lives_alone === false) {
@@ -480,7 +507,6 @@
         livesAloneUnknown++;
       }
 
-      // Age range count
       if (client.date_of_birth) {
         const birthDate = new Date(client.date_of_birth);
         const age = currentYear - birthDate.getFullYear();
@@ -509,7 +535,6 @@
 
     const totalClients = clientsInReport.length;
 
-    // Create CSV content
     const csvLines = [
       `Station Name,${organizationName}`,
       `Report Period,${fromDate || 'N/A'} to ${toDate || 'N/A'}`,
@@ -541,8 +566,13 @@
     toastStore.success('Client demographics report exported');
   };
 
-  // Table Results CSV Export - exports the current filtered/searched view
+  // Table Results CSV Export
   const exportTableResultsCSV = () => {
+    if (!canExport) {
+      toastStore.error('You don\'t have permission to export reports');
+      return;
+    }
+
     const filteredRides = getFilteredRides();
     
     if (filteredRides.length === 0) {
@@ -612,7 +642,10 @@
   <title>Reports | DriveKind</title>
 </svelte:head>
 
-<RoleGuard requiredRoles={['Admin', 'Driver', 'Dispatcher', 'Volunteer']}>
+<RoleGuard requiredRoles={[
+  'Admin', 'Super Admin', 'Driver', 'Dispatcher', 'Volunteer',
+  'Report Manager', 'Report View Only', 'List Manager'
+]}>
   <div class="min-h-screen bg-gray-50">
     <Breadcrumbs />
     
@@ -620,41 +653,53 @@
       <!-- Page Header -->
       <div class="mb-8">
         <h1 class="text-3xl font-bold text-gray-900">Reports</h1>
-        <p class="text-gray-600 mt-2">Generate personal reports and organization analytics</p>
+        <p class="text-gray-600 mt-2">
+          {#if hasPersonalAccess && hasOrgAccess}
+            Generate personal reports and organization analytics
+          {:else if hasPersonalAccess}
+            Generate your personal volunteer reports
+          {:else if hasOrgAccess}
+            View and export organization analytics
+          {/if}
+        </p>
       </div>
 
       <!-- Tab Navigation -->
-      <div class="border-b border-gray-200">
-        <nav class="-mb-px flex space-x-8">
-          <button
-            onclick={() => activeTab = 'personal'}
-            class={`whitespace-nowrap pb-4 px-1 border-b-2 font-medium text-sm ${
-              activeTab === 'personal'
-                ? 'border-blue-500 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-            }`}
-          >
-            <UserIcon class="w-4 h-4 inline mr-2" />
-            Personal Report
-          </button>
-          {#if isAdmin}
-            <button
-              onclick={() => activeTab = 'organization'}
-              class={`whitespace-nowrap pb-4 px-1 border-b-2 font-medium text-sm ${
-                activeTab === 'organization'
-                  ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
-            >
-              <BuildingIcon class="w-4 h-4 inline mr-2" />
-              Organization Reports
-            </button>
-          {/if}
-        </nav>
-      </div>
+      {#if hasPersonalAccess || hasOrgAccess}
+        <div class="border-b border-gray-200">
+          <nav class="-mb-px flex space-x-8">
+            {#if hasPersonalAccess}
+              <button
+                onclick={() => activeTab = 'personal'}
+                class={`whitespace-nowrap pb-4 px-1 border-b-2 font-medium text-sm ${
+                  activeTab === 'personal'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                <UserIcon class="w-4 h-4 inline mr-2" />
+                Personal Report
+              </button>
+            {/if}
+            {#if hasOrgAccess}
+              <button
+                onclick={() => activeTab = 'organization'}
+                class={`whitespace-nowrap pb-4 px-1 border-b-2 font-medium text-sm ${
+                  activeTab === 'organization'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                <BuildingIcon class="w-4 h-4 inline mr-2" />
+                Organization Reports
+              </button>
+            {/if}
+          </nav>
+        </div>
+      {/if}
 
       <!-- PERSONAL REPORT TAB -->
-      {#if activeTab === 'personal'}
+      {#if activeTab === 'personal' && hasPersonalAccess}
         <Card>
           <CardHeader>
             <CardTitle class="flex items-center gap-2">
@@ -785,28 +830,47 @@
               </div>
             {/if}
 
-            <!-- Filename customization for personal report -->
-            <div class="bg-gray-50 rounded-lg p-4 border border-gray-200">
-              <Label class="text-sm font-medium mb-2 block">Export Filename</Label>
-              <Input
-                bind:value={personalExportFileName}
-                placeholder={generatePersonalFileName()}
-                class="text-sm"
-              />
-              <p class="text-xs text-gray-500 mt-1">Customize the filename for your export (without extension)</p>
-            </div>
+            <!-- Filename customization -->
+            {#if canExport}
+              <div class="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                <Label class="text-sm font-medium mb-2 block">Export Filename</Label>
+                <Input
+                  bind:value={personalExportFileName}
+                  placeholder={generatePersonalFileName()}
+                  class="text-sm"
+                />
+                <p class="text-xs text-gray-500 mt-1">Customize the filename for your export (without extension)</p>
+              </div>
+            {/if}
 
             <!-- Generate Button -->
-            <Button onclick={exportPersonalReportCSV} class="w-full">
-              <DownloadIcon class="w-5 h-5 mr-2" />
-              Generate Personal Report
-            </Button>
+            {#if canExport}
+              <Button onclick={exportPersonalReportCSV} class="w-full">
+                <DownloadIcon class="w-5 h-5 mr-2" />
+                Generate Personal Report
+              </Button>
+            {:else}
+              <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                <p class="text-sm text-yellow-800">
+                  You can view your hours and miles but don't have permission to export reports. Contact an administrator for export access.
+                </p>
+              </div>
+            {/if}
           </CardContent>
         </Card>
       {/if}
 
       <!-- ORGANIZATION REPORTS TAB -->
-      {#if activeTab === 'organization' && isAdmin}
+      {#if activeTab === 'organization' && hasOrgAccess}
+        <!-- Read-only banner for Report View Only -->
+        {#if !canExport}
+          <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <p class="text-sm text-blue-800">
+              <strong>View Only:</strong> You can view all report data but cannot export. Contact an administrator for export access.
+            </p>
+          </div>
+        {/if}
+
         <div class="space-y-6">
           <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <!-- Filter Section -->
@@ -1053,7 +1117,7 @@
                     {rides.length} completed ride{rides.length !== 1 ? 's' : ''} found
                   </p>
                 </div>
-                {#if rides.length > 0}
+                {#if rides.length > 0 && canExport}
                   <div class="flex gap-2">
                     <Button variant="outline" onclick={exportTableResultsCSV} size="sm">
                       <DownloadIcon class="h-4 w-4 mr-2" />
@@ -1070,7 +1134,6 @@
                         Client Report CSV
                       </Button>
                     {:else}
-                      <!-- Organization - show both -->
                       <Button variant="outline" onclick={exportUserCSV} size="sm">
                         <DownloadIcon class="h-4 w-4 mr-2" />
                         User Report CSV
@@ -1086,16 +1149,17 @@
               
               {#if rides.length > 0}
                 <CardContent class="space-y-4">
-                  <!-- Filename customization -->
-                  <div class="bg-gray-50 rounded-lg p-4 border border-gray-200">
-                    <Label class="text-sm font-medium mb-2 block">Export Filename</Label>
-                    <Input
-                      bind:value={exportFileName}
-                      placeholder={generateDefaultFileName()}
-                      class="text-sm"
-                    />
-                    <p class="text-xs text-gray-500 mt-1">Customize the filename for your export (without extension)</p>
-                  </div>
+                  {#if canExport}
+                    <div class="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                      <Label class="text-sm font-medium mb-2 block">Export Filename</Label>
+                      <Input
+                        bind:value={exportFileName}
+                        placeholder={generateDefaultFileName()}
+                        class="text-sm"
+                      />
+                      <p class="text-xs text-gray-500 mt-1">Customize the filename for your export (without extension)</p>
+                    </div>
+                  {/if}
 
                   <div class="flex items-center gap-4">
                     <div class="flex items-center gap-2">
@@ -1271,6 +1335,21 @@
             </Card>
           {/if}
         </div>
+      {/if}
+
+      <!-- No Permission Message -->
+      {#if !hasPersonalAccess && !hasOrgAccess}
+        <Card>
+          <CardContent class="py-12">
+            <div class="text-center">
+              <FileTextIcon class="w-16 h-16 mx-auto text-gray-300 mb-4" />
+              <h3 class="text-lg font-medium text-gray-900 mb-2">No Report Access</h3>
+              <p class="text-gray-600 max-w-md mx-auto">
+                You don't currently have permission to access reports. Contact your administrator if you need access to personal or organization reports.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
       {/if}
     </div>
   </div>

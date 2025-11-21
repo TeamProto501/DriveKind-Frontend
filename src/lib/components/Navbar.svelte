@@ -29,6 +29,7 @@
     Shield,
     UserCog,
     Truck,
+    Eye,
   } from "@lucide/svelte";
   import type { RoleEnum, Profile, Organization } from "$lib/types";
 
@@ -90,6 +91,7 @@
       Settings: Settings,
       HelpCircle: HelpCircle,
       User: User,
+      Eye: Eye,
     };
     return iconMap[icon] || Home;
   }
@@ -98,6 +100,20 @@
   function hasRole(roles: RoleEnum[]): boolean {
     return roles.some((role) => userRoles.includes(role));
   }
+
+  // Determine section label based on roles
+  const adminSectionLabel = $derived(() => {
+    if (hasRole(["Report View Only"]) && !hasRole(["Admin", "Super Admin"])) {
+      return "Report View";
+    }
+    if (hasRole(["Report Manager"]) && !hasRole(["Admin", "Super Admin"])) {
+      return "Reports";
+    }
+    if (hasRole(["List Manager"]) && !hasRole(["Admin", "Super Admin"])) {
+      return "Management";
+    }
+    return "Admin";
+  });
 
   // Navigation groups organized by feature area
   const navigationGroups = $derived(() => {
@@ -116,12 +132,23 @@
       icon: "Calendar",
     });
 
-    // Reports (available to all)
-    platformItems.push({
-      label: "Reports",
-      href: "/admin/reports",
-      icon: "FileText",
-    });
+    // Reports - available to many roles
+    if (hasRole([
+      "Admin", 
+      "Super Admin", 
+      "Report View Only", 
+      "Report Manager", 
+      "List Manager",
+      "Driver",
+      "Dispatcher",
+      "Volunteer"
+    ])) {
+      platformItems.push({
+        label: "Reports",
+        href: "/admin/reports",
+        icon: "FileText",
+      });
+    }
 
     if (platformItems.length > 0) {
       groups.push({
@@ -131,16 +158,26 @@
     }
 
     // Dispatcher Section
-    if (hasRole(["Dispatcher", "Admin", "Super Admin"])) {
+    if (hasRole(["Dispatcher", "Admin", "Super Admin", "BPSR Dispatcher Add-on"])) {
+      const dispatcherItems = [];
+      
+      if (hasRole(["Dispatcher", "Admin", "Super Admin"])) {
+        dispatcherItems.push({ label: "Dashboard", href: "/dispatcher/dashboard" });
+      }
+      
+      if (hasRole(["Dispatcher", "Admin", "Super Admin", "BPSR Dispatcher Add-on"])) {
+        dispatcherItems.push({ label: "Ride Management", href: "/dispatcher/rides" });
+      }
+      
+      if (hasRole(["Dispatcher", "Admin", "Super Admin", "WSPS Dispatcher Add-on", "BPSR Dispatcher Add-on"])) {
+        dispatcherItems.push({ label: "Destinations", href: "/dispatcher/destinations" });
+      }
+
       groups.push({
         label: "Dispatcher",
         icon: "Truck",
         collapsible: true,
-        items: [
-          { label: "Dashboard", href: "/dispatcher/dashboard" },
-          { label: "Ride Management", href: "/dispatcher/rides" },
-          { label: "Destinations", href: "/dispatcher/destinations" },
-        ],
+        items: dispatcherItems,
       });
     }
 
@@ -159,19 +196,58 @@
       });
     }
 
-    // Admin Section
-    if (hasRole(["Admin", "Super Admin"])) {
+    // Admin/Management Section
+    // Available to: Admin, Super Admin, Report View Only, Report Manager, List Manager, 
+    // New Client Enroller, WSPS Dispatcher Add-on, BPSR Dispatcher Add-on, Bri Pen Driver Add-on
+    if (hasRole([
+      "Admin", 
+      "Super Admin", 
+      "Report View Only", 
+      "Report Manager", 
+      "List Manager",
+      "New Client Enroller",
+      "WSPS Dispatcher Add-on",
+      "BPSR Dispatcher Add-on",
+      "Bri Pen Driver Add-on"
+    ])) {
       const adminItems = [];
 
-      if (hasRole(["Admin", "Super Admin"])) {
+      // Dashboard - Admin, Super Admin, Report View Only, Report Manager, List Manager
+      if (hasRole(["Admin", "Super Admin", "Report View Only", "Report Manager", "List Manager"])) {
         adminItems.push({ label: "Dashboard", href: "/admin/dash" });
+      }
+
+      // User & Client Management - Admin, Super Admin, List Manager, Report View Only, 
+      // New Client Enroller, WSPS Dispatcher Add-on, BPSR Dispatcher Add-on
+      if (hasRole([
+        "Admin", 
+        "Super Admin", 
+        "List Manager", 
+        "Report View Only",
+        "New Client Enroller",
+        "WSPS Dispatcher Add-on",
+        "BPSR Dispatcher Add-on"
+      ])) {
         adminItems.push({ label: "User & Client Management", href: "/admin/users" });
+      }
+
+      // Vehicle Management - Admin, Super Admin only
+      if (hasRole(["Admin", "Super Admin"])) {
         adminItems.push({ label: "Vehicle Management", href: "/admin/vehicle_management" });
+      }
+
+      // Database - Admin, Super Admin, Report View Only, Report Manager, List Manager
+      if (hasRole(["Admin", "Super Admin", "Report View Only", "Report Manager", "List Manager"])) {
         adminItems.push({ label: "Database", href: "/admin/database" });
+      }
+
+      // Configuration - Admin, Super Admin only
+      if (hasRole(["Admin", "Super Admin"])) {
         adminItems.push({ label: "Configuration", href: "/admin/config" });
         adminItems.push({ label: "Audit Logs", href: "/admin/audit" });
       }
 
+      // Organizations - Super Admin only
       if (hasRole(["Super Admin"])) {
         adminItems.push({
           label: "Organizations",
@@ -181,8 +257,8 @@
 
       if (adminItems.length > 0) {
         groups.push({
-          label: "Admin",
-          icon: "Shield",
+          label: adminSectionLabel(),
+          icon: hasRole(["Report View Only"]) && !hasRole(["Admin", "Super Admin"]) ? "Eye" : "Shield",
           collapsible: true,
           items: adminItems,
         });
@@ -318,7 +394,7 @@
         {#if hasRole(["Dispatcher", "Admin", "Super Admin"])}
           <div class="px-2 pb-4">
             <Button
-              onclick={() => navigateTo("/dispatcher/rides")}
+              onclick={() => navigateTo("/dispatcher/rides?create=true")}
               class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium flex items-center justify-center gap-2"
             >
               <Plus class="w-4 h-4" />

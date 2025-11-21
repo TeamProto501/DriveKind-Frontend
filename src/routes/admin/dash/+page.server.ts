@@ -1,6 +1,7 @@
 import type { PageServerLoad } from './$types';
 import { redirect } from '@sveltejs/kit';
 import { createSupabaseServerClient } from '$lib/supabase.server';
+import { canViewUsers, canViewClients } from '$lib/utils/permissions';
 
 export const load: PageServerLoad = async (event) => {
   const supabase = createSupabaseServerClient(event);
@@ -28,9 +29,17 @@ export const load: PageServerLoad = async (event) => {
   const orgId = profile.org_id as number;
   const tab = event.url.searchParams.get('tab') ?? 'clients';
 
-  // Helpers
+  // Get user roles
   const isRoleArray = Array.isArray(profile.role);
   const roles: string[] = isRoleArray ? (profile.role as string[]) : (profile.role ? [String(profile.role)] : []);
+
+  // Check if user has dashboard access
+  const allowedRoles = ['Super Admin', 'Admin', 'List Manager', 'Report View Only', 'Report Manager'];
+  const hasAccess = roles.some(role => allowedRoles.includes(role));
+
+  if (!hasAccess) {
+    throw redirect(302, '/');
+  }
 
   // --- Fetch metrics for dashboard cards ---
   const metrics = {
@@ -119,6 +128,11 @@ export const load: PageServerLoad = async (event) => {
   // --- Data per tab (all EQ org_id) ---
   try {
     if (tab === 'clients') {
+      // Check if user can view clients
+      if (!canViewClients(roles)) {
+        return { tab, data: [], roles, metrics, error: 'No permission to view clients' };
+      }
+
       const { data, error } = await supabase
         .from('clients')
         .select('first_name, last_name, primary_phone, city, state, zip_code')
@@ -129,6 +143,11 @@ export const load: PageServerLoad = async (event) => {
     }
 
     if (tab === 'drivers') {
+      // Check if user can view users/staff
+      if (!canViewUsers(roles)) {
+        return { tab, data: [], roles, metrics, error: 'No permission to view staff' };
+      }
+
       const { data, error } = await supabase
         .from('staff_profiles')
         .select('first_name, last_name, primary_phone, role')
@@ -140,6 +159,10 @@ export const load: PageServerLoad = async (event) => {
     }
 
     if (tab === 'volunteer') {
+      if (!canViewUsers(roles)) {
+        return { tab, data: [], roles, metrics, error: 'No permission to view staff' };
+      }
+
       const { data, error } = await supabase
         .from('staff_profiles')
         .select('first_name, last_name, primary_phone, role')
@@ -151,6 +174,10 @@ export const load: PageServerLoad = async (event) => {
     }
 
     if (tab === 'dispatcher') {
+      if (!canViewUsers(roles)) {
+        return { tab, data: [], roles, metrics, error: 'No permission to view staff' };
+      }
+
       const { data, error } = await supabase
         .from('staff_profiles')
         .select('first_name, last_name, primary_phone, role')
@@ -161,7 +188,7 @@ export const load: PageServerLoad = async (event) => {
       return { tab, data: data ?? [], roles, metrics };
     }
 
-    // Default / "Ride Requests" tab -> show rides with client and driver names
+    // Default / "Ride Requests" tab
     const { data: ridesData, error } = await supabase
       .from('rides')
       .select(`

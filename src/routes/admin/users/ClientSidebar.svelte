@@ -9,6 +9,7 @@
   export let session: any = undefined;
   export let orgId: number;
   export let minimumAge: number = 0;
+  export let readOnly: boolean = false; // NEW: Read-only mode for view-only roles
   const dispatch = createEventDispatcher();
 
   type Client = {
@@ -77,6 +78,11 @@
   let saving = false;
   let errorMessage: string | null = null;
 
+  // NEW: If readOnly, force view mode
+  $: if (readOnly && mode === "edit" && !createMode) {
+    mode = "view";
+  }
+
   function calculateAge(birthDate: string): number {
     const today = new Date();
     const birth = new Date(birthDate);
@@ -107,7 +113,7 @@
         street_address: "",
         address2: null,
         city: "",
-        state: "NY", // ← Set default state to NY
+        state: "NY",
         zip_code: "",
         lives_alone: false,
         primaryPhone_is_cell: true,
@@ -140,13 +146,11 @@
 
   $: form = initForm();
 
-  // --- REQUIRED FIELD VALIDATION (now includes Email + Contact Preference) ---
   function errsStep(s: number): string[] {
     const e: string[] = [];
     if (s === 1) {
       if (!form.first_name.trim()) e.push("First name is required.");
       if (!form.last_name.trim()) e.push("Last name is required.");
-      // Email is optional - removed from validation
       if (!form.primary_phone.trim()) e.push("Primary phone is required.");
       if (!form.date_of_birth) {
         e.push("Date of birth is required.");
@@ -193,13 +197,11 @@
   }
 
   function goToClientStep(target: number) {
-    // free backward navigation
     if (target <= step) {
       step = Math.max(1, Math.min(4, target));
       errorMessage = null;
       return;
     }
-    // block forward unless current step validates
     const e = errsStep(step);
     if (e.length) {
       errorMessage = e.join(" ");
@@ -210,6 +212,12 @@
   }
 
   async function saveClient() {
+    // Prevent save if readOnly
+    if (readOnly) {
+      toastStore.error("You don't have permission to edit clients");
+      return;
+    }
+
     const e = [...errsStep(1), ...errsStep(2)];
     if (e.length) {
       errorMessage = e.join(" ");
@@ -288,7 +296,7 @@
     <h2 class="text-lg md:text-xl font-semibold text-gray-900">
       {createMode
         ? "Add New Client"
-        : mode === "view"
+        : mode === "view" || readOnly
           ? "Client Profile"
           : "Edit Client"}
     </h2>
@@ -299,6 +307,15 @@
       <X class="w-5 h-5" />
     </button>
   </div>
+
+  <!-- NEW: Read-Only Banner -->
+  {#if readOnly && !createMode}
+    <div class="px-6 py-3 bg-blue-50 border-b border-blue-200">
+      <p class="text-sm text-blue-800">
+        <strong>View Only:</strong> You don't have permission to edit this client.
+      </p>
+    </div>
+  {/if}
 
   <!-- Body -->
   <div class="flex-1 overflow-y-auto p-6 space-y-4">
@@ -315,7 +332,7 @@
       </div>
     {/if}
 
-    {#if !createMode && mode === "view" && client}
+    {#if !createMode && (mode === "view" || readOnly) && client}
       <!-- READ-ONLY PROFILE -->
       <div class="space-y-4 text-[15px] leading-6">
         <div class="bg-gray-50 rounded-lg p-3">
@@ -340,16 +357,8 @@
             </div>
           </div>
           <div>
-            <label class="block text-base font-medium"
-              >Email <span class="text-gray-500 font-normal">(optional)</span
-              ></label
-            >
-            <input
-              type="email"
-              class="mt-1 w-full border rounded px-3 py-2 text-base"
-              bind:value={form.email}
-              placeholder="client@example.com"
-            />
+            <div class="text-xs text-gray-500">Email</div>
+            <div class="font-medium">{client.email || "—"}</div>
           </div>
           <div>
             <div class="text-xs text-gray-500">Address</div>
@@ -444,18 +453,22 @@
         </div>
       </div>
 
-      <div class="px-6 pb-6 pt-2">
-        <button
-          on:click={() => {
-            mode = "edit";
-            step = 1;
-          }}
-          class="w-full rounded-lg bg-blue-600 text-white py-3 text-base"
-        >
-          Edit Information
-        </button>
-      </div>
+      <!-- Only show Edit button if NOT readOnly -->
+      {#if !readOnly}
+        <div class="px-6 pb-6 pt-2">
+          <button
+            on:click={() => {
+              mode = "edit";
+              step = 1;
+            }}
+            class="w-full rounded-lg bg-blue-600 text-white py-3 text-base"
+          >
+            Edit Information
+          </button>
+        </div>
+      {/if}
     {:else}
+      <!-- EDIT/CREATE FORM - Rest of the form code stays the same -->
       <!-- CLICKABLE STEPPER -->
       <div class="flex items-center justify-center gap-3 mb-2 select-none">
         {#each [1, 2, 3, 4] as s}
@@ -472,7 +485,6 @@
               {s}
             </button>
             {#if s < 4}
-              <!-- svelte-ignore element_invalid_self_closing_tag -->
               <button
                 type="button"
                 aria-label={`Jump toward step ${s + 1}`}
@@ -485,7 +497,7 @@
       </div>
 
       {#if step === 1}
-        <!-- Basic Info -->
+        <!-- Basic Info - keeping original form content -->
         <div class="space-y-3">
           <div>
             <label class="block text-base font-medium">First Name *</label
@@ -842,7 +854,7 @@
   </div>
 
   <!-- Footer -->
-  {#if createMode || mode === "edit"}
+  {#if createMode || (mode === "edit" && !readOnly)}
     <div class="px-6 py-4 border-t flex items-center justify-between">
       <div>
         {#if step > 1}<button
