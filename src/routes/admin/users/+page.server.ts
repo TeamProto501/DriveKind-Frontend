@@ -13,13 +13,13 @@ export const load = async (event) => {
     } = await supabase.auth.getSession();
     if (!session) throw redirect(302, "/login");
 
-    // Get org for filtering
+    // Get user profile with role
     const {
       data: { user },
     } = await supabase.auth.getUser();
     const { data: userProfile } = await supabase
       .from("staff_profiles")
-      .select("org_id")
+      .select("org_id, role")
       .eq("user_id", user.id)
       .single();
 
@@ -35,61 +35,93 @@ export const load = async (event) => {
       };
     }
 
-    // Staff profiles from API (bearer token)
+    // Check if user has permission to access this page
+    const allowedRoles = [
+      'Super Admin',
+      'Admin',
+      'List Manager',
+      'Report View Only',
+      'New Client Enroller',
+      'WSPS Dispatcher Add-on',
+      'BPSR Dispatcher Add-on'
+    ];
+
+    const userRoles = Array.isArray(userProfile.role) ? userProfile.role : [userProfile.role];
+    const hasAccess = userRoles.some((role: string) => allowedRoles.includes(role));
+
+    if (!hasAccess) {
+      console.error("User does not have permission to access user management:", userRoles);
+      throw redirect(302, "/");
+    }
+
+    // Determine what data to load based on roles
+    const canViewUsers = userRoles.some((role: string) => 
+      ['Super Admin', 'Admin', 'List Manager', 'Report View Only'].includes(role)
+    );
+    
+    const canViewClients = userRoles.some((role: string) =>
+      ['Super Admin', 'Admin', 'List Manager', 'Report View Only', 'New Client Enroller', 'WSPS Dispatcher Add-on', 'BPSR Dispatcher Add-on'].includes(role)
+    );
+
+    // Staff profiles from API (bearer token) - only if user has permission
     let staffData: any[] = [];
-    try {
-      const res = await fetch(`${API_BASE_URL}/staff-profiles`, {
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${session.access_token}`,
-        },
-      });
+    if (canViewUsers) {
+      try {
+        const res = await fetch(`${API_BASE_URL}/staff-profiles`, {
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        });
 
-      if (!res.ok) {
-        console.error(
-          "Failed to fetch staff profiles:",
-          res.status,
-          res.statusText
-        );
-        if (res.status === 401 || res.status === 403)
-          throw redirect(302, "/login");
-      } else {
-        const text = await res.text();
-        staffData = JSON.parse(text);
-
-        if (!Array.isArray(staffData)) {
+        if (!res.ok) {
           console.error(
-            "API returned non-array for staff profiles:",
-            staffData
+            "Failed to fetch staff profiles:",
+            res.status,
+            res.statusText
           );
-          staffData = [];
+          if (res.status === 401 || res.status === 403)
+            throw redirect(302, "/login");
+        } else {
+          const text = await res.text();
+          staffData = JSON.parse(text);
+
+          if (!Array.isArray(staffData)) {
+            console.error(
+              "API returned non-array for staff profiles:",
+              staffData
+            );
+            staffData = [];
+          }
         }
+      } catch (err) {
+        console.error("Error fetching staff profiles:", err);
+        staffData = [];
       }
-    } catch (err) {
-      console.error("Error fetching staff profiles:", err);
-      staffData = [];
     }
 
-    // Clients by org (direct from Supabase)
+    // Clients by org (direct from Supabase) - only if user has permission
     let clientsData: any[] = [];
-    try {
-      const { data: clients, error: clientsError } = await supabase
-        .from("clients")
-        .select("*")
-        .eq("org_id", userProfile.org_id)
-        .order("last_name", { ascending: true });
+    if (canViewClients) {
+      try {
+        const { data: clients, error: clientsError } = await supabase
+          .from("clients")
+          .select("*")
+          .eq("org_id", userProfile.org_id)
+          .order("last_name", { ascending: true });
 
-      if (clientsError) {
-        console.error("Error fetching clients:", clientsError);
-      } else {
-        clientsData = clients || [];
+        if (clientsError) {
+          console.error("Error fetching clients:", clientsError);
+        } else {
+          clientsData = clients || [];
+        }
+      } catch (err) {
+        console.error("Error fetching clients:", err);
+        clientsData = [];
       }
-    } catch (err) {
-      console.error("Error fetching clients:", err);
-      clientsData = [];
     }
 
-    //fetch organization's minimum age
+    // Fetch organization's minimum age
     let minimumAge: number = 0;
     try {
       const { data: ageData, error: ageError } = await supabase
@@ -107,8 +139,9 @@ export const load = async (event) => {
       console.error(err);
       minimumAge = 0;
     }
-    //default password
-    let dPassword: "";
+    
+    // Default password
+    let dPassword: string = "";
     try {
       const { data: uData, error: uError } = await supabase
         .from("organization")

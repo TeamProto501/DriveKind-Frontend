@@ -9,6 +9,7 @@
   export let createMode: boolean = false;
   export let session: any = undefined;
   export let orgId: number;
+  export let readOnly: boolean = false; // NEW: Read-only mode for view-only roles
 
   const dispatch = createEventDispatcher();
 
@@ -58,6 +59,12 @@
     "Driver",
     "Volunteer",
     "Super Admin",
+    "New Client Enroller",
+    "Report View Only",
+    "List Manager",
+    "Report Manager",
+    "WSPS Dispatcher Add-on",
+    "BPSR Dispatcher Add-on",
   ];
   let canManageSuperAdmin = false;
 
@@ -101,6 +108,11 @@
   let errorMessage: string | null = null;
   let tempPassword = "";
   let tempPasswordConfirm = "";
+
+  // NEW: If readOnly, force view mode
+  $: if (readOnly && mode === "edit" && !createMode) {
+    mode = "view";
+  }
 
   function initForm(): StaffForm {
     if (!user || createMode) {
@@ -175,7 +187,6 @@
   }
   $: form = initForm();
 
-  // --- REQUIRED FIELD VALIDATION ---
   function validateStep(s: number): string[] {
     const errs: string[] = [];
     if (s === 1) {
@@ -244,6 +255,12 @@
   }
 
   async function saveUser() {
+    // Prevent save if readOnly
+    if (readOnly) {
+      toastStore.error("You don't have permission to edit users");
+      return;
+    }
+
     const allErrs = [...validateStep(1), ...validateStep(2)];
     if (allErrs.length) {
       errorMessage = allErrs.join(" ");
@@ -334,17 +351,26 @@
     <h2 class="text-lg md:text-xl font-semibold text-gray-900">
       {createMode
         ? "Add New User"
-        : mode === "view"
+        : mode === "view" || readOnly
           ? "User Profile"
           : "Edit User"}
     </h2>
     <button
-      onclick={() => dispatch("close")}
+      on:click={() => dispatch("close")}
       class="text-gray-500 hover:text-gray-700"
     >
       <X class="w-5 h-5" />
     </button>
   </div>
+
+  <!-- NEW: Read-Only Banner -->
+  {#if readOnly && !createMode}
+    <div class="px-6 py-3 bg-blue-50 border-b border-blue-200">
+      <p class="text-sm text-blue-800">
+        <strong>View Only:</strong> You don't have permission to edit this user.
+      </p>
+    </div>
+  {/if}
 
   <!-- Body -->
   <div class="flex-1 overflow-y-auto p-6 space-y-4">
@@ -361,7 +387,7 @@
       </div>
     {/if}
 
-    {#if !createMode && mode === "view" && user}
+    {#if !createMode && (mode === "view" || readOnly) && user}
       <!-- READ-ONLY PROFILE -->
       <div class="space-y-4 text-[15px] leading-6">
         <div class="bg-gray-50 rounded-lg p-3">
@@ -493,18 +519,22 @@
         </div>
       </div>
 
-      <div class="px-6 pb-6 pt-2">
-        <button
-          onclick={() => {
-            mode = "edit";
-            step = 1;
-          }}
-          class="w-full rounded-lg bg-blue-600 text-white py-3 text-base"
-        >
-          Edit Information
-        </button>
-      </div>
+      <!-- Only show Edit button if NOT readOnly -->
+      {#if !readOnly}
+        <div class="px-6 pb-6 pt-2">
+          <button
+            on:click={() => {
+              mode = "edit";
+              step = 1;
+            }}
+            class="w-full rounded-lg bg-blue-600 text-white py-3 text-base"
+          >
+            Edit Information
+          </button>
+        </div>
+      {/if}
     {:else}
+      <!-- EDIT/CREATE FORM -->
       <!-- CLICKABLE STEPPER -->
       <div class="flex items-center justify-center gap-3 mb-2 select-none">
         {#each [1, 2, 3] as s}
@@ -512,7 +542,7 @@
             <button
               type="button"
               title={`Go to step ${s}`}
-              onclick={() => goToUserStep(s)}
+              on:click={() => goToUserStep(s)}
               class="w-8 h-8 rounded-full flex items-center justify-center text-sm transition-colors
                     {step === s
                 ? 'bg-blue-600 text-white'
@@ -526,7 +556,7 @@
               <button
                 type="button"
                 aria-label={`Jump toward step ${s + 1}`}
-                onclick={() => goToUserStep(s + 1)}
+                on:click={() => goToUserStep(s + 1)}
                 class="w-8 h-[2px] rounded {step > s
                   ? 'bg-blue-600'
                   : 'bg-gray-200 hover:bg-gray-300'}"
@@ -630,7 +660,7 @@
                   <input
                     type="checkbox"
                     checked={form.role.includes(r)}
-                    onchange={() => {
+                    on:change={() => {
                       form.role = form.role.includes(r)
                         ? form.role.filter((x) => x !== r)
                         : [...form.role, r];
@@ -725,7 +755,7 @@
       {#if step === 3}
         <div class="space-y-3">
           <!-- REACTIVATE BUTTON FOR INACTIVE USERS -->
-          {#if !createMode && user && user.active === false}
+          {#if !createMode && user && user.active === false && !readOnly}
             <div
               class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4"
             >
@@ -753,7 +783,7 @@
                   </p>
                   <button
                     type="button"
-                    onclick={async () => {
+                    on:click={async () => {
                       if (!user) return;
                       if (
                         !confirm(
@@ -899,7 +929,7 @@
                     <input
                       type="checkbox"
                       checked={isSelected}
-                      onchange={(e) => {
+                      on:change={(e) => {
                         if (!form.cannot_handle_mobility_devices) {
                           form.cannot_handle_mobility_devices = [];
                         }
@@ -938,26 +968,26 @@
   </div>
 
   <!-- Footer -->
-  {#if createMode || mode === "edit"}
+  {#if createMode || (mode === "edit" && !readOnly)}
     <div class="px-6 py-4 border-t flex items-center justify-between">
       <div>
-        {#if step > 1}<button onclick={back} class="px-4 py-2 rounded-lg border"
+        {#if step > 1}<button on:click={back} class="px-4 py-2 rounded-lg border"
             >Back</button
           >{/if}
       </div>
       <div class="flex gap-2">
         <button
-          onclick={() => dispatch("close")}
+          on:click={() => dispatch("close")}
           class="px-4 py-2 rounded-lg border">Cancel</button
         >
         {#if step < 3}
           <button
-            onclick={next}
+            on:click={next}
             class="px-4 py-2 rounded-lg bg-blue-600 text-white">Next</button
           >
         {:else}
           <button
-            onclick={saveUser}
+            on:click={saveUser}
             disabled={saving}
             class="px-4 py-2 rounded-lg bg-blue-600 text-white disabled:opacity-50"
           >

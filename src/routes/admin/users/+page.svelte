@@ -18,6 +18,17 @@
   import { toastStore } from "$lib/toast";
   import { goto } from "$app/navigation";
   import type { PageData } from "./$types";
+  import {
+    canViewClients,
+    canCreateClients,
+    canEditClients,
+    canViewUsers,
+    canCreateUsers,
+    canEditUsers,
+    getVisibleUserTabs,
+    shouldOnlyShowClientsTab,
+    isReadOnly
+  } from "$lib/utils/permissions";
 
   export let data: PageData;
 
@@ -66,9 +77,23 @@
 
   // ---------- State ----------
   const orgId = data.userProfile?.org_id as number;
+  const userRoles = data.userProfile?.role || [];
 
-  let activeTab: "users" | "clients" =
-    data.tab === "clients" ? "clients" : "users";
+  // Determine visible tabs and permissions
+  const visibleTabs = getVisibleUserTabs(userRoles);
+  const onlyShowClientsTab = shouldOnlyShowClientsTab(userRoles);
+  const clientsReadOnly = isReadOnly(userRoles, 'clients');
+  const usersReadOnly = isReadOnly(userRoles, 'users');
+
+  // Determine initial tab based on permissions
+  let defaultTab: "users" | "clients" = "users";
+  if (onlyShowClientsTab || (data.tab === "clients" && visibleTabs.showClients)) {
+    defaultTab = "clients";
+  } else if (!visibleTabs.showUsers && visibleTabs.showClients) {
+    defaultTab = "clients";
+  }
+
+  let activeTab: "users" | "clients" = data.tab === "clients" ? "clients" : defaultTab;
 
   // Enforce org filter at source
   let staffProfiles: StaffRow[] = (
@@ -84,7 +109,7 @@
 
   let searchQuery = "";
   let roleFilter: string = "All";
-  const roles = ["All", "Admin", "Dispatcher", "Driver", "Volunteer"];
+  const roles = ["All", "Admin", "Dispatcher", "Driver", "Volunteer", "New Client Enroller", "Report View Only", "List Manager", "Report Manager"];
 
   let selectedUser: StaffRow | null = null;
   let isCreateMode = false;
@@ -139,6 +164,14 @@
     currentPage * pageSize
   );
 
+  // Permission checks
+  $: canViewClientsData = canViewClients(userRoles);
+  $: canCreateClientsData = canCreateClients(userRoles);
+  $: canEditClientsData = canEditClients(userRoles);
+  $: canViewUsersData = canViewUsers(userRoles);
+  $: canCreateUsersData = canCreateUsers(userRoles);
+  $: canEditUsersData = canEditUsers(userRoles);
+
   // ---------- Helpers ----------
   function getStatusColor(status: string): string {
     switch (status) {
@@ -154,6 +187,16 @@
   }
 
   function switchTab(tab: "users" | "clients") {
+    // Check permissions before switching
+    if (tab === "users" && !visibleTabs.showUsers) {
+      toastStore.error("You don't have permission to view users");
+      return;
+    }
+    if (tab === "clients" && !visibleTabs.showClients) {
+      toastStore.error("You don't have permission to view clients");
+      return;
+    }
+
     activeTab = tab;
     searchQuery = "";
     roleFilter = "All";
@@ -309,20 +352,43 @@
 
   // Sidebars open/close
   function openSidebar(user: StaffRow | null = null) {
+    // Check permissions
+    if (user && !canEditUsersData) {
+      toastStore.error("You don't have permission to edit users");
+      return;
+    }
+    if (!user && !canCreateUsersData) {
+      toastStore.error("You don't have permission to create users");
+      return;
+    }
+
     selectedUser = user;
     isCreateMode = !user;
     showSidebar = true;
   }
+  
   function closeSidebar() {
     selectedUser = null;
     isCreateMode = false;
     showSidebar = false;
   }
+  
   function openClientSidebar(client: ClientRow | null = null) {
+    // Check permissions
+    if (client && !canEditClientsData) {
+      toastStore.error("You don't have permission to edit clients");
+      return;
+    }
+    if (!client && !canCreateClientsData) {
+      toastStore.error("You don't have permission to create clients");
+      return;
+    }
+    
     selectedClient = client;
     isClientCreateMode = !client;
     showClientSidebar = true;
   }
+  
   function closeClientSidebar() {
     selectedClient = null;
     isClientCreateMode = false;
@@ -333,6 +399,7 @@
     await refreshData();
     closeClientSidebar();
   }
+  
   async function handleUserUpdated() {
     await refreshData();
     closeSidebar();
@@ -340,15 +407,21 @@
 
   // Deactivate user search
   function openDeactivateUserSearch() {
+    if (!canEditUsersData) {
+      toastStore.error("You don't have permission to deactivate users");
+      return;
+    }
     showDeactivateUserSearch = true;
     deactivateUserSearchQuery = "";
     deactivateUserSearchResults = [];
   }
+  
   function closeDeactivateUserSearch() {
     showDeactivateUserSearch = false;
     deactivateUserSearchQuery = "";
     deactivateUserSearchResults = [];
   }
+  
   function searchUsersForDeactivate() {
     if (!deactivateUserSearchQuery.trim()) {
       deactivateUserSearchResults = [];
@@ -371,26 +444,37 @@
     showDeactivateUserModal = true;
     closeDeactivateUserSearch();
   }
+  
   function openDeactivateUserModal(user: StaffRow) {
+    if (!canEditUsersData) {
+      toastStore.error("You don't have permission to deactivate users");
+      return;
+    }
     userToDeactivate = user;
     showDeactivateUserModal = true;
   }
+  
   function closeDeactivateUserModal() {
     showDeactivateUserModal = false;
     userToDeactivate = null;
   }
 
   function openDeactivateModal(client: ClientRow) {
+    if (!canEditClientsData) {
+      toastStore.error("You don't have permission to deactivate clients");
+      return;
+    }
     clientToDeactivate = client;
     showDeactivateModal = true;
   }
+  
   function closeDeactivateModal() {
     showDeactivateModal = false;
     clientToDeactivate = null;
   }
 
   async function confirmDeactivate() {
-    if (!clientToDeactivate) return;
+    if (!clientToDeactivate || !canEditClientsData) return;
 
     try {
       isDeactivating = true;
@@ -426,7 +510,7 @@
   import { enhance } from "$app/forms";
 
   async function confirmDeactivateUser() {
-    if (!userToDeactivate) return;
+    if (!userToDeactivate || !canEditUsersData) return;
 
     try {
       isDeactivatingUser = true;
@@ -461,6 +545,11 @@
   }
 
   async function reactivateUser(user: StaffRow) {
+    if (!canEditUsersData) {
+      toastStore.error("You don't have permission to reactivate users");
+      return;
+    }
+
     if (!confirm(`Reactivate ${user.first_name} ${user.last_name}?`)) {
       return;
     }
@@ -505,11 +594,19 @@
   applyFilters();
 </script>
 
-<RoleGuard requiredRoles={["Admin"]}>
+<RoleGuard requiredRoles={["Admin", "Super Admin", "List Manager", "Report View Only", "New Client Enroller", "WSPS Dispatcher Add-on", "BPSR Dispatcher Add-on"]}>
   <div class="min-h-screen bg-gray-50">
     <Breadcrumbs />
 
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <!-- Permission Notice for Read-Only Users -->
+      {#if (activeTab === "clients" && clientsReadOnly) || (activeTab === "users" && usersReadOnly)}
+        <div class="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <p class="text-blue-800 font-medium">View-Only Mode</p>
+          <p class="text-blue-600 text-sm mt-1">You have read-only access to this data. Contact an administrator to make changes.</p>
+        </div>
+      {/if}
+
       <!-- Add error display -->
       {#if data.error}
         <div class="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
@@ -521,10 +618,14 @@
       <div class="mb-8 flex items-center justify-between">
         <div>
           <h1 class="text-3xl font-bold text-gray-900">
-            User and Client Management
+            {onlyShowClientsTab ? "Client Management" : "User and Client Management"}
           </h1>
           <p class="text-gray-600 mt-2">
-            Manage user accounts, roles, and client records.
+            {#if onlyShowClientsTab}
+              View and manage client records.
+            {:else}
+              Manage user accounts, roles, and client records.
+            {/if}
           </p>
         </div>
 
@@ -538,7 +639,7 @@
             {isRefreshing ? "Refreshing..." : "Refresh"}
           </button>
 
-          {#if activeTab === "users"}
+          {#if activeTab === "users" && canEditUsersData}
             <button
               class="inline-flex items-center gap-2 bg-orange-100 text-orange-700 px-4 py-2 rounded-lg shadow hover:bg-orange-200 transition"
               on:click={openDeactivateUserSearch}
@@ -547,45 +648,57 @@
             </button>
           {/if}
 
-          <button
-            class="inline-flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg shadow hover:bg-blue-700 transition"
-            on:click={() =>
-              activeTab === "users"
-                ? openSidebar(null)
-                : openClientSidebar(null)}
-          >
-            <Plus class="w-4 h-4" /> Add {activeTab === "users"
-              ? "User"
-              : "Client"}
-          </button>
+          {#if activeTab === "users" && canCreateUsersData}
+            <button
+              class="inline-flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg shadow hover:bg-blue-700 transition"
+              on:click={() => openSidebar(null)}
+            >
+              <Plus class="w-4 h-4" /> Add User
+            </button>
+          {/if}
+
+          {#if activeTab === "clients" && canCreateClientsData}
+            <button
+              class="inline-flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg shadow hover:bg-blue-700 transition"
+              on:click={() => openClientSidebar(null)}
+            >
+              <Plus class="w-4 h-4" /> Add Client
+            </button>
+          {/if}
         </div>
       </div>
 
-      <!-- Tabs -->
-      <div class="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
-        <div class="border-b border-gray-200">
-          <nav class="flex -mb-px">
-            <button
-              on:click={() => switchTab("users")}
-              class="px-6 py-3 text-sm font-medium border-b-2 transition-colors {activeTab ===
-              'users'
-                ? 'border-blue-500 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}"
-            >
-              Users ({staffProfiles.length})
-            </button>
-            <button
-              on:click={() => switchTab("clients")}
-              class="px-6 py-3 text-sm font-medium border-b-2 transition-colors {activeTab ===
-              'clients'
-                ? 'border-blue-500 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}"
-            >
-              Clients ({clients.length})
-            </button>
-          </nav>
+      <!-- Tabs - Only show if user has access to multiple tabs -->
+      {#if !onlyShowClientsTab}
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
+          <div class="border-b border-gray-200">
+            <nav class="flex -mb-px">
+              {#if visibleTabs.showUsers}
+                <button
+                  on:click={() => switchTab("users")}
+                  class="px-6 py-3 text-sm font-medium border-b-2 transition-colors {activeTab ===
+                  'users'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}"
+                >
+                  Users ({staffProfiles.length})
+                </button>
+              {/if}
+              {#if visibleTabs.showClients}
+                <button
+                  on:click={() => switchTab("clients")}
+                  class="px-6 py-3 text-sm font-medium border-b-2 transition-colors {activeTab ===
+                  'clients'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}"
+                >
+                  Clients ({clients.length})
+                </button>
+              {/if}
+            </nav>
+          </div>
         </div>
-      </div>
+      {/if}
 
       <div class="bg-white rounded-lg shadow-sm border border-gray-200">
         <!-- Filters -->
@@ -681,8 +794,8 @@
                 <tbody>
                   {#each paginatedProfiles as user}
                     <tr
-                      class="border-b hover:bg-gray-50 text-sm cursor-pointer"
-                      on:click={() => openSidebar(user)}
+                      class="border-b hover:bg-gray-50 text-sm {canEditUsersData ? 'cursor-pointer' : ''}"
+                      on:click={() => canEditUsersData && openSidebar(user)}
                     >
                       <td class="px-4 py-2 font-medium"
                         >{user.first_name} {user.last_name}</td
@@ -711,26 +824,30 @@
                       </td>
                       <td class="px-4 py-2" on:click|stopPropagation>
                         <div class="flex items-center gap-3">
-                          <button
-                            class="text-blue-600 hover:underline text-sm font-medium"
-                            on:click={() => openSidebar(user)}
-                          >
-                            Edit
-                          </button>
-                          {#if user.active === false}
+                          {#if canEditUsersData}
                             <button
-                              class="text-green-600 hover:underline text-sm font-medium"
-                              on:click={() => reactivateUser(user)}
+                              class="text-blue-600 hover:underline text-sm font-medium"
+                              on:click={() => openSidebar(user)}
                             >
-                              Reactivate
+                              Edit
                             </button>
+                            {#if user.active === false}
+                              <button
+                                class="text-green-600 hover:underline text-sm font-medium"
+                                on:click={() => reactivateUser(user)}
+                              >
+                                Reactivate
+                              </button>
+                            {:else}
+                              <button
+                                class="text-orange-600 hover:underline text-sm font-medium"
+                                on:click={() => openDeactivateUserModal(user)}
+                              >
+                                Deactivate
+                              </button>
+                            {/if}
                           {:else}
-                            <button
-                              class="text-orange-600 hover:underline text-sm font-medium"
-                              on:click={() => openDeactivateUserModal(user)}
-                            >
-                              Deactivate
-                            </button>
+                            <span class="text-gray-400 text-sm">View Only</span>
                           {/if}
                         </div>
                       </td>
@@ -814,8 +931,8 @@
               <tbody>
                 {#each paginatedClients as client}
                   <tr
-                    class="border-b hover:bg-gray-50 text-sm cursor-pointer"
-                    on:click={() => openClientSidebar(client)}
+                    class="border-b hover:bg-gray-50 text-sm {canEditClientsData ? 'cursor-pointer' : ''}"
+                    on:click={() => canEditClientsData && openClientSidebar(client)}
                   >
                     <td class="px-4 py-2 font-medium"
                       >{client.first_name} {client.last_name}</td
@@ -840,19 +957,23 @@
                     >
                     <td class="px-4 py-2" on:click|stopPropagation>
                       <div class="flex items-center gap-3">
-                        <button
-                          class="text-blue-600 hover:underline text-sm font-medium"
-                          on:click={() => openClientSidebar(client)}
-                        >
-                          Edit
-                        </button>
-                        {#if client.client_status_enum !== "Inactive"}
+                        {#if canEditClientsData}
                           <button
-                            class="text-orange-600 hover:underline text-sm font-medium"
-                            on:click={() => openDeactivateModal(client)}
+                            class="text-blue-600 hover:underline text-sm font-medium"
+                            on:click={() => openClientSidebar(client)}
                           >
-                            Deactivate
+                            Edit
                           </button>
+                          {#if client.client_status_enum !== "Inactive"}
+                            <button
+                              class="text-orange-600 hover:underline text-sm font-medium"
+                              on:click={() => openDeactivateModal(client)}
+                            >
+                              Deactivate
+                            </button>
+                          {/if}
+                        {:else}
+                          <span class="text-gray-400 text-sm">View Only</span>
                         {/if}
                       </div>
                     </td>
@@ -924,6 +1045,7 @@
         createMode={isCreateMode}
         session={data.session}
         {orgId}
+        readOnly={usersReadOnly}
         on:close={closeSidebar}
         on:updated={handleUserUpdated}
       />
@@ -936,6 +1058,7 @@
         createMode={isClientCreateMode}
         session={data.session}
         {orgId}
+        readOnly={clientsReadOnly}
         on:close={closeClientSidebar}
         on:updated={handleClientUpdated}
       />
