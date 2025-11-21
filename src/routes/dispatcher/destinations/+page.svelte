@@ -7,11 +7,18 @@
     Pencil,
     Trash2,
     X,
+    Eye,
   } from "@lucide/svelte";
   import { onMount } from "svelte";
   import { supabase } from "$lib/supabase";
   import { invalidate } from "$app/navigation";
   import { invalidateAll } from "$app/navigation";
+  import {
+    canViewDestinations,
+    canCreateDestinations,
+    canEditDestinations,
+    canDeleteDestinations
+  } from '$lib/utils/permissions';
 
   // shadcn/ui
   import * as Dialog from "$lib/components/ui/dialog/index.js";
@@ -25,18 +32,22 @@
     profile?: any | null;
     roles?: string[] | null;
   }
-  // Runes: use $props()
+  
   let { data }: { data?: PageData } = $props();
 
-  // ---- Role handling (runes) ----
+  // ---- Role handling with new permission functions ----
   let userRoles = $state<string[]>([]);
-  function hasRole(required: string[]): boolean {
-    return required.some((r) => userRoles.includes(r));
-  }
+  
   $effect(() => {
     userRoles = Array.isArray(data?.roles) ? (data!.roles as string[]) : [];
   });
-  let canManage = $derived(hasRole(["Admin", "Super Admin"]));
+  
+  // Permission checks using centralized functions
+  let canView = $derived(canViewDestinations(userRoles));
+  let canCreate = $derived(canCreateDestinations(userRoles));
+  let canEdit = $derived(canEditDestinations(userRoles));
+  let canDelete = $derived(canDeleteDestinations(userRoles));
+  let isReadOnly = $derived(canView && !canEdit && !canDelete && !canCreate);
 
   // ---- Table shape ----
   interface Destination {
@@ -48,7 +59,7 @@
     state: string | null;
     zipcode: string | null;
     location_name: string | null;
-    org_id: number | null; // used only for filtering/guarding
+    org_id: number | null;
   }
 
   let destinations = $state<Destination[]>(data?.destinations || []);
@@ -72,21 +83,21 @@
   let viewerUid: string | null = $state(data?.session?.user?.id || null);
   let viewerOrgId: number | null = $state(data?.profile?.org_id || null);
 
-  // toast - now with fixed positioning above modal
+  // toast
   let toast = $state("");
   let toastOk = $state(true);
   function setToast(message: string, ok = true) {
     toast = message;
     toastOk = ok;
-    setTimeout(() => (toast = ""), 6000); // Increased to 6s for readability
+    setTimeout(() => (toast = ""), 6000);
   }
 
-  // CREATE / EDIT modal state (only rendered if canManage)
+  // CREATE / EDIT modal state
   let showUpsertModal = $state(false);
   let isSaving = $state(false);
   let upsertMode = $state<"create" | "edit">("create");
   let form = $state({
-    destination_id: null as number | null, // never sent on create
+    destination_id: null as number | null,
     location_name: "" as string,
     address: "" as string,
     address2: "" as string,
@@ -103,14 +114,17 @@
     state: "",
   });
 
-  // DELETE modal state (only rendered if canManage)
+  // DELETE modal state
   let showDeleteModal = $state(false);
   let isDeleting = $state(false);
   let toDelete = $state<Destination | null>(null);
 
+  // VIEW modal state for read-only users
+  let showViewModal = $state(false);
+  let viewingDestination = $state<Destination | null>(null);
+
   onMount(async () => {
     try {
-      // Use server-loaded data
       if (data?.session?.user?.id) {
         viewerUid = data.session.user.id;
       }
@@ -118,14 +132,12 @@
         viewerOrgId = data.profile.org_id;
       }
 
-      // If server data is available, use it
       if (data?.destinations) {
         destinations = data.destinations;
         isLoading = false;
         return;
       }
 
-      // Fallback: load org if not in server data
       if (!viewerOrgId) {
         await loadViewerOrg();
         if (!viewerOrgId) {
@@ -145,7 +157,6 @@
     }
   });
 
-  // Friendly datetime
   function formatDate(ts: string | null): string {
     if (!ts) return "—";
     const d = new Date(ts);
@@ -159,7 +170,6 @@
     }).format(d);
   }
 
-  // ---- Viewer org lookup ----
   async function loadViewerOrg() {
     viewerUid = data?.session?.user?.id ?? null;
     if (!viewerUid) {
@@ -179,7 +189,6 @@
     viewerOrgId = (sp?.org_id ?? null) as number | null;
   }
 
-  // Load (filter by org) - now uses server data, but can refresh if needed
   async function loadDestinations() {
     try {
       isLoading = true;
@@ -190,9 +199,7 @@
         return;
       }
 
-      // Invalidate the page to reload data from server
       await invalidate("/dispatcher/destinations");
-      // Also invalidate all to ensure everything refreshes
       await invalidateAll();
     } catch (e: any) {
       console.error("Load error:", e?.message ?? e);
@@ -203,7 +210,6 @@
     }
   }
 
-  // ------- Add / Edit (guarded) -------
   function resetForm() {
     form = {
       destination_id: null,
@@ -255,14 +261,20 @@
   }
 
   function openCreateModal() {
-    if (!canManage) return;
+    if (!canCreate) {
+      setToast("You don't have permission to create destinations.", false);
+      return;
+    }
     upsertMode = "create";
     resetForm();
     showUpsertModal = true;
   }
 
   function openEditModal(row: Destination) {
-    if (!canManage) return;
+    if (!canEdit) {
+      setToast("You don't have permission to edit destinations.", false);
+      return;
+    }
     upsertMode = "edit";
     form = {
       destination_id: row.destination_id,
@@ -282,8 +294,13 @@
     showUpsertModal = true;
   }
 
+  function openViewModal(row: Destination) {
+    viewingDestination = row;
+    showViewModal = true;
+  }
+
   async function saveDestination() {
-    if (!canManage) {
+    if ((upsertMode === "create" && !canCreate) || (upsertMode === "edit" && !canEdit)) {
       setToast("You do not have permission to modify destinations.", false);
       return;
     }
@@ -292,7 +309,6 @@
       return;
     }
 
-    // Validate form
     if (!validateForm()) {
       setToast("Please fix the errors in the form below.", false);
       return;
@@ -371,15 +387,17 @@
     }
   }
 
-  // ------- Delete (guarded) -------
   function openDeleteModal(row: Destination) {
-    if (!canManage) return;
+    if (!canDelete) {
+      setToast("You don't have permission to delete destinations.", false);
+      return;
+    }
     toDelete = row;
     showDeleteModal = true;
   }
 
   async function confirmDelete() {
-    if (!canManage) {
+    if (!canDelete) {
       setToast("You do not have permission to delete destinations.", false);
       return;
     }
@@ -412,7 +430,6 @@
     }
   }
 
-  // ------- FILTER (runes) -------
   let filteredDestinations = $derived(
     !destinations?.length
       ? []
@@ -445,7 +462,7 @@
 </script>
 
 <div class="min-h-screen bg-gray-50">
-  <!-- Toast - Fixed position at top, above modals -->
+  <!-- Toast -->
   {#if toast}
     <div class="fixed top-4 left-1/2 -translate-x-1/2 z-[100] max-w-2xl w-full px-4">
       <div
@@ -481,17 +498,24 @@
           <div>
             <h1 class="text-2xl font-bold text-gray-900">Destinations</h1>
             <p class="text-sm text-gray-600">
-              View {canManage ? "and manage " : ""}destinations in your org
+              {isReadOnly ? "View destinations in your org" : "View and manage destinations in your org"}
             </p>
           </div>
         </div>
 
-        {#if canManage}
-          <Button onclick={openCreateModal} class="flex items-center gap-2">
-            <Plus class="w-4 h-4" />
-            <span>Add Destination</span>
-          </Button>
-        {/if}
+        <div class="flex items-center gap-3">
+          {#if isReadOnly}
+            <div class="px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800">
+              View Only
+            </div>
+          {/if}
+          {#if canCreate}
+            <Button onclick={openCreateModal} class="flex items-center gap-2">
+              <Plus class="w-4 h-4" />
+              <span>Add Destination</span>
+            </Button>
+          {/if}
+        </div>
       </div>
     </div>
   </div>
@@ -567,12 +591,10 @@
                   class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase"
                   >Created At</th
                 >
-                {#if canManage}
-                  <th
-                    class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase"
-                    >Actions</th
-                  >
-                {/if}
+                <th
+                  class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase"
+                  >Actions</th
+                >
               </tr>
             </thead>
             <tbody class="bg-white divide-y divide-gray-200">
@@ -611,30 +633,44 @@
                   <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
                     {formatDate(dest.created_at)}
                   </td>
-                  {#if canManage}
-                    <td class="px-6 py-4 whitespace-nowrap">
-                      <div class="flex gap-2">
+                  <td class="px-6 py-4 whitespace-nowrap">
+                    <div class="flex gap-2">
+                      {#if isReadOnly}
                         <Button
                           variant="outline"
                           size="sm"
                           class="flex items-center gap-1"
-                          onclick={() => openEditModal(dest)}
+                          onclick={() => openViewModal(dest)}
                         >
-                          <Pencil class="w-4 h-4" />
-                          <span>Edit</span>
+                          <Eye class="w-4 h-4" />
+                          <span>View</span>
                         </Button>
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          class="flex items-center gap-1"
-                          onclick={() => openDeleteModal(dest)}
-                        >
-                          <Trash2 class="w-4 h-4" />
-                          <span>Delete</span>
-                        </Button>
-                      </div>
-                    </td>
-                  {/if}
+                      {:else}
+                        {#if canEdit}
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            class="flex items-center gap-1"
+                            onclick={() => openEditModal(dest)}
+                          >
+                            <Pencil class="w-4 h-4" />
+                            <span>Edit</span>
+                          </Button>
+                        {/if}
+                        {#if canDelete}
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            class="flex items-center gap-1"
+                            onclick={() => openDeleteModal(dest)}
+                          >
+                            <Trash2 class="w-4 h-4" />
+                            <span>Delete</span>
+                          </Button>
+                        {/if}
+                      {/if}
+                    </div>
+                  </td>
                 </tr>
               {/each}
             </tbody>
@@ -644,9 +680,52 @@
     </div>
   </div>
 
-  <!-- Modals only mount if user can manage -->
-  {#if canManage}
-    <!-- Create / Edit Modal -->
+  <!-- View Modal (Read-only) -->
+  <Dialog.Root bind:open={showViewModal}>
+    <Dialog.Content class="sm:max-w-lg bg-white">
+      <Dialog.Header>
+        <Dialog.Title>Destination Details</Dialog.Title>
+        <Dialog.Description>View-only information</Dialog.Description>
+      </Dialog.Header>
+
+      {#if viewingDestination}
+        <div class="space-y-4">
+          <div>
+            <Label class="text-sm text-gray-500">Location Name</Label>
+            <p class="text-sm font-medium">{viewingDestination.location_name ?? "—"}</p>
+          </div>
+          <div>
+            <Label class="text-sm text-gray-500">Address</Label>
+            <p class="text-sm font-medium">{viewingDestination.address ?? "—"}</p>
+            {#if viewingDestination.address2}
+              <p class="text-sm text-gray-600">{viewingDestination.address2}</p>
+            {/if}
+          </div>
+          <div class="grid grid-cols-3 gap-4">
+            <div>
+              <Label class="text-sm text-gray-500">City</Label>
+              <p class="text-sm font-medium">{viewingDestination.city ?? "—"}</p>
+            </div>
+            <div>
+              <Label class="text-sm text-gray-500">State</Label>
+              <p class="text-sm font-medium">{viewingDestination.state ?? "—"}</p>
+            </div>
+            <div>
+              <Label class="text-sm text-gray-500">Zipcode</Label>
+              <p class="text-sm font-medium">{viewingDestination.zipcode ?? "—"}</p>
+            </div>
+          </div>
+        </div>
+      {/if}
+
+      <Dialog.Footer class="mt-6">
+        <Button onclick={() => (showViewModal = false)}>Close</Button>
+      </Dialog.Footer>
+    </Dialog.Content>
+  </Dialog.Root>
+
+  <!-- Create / Edit Modal -->
+  {#if canCreate || canEdit}
     <Dialog.Root bind:open={showUpsertModal}>
       <Dialog.Content class="sm:max-w-lg bg-white max-h-[90vh] overflow-y-auto">
         <Dialog.Header>
@@ -751,8 +830,10 @@
         </Dialog.Footer>
       </Dialog.Content>
     </Dialog.Root>
+  {/if}
 
-    <!-- Delete Modal -->
+  <!-- Delete Modal -->
+  {#if canDelete}
     <Dialog.Root bind:open={showDeleteModal}>
       <Dialog.Content class="sm:max-w-md bg-white">
         <Dialog.Header>

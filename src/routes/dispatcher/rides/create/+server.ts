@@ -2,6 +2,7 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { createSupabaseServerClient } from '$lib/supabase.server';
+import { canCreateRides } from '$lib/utils/permissions';
 
 function canonEstimatedLen(raw: unknown): string | null {
   const s = (raw ?? '').toString().trim().toLowerCase();
@@ -77,20 +78,21 @@ export const POST: RequestHandler = async (event) => {
 
     if (profileError || !profile) return json({ error: 'Profile not found' }, { status: 404 });
 
-    const hasDispatcherRole =
-      profile.role &&
-      (Array.isArray(profile.role)
-        ? (profile.role.includes('Dispatcher') || profile.role.includes('Admin'))
-        : (profile.role === 'Dispatcher' || profile.role === 'Admin'));
+    // Get user roles and check permission
+    const userRoles = Array.isArray(profile.role) 
+      ? profile.role 
+      : profile.role ? [profile.role] : [];
 
-    if (!hasDispatcherRole) return json({ error: 'Access denied. Dispatcher or Admin role required.' }, { status: 403 });
+    if (!canCreateRides(userRoles)) {
+      return json({ error: 'You don\'t have permission to create rides' }, { status: 403 });
+    }
 
     // (optional) reject bad len explicitly
     if (body.estimated_appointment_length && !canonEstimatedLen(body.estimated_appointment_length)) {
       return json({ error: "Invalid estimated appointment length. Use '30 mins' or '2 hrs 30 mins'." }, { status: 400 });
     }
 
-    // Build payload (NO vehicle_id, NO driver_user_id)
+    // Build payload
     const payload = {
       org_id: profile.org_id,
       client_id: body.client_id ?? null,

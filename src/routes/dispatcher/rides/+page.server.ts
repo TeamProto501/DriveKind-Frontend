@@ -1,6 +1,7 @@
 import type { PageServerLoad } from "./$types";
 import { createSupabaseServerClient } from "$lib/supabase.server";
 import { redirect } from "@sveltejs/kit";
+import { canManageRides } from '$lib/utils/permissions';
 
 export const load: PageServerLoad = async (event) => {
   const supabase = createSupabaseServerClient(event);
@@ -15,7 +16,7 @@ export const load: PageServerLoad = async (event) => {
       throw redirect(302, "/login");
     }
 
-    // Profile (must be dispatcher or admin)
+    // Profile (must have ride management permissions)
     const { data: profile, error: profileError } = await supabase
       .from("staff_profiles")
       .select("user_id, org_id, first_name, last_name, role")
@@ -36,23 +37,14 @@ export const load: PageServerLoad = async (event) => {
       };
     }
 
-    const hasDispatcherRole =
-      profile.role &&
-      (Array.isArray(profile.role)
-        ? profile.role.includes("Dispatcher") || profile.role.includes("Admin")
-        : profile.role === "Dispatcher" || profile.role === "Admin");
+    // Get user roles
+    const userRoles = Array.isArray(profile.role) 
+      ? profile.role 
+      : profile.role ? [profile.role] : [];
 
-    if (!hasDispatcherRole) {
-      return {
-        session,
-        rides: [],
-        drivers: [],
-        clients: [],
-        calls: [],
-        destinations: [],
-        profile,
-        error: "Access denied. Dispatcher role required.",
-      };
+    // Check if user can manage rides
+    if (!canManageRides(userRoles)) {
+      throw redirect(302, '/');
     }
 
     // Rides (notes included; nested clients include other_limitations)
@@ -153,6 +145,7 @@ export const load: PageServerLoad = async (event) => {
     if (clientsError) {
       console.error("Error loading clients:", clientsError);
     }
+
     let organization = null;
     if (profile?.org_id) {
       const { data: orgData } = await supabase
@@ -163,6 +156,7 @@ export const load: PageServerLoad = async (event) => {
 
       organization = orgData;
     }
+
     // Calls
     const { data: calls, error: callsError } = await supabase
       .from("calls")

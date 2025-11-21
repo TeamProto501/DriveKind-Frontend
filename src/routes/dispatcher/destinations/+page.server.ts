@@ -1,6 +1,7 @@
 import type { PageServerLoad } from './$types';
 import { redirect } from '@sveltejs/kit';
 import { createSupabaseServerClient } from '$lib/supabase.server';
+import { canViewDestinations } from '$lib/utils/permissions';
 
 export const load: PageServerLoad = async (event) => {
   const supabase = createSupabaseServerClient(event);
@@ -27,7 +28,14 @@ export const load: PageServerLoad = async (event) => {
     };
   }
 
-  // Get destinations for the user's org (server-side bypasses RLS)
+  // Check if user can view destinations
+  const userRoles = Array.isArray(profile.role) ? profile.role : (profile.role ? [profile.role] : []);
+  
+  if (!canViewDestinations(userRoles)) {
+    throw redirect(302, '/');
+  }
+
+  // Get destinations for the user's org
   const { data: destinations, error } = await supabase
     .from('destinations')
     .select(`
@@ -49,7 +57,7 @@ export const load: PageServerLoad = async (event) => {
   return {
     session,
     profile,
-    roles: Array.isArray(profile.role) ? profile.role : (profile.role ? [profile.role] : []),
+    roles: userRoles,
     destinations: destinations || [],
     error: error?.message || null
   };

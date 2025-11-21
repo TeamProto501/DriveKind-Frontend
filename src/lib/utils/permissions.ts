@@ -313,7 +313,17 @@ export function canViewRides(roles: Role[] | null | undefined): boolean {
   ]);
 }
 
-export function canCreateRideRequests(roles: Role[] | null | undefined): boolean {
+export function canManageRides(roles: Role[] | null | undefined): boolean {
+  // Can access the dispatcher/rides page
+  return hasRole(roles, [
+    'Super Admin',
+    'Admin',
+    'Dispatcher',
+    'List Manager' // Can view rides for reporting
+  ]);
+}
+
+export function canCreateRides(roles: Role[] | null | undefined): boolean {
   return hasRole(roles, [
     'Super Admin',
     'Admin',
@@ -322,13 +332,31 @@ export function canCreateRideRequests(roles: Role[] | null | undefined): boolean
   ]);
 }
 
-export function canEditRideInfo(roles: Role[] | null | undefined): boolean {
+export function canCreateRideRequests(roles: Role[] | null | undefined): boolean {
+  // Alias for canCreateRides for backwards compatibility
+  return canCreateRides(roles);
+}
+
+export function canEditRides(roles: Role[] | null | undefined): boolean {
   return hasRole(roles, [
     'Super Admin',
     'Admin',
     'Dispatcher',
     'Driver' // Drivers can edit their own rides
     // Note: BPSR Dispatcher Add-on CANNOT edit ride info
+  ]);
+}
+
+export function canEditRideInfo(roles: Role[] | null | undefined): boolean {
+  // Alias for canEditRides for backwards compatibility
+  return canEditRides(roles);
+}
+
+export function canAssignDrivers(roles: Role[] | null | undefined): boolean {
+  return hasRole(roles, [
+    'Super Admin',
+    'Admin',
+    'Dispatcher'
   ]);
 }
 
