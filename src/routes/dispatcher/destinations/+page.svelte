@@ -18,9 +18,7 @@
     canCreateDestinations,
     canEditDestinations,
     canDeleteDestinations,
-
     type Role
-
   } from '$lib/utils/permissions';
 
   // shadcn/ui
@@ -29,34 +27,16 @@
   import { Label } from "$lib/components/ui/label/index.js";
   import { Input } from "$lib/components/ui/input/index.js";
 
-  // ---- Page data from load() (roles, etc.) ----
+  // ---- Page data from load() ----
   interface PageData {
     session?: { user: any } | null;
     profile?: any | null;
-    roles?: string[] | null;
-    destinations?: Destination[]; // added so data.destinations is typed
+    roles?: Role[] | null;
+    destinations?: Destination[];
     error?: string | null;
   }
 
   let { data }: { data?: PageData } = $props();
-
-  // ---- Role handling (runes) ----
-  let userRoles = $state<Role[]>([]);
-
-  let destinations = $state<Destination[]>(data?.destinations || []);
-  let isLoading = $state(false);
-  let searchTerm = $state("");
-  
-  $effect(() => {
-    userRoles = Array.isArray(data?.roles) ? (data!.roles as Role[]) : [];
-  });
-  
-  // Permission checks using centralized functions
-  let canView = $derived(canViewDestinations(userRoles));
-  let canCreate = $derived(canCreateDestinations(userRoles));
-  let canEdit = $derived(canEditDestinations(userRoles));
-  let canDelete = $derived(canDeleteDestinations(userRoles));
-  let isReadOnly = $derived(canView && !canEdit && !canDelete && !canCreate);
 
   // Table shape
   interface Destination {
@@ -71,8 +51,19 @@
     org_id: number | null;
   }
 
-  // Reactively update destinations when data changes
+  // ---- State ----
+  let userRoles = $state<Role[]>([]);
+  let destinations = $state<Destination[]>([]);
+  let isLoading = $state(true);
+  let searchTerm = $state("");
+  let viewerUid = $state<string | null>(null);
+  let viewerOrgId = $state<number | null>(null);
+
+  // Extract roles from data
   $effect(() => {
+    if (data?.roles) {
+      userRoles = Array.isArray(data.roles) ? data.roles : [];
+    }
     if (data?.destinations) {
       destinations = data.destinations;
     }
@@ -84,9 +75,12 @@
     }
   });
 
-  // viewer identity
-  let viewerUid: string | null = $state(data?.session?.user?.id || null);
-  let viewerOrgId: number | null = $state(data?.profile?.org_id || null);
+  // Permission checks using centralized functions
+  let canView = $derived(canViewDestinations(userRoles));
+  let canCreate = $derived(canCreateDestinations(userRoles));
+  let canEdit = $derived(canEditDestinations(userRoles));
+  let canDelete = $derived(canDeleteDestinations(userRoles));
+  let isReadOnly = $derived(canView && !canEdit && !canDelete && !canCreate);
 
   // toast
   let toast = $state("");
@@ -112,7 +106,6 @@
   });
 
   // Inline validation errors
-  // location_name removed – it is optional now
   let formErrors = $state({
     address: "",
     city: "",
@@ -240,8 +233,6 @@
       state: "",
     };
 
-    // location_name is OPTIONAL now – skip validation
-
     if (!form.address.trim()) {
       formErrors.address = "Street address is required";
       isValid = false;
@@ -317,7 +308,6 @@
     try {
       if (upsertMode === "create") {
         const payload = {
-          // if blank, send null
           location_name: form.location_name.trim() || null,
           address: form.address.trim(),
           address2: form.address2?.trim() || null,
@@ -540,10 +530,7 @@
             </div>
           </div>
           <div class="text-sm text-gray-500">
-            {filteredDestinations.length} destination{filteredDestinations.length !==
-            1
-              ? "s"
-              : ""} found
+            {filteredDestinations.length} destination{filteredDestinations.length !== 1 ? "s" : ""} found
           </div>
         </div>
       </div>
@@ -742,7 +729,7 @@
         </Dialog.Header>
 
         <div class="space-y-4">
-          <!-- Location name is OPTIONAL now -->
+          <!-- Location name is OPTIONAL -->
           <div class="space-y-2">
             <Label for="location_name">Location Name</Label>
             <Input
