@@ -65,6 +65,7 @@
     "Report Manager",
     "WSPS Dispatcher Add-on",
     "BPSR Dispatcher Add-on",
+    "Bri Pen Driver Add-on",
   ];
   let canManageSuperAdmin = false;
 
