@@ -17,7 +17,10 @@
     canViewDestinations,
     canCreateDestinations,
     canEditDestinations,
-    canDeleteDestinations
+    canDeleteDestinations,
+
+    type Role
+
   } from '$lib/utils/permissions';
 
   // shadcn/ui
@@ -34,14 +37,18 @@
     destinations?: Destination[]; // added so data.destinations is typed
     error?: string | null;
   }
-  
+
   let { data }: { data?: PageData } = $props();
 
-  // ---- Role handling with new permission functions ----
-  let userRoles = $state<string[]>([]);
+  // ---- Role handling (runes) ----
+  let userRoles = $state<Role[]>([]);
+
+  let destinations = $state<Destination[]>(data?.destinations || []);
+  let isLoading = $state(false);
+  let searchTerm = $state("");
   
   $effect(() => {
-    userRoles = Array.isArray(data?.roles) ? (data!.roles as string[]) : [];
+    userRoles = Array.isArray(data?.roles) ? (data!.roles as Role[]) : [];
   });
   
   // Permission checks using centralized functions
@@ -63,23 +70,6 @@
     location_name: string | null;
     org_id: number | null;
   }
-
-  // Runes: use $props()
-  let { data }: { data?: PageData } = $props();
-
-  // ---- Role handling (runes) ----
-  let userRoles = $state<string[]>([]);
-  function hasRole(required: string[]): boolean {
-    return required.some((r) => userRoles.includes(r));
-  }
-  $effect(() => {
-    userRoles = Array.isArray(data?.roles) ? (data!.roles as string[]) : [];
-  });
-  let canManage = $derived(hasRole(["Admin", "Super Admin"]));
-
-  let destinations = $state<Destination[]>(data?.destinations || []);
-  let isLoading = $state(false);
-  let searchTerm = $state("");
 
   // Reactively update destinations when data changes
   $effect(() => {
