@@ -28,7 +28,7 @@
   
   export let data: any;
 
-  // Metric cards with real data and links - UPDATED
+  // Metric cards with real data and links
   const metricCards = [
     {
       label: "User Management",
@@ -112,7 +112,7 @@
     }
   ];
 
-  // Tab configuration - UPDATED
+  // Tab configuration
   const tabs = [
     {
       id: "riderequests",
@@ -161,15 +161,12 @@
   }
 </script>
 
-<!-- Make breadcrumbs non-interactive -->
 <div class="static-breadcrumbs">
   <Breadcrumbs />
 </div>
 
-<RoleGuard requiredRoles={["Admin"]}>
+<RoleGuard requiredRoles={["Admin", "Super Admin", "List Manager", "Report View Only", "Report Manager"]}>
   <div class="min-h-screen bg-gray-50">
-    <!-- (Breadcrumbs moved above with static behavior) -->
-
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <!-- Header Section -->
       <div class="mb-8">
@@ -192,8 +189,7 @@
       <!-- Metrics Grid - Clickable Cards -->
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         {#each metricCards as card}
-          
-            <a href={card.href}
+          <a href={card.href}
             class="group relative bg-white rounded-lg border border-gray-200 hover:border-gray-300 hover:shadow-lg transition-all duration-200 p-6 overflow-hidden"
           >
             <!-- Gradient Background Effect -->
