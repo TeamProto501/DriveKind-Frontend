@@ -583,7 +583,7 @@
                 <div class="flex items-start gap-2">
                   <MapPin class="w-4 h-4 mt-0.5" />
                   <div>
-                    <div class="font-medium">Dropoff:</div>
+                    <div class="font-medium">Destination:</div>
                     <div>{ride.destination_name}</div>
                     <div>{ride.dropoff_address}</div>
                     {#if (ride.dropoff_address2)}<div>{ride.dropoff_address2}</div>{/if}
