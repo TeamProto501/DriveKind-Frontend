@@ -14,7 +14,8 @@ export type Role =
   | 'List Manager'
   | 'Report Manager'
   | 'WSPS Dispatcher Add-on'
-  | 'BPSR Dispatcher Add-on';
+  | 'BPSR Dispatcher Add-on'
+  | 'Bri Pen Driver Add-on';
 
 /**
  * Check if a user has at least one of the specified roles
@@ -82,7 +83,8 @@ export function canViewClients(roles: Role[] | null | undefined): boolean {
     'Report View Only',
     'New Client Enroller',
     'WSPS Dispatcher Add-on',
-    'BPSR Dispatcher Add-on'
+    'BPSR Dispatcher Add-on',
+    'Bri Pen Driver Add-on'
   ]);
 }
 
@@ -392,10 +394,11 @@ export function getVisibleUserTabs(roles: Role[] | null | undefined): {
   const isNewClientEnroller = hasRole(roles, ['New Client Enroller']);
   const isWSPSAddon = hasRole(roles, ['WSPS Dispatcher Add-on']);
   const isBPSRAddon = hasRole(roles, ['BPSR Dispatcher Add-on']);
+  const isBriPenAddon = hasRole(roles, ['Bri Pen Driver Add-on']);
   const isReportViewOnly = hasRole(roles, ['Report View Only']);
 
   return {
-    showClients: isSuperAdminOrAdmin || isListManager || isNewClientEnroller || isWSPSAddon || isBPSRAddon || isReportViewOnly,
+    showClients: isSuperAdminOrAdmin || isListManager || isNewClientEnroller || isWSPSAddon || isBPSRAddon || isReportViewOnly || isBriPenAddon,
     showUsers: isSuperAdminOrAdmin || isListManager || isReportViewOnly,
     showVehicles: isSuperAdminOrAdmin,
     showDestinations: isSuperAdminOrAdmin,
@@ -453,7 +456,8 @@ export function getRoleDisplayName(role: Role): string {
     'List Manager': 'List Manager',
     'Report Manager': 'Report Manager',
     'WSPS Dispatcher Add-on': 'WSPS Dispatcher',
-    'BPSR Dispatcher Add-on': 'BPSR Dispatcher'
+    'BPSR Dispatcher Add-on': 'BPSR Dispatcher',
+    'Bri Pen Driver Add-on': 'Bri Pen Driver'
   };
   
   return displayNames[role] || role;
@@ -476,7 +480,8 @@ export function getRoleDescription(role: Role): string {
     'List Manager': 'Manage client and user lists',
     'Report Manager': 'Create and manage reports',
     'WSPS Dispatcher Add-on': 'View clients and destinations (add-on role)',
-    'BPSR Dispatcher Add-on': 'Edit clients, destinations, and force accept rides (add-on role)'
+    'BPSR Dispatcher Add-on': 'Edit clients, destinations, and force accept rides (add-on role)',
+    'Bri Pen Driver Add-on': 'View clients'
   };
   
   return descriptions[role] || 'Custom role';
@@ -486,5 +491,5 @@ export function getRoleDescription(role: Role): string {
  * Check if role is an "add-on" role (should be combined with another role)
  */
 export function isAddonRole(role: Role): boolean {
-  return role === 'WSPS Dispatcher Add-on' || role === 'BPSR Dispatcher Add-on';
+  return role === 'WSPS Dispatcher Add-on' || role === 'BPSR Dispatcher Add-on' || role === 'Bri Pen Driver Add-on';
 }

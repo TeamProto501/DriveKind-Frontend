@@ -56,6 +56,10 @@ function getRoleBasedHomePage(roles: string[]): string {
   if (roles.includes('BPSR Dispatcher Add-on')) {
     return '/dispatcher/destinations'; // Can edit destinations
   }
+
+  if (roles.includes('Bri Pen Driver Add-on')) {
+    return '/admin/users?tab=clients'; // View clients only
+  }
   
   // Fallback to root if no recognized role
   return '/';
