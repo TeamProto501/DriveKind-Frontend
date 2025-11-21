@@ -109,7 +109,7 @@
     if (hasRole(["Report Manager"]) && !hasRole(["Admin", "Super Admin"])) {
       return "Reports";
     }
-    if (hasRole(["List Manager", "Bri Pen Driver Add-on"]) && !hasRole(["Admin", "Super Admin"])) {
+    if (hasRole(["List Manager"]) && !hasRole(["Admin", "Super Admin"])) {
       return "Management";
     }
     return "Admin";
@@ -198,7 +198,7 @@
 
     // Admin/Management Section
     // Available to: Admin, Super Admin, Report View Only, Report Manager, List Manager, 
-    // New Client Enroller, WSPS Dispatcher Add-on, BPSR Dispatcher Add-on
+    // New Client Enroller, WSPS Dispatcher Add-on, BPSR Dispatcher Add-on, Bri Pen Driver Add-on
     if (hasRole([
       "Admin", 
       "Super Admin", 
@@ -207,7 +207,8 @@
       "List Manager",
       "New Client Enroller",
       "WSPS Dispatcher Add-on",
-      "BPSR Dispatcher Add-on"
+      "BPSR Dispatcher Add-on",
+      "Bri Pen Driver Add-on"
     ])) {
       const adminItems = [];
 
@@ -225,8 +226,7 @@
         "Report View Only",
         "New Client Enroller",
         "WSPS Dispatcher Add-on",
-        "BPSR Dispatcher Add-on",
-        "Bri Pen Driver Add-on"
+        "BPSR Dispatcher Add-on"
       ])) {
         adminItems.push({ label: "User & Client Management", href: "/admin/users" });
       }
