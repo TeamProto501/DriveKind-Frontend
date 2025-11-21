@@ -6,20 +6,58 @@ import { createSupabaseServerClient } from '$lib/supabase.server';
 function getRoleBasedHomePage(roles: string[]): string {
   if (!roles || roles.length === 0) return '/';
   
-  // Priority order: Admin > Dispatcher > Driver > Client
+  // Priority order for role-based landing pages
+  // Super Admin and Admin go to admin dashboard
   if (roles.includes('Super Admin') || roles.includes('Admin')) {
     return '/admin/dash';
   }
+  
+  // Dispatcher goes to dispatcher dashboard
   if (roles.includes('Dispatcher')) {
     return '/dispatcher/dashboard';
   }
+  
+  // Driver goes to driver rides
   if (roles.includes('Driver')) {
     return '/driver/rides';
   }
+  
+  // Volunteer goes to calendar
   if (roles.includes('Volunteer')) {
     return '/calendar';
   }
   
+  // NEW ROLES - All administrative/reporting roles go to reports or admin dash
+  if (roles.includes('Report Manager')) {
+    return '/admin/reports';
+  }
+  
+  if (roles.includes('Report View Only')) {
+    return '/admin/reports';
+  }
+  
+  if (roles.includes('List Manager')) {
+    return '/admin/dash'; // Can access dashboard
+  }
+  
+  if (roles.includes('New Client Enroller')) {
+    return '/admin/users?tab=clients'; // Direct to clients tab
+  }
+  
+  if (roles.includes('Coordinator')) {
+    return '/calendar'; // Similar to volunteer
+  }
+  
+  // Add-on roles (these should be combined with other roles, but provide fallback)
+  if (roles.includes('WSPS Dispatcher Add-on')) {
+    return '/dispatcher/destinations'; // Can view destinations
+  }
+  
+  if (roles.includes('BPSR Dispatcher Add-on')) {
+    return '/dispatcher/destinations'; // Can edit destinations
+  }
+  
+  // Fallback to root if no recognized role
   return '/';
 }
 
@@ -35,7 +73,7 @@ export const load: PageServerLoad = async (event) => {
       .eq('user_id', session.user.id)
       .single();
 
-    const roles = Array.isArray(profile?.role) ? profile.role : [];
+    const roles = Array.isArray(profile?.role) ? profile.role : (profile?.role ? [profile.role] : []);
     const homePage = getRoleBasedHomePage(roles);
     throw redirect(302, homePage);
   }
@@ -73,7 +111,7 @@ export const actions: Actions = {
       .eq('user_id', data.session.user.id)
       .single();
 
-    const roles = Array.isArray(profile?.role) ? profile.role : [];
+    const roles = Array.isArray(profile?.role) ? profile.role : (profile?.role ? [profile.role] : []);
     const homePage = getRoleBasedHomePage(roles);
 
     // Redirect to role-based home page
