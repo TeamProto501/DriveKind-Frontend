@@ -178,6 +178,59 @@ export function canLogOwnHoursMiles(roles: Role[] | null | undefined): boolean {
   ]);
 }
 
+// Can access personal reports tab (own volunteer hours/miles)
+export function canAccessPersonalReports(roles: Role[] | null | undefined): boolean {
+  return hasRole(roles, [
+    'Super Admin',
+    'Admin',
+    'Driver',
+    'Dispatcher',
+    'Volunteer',
+    'Report Manager',
+    'Report View Only',
+    'List Manager'
+  ]);
+}
+
+// Can access organization-wide reports tab
+export function canAccessOrgReports(roles: Role[] | null | undefined): boolean {
+  return hasRole(roles, [
+    'Super Admin',
+    'Admin',
+    'Report Manager',
+    'Report View Only',
+    'List Manager'
+  ]);
+}
+
+// Can export reports to CSV (Report View Only explicitly CANNOT)
+export function canExportReports(roles: Role[] | null | undefined): boolean {
+  // Report View Only is explicitly excluded from exporting
+  if (hasRole(roles, ['Report View Only'])) {
+    return false;
+  }
+  
+  return hasRole(roles, [
+    'Super Admin',
+    'Admin',
+    'Report Manager',
+    'List Manager',
+    'Driver',      // Can export their own personal reports
+    'Dispatcher',  // Can export their own personal reports
+    'Volunteer'    // Can export their own personal reports
+  ]);
+}
+
+// Can view all drivers in organization reports
+export function canViewAllDrivers(roles: Role[] | null | undefined): boolean {
+  return canAccessOrgReports(roles);
+}
+
+// Can view all clients in organization reports
+export function canViewAllClients(roles: Role[] | null | undefined): boolean {
+  return canAccessOrgReports(roles);
+}
+
 // ============================================
 // DATABASE PERMISSIONS
 // ============================================

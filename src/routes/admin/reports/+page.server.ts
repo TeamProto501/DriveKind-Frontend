@@ -1,6 +1,11 @@
 import type { PageServerLoad, Actions } from './$types';
 import { error, fail, redirect } from '@sveltejs/kit';
 import { createSupabaseServerClient } from '$lib/supabase.server';
+import {
+  canAccessPersonalReports,
+  canAccessOrgReports,
+  canExportReports
+} from '$lib/utils/permissions';
 
 export interface RideReportData {
   ride_id: number;
@@ -56,6 +61,19 @@ export const load: PageServerLoad = async (event) => {
     console.error('Error fetching user profile:', profileError);
   }
 
+  // Get user roles
+  const userRoles = Array.isArray(userProfile?.role) 
+    ? userProfile.role 
+    : userProfile?.role ? [userProfile.role] : [];
+
+  // Check if user has any reports access
+  const hasPersonalAccess = canAccessPersonalReports(userRoles);
+  const hasOrgAccess = canAccessOrgReports(userRoles);
+
+  if (!hasPersonalAccess && !hasOrgAccess) {
+    throw redirect(302, '/');
+  }
+
   // Get organization
   const { data: organization } = await supabase
     .from('organization')
@@ -63,16 +81,12 @@ export const load: PageServerLoad = async (event) => {
     .eq('org_id', userProfile?.org_id)
     .single();
 
-  // Check if user is admin
-  const isAdmin = Array.isArray(userProfile?.role) 
-    ? userProfile.role.includes('Admin') 
-    : userProfile?.role === 'Admin';
-
   let drivers: StaffProfile[] = [];
   let clients: ClientProfile[] = [];
   let allStaff: StaffProfile[] = [];
 
-  if (isAdmin) {
+  // Only fetch org data if user has org reports access
+  if (hasOrgAccess) {
     // Fetch drivers
     const { data: driversData } = await supabase
       .from('staff_profiles')
@@ -117,7 +131,7 @@ export const load: PageServerLoad = async (event) => {
     drivers,
     clients,
     allStaff,
-    isAdmin
+    isAdmin: hasOrgAccess // Reuse for backward compatibility
   };
 };
 
@@ -128,6 +142,22 @@ export const actions: Actions = {
     const { data: { session } } = await supabase.auth.getSession();
     
     if (!session) return fail(401, { error: 'Unauthorized' });
+
+    // Get user profile to check permissions
+    const { data: userProfile } = await supabase
+      .from('staff_profiles')
+      .select('role')
+      .eq('user_id', session.user.id)
+      .single();
+
+    const userRoles = Array.isArray(userProfile?.role) 
+      ? userProfile.role 
+      : [userProfile?.role];
+
+    // Check if user has personal reports access
+    if (!canAccessPersonalReports(userRoles)) {
+      return fail(403, { error: 'You don\'t have permission to access personal reports' });
+    }
 
     try {
       // Get rides from past month
@@ -176,75 +206,30 @@ export const actions: Actions = {
     }
   },
 
-  // Get driver's rides for auto-population
-  getDriverRides: async (event) => {
+  fetchRides: async (event) => {
     const supabase = createSupabaseServerClient(event);
     const { request } = event;
     const { data: { session } } = await supabase.auth.getSession();
     
     if (!session) return fail(401, { error: 'Unauthorized' });
 
-    const formData = await request.formData();
-    const startDate = formData.get('startDate') as string;
-    const endDate = formData.get('endDate') as string;
+    // Get user profile to check permissions
+    const { data: userProfile } = await supabase
+      .from('staff_profiles')
+      .select('role')
+      .eq('user_id', session.user.id)
+      .single();
 
-    if (!startDate || !endDate) {
-      return fail(400, { error: 'Please select both start and end dates' });
+    const userRoles = Array.isArray(userProfile?.role) 
+      ? userProfile.role 
+      : [userProfile?.role];
+
+    // Check if user has org reports access
+    if (!canAccessOrgReports(userRoles)) {
+      return fail(403, { error: 'You don\'t have permission to access organization reports' });
     }
 
-    try {
-      // Query rides for this driver
-      let query = supabase
-        .from('rides')
-        .select('hours, miles_driven, ride_id, client_id')
-        .eq('driver_user_id', session.user.id)
-        .eq('status', 'Completed');
-
-      if (startDate) {
-        query = query.gte('appointment_time', new Date(startDate).toISOString());
-      }
-      if (endDate) {
-        const end = new Date(endDate);
-        end.setDate(end.getDate() + 1);
-        query = query.lt('appointment_time', end.toISOString());
-      }
-
-      const { data: rides, error: ridesError } = await query;
-
-      if (ridesError) {
-        console.error('Error fetching rides:', ridesError);
-        return fail(500, { error: 'Failed to fetch rides' });
-      }
-
-      // Calculate totals
-      const totalHours = rides?.reduce((sum, r) => sum + (r.hours || 0), 0) || 0;
-      const totalMiles = rides?.reduce((sum, r) => sum + (r.miles_driven || 0), 0) || 0;
-      const rideCount = rides?.length || 0;
-      
-      // Count unique clients
-      const uniqueClients = new Set(rides?.map(r => r.client_id).filter(Boolean)).size;
-
-      return {
-        success: true,
-        autoFill: {
-          hours: totalHours,
-          miles: totalMiles,
-          rides: rideCount,
-          clients: uniqueClients
-        },
-        message: `Loaded ${rideCount} rides with ${totalHours.toFixed(2)} hours and ${totalMiles.toFixed(1)} miles`
-      };
-    } catch (err) {
-      console.error('Error in getDriverRides:', err);
-      return fail(500, { error: 'An unexpected error occurred' });
-    }
-  },
-
-  fetchRides: async (event) => {
-    const supabase = createSupabaseServerClient(event);
-    const { request } = event;
     const formData = await request.formData();
-
     const filterType = formData.get('filterType') as string;
     const selectedId = formData.get('selectedId') as string;
     const fromDate = formData.get('fromDate') as string;
