@@ -4,9 +4,9 @@ import { createSupabaseServerClient } from '$lib/supabase.server';
 export const POST: RequestHandler = async (event) => {
   try {
     const supabase = createSupabaseServerClient(event);
-    const { data: { session } } = await supabase.auth.getSession();
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
 
-    if (!session) {
+    if (userError || !user) {
       return json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -20,7 +20,7 @@ export const POST: RequestHandler = async (event) => {
     // Verify the vehicle belongs to the current user
     const { data: existingVehicle, error: fetchError } = await supabase
       .from('vehicles')
-      .select('vehicle_id, user_id')
+      .select('vehicle_id, user_id, active')
       .eq('vehicle_id', vehicle_id)
       .single();
 
@@ -28,28 +28,19 @@ export const POST: RequestHandler = async (event) => {
       return json({ error: 'Vehicle not found' }, { status: 404 });
     }
 
-    if (existingVehicle.user_id !== session.user.id) {
+    if (existingVehicle.user_id !== user.id) {
       return json({ error: 'You do not have permission to update this vehicle' }, { status: 403 });
     }
 
-    // First, deactivate all other vehicles for this user
-    const { error: deactivateError } = await supabase
-      .from('vehicles')
-      .update({ active: false })
-      .eq('user_id', session.user.id)
-      .neq('vehicle_id', vehicle_id);
-
-    if (deactivateError) {
-      console.error('Error deactivating other vehicles:', deactivateError);
-      return json({ error: `Failed to deactivate other vehicles: ${deactivateError.message}` }, { status: 500 });
-    }
-
-    // Then activate the selected vehicle
+    // Toggle the active status of the selected vehicle (allow multiple active vehicles)
+    const currentActive = existingVehicle.active ?? false;
+    const newActiveStatus = !currentActive;
+    
     const { data: vehicle, error: activateError } = await supabase
       .from('vehicles')
-      .update({ active: true })
+      .update({ active: newActiveStatus })
       .eq('vehicle_id', vehicle_id)
-      .eq('user_id', session.user.id)
+      .eq('user_id', user.id)
       .select()
       .single();
 

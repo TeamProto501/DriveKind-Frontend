@@ -31,6 +31,8 @@
     session?: { user: any } | null;
     profile?: any | null;
     roles?: string[] | null;
+    destinations?: Destination[]; // added so data.destinations is typed
+    error?: string | null;
   }
   
   let { data }: { data?: PageData } = $props();
@@ -49,7 +51,7 @@
   let canDelete = $derived(canDeleteDestinations(userRoles));
   let isReadOnly = $derived(canView && !canEdit && !canDelete && !canCreate);
 
-  // ---- Table shape ----
+  // Table shape
   interface Destination {
     destination_id: number;
     created_at: string | null;
@@ -61,6 +63,19 @@
     location_name: string | null;
     org_id: number | null;
   }
+
+  // Runes: use $props()
+  let { data }: { data?: PageData } = $props();
+
+  // ---- Role handling (runes) ----
+  let userRoles = $state<string[]>([]);
+  function hasRole(required: string[]): boolean {
+    return required.some((r) => userRoles.includes(r));
+  }
+  $effect(() => {
+    userRoles = Array.isArray(data?.roles) ? (data!.roles as string[]) : [];
+  });
+  let canManage = $derived(hasRole(["Admin", "Super Admin"]));
 
   let destinations = $state<Destination[]>(data?.destinations || []);
   let isLoading = $state(false);
@@ -107,8 +122,8 @@
   });
 
   // Inline validation errors
+  // location_name removed – it is optional now
   let formErrors = $state({
-    location_name: "",
     address: "",
     city: "",
     state: "",
@@ -221,7 +236,6 @@
       zipcode: "",
     };
     formErrors = {
-      location_name: "",
       address: "",
       city: "",
       state: "",
@@ -231,16 +245,12 @@
   function validateForm(): boolean {
     let isValid = true;
     formErrors = {
-      location_name: "",
       address: "",
       city: "",
       state: "",
     };
 
-    if (!form.location_name.trim()) {
-      formErrors.location_name = "Location name is required";
-      isValid = false;
-    }
+    // location_name is OPTIONAL now – skip validation
 
     if (!form.address.trim()) {
       formErrors.address = "Street address is required";
@@ -286,7 +296,6 @@
       zipcode: row.zipcode ?? "",
     };
     formErrors = {
-      location_name: "",
       address: "",
       city: "",
       state: "",
@@ -318,7 +327,8 @@
     try {
       if (upsertMode === "create") {
         const payload = {
-          location_name: form.location_name.trim(),
+          // if blank, send null
+          location_name: form.location_name.trim() || null,
           address: form.address.trim(),
           address2: form.address2?.trim() || null,
           city: form.city.trim(),
@@ -344,7 +354,7 @@
           return setToast("Missing destination_id for update.", false);
 
         const payload = {
-          location_name: form.location_name.trim(),
+          location_name: form.location_name.trim() || null,
           address: form.address.trim(),
           address2: form.address2?.trim() || null,
           city: form.city.trim(),
@@ -742,17 +752,17 @@
         </Dialog.Header>
 
         <div class="space-y-4">
+          <!-- Location name is OPTIONAL now -->
           <div class="space-y-2">
-            <Label for="location_name">Location Name *</Label>
+            <Label for="location_name">Location Name</Label>
             <Input
               id="location_name"
               bind:value={form.location_name}
               placeholder="e.g., Jefferson Medical Plaza"
-              class={formErrors.location_name ? "border-red-500" : ""}
             />
-            {#if formErrors.location_name}
-              <p class="text-sm text-red-600">{formErrors.location_name}</p>
-            {/if}
+            <p class="text-xs text-gray-500">
+              Optional. Leave blank if this destination has no special name.
+            </p>
           </div>
 
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">

@@ -8,22 +8,22 @@ export const load: PageServerLoad = async (event) => {
 
   // 1) Auth
   const {
-    data: { session },
-    error: sessionError
-  } = await supabase.auth.getSession();
+    data: { user },
+    error: userError
+  } = await supabase.auth.getUser();
 
-  if (sessionError || !session) throw redirect(302, '/login');
+  if (userError || !user) throw redirect(302, '/login');
 
-  // 2) Profile (need org + role)
+  // 2) Profile (need org + role + max_weekly_rides)
   const { data: profile, error: profileError } = await supabase
     .from('staff_profiles')
-    .select('user_id, org_id, first_name, last_name, role')
-    .eq('user_id', session.user.id)
+    .select('user_id, org_id, first_name, last_name, role, max_weekly_rides')
+    .eq('user_id', user.id)
     .single();
 
   if (profileError || !profile) {
     return {
-      session,
+      session: { user },
       rides: [],
       profile: null,
       error: 'Profile not found. Please contact your administrator.'
@@ -38,7 +38,7 @@ export const load: PageServerLoad = async (event) => {
 
   if (!isDriver) {
     return {
-      session,
+      session: { user },
       rides: [],
       profile,
       error: 'Access denied. Driver role required.'
@@ -80,20 +80,27 @@ export const load: PageServerLoad = async (event) => {
       dropoff_address2,
       completion_status,
       donation_amount,
+      assigned_vehicle,
       clients:client_id (
         first_name,
         last_name,
         primary_phone,
         other_limitations
+      ),
+      vehicles:assigned_vehicle (
+        vehicle_id,
+        type_of_vehicle_enum,
+        vehicle_color,
+        nondriver_seats
       )
     `)
-    .eq('driver_user_id', session.user.id)
+    .eq('driver_user_id', user.id)
     .order('appointment_time', { ascending: true });
 
   if (ridesError) {
     console.error('Error loading rides:', ridesError);
     return {
-      session,
+      session: { user },
       rides: [],
       profile,
       error: `Failed to load rides: ${ridesError.message}`
@@ -104,7 +111,7 @@ export const load: PageServerLoad = async (event) => {
   const { data: requestRows, error: requestErr } = await supabase
     .from('ride_requests')
     .select('ride_id, driver_id, org_id, denied')
-    .eq('driver_id', session.user.id)
+    .eq('driver_id', user.id)
     .eq('org_id', profile.org_id);
 
   if (requestErr) {
@@ -158,11 +165,18 @@ export const load: PageServerLoad = async (event) => {
         dropoff_address2,
         completion_status,
         donation_amount,
+        assigned_vehicle,
         clients:client_id (
           first_name,
           last_name,
           primary_phone,
           other_limitations
+        ),
+        vehicles:assigned_vehicle (
+          vehicle_id,
+          type_of_vehicle_enum,
+          vehicle_color,
+          nondriver_seats
         )
       `)
       .in('ride_id', freshPendingIds);
@@ -174,13 +188,35 @@ export const load: PageServerLoad = async (event) => {
     }
   }
 
-  // 6) Final list is pending (requests) + assigned
-  const rides = [...pendingRides, ...(assignedRides || [])];
+  // 6) Get driver's active vehicles for vehicle selection
+  const { data: activeVehicles } = await supabase
+    .from('vehicles')
+    .select('vehicle_id, type_of_vehicle_enum, vehicle_color, nondriver_seats, active')
+    .eq('user_id', user.id)
+    .eq('active', true)
+    .order('vehicle_id', { ascending: true });
+
+  // 7) For each pending ride, determine which vehicles are eligible
+  const ridesWithEligibleVehicles = (pendingRides || []).map((ride: any) => {
+    const eligibleVehicles = (activeVehicles || []).filter((vehicle: any) => {
+      const requiredSeats = (ride.riders || 0) + 1;
+      const vehicleSeats = (vehicle.nondriver_seats || 0) + 1; // +1 for driver
+      return vehicleSeats >= requiredSeats;
+    });
+    return {
+      ...ride,
+      eligibleVehicles
+    };
+  });
+
+  // 8) Final list is pending (with eligible vehicles) + assigned
+  const rides = [...ridesWithEligibleVehicles, ...(assignedRides || [])];
 
   return {
-    session,
+    session: { user },
     rides,
     profile,
+    activeVehicles: activeVehicles || [],
     error: null
   };
 };

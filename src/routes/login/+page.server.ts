@@ -67,7 +67,9 @@ function getRoleBasedHomePage(roles: string[]): string {
 
 export const load: PageServerLoad = async (event) => {
   const supabase = createSupabaseServerClient(event);
-  const { data: { session } } = await supabase.auth.getSession();
+  const {
+    data: { session }
+  } = await supabase.auth.getSession();
 
   // If already logged in, redirect to role-based home
   if (session) {
@@ -82,7 +84,12 @@ export const load: PageServerLoad = async (event) => {
     throw redirect(302, homePage);
   }
 
-  return {};
+  // Check for password reset success message
+  const passwordReset = event.url.searchParams.get('passwordReset');
+
+  return {
+    passwordResetSuccess: passwordReset === 'success'
+  };
 };
 
 export const actions: Actions = {
@@ -97,7 +104,11 @@ export const actions: Actions = {
       return fail(400, { error: 'Please fill in all fields' });
     }
 
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    // 1) Authenticate user
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password
+    });
 
     if (error) {
       console.error('Supabase login error:', error);
@@ -108,17 +119,71 @@ export const actions: Actions = {
       return fail(400, { error: 'No session returned from Supabase' });
     }
 
-    // Fetch user's role to determine redirect
-    const { data: profile } = await supabase
+    // 2) Fetch user's profile to get org_id + roles
+    const {
+      data: profile,
+      error: profileError
+    } = await supabase
       .from('staff_profiles')
-      .select('role')
+      .select('org_id, role')
       .eq('user_id', data.session.user.id)
       .single();
 
     const roles = Array.isArray(profile?.role) ? profile.role : (profile?.role ? [profile.role] : []);
+    if (profileError) {
+      console.error('Profile lookup error:', profileError);
+      await supabase.auth.signOut();
+      return fail(400, {
+        error:
+          'There was an issue verifying your profile. Please contact your administrator.'
+      });
+    }
+
+    // 3) If user has an org, check that org's status via org_status_enum
+    if (profile?.org_id != null) {
+      const {
+        data: org,
+        error: orgError
+      } = await supabase
+        .from('organization') // ✅ table is singular
+        .select('org_id, org_status_enum') // ✅ only existing columns
+        .eq('org_id', profile.org_id)
+        .maybeSingle();
+
+      console.log('Org lookup result:', { org, orgError });
+
+      if (orgError || !org) {
+        console.error('Org lookup error or missing org:', orgError, org);
+        await supabase.auth.signOut();
+        return fail(400, {
+          error:
+            'Unable to verify your organization. Please contact your administrator.'
+        });
+      }
+
+      const rawStatus = (org as any).org_status_enum;
+      const normalizedStatus = rawStatus
+        ? String(rawStatus).trim().toLowerCase()
+        : '';
+
+      console.log('Normalized org_status_enum:', normalizedStatus);
+
+      const isInactive =
+        normalizedStatus === 'inactive' || normalizedStatus === 'disabled';
+
+      if (isInactive) {
+        await supabase.auth.signOut();
+        return fail(400, {
+          error:
+            'Your organization is inactive. Please contact your administrator.'
+        });
+      }
+    }
+
+    // 4) Org is OK (or no org) – compute roles + redirect
+    const roles = Array.isArray(profile?.role) ? profile.role : [];
     const homePage = getRoleBasedHomePage(roles);
 
-    // Redirect to role-based home page
     throw redirect(302, homePage);
   },
 

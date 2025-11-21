@@ -400,6 +400,7 @@
     "secondary_contact_city",
     "secondary_contact_state",
     "secondary_contact_zipcode",
+    "org_website", // <-- make website optional here
   ]);
   function isRequired(key: string) {
     return !OPTIONAL_KEYS.has(key);
@@ -447,7 +448,7 @@
   function validateRequiredForStep(stepIdx: number): string[] {
     fieldErrors = {};
     const req: Record<number, string[]> = {
-      0: ["name", "org_status", "org_website", "org_email", "org_phone"],
+      0: ["name", "org_status", "org_email", "org_phone"],
       1: ["org_address", "org_city", "org_state", "org_zip_code"],
       2: [
         "rides_phone_number",

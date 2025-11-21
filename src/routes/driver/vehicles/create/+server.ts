@@ -4,9 +4,9 @@ import { createSupabaseServerClient } from '$lib/supabase.server';
 export const POST: RequestHandler = async (event) => {
   try {
     const supabase = createSupabaseServerClient(event);
-    const { data: { session } } = await supabase.auth.getSession();
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
 
-    if (!session) {
+    if (userError || !user) {
       return json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -29,7 +29,7 @@ export const POST: RequestHandler = async (event) => {
       const { data: profile } = await supabase
         .from('staff_profiles')
         .select('org_id')
-        .eq('user_id', session.user.id)
+        .eq('user_id', user.id)
         .single();
       
       if (!profile) {
@@ -39,7 +39,7 @@ export const POST: RequestHandler = async (event) => {
     }
 
     const payload = {
-      user_id: session.user.id,
+      user_id: user.id,
       org_id: userOrgId,
       type_of_vehicle_enum: type_of_vehicle_enum as 'SUV' | 'Sedan' | 'Van' | 'Motorcycle' | 'Truck' | 'Coupe',
       vehicle_color: vehicle_color.trim(),

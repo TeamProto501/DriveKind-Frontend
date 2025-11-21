@@ -1,3 +1,4 @@
+// src/routes/admin/audit/+page.server.ts
 import { authenticatedFetchServer, API_BASE_URL } from "$lib/api.server";
 import { createSupabaseServerClient } from "$lib/supabase.server";
 import { redirect } from "@sveltejs/kit";
@@ -9,88 +10,180 @@ function getRows(raw: any): any[] {
   return [];
 }
 
+// Only used for the previewByRange action (backend /calls/previewByTime)
 function flattenCalls(data: any[]): any[] {
   return data.map((item) => {
     const flattened: any = { ...item };
 
-    // Optional: if your API joins staff_profiles, map to staff_name
-    if (item.staff_profiles) {
-      const first = item.staff_profiles.first_name ?? "";
-      const last = item.staff_profiles.last_name ?? "";
+    if (item.staff_profiles || item.staff_profile) {
+      const staff = item.staff_profiles ?? item.staff_profile;
+      const first = staff?.first_name ?? "";
+      const last = staff?.last_name ?? "";
       flattened.staff_name = [first, last].filter(Boolean).join(" ");
       delete flattened.staff_profiles;
+      delete flattened.staff_profile;
     }
 
-    // Leave all actual DB columns as-is so we can choose what to display:
-    // call_id, user_id, org_id, call_time, call_type, other_type, client_id,
-    // phone_number, forwarded_to_name, caller_first_name, caller_last_name, etc.
     return flattened;
   });
 }
 
 export const load: PageServerLoad = async (event) => {
-  const supabase = createSupabaseServerClient(event);
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-
-  if (!session) {
-    throw redirect(302, "/login");
-  }
-
-  // Get user's org_id for scoping calls
-  const { data: profile } = await supabase
-    .from("staff_profiles")
-    .select("org_id")
-    .eq("user_id", session.user.id)
-    .single();
-
-  const userOrgId = profile?.org_id ?? null;
-
   const tab = event.url.searchParams.get("tab") ?? "audits";
 
+  // ----- CALLS TAB (direct from Supabase, org-scoped) -----
   if (tab === "calls") {
-    const res = await authenticatedFetchServer(
-      API_BASE_URL + "/calls",
-      {},
-      event
-    );
+    const supabase = createSupabaseServerClient(event);
 
-    const text = await res.text();
-    let raw: any;
-    try {
-      raw = JSON.parse(text);
-    } catch {
-      raw = text;
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
+
+    if (userError) {
+      // user error handled silently; auth checks below will return appropriate data
     }
 
-    const rows = flattenCalls(getRows(raw));
-
-    // Filter by org_id if we have it
-    const scopedRows =
-      userOrgId == null
-        ? rows
-        : rows.filter((row: any) => row.org_id === userOrgId);
-
-    return { data: scopedRows, tab: "calls", userOrgId };
-  } else {
-    const res = await authenticatedFetchServer(
-      API_BASE_URL + "/audit-log/dash",
-      {},
-      event
-    );
-
-    const text = await res.text();
-    let raw: any;
-    try {
-      raw = JSON.parse(text);
-    } catch {
-      raw = text;
+    if (!user) {
+      return { data: [], tab: "calls", staffProfiles: [], clients: [] };
     }
 
-    const rows = getRows(raw);
-    return { data: rows, tab: "audits", userOrgId };
+    // Get user's org_id
+    const { data: profile, error: profileError } = await supabase
+      .from("staff_profiles")
+      .select("org_id")
+      .eq("user_id", user.id)
+      .single();
+
+    if (profileError) {
+      // profile loading error will be handled downstream
+    }
+
+    const orgId = profile?.org_id ?? null;
+
+    let calls: any[] = [];
+    let staffProfiles: any[] = [];
+    let clients: any[] = [];
+
+    if (orgId !== null) {
+      // Calls for this org
+      const { data: callData, error: callError } = await supabase
+        .from("calls")
+        .select(
+          `
+          *
+        `
+        )
+        .eq("org_id", orgId);
+
+      if (!callError) {
+        calls = callData ?? [];
+      }
+
+      // Staff in this org (for Dispatcher column and dropdown)
+      const { data: staffData, error: staffError } = await supabase
+        .from("staff_profiles")
+        .select("user_id, org_id, first_name, last_name")
+        .eq("org_id", orgId);
+
+      if (!staffError) {
+        staffProfiles = staffData ?? [];
+      }
+
+      // Clients in this org (for Client column and dropdown)
+      const { data: clientData, error: clientError } = await supabase
+        .from("clients")
+        .select("client_id, org_id, first_name, last_name, primary_phone")
+        .eq("org_id", orgId);
+
+      if (!clientError) {
+        clients = clientData ?? [];
+      }
+    }
+
+    return {
+      data: calls,
+      tab: "calls",
+      staffProfiles,
+      clients,
+    };
   }
+
+  // ----- AUDITS TAB (Supabase SDK, org-scoped) -----
+  const supabase = createSupabaseServerClient(event);
+
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
+
+  if (userError) {
+    // user error handled silently; return below if no user
+  }
+
+  if (!user) {
+    return { 
+      data: [], 
+      tab: "audits", 
+      staffProfiles: [], 
+      clients: [],
+      error: "Not authenticated."
+    };
+  }
+
+  // Get user's org_id
+  const { data: profile, error: profileError } = await supabase
+    .from("staff_profiles")
+    .select("org_id")
+    .eq("user_id", user.id)
+    .single();
+
+  if (profileError) {
+    // profile loading error handled downstream
+  }
+
+  const orgId = profile?.org_id ?? null;
+
+  let audits: any[] = [];
+  let staffProfiles: any[] = [];
+
+  if (orgId !== null) {
+    // Fetch audit log for this org
+    const { data: auditData, error: auditError } = await supabase
+      .from("transactions_audit_log")
+      .select("*")
+      .eq("org_id", orgId)
+      .order("timestamp", { ascending: false });
+
+    if (auditError) {
+      return {
+        data: [],
+        tab: "audits",
+        staffProfiles: [],
+        clients: [],
+        error: `Failed to fetch audits: ${auditError.message}`,
+      };
+    }
+    audits = auditData ?? [];
+
+    // Fetch staff profiles so we can resolve dispatcher names
+    const { data: staffData, error: staffError } = await supabase
+      .from("staff_profiles")
+      .select("user_id, org_id, first_name, last_name")
+      .eq("org_id", orgId);
+
+    if (!staffError) {
+      staffProfiles = staffData ?? [];
+    }
+  }
+
+  // returning audits tab data
+  return {
+    data: audits,
+    tab: "audits",
+    staffProfiles,
+    clients: [],
+  };
 };
 
 export const actions: Actions = {
@@ -162,59 +255,220 @@ export const actions: Actions = {
     return { data: rows };
   },
 
+  // Update an existing call (directly via Supabase, org-scoped)
   updateCall: async (event) => {
+    const supabase = createSupabaseServerClient(event);
     const formData = await event.request.formData();
 
-    const call_id = formData.get("call_id") as string;
+    const callIdStr = formData.get("call_id") as string | null;
+    if (!callIdStr) {
+      console.error("updateCall error: Missing call_id.");
+      return { success: false, error: "Missing call_id." };
+    }
+    const call_id = Number(callIdStr);
+
+    // Auth and org scoping
+    const {
+      data: { user },
+      error: userError
+    } = await supabase.auth.getUser();
+
+    if (userError || !user) {
+      console.error(`updateCall auth error: ${userError?.message || "No user"}`);
+      return { success: false, error: "Not authenticated." };
+    }
+
+    const { data: profile, error: profileError } = await supabase
+      .from("staff_profiles")
+      .select("org_id")
+      .eq("user_id", user.id)
+      .single();
+
+    if (profileError || !profile?.org_id) {
+      console.error(`updateCall profile error: ${profileError?.message || "No org_id"}`);
+      return { success: false, error: "Could not determine user org." };
+    }
+
+    const orgId = profile.org_id;
+    console.log(`updateCall called: call_id=${call_id}, orgId=${orgId}`);
 
     const call_time_local = formData.get("call_time") as string | null;
     const formatToSQL = (dateTimeLocal: string) =>
       dateTimeLocal.replace("T", " ") + ":00";
 
-    const body: any = {
-      // not editable, but passed in case your API wants them
-      user_id: formData.get("user_id") || null,
-      client_id: formData.get("client_id") || null,
-      call_type: formData.get("call_type") || null,
+    const clientIdRaw = formData.get("client_id") as string | null;
+    const client_id =
+      clientIdRaw && clientIdRaw.trim() !== "" ? Number(clientIdRaw) : null;
 
-      // editable fields
+    const updatePayload: Record<string, any> = {
+      user_id: (formData.get("user_id") as string) || null,
+      client_id,
+      call_type: (formData.get("call_type") as string) || null,
       call_time: call_time_local ? formatToSQL(call_time_local) : null,
-      other_type: formData.get("other_type") || null,
-      phone_number: formData.get("phone_number") || null,
-      forwarded_to_name: formData.get("forwarded_to_name") || null,
-      caller_first_name: formData.get("caller_first_name") || null,
-      caller_last_name: formData.get("caller_last_name") || null,
-      // org_id intentionally not sent
+      other_type: (formData.get("other_type") as string) || "",
+      phone_number: (formData.get("phone_number") as string) || "",
+      forwarded_to_name: (formData.get("forwarded_to_name") as string) || "",
+      caller_first_name: (formData.get("caller_first_name") as string) || "",
+      caller_last_name: (formData.get("caller_last_name") as string) || ""
     };
 
-    try {
-      const res = await authenticatedFetchServer(
-        API_BASE_URL + `/calls/${call_id}`,
-        {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(body),
-        },
-        event
-      );
+    console.log(`updateCall updating call: call_id=${call_id}, payload=${JSON.stringify(updatePayload)}`);
+    const { error: updateError } = await supabase
+      .from("calls")
+      .update(updatePayload)
+      .eq("call_id", call_id)
+      .eq("org_id", orgId);
 
-      const text = await res.text();
+    if (updateError) {
+      console.error(`updateCall update error: ${updateError.message}`);
+      return { success: false, error: updateError.message };
+    }
 
-      if (!res.ok) {
-        return {
-          success: false,
-          error: text || `API returned ${res.status}`,
-        };
+    console.log(`updateCall successful: call_id=${call_id}, orgId=${orgId}`);
+    throw redirect(303, "/admin/audit?tab=calls");
+  },
+
+  // Delete a single call (directly via Supabase, org-scoped)
+  deleteCall: async (event) => {
+    const formData = await event.request.formData();
+    const callIdStr = formData.get("call_id") as string | null;
+
+    if (!callIdStr) {
+      return { success: false, error: "Missing call_id." };
+    }
+
+    const call_id = Number(callIdStr);
+    const supabase = createSupabaseServerClient(event);
+
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
+
+    if (userError || !user) {
+      return { success: false, error: "Not authenticated." };
+    }
+
+    const { data: profile, error: profileError } = await supabase
+      .from("staff_profiles")
+      .select("org_id")
+      .eq("user_id", user.id)
+      .single();
+
+    if (profileError || !profile?.org_id) {
+      return { success: false, error: "Could not determine user org." };
+    }
+
+    const orgId = profile.org_id;
+    console.log(`deleteCall called: call_id=${call_id}, orgId=${orgId}`);
+
+    const { error: deleteError } = await supabase
+      .from("calls")
+      .delete()
+      .eq("call_id", call_id)
+      .eq("org_id", orgId);
+
+    if (deleteError) {
+      console.error(`deleteCall error: ${deleteError.message}`);
+      return { success: false, error: deleteError.message };
+    }
+
+    console.log(`deleteCall successful: call_id=${call_id}, orgId=${orgId}`);
+    throw redirect(303, "/admin/audit?tab=calls");
+  },
+
+  // Create a new call (directly via Supabase, org-scoped)
+  createCall: async (event) => {
+    const supabase = createSupabaseServerClient(event);
+    const formData = await event.request.formData();
+
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
+
+    if (userError || !user) {
+      return { success: false, error: "Not authenticated." };
+    }
+
+    const { data: profile, error: profileError } = await supabase
+      .from("staff_profiles")
+      .select("org_id")
+      .eq("user_id", user.id)
+      .single();
+
+    if (profileError || !profile?.org_id) {
+      return { success: false, error: "Could not determine user org." };
+    }
+
+    const orgId = profile.org_id;
+
+    const user_id = (formData.get("user_id") as string) || null;
+    const clientIdStr = (formData.get("client_id") as string) || "";
+    const client_id = clientIdStr ? Number(clientIdStr) : null;
+
+    const call_type = (formData.get("call_type") as string) || null;
+
+    const call_time_local = formData.get("call_time") as string | null;
+    const formatToSQL = (dateTimeLocal: string) =>
+      dateTimeLocal.replace("T", " ") + ":00";
+    const call_time = call_time_local ? formatToSQL(call_time_local) : null;
+
+    const other_type = (formData.get("other_type") as string) || null;
+    const phone_number = (formData.get("phone_number") as string) || null;
+    const forwarded_to_name =
+      (formData.get("forwarded_to_name") as string) || null;
+
+    let caller_first_name =
+      (formData.get("caller_first_name") as string) || null;
+    let caller_last_name =
+      (formData.get("caller_last_name") as string) || null;
+
+    // If a client is selected, override caller_* with the client's name
+    if (client_id !== null) {
+      const { data: client, error: clientError } = await supabase
+        .from("clients")
+        .select("first_name, last_name")
+        .eq("client_id", client_id)
+        .single();
+
+      if (!clientError && client) {
+        caller_first_name = client.first_name ?? caller_first_name;
+        caller_last_name = client.last_name ?? caller_last_name;
       }
+    }
 
-      return { success: true };
-    } catch (err: any) {
+    // Enforce rule: if no client selected, require caller first + last
+    if (!client_id && (!caller_first_name || !caller_last_name)) {
       return {
         success: false,
-        error: err?.message || "Unexpected error while updating call.",
+        error:
+          "Caller first and last name are required if no client is selected.",
       };
     }
+
+    const { data: insertData, error: insertError } = await supabase
+      .from("calls")
+      .insert({
+        org_id: orgId,
+        user_id,
+        client_id,
+        call_time,
+        call_type,
+        other_type,
+        phone_number,
+        forwarded_to_name,
+        caller_first_name,
+        caller_last_name,
+      })
+      .select("call_id");
+
+    if (insertError) {
+      return { success: false, error: insertError.message };
+    }
+
+    const createdId = insertData?.[0]?.call_id ?? null;
+    // After creating, land on calls
+    throw redirect(303, "/admin/audit?tab=calls");
   },
 };

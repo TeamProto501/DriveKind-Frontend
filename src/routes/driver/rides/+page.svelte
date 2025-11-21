@@ -4,6 +4,7 @@
   import { Badge } from "$lib/components/ui/badge";
   import { Card, CardContent } from "$lib/components/ui/card";
   import { Input } from "$lib/components/ui/input";
+  import * as Dialog from "$lib/components/ui/dialog/index.js";
   import {
     Calendar,
     Car,
@@ -22,6 +23,7 @@
   import type { PageData } from './$types';
   import RideCompletionModal from '$lib/components/RideCompletionModal.svelte';
   import { validateRideCompletion, sanitizeInput } from '$lib/utils/validation';
+  import { supabase } from '$lib/supabase';
 
   let { data }: { data: PageData } = $props();
 
@@ -33,6 +35,15 @@
   let searchTerm = $state("");
   let activeTab = $state("requests"); // requests | scheduled | active | completed
   let isUpdating = $state(false);
+
+  // ---- Driver weekly rides preference ----
+  let maxWeeklyRides = $state(
+    data.profile?.max_weekly_rides != null
+      ? String(data.profile.max_weekly_rides)
+      : ""
+  );
+  let isSavingMaxWeekly = $state(false);
+
   let showCompletionModal = $state(false);
   let selectedRideForCompletion = $state<any>(null);
   let showEditModal = $state(false);
@@ -46,6 +57,11 @@
     donation_type: '',
     donation_amount: ''
   });
+
+  // Vehicle selection for ride acceptance
+  let showVehicleSelectionModal = $state(false);
+  let selectedRideForAcceptance = $state<any>(null);
+  let selectedVehicleId = $state<number | null>(null);
 
   function getStatusColor(status: string) {
     switch (status) {
@@ -180,40 +196,128 @@
     catch { try { return await resp.text(); } catch { return ''; } }
   }
 
-  // Accept
-  async function acceptRide(rideId: number) {
-    if (!data.session?.access_token) {
-      alert('Session expired. Please refresh the page and try again.');
+  // ---- Save max_weekly_rides for this driver ----
+  async function saveMaxWeeklyRides() {
+    const raw = maxWeeklyRides.trim();
+    let value: number | null = null;
+
+    // blank = no limit
+    if (raw !== "") {
+      const parsed = parseInt(raw, 10);
+      if (Number.isNaN(parsed) || parsed < 0) {
+        alert(
+          "Please enter a non-negative whole number for max weekly rides, or leave it blank for no limit."
+        );
+        return;
+      }
+      value = parsed;
+    }
+
+    if (!data.profile) {
+      alert("Profile not loaded. Please refresh the page.");
       return;
     }
+
+    isSavingMaxWeekly = true;
+    try {
+      // Directly update staff_profiles via Supabase (no external API)
+      const { error } = await supabase
+        .from("staff_profiles")
+        .update({ max_weekly_rides: value })
+        .eq("user_id", data.profile.user_id);
+
+      if (error) {
+        console.error("Update max_weekly_rides failed:", error);
+        alert(`Failed to update weekly ride limit: ${error.message}`);
+        return;
+      }
+
+      alert("Weekly ride limit updated.");
+      maxWeeklyRides = value != null ? String(value) : "";
+      await invalidateAll();
+    } catch (e) {
+      console.error(e);
+      alert("Error updating weekly ride limit. Please try again.");
+    } finally {
+      isSavingMaxWeekly = false;
+    }
+  }
+
+  // Accept - with vehicle selection if multiple eligible vehicles
+  function openAcceptModal(ride: any) {
+    selectedRideForAcceptance = ride;
+    selectedVehicleId = null;
+    
+    // If no eligible vehicles, show error
+    if (!ride.eligibleVehicles || ride.eligibleVehicles.length === 0) {
+      alert('No eligible vehicles for this ride. Please activate a vehicle with enough seats.');
+      return;
+    }
+    
+    // If only one eligible vehicle, auto-select it and accept
+    if (ride.eligibleVehicles.length === 1) {
+      selectedVehicleId = ride.eligibleVehicles[0].vehicle_id;
+      void acceptRideWithVehicle(ride.ride_id, ride.eligibleVehicles[0].vehicle_id);
+      return;
+    }
+    
+    // Show vehicle selection modal if multiple vehicles
+    showVehicleSelectionModal = true;
+  }
+
+  async function acceptRideWithVehicle(rideId: number, vehicleId: number) {
+    if (!vehicleId) {
+      alert('Please select a vehicle before accepting the ride.');
+      return;
+    }
+    
     isUpdating = true;
     try {
-      const resp = await fetch(`${API_BASE}/rides/${rideId}/accept`, {
+      // Use SvelteKit server endpoint (server-side auth, no client session needed)
+      const resp = await fetch(`/driver/rides/accept/${rideId}`, {
         method: 'POST',
         headers: {
-          // no content-type since no body
-          'Authorization': `Bearer ${data.session.access_token}`
-        }
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ vehicle_id: vehicleId })
       });
+      
       if (!resp.ok) {
-        const msg = await readError(resp);
-        console.error('Accept failed:', resp.status, msg);
-        alert(`Failed to accept ride (${resp.status}): ${msg || 'Unknown error'}`);
+        const data = await resp.json();
+        console.error('Accept failed:', resp.status, data.error);
+        alert(`Failed to accept ride: ${data.error || 'Unknown error'}`);
       } else {
+        showVehicleSelectionModal = false;
+        selectedRideForAcceptance = null;
+        selectedVehicleId = null;
         await invalidateAll();
         alert('Ride accepted! It now appears in your Scheduled tab.');
       }
     } catch (e) {
-      console.error(e);
+      console.error('Network error:', e);
       alert('Error accepting ride. Please try again.');
     } finally {
       isUpdating = false;
     }
   }
 
+  // Legacy function for backward compatibility
+  async function acceptRide(rideId: number) {
+    // Find the ride to check eligible vehicles
+    const ride = data.rides?.find((r: any) => r.ride_id === rideId);
+    if (ride) {
+      openAcceptModal(ride);
+    } else {
+      alert('Ride not found.');
+    }
+  }
+
   // Decline
   async function declineRide(rideId: number) {
-    if (!data.session?.access_token) {
+    // Get access token from client-side Supabase session
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    
+    if (sessionError || !session?.access_token) {
       alert('Session expired. Please refresh the page and try again.');
       return;
     }
@@ -224,7 +328,7 @@
         method: 'POST',
         headers: {
           // no content-type since no body
-          'Authorization': `Bearer ${data.session.access_token}`
+          'Authorization': `Bearer ${session.access_token}`
         }
       });
 
@@ -346,6 +450,39 @@
     </div>
   </div>
 
+  {#if data.profile}
+    <Card>
+      <CardContent class="p-4 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+        <div>
+          <h2 class="text-lg font-semibold flex items-center gap-2">
+            <Car class="w-5 h-5 text-blue-600" />
+            Weekly Ride Limit
+          </h2>
+          <p class="text-sm text-muted-foreground">
+            Set the maximum number of rides you prefer to drive each week. Leave blank for no limit.
+          </p>
+        </div>
+
+        <div class="flex items-center gap-2 mt-2 md:mt-0">
+          <Input
+            type="number"
+            min="0"
+            class="w-28"
+            placeholder="No limit"
+            bind:value={maxWeeklyRides}
+          />
+          <Button
+            size="sm"
+            onclick={saveMaxWeeklyRides}
+            disabled={isSavingMaxWeekly}
+          >
+            {isSavingMaxWeekly ? "Saving..." : "Save"}
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  {/if}
+
   {#if data.error}
     <Card class="border-red-200 bg-red-50">
       <CardContent class="p-4">
@@ -418,7 +555,7 @@
                 <Badge class={getStatusColor(ride.status)}>{ride.status.toUpperCase()}</Badge>
                 {#if ride.purpose}<Badge variant="outline">{ride.purpose}</Badge>{/if}
               </div>
-
+              
               <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-muted-foreground">
                 <div class="flex items-center gap-2">
                   <Phone class="w-4 h-4" />{getClientPhone(ride)}
@@ -446,7 +583,7 @@
                 <div class="flex items-start gap-2">
                   <MapPin class="w-4 h-4 mt-0.5" />
                   <div>
-                    <div class="font-medium">Dropoff:</div>
+                    <div class="font-medium">Destination:</div>
                     <div>{ride.destination_name}</div>
                     <div>{ride.dropoff_address}</div>
                     {#if (ride.dropoff_address2)}<div>{ride.dropoff_address2}</div>{/if}
@@ -469,6 +606,17 @@
                 {#if ride.riders > 0}
                   <div class="flex items-center gap-2">
                     <Car class="w-4 h-4" />{ride.riders} passenger{ride.riders > 1 ? 's' : ''}
+                  </div>
+                {/if}
+
+                <!-- Show assigned vehicle -->
+                {#if ride.assigned_vehicle && ride.vehicles}
+                  <div class="flex items-center gap-2">
+                    <Car class="w-4 h-4" />
+                    <div>
+                      <span class="font-medium">Assigned Vehicle:</span>
+                      <span class="ml-1">{ride.vehicles.type_of_vehicle_enum} - {ride.vehicles.vehicle_color}</span>
+                    </div>
                   </div>
                 {/if}
 
@@ -496,17 +644,29 @@
                   </span>
                 </div>
               </div>
-
+              
               {#if ride.notes}
                 <div class="text-sm">
                   <span class="font-medium">Notes:</span> {ride.notes}
                 </div>
               {/if}
             </div>
-
+            
             <div class="flex gap-2 ml-4">
               {#if ride.status === "Pending"}
-                <Button size="sm" onclick={() => acceptRide(ride.ride_id)} disabled={isUpdating}>
+                <!-- Show eligible vehicles info -->
+                {#if ride.eligibleVehicles && ride.eligibleVehicles.length > 0}
+                  <div class="text-xs text-gray-600 mb-2 mr-4">
+                    {ride.eligibleVehicles.length === 1 
+                      ? `1 vehicle: ${ride.eligibleVehicles[0].type_of_vehicle_enum} (${ride.eligibleVehicles[0].vehicle_color})`
+                      : `${ride.eligibleVehicles.length} vehicles available`}
+                  </div>
+                {:else if ride.eligibleVehicles && ride.eligibleVehicles.length === 0}
+                  <div class="text-xs text-red-600 mb-2 mr-4">
+                    No eligible vehicles (need {ride.riders + 1} seats)
+                  </div>
+                {/if}
+                <Button size="sm" onclick={() => openAcceptModal(ride)} disabled={isUpdating || (ride.eligibleVehicles && ride.eligibleVehicles.length === 0)}>
                   <CheckCircle class="w-4 h-4 mr-1" />Accept
                 </Button>
                 <Button variant="outline" size="sm" onclick={() => declineRide(ride.ride_id)} disabled={isUpdating}>
@@ -717,4 +877,70 @@
     onSubmit={submitCompletion}
     isSubmitting={isUpdating}
   />
+
+  <!-- Vehicle Selection Modal for Ride Acceptance -->
+  {#if showVehicleSelectionModal && selectedRideForAcceptance}
+    <Dialog.Root bind:open={showVehicleSelectionModal}>
+      <Dialog.Content class="sm:max-w-md bg-white">
+        <Dialog.Header>
+          <Dialog.Title>Select Vehicle</Dialog.Title>
+          <Dialog.Description>
+            Please select which vehicle you'll use.
+          </Dialog.Description>
+        </Dialog.Header>
+
+        <div class="space-y-3 mt-4">
+          {#each selectedRideForAcceptance.eligibleVehicles || [] as vehicle}
+            <button
+              type="button"
+              class="w-full p-4 border-2 rounded-lg text-left transition-colors {selectedVehicleId === vehicle.vehicle_id 
+                ? 'border-blue-600 bg-blue-50' 
+                : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'}"
+              onclick={() => selectedVehicleId = vehicle.vehicle_id}
+            >
+              <div class="flex items-center justify-between">
+                <div>
+                  <div class="font-medium text-gray-900">
+                    {vehicle.type_of_vehicle_enum} - {vehicle.vehicle_color}
+                  </div>
+                  <div class="text-sm text-gray-600 mt-1">
+                    {vehicle.nondriver_seats + 1} total seats ({vehicle.nondriver_seats} passengers)
+                  </div>
+                </div>
+                {#if selectedVehicleId === vehicle.vehicle_id}
+                  <CheckCircle class="w-5 h-5 text-blue-600" />
+                {/if}
+              </div>
+            </button>
+          {/each}
+        </div>
+
+        <Dialog.Footer class="mt-6">
+          <Button
+            variant="outline"
+            onclick={() => {
+              showVehicleSelectionModal = false;
+              selectedRideForAcceptance = null;
+              selectedVehicleId = null;
+            }}
+            disabled={isUpdating}
+          >
+            Cancel
+          </Button>
+          <Button
+            onclick={() => {
+              if (selectedVehicleId) {
+                void acceptRideWithVehicle(selectedRideForAcceptance.ride_id, selectedVehicleId);
+              } else {
+                alert('Please select a vehicle');
+              }
+            }}
+            disabled={isUpdating || !selectedVehicleId}
+          >
+            {isUpdating ? 'Accepting...' : 'Accept Ride'}
+          </Button>
+        </Dialog.Footer>
+      </Dialog.Content>
+    </Dialog.Root>
+  {/if}
 </div>
