@@ -67,9 +67,7 @@ function getRoleBasedHomePage(roles: string[]): string {
 
 export const load: PageServerLoad = async (event) => {
   const supabase = createSupabaseServerClient(event);
-  const {
-    data: { session }
-  } = await supabase.auth.getSession();
+  const { data: { session } } = await supabase.auth.getSession();
 
   // If already logged in, redirect to role-based home
   if (session) {
@@ -120,33 +118,28 @@ export const actions: Actions = {
     }
 
     // 2) Fetch user's profile to get org_id + roles
-    const {
-      data: profile,
-      error: profileError
-    } = await supabase
+    const { data: profile, error: profileError } = await supabase
       .from('staff_profiles')
       .select('org_id, role')
       .eq('user_id', data.session.user.id)
       .single();
 
-    const roles = Array.isArray(profile?.role) ? profile.role : (profile?.role ? [profile.role] : []);
     if (profileError) {
       console.error('Profile lookup error:', profileError);
       await supabase.auth.signOut();
       return fail(400, {
-        error:
-          'There was an issue verifying your profile. Please contact your administrator.'
+        error: 'There was an issue verifying your profile. Please contact your administrator.'
       });
     }
 
+    // Extract roles once (no duplicate!)
+    const roles = Array.isArray(profile?.role) ? profile.role : (profile?.role ? [profile.role] : []);
+
     // 3) If user has an org, check that org's status via org_status_enum
     if (profile?.org_id != null) {
-      const {
-        data: org,
-        error: orgError
-      } = await supabase
-        .from('organization') // ✅ table is singular
-        .select('org_id, org_status_enum') // ✅ only existing columns
+      const { data: org, error: orgError } = await supabase
+        .from('organization')
+        .select('org_id, org_status_enum')
         .eq('org_id', profile.org_id)
         .maybeSingle();
 
@@ -156,8 +149,7 @@ export const actions: Actions = {
         console.error('Org lookup error or missing org:', orgError, org);
         await supabase.auth.signOut();
         return fail(400, {
-          error:
-            'Unable to verify your organization. Please contact your administrator.'
+          error: 'Unable to verify your organization. Please contact your administrator.'
         });
       }
 
@@ -168,22 +160,18 @@ export const actions: Actions = {
 
       console.log('Normalized org_status_enum:', normalizedStatus);
 
-      const isInactive =
-        normalizedStatus === 'inactive' || normalizedStatus === 'disabled';
+      const isInactive = normalizedStatus === 'inactive' || normalizedStatus === 'disabled';
 
       if (isInactive) {
         await supabase.auth.signOut();
         return fail(400, {
-          error:
-            'Your organization is inactive. Please contact your administrator.'
+          error: 'Your organization is inactive. Please contact your administrator.'
         });
       }
     }
 
-    // 4) Org is OK (or no org) – compute roles + redirect
-    const roles = Array.isArray(profile?.role) ? profile.role : [];
+    // 4) Org is OK (or no org) – redirect to role-based home
     const homePage = getRoleBasedHomePage(roles);
-
     throw redirect(302, homePage);
   },
 
