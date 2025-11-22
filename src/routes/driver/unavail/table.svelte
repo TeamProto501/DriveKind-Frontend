@@ -65,7 +65,7 @@
     const endTime = row.end_time;
     const daysOfWeek = row.days_of_week;
 
-    if (type === "One-time") {
+    if (type === "One-Time") {
       if (allDay) {
         return startDate ? formatDate(startDate) : "—";
       }
@@ -76,7 +76,7 @@
       return [date, time].filter(Boolean).join(" • ");
     }
 
-    if (type === "Date range") {
+    if (type === "Date Range") {
       const dateRange = startDate && endDate && startDate !== endDate
         ? `${formatDate(startDate)} - ${formatDate(endDate)}`
         : startDate
@@ -113,9 +113,9 @@
 
   function getTypeBadgeClass(type: string): string {
     switch (type) {
-      case "One-time":
+      case "One-Time":
         return "bg-blue-100 text-blue-800 border-blue-200";
-      case "Date range":
+      case "Date Range":
         return "bg-purple-100 text-purple-800 border-purple-200";
       case "Weekly":
         return "bg-green-100 text-green-800 border-green-200";

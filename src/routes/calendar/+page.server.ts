@@ -19,23 +19,10 @@ function expandRecurringUnavailability(unavail: any[]): any[] {
       return;
     }
 
-    // For OLD schema (repeating_day)
-    if (item.repeating_day && !item.recurring) {
-      const dayMap: Record<string, number> = {
-        'Sunday': 0, 'Monday': 1, 'Tuesday': 2, 'Wednesday': 3,
-        'Thursday': 4, 'Friday': 5, 'Saturday': 6
-      };
-      
-      const targetDayOfWeek = dayMap[item.repeating_day];
-      
-      if (targetDayOfWeek === undefined) {
-        console.warn('Invalid repeating_day:', item.repeating_day);
-        return;
-      }
-      
+    // Handle "Weekly" recurring type (your new schema)
+    if (item.unavailability_type === 'Weekly' && item.days_of_week && Array.isArray(item.days_of_week)) {
       const startDate = new Date(today);
-      const endDate = new Date(today);
-      endDate.setFullYear(endDate.getFullYear() + 1);
+      const endDate = item.end_date ? new Date(item.end_date) : new Date(today.getTime() + 365 * 24 * 60 * 60 * 1000);
       
       let currentDate = new Date(startDate);
       const maxIterations = 365;
@@ -44,7 +31,8 @@ function expandRecurringUnavailability(unavail: any[]): any[] {
       while (currentDate <= endDate && iterations < maxIterations) {
         iterations++;
         
-        if (currentDate.getDay() === targetDayOfWeek) {
+        const dayOfWeek = currentDate.getDay();
+        if (item.days_of_week.includes(dayOfWeek)) {
           expanded.push({
             ...item,
             id: `${item.id}-${currentDate.toISOString().split('T')[0]}`,
@@ -59,76 +47,49 @@ function expandRecurringUnavailability(unavail: any[]): any[] {
       return;
     }
     
-    // For NEW schema (recurring = true)
-    if (item.recurring) {
-      if (!item.unavailable_date) {
-        console.warn('Recurring item missing unavailable_date:', item);
-        return;
-      }
-
-      const recordStartDate = new Date(item.unavailable_date);
-      const startDate = recordStartDate > today ? recordStartDate : today;
+    // Handle "Date Range" type
+    if (item.unavailability_type === 'Date Range' && item.start_date && item.end_date) {
+      const startDate = new Date(item.start_date);
+      const endDate = new Date(item.end_date);
       
-      const endDate = item.recurrence_end_date 
-        ? new Date(item.recurrence_end_date)
-        : new Date(startDate.getTime() + 365 * 24 * 60 * 60 * 1000);
-      
-      if (endDate < today) {
-        return;
-      }
-      
-      const pattern = item.recurrence_pattern || 'weekly';
-      const daysOfWeek = item.days_of_week || [startDate.getDay()];
-      
-      let currentDate = new Date(startDate);
-      const maxIterations = 365;
-      let iterations = 0;
-
-      while (currentDate <= endDate && iterations < maxIterations) {
-        iterations++;
+      // Only show if not completely in the past
+      if (endDate >= today) {
+        let currentDate = new Date(Math.max(startDate.getTime(), today.getTime()));
         
-        if (pattern === 'daily') {
+        while (currentDate <= endDate) {
           expanded.push({
             ...item,
             id: `${item.id}-${currentDate.toISOString().split('T')[0]}`,
             unavailable_date: currentDate.toISOString().split('T')[0],
-            is_recurring_instance: true,
+            is_range_instance: true,
             original_id: item.id
           });
-          currentDate.setDate(currentDate.getDate() + 1);
-        } else if (pattern === 'weekly') {
-          const dayOfWeek = currentDate.getDay();
-          if (daysOfWeek.includes(dayOfWeek)) {
-            expanded.push({
-              ...item,
-              id: `${item.id}-${currentDate.toISOString().split('T')[0]}`,
-              unavailable_date: currentDate.toISOString().split('T')[0],
-              is_recurring_instance: true,
-              original_id: item.id
-            });
-          }
-          currentDate.setDate(currentDate.getDate() + 1);
-        } else if (pattern === 'monthly') {
-          if (currentDate.getDate() === startDate.getDate()) {
-            expanded.push({
-              ...item,
-              id: `${item.id}-${currentDate.toISOString().split('T')[0]}`,
-              unavailable_date: currentDate.toISOString().split('T')[0],
-              is_recurring_instance: true,
-              original_id: item.id
-            });
-          }
           currentDate.setDate(currentDate.getDate() + 1);
         }
       }
       return;
     }
     
-    // Non-recurring events: only show if not in the past and has valid date
-    if (item.unavailable_date) {
-      const eventDate = new Date(item.unavailable_date);
+    // Handle "One-Time" type (single date)
+    if (item.unavailability_type === 'One-Time' && item.start_date) {
+      const eventDate = new Date(item.start_date);
       if (eventDate >= today) {
-        expanded.push(item);
+        expanded.push({
+          ...item,
+          unavailable_date: item.start_date  // Map start_date to unavailable_date for the calendar
+        });
+      }
+      return;
+    }
+    
+    // Fallback for any other format
+    if (item.start_date) {
+      const eventDate = new Date(item.start_date);
+      if (eventDate >= today) {
+        expanded.push({
+          ...item,
+          unavailable_date: item.start_date
+        });
       }
     }
   });
@@ -166,7 +127,7 @@ export const load = async (event) => {
     .from('driver_unavailability')
     .select('*')
     .eq('user_id', session.user.id)
-    .order('unavailable_date', { ascending: true });
+    .order('start_date', { ascending: true });
 
   if (myUnavailError) {
     console.error('Error fetching my unavailability:', myUnavailError);
@@ -191,7 +152,7 @@ export const load = async (event) => {
     const { data: allUnavailRaw, error: allUnavailError } = await supabase
       .from('driver_unavailability')
       .select('*')
-      .order('unavailable_date', { ascending: true });
+      .order('start_date', { ascending: true });
 
     if (allUnavailError) {
       console.error('Error fetching all unavailability:', allUnavailError);
