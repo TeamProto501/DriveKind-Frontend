@@ -110,7 +110,7 @@ export const actions: Actions = {
 
       const insertData = {
         user_id: session.user.id,
-        unavailability_type: "One-time",
+        unavailability_type: "One-Time",
         all_day: allDay,
         start_date: dateRaw,
         end_date: null,
@@ -201,7 +201,7 @@ export const actions: Actions = {
 
       const insertData = {
         user_id: session.user.id,
-        unavailability_type: "Date range",
+        unavailability_type: "Date Range",
         all_day: allDay,
         start_date: startDateRaw,
         end_date: endDateRaw,
