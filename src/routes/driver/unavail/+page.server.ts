@@ -1,4 +1,6 @@
-// src/routes/driver/unavail/+page.server.ts
+// DEBUGGING VERSION - Check your server logs after using this
+// This will show the exact error message from Supabase
+
 import { createSupabaseServerClient } from "$lib/supabase.server";
 import { redirect, fail } from "@sveltejs/kit";
 import type { Actions, PageServerLoad } from "./$types";
@@ -11,7 +13,6 @@ export const load: PageServerLoad = async (event) => {
     throw redirect(302, "/login");
   }
 
-  // Fetch all unavailability for this driver
   const { data: unavailabilityData, error: unavailError } = await supabase
     .from("driver_unavailability")
     .select("*")
@@ -26,19 +27,17 @@ export const load: PageServerLoad = async (event) => {
   return { data: unavailabilityData || [] };
 };
 
-// Helper: Normalize time input (HH:MM format)
 function normalizeTime(time: string | null): string | null {
   if (!time) return null;
   const parts = time.split(":");
   if (parts.length >= 2) {
     const hh = parts[0]?.padStart(2, "0") ?? "00";
     const mm = parts[1]?.padStart(2, "0") ?? "00";
-    return `${hh}:${mm}`;
+    return `${hh}:${mm}:00`; // Add seconds for time without time zone
   }
   return time;
 }
 
-// Helper: Validate date is in the future
 function validateFutureDate(dateStr: string): boolean {
   try {
     const date = new Date(dateStr);
@@ -50,9 +49,8 @@ function validateFutureDate(dateStr: string): boolean {
   }
 }
 
-// Helper: Validate time range
 function validateTimeRange(startTime: string | null, endTime: string | null): boolean {
-  if (!startTime || !endTime) return true; // Skip if either is null
+  if (!startTime || !endTime) return true;
   try {
     const [sh, sm] = startTime.split(":").map(Number);
     const [eh, em] = endTime.split(":").map(Number);
@@ -65,10 +63,8 @@ function validateTimeRange(startTime: string | null, endTime: string | null): bo
 }
 
 export const actions: Actions = {
-  // =========================
-  // ONE-TIME (specific date)
-  // =========================
   createSpecificUnavailability: async (event) => {
+    console.log("=== CREATE SPECIFIC UNAVAILABILITY ===");
     try {
       const supabase = createSupabaseServerClient(event);
       const { data: { session } } = await supabase.auth.getSession();
@@ -84,7 +80,14 @@ export const actions: Actions = {
       const endTimeRaw = formData.get("endTime") as string;
       const reason = (formData.get("reason") as string) || null;
 
-      // Validation
+      console.log("Form data received:", {
+        dateRaw,
+        allDay,
+        startTimeRaw,
+        endTimeRaw,
+        reason
+      });
+
       if (!dateRaw) {
         return fail(400, { error: "Please select a date" });
       }
@@ -105,37 +108,48 @@ export const actions: Actions = {
         }
       }
 
-      // Insert
-      const { error: insertError } = await supabase
+      const insertData = {
+        user_id: session.user.id,
+        unavailability_type: "One-time",
+        all_day: allDay,
+        start_date: dateRaw,
+        end_date: null,
+        start_time,
+        end_time,
+        days_of_week: null,
+        reason
+      };
+
+      console.log("About to insert:", insertData);
+
+      const { data: inserted, error: insertError } = await supabase
         .from("driver_unavailability")
-        .insert({
-          user_id: session.user.id,
-          unavailability_type: "One-time",
-          all_day: allDay,
-          start_date: dateRaw,
-          end_date: null,
-          start_time,
-          end_time,
-          days_of_week: null,
-          reason
-        });
+        .insert(insertData)
+        .select();
 
       if (insertError) {
-        console.error("Error inserting one-time unavailability:", insertError);
-        return fail(500, { error: "Failed to save unavailability" });
+        console.error("=== SUPABASE INSERT ERROR ===");
+        console.error("Error object:", insertError);
+        console.error("Error message:", insertError.message);
+        console.error("Error details:", insertError.details);
+        console.error("Error hint:", insertError.hint);
+        console.error("Error code:", insertError.code);
+        return fail(500, { 
+          error: `Database error: ${insertError.message}. Check server logs for details.` 
+        });
       }
 
+      console.log("Successfully inserted:", inserted);
       return { success: true };
-    } catch (err) {
-      console.error("Error creating specific unavailability:", err);
-      return fail(500, { error: "An unexpected error occurred" });
+    } catch (err: any) {
+      console.error("=== CAUGHT EXCEPTION ===");
+      console.error(err);
+      return fail(500, { error: `Exception: ${err.message}` });
     }
   },
 
-  // =========================
-  // DATE RANGE (multi-day)
-  // =========================
   createRangeUnavailability: async (event) => {
+    console.log("=== CREATE RANGE UNAVAILABILITY ===");
     try {
       const supabase = createSupabaseServerClient(event);
       const { data: { session } } = await supabase.auth.getSession();
@@ -152,7 +166,15 @@ export const actions: Actions = {
       const endTimeRaw = formData.get("endTime") as string;
       const reason = (formData.get("reason") as string) || null;
 
-      // Validation
+      console.log("Form data received:", {
+        startDateRaw,
+        endDateRaw,
+        allDay,
+        startTimeRaw,
+        endTimeRaw,
+        reason
+      });
+
       if (!startDateRaw || !endDateRaw) {
         return fail(400, { error: "Please provide both start and end dates" });
       }
@@ -177,37 +199,48 @@ export const actions: Actions = {
         }
       }
 
-      // Insert
-      const { error: insertError } = await supabase
+      const insertData = {
+        user_id: session.user.id,
+        unavailability_type: "Date range",
+        all_day: allDay,
+        start_date: startDateRaw,
+        end_date: endDateRaw,
+        start_time,
+        end_time,
+        days_of_week: null,
+        reason
+      };
+
+      console.log("About to insert:", insertData);
+
+      const { data: inserted, error: insertError } = await supabase
         .from("driver_unavailability")
-        .insert({
-          user_id: session.user.id,
-          unavailability_type: "Date range",
-          all_day: allDay,
-          start_date: startDateRaw,
-          end_date: endDateRaw,
-          start_time,
-          end_time,
-          days_of_week: null,
-          reason
-        });
+        .insert(insertData)
+        .select();
 
       if (insertError) {
-        console.error("Error inserting range unavailability:", insertError);
-        return fail(500, { error: "Failed to save date range unavailability" });
+        console.error("=== SUPABASE INSERT ERROR ===");
+        console.error("Error object:", insertError);
+        console.error("Error message:", insertError.message);
+        console.error("Error details:", insertError.details);
+        console.error("Error hint:", insertError.hint);
+        console.error("Error code:", insertError.code);
+        return fail(500, { 
+          error: `Database error: ${insertError.message}. Check server logs for details.` 
+        });
       }
 
+      console.log("Successfully inserted:", inserted);
       return { success: true };
-    } catch (err) {
-      console.error("Error creating range unavailability:", err);
-      return fail(500, { error: "An unexpected error occurred" });
+    } catch (err: any) {
+      console.error("=== CAUGHT EXCEPTION ===");
+      console.error(err);
+      return fail(500, { error: `Exception: ${err.message}` });
     }
   },
 
-  // =========================
-  // WEEKLY RECURRING
-  // =========================
   createRegularUnavailability: async (event) => {
+    console.log("=== CREATE WEEKLY UNAVAILABILITY ===");
     try {
       const supabase = createSupabaseServerClient(event);
       const { data: { session } } = await supabase.auth.getSession();
@@ -224,13 +257,21 @@ export const actions: Actions = {
       const endDateRaw = (formData.get("endDate") as string) || null;
       const reason = (formData.get("reason") as string) || null;
 
-      // Validation
+      console.log("Form data received:", {
+        daysRaw,
+        allDay,
+        startTimeRaw,
+        endTimeRaw,
+        endDateRaw,
+        reason
+      });
+
       if (!daysRaw || daysRaw.length === 0) {
         return fail(400, { error: "Please select at least one day of the week" });
       }
 
-      // Convert day strings to numbers
       const daysOfWeek = daysRaw.map(d => parseInt(d, 10)).filter(n => !isNaN(n));
+      console.log("Parsed days of week:", daysOfWeek);
 
       if (daysOfWeek.length === 0) {
         return fail(400, { error: "Invalid days selected" });
@@ -252,36 +293,46 @@ export const actions: Actions = {
         return fail(400, { error: "End date must be in the future" });
       }
 
-      // Insert
-      const { error: insertError } = await supabase
+      const insertData = {
+        user_id: session.user.id,
+        unavailability_type: "Weekly",
+        all_day: allDay,
+        start_date: null,
+        end_date: endDateRaw,
+        start_time,
+        end_time,
+        days_of_week: daysOfWeek,
+        reason
+      };
+
+      console.log("About to insert:", insertData);
+
+      const { data: inserted, error: insertError } = await supabase
         .from("driver_unavailability")
-        .insert({
-          user_id: session.user.id,
-          unavailability_type: "Weekly",
-          all_day: allDay,
-          start_date: null,
-          end_date: endDateRaw,
-          start_time,
-          end_time,
-          days_of_week: daysOfWeek,
-          reason
-        });
+        .insert(insertData)
+        .select();
 
       if (insertError) {
-        console.error("Error inserting weekly unavailability:", insertError);
-        return fail(500, { error: "Failed to save weekly unavailability" });
+        console.error("=== SUPABASE INSERT ERROR ===");
+        console.error("Error object:", insertError);
+        console.error("Error message:", insertError.message);
+        console.error("Error details:", insertError.details);
+        console.error("Error hint:", insertError.hint);
+        console.error("Error code:", insertError.code);
+        return fail(500, { 
+          error: `Database error: ${insertError.message}. Check server logs for details.` 
+        });
       }
 
+      console.log("Successfully inserted:", inserted);
       return { success: true };
-    } catch (err) {
-      console.error("Error creating weekly unavailability:", err);
-      return fail(500, { error: "An unexpected error occurred" });
+    } catch (err: any) {
+      console.error("=== CAUGHT EXCEPTION ===");
+      console.error(err);
+      return fail(500, { error: `Exception: ${err.message}` });
     }
   },
 
-  // =========================
-  // DELETE
-  // =========================
   deleteUnavailability: async (event) => {
     try {
       const supabase = createSupabaseServerClient(event);
@@ -298,7 +349,6 @@ export const actions: Actions = {
         return fail(400, { error: "Invalid unavailability ID" });
       }
 
-      // Delete only if it belongs to this user
       const { error: deleteError } = await supabase
         .from("driver_unavailability")
         .delete()
