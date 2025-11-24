@@ -1,0 +1,369 @@
+// DEBUGGING VERSION - Check your server logs after using this
+// This will show the exact error message from Supabase
+
+import { createSupabaseServerClient } from "$lib/supabase.server";
+import { redirect, fail } from "@sveltejs/kit";
+import type { Actions, PageServerLoad } from "./$types";
+
+export const load: PageServerLoad = async (event) => {
+  const supabase = createSupabaseServerClient(event);
+  const { data: { session } } = await supabase.auth.getSession();
+
+  if (!session) {
+    throw redirect(302, "/login");
+  }
+
+  const { data: unavailabilityData, error: unavailError } = await supabase
+    .from("driver_unavailability")
+    .select("*")
+    .eq("user_id", session.user.id)
+    .order("created_at", { ascending: false });
+
+  if (unavailError) {
+    console.error("Error fetching unavailability:", unavailError);
+    return { data: [], error: "Failed to load unavailability data" };
+  }
+
+  return { data: unavailabilityData || [] };
+};
+
+function normalizeTime(time: string | null): string | null {
+  if (!time) return null;
+  const parts = time.split(":");
+  if (parts.length >= 2) {
+    const hh = parts[0]?.padStart(2, "0") ?? "00";
+    const mm = parts[1]?.padStart(2, "0") ?? "00";
+    return `${hh}:${mm}:00`; // Add seconds for time without time zone
+  }
+  return time;
+}
+
+function validateFutureDate(dateStr: string): boolean {
+  try {
+    const date = new Date(dateStr);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return date >= today;
+  } catch {
+    return false;
+  }
+}
+
+function validateTimeRange(startTime: string | null, endTime: string | null): boolean {
+  if (!startTime || !endTime) return true;
+  try {
+    const [sh, sm] = startTime.split(":").map(Number);
+    const [eh, em] = endTime.split(":").map(Number);
+    const startMinutes = sh * 60 + sm;
+    const endMinutes = eh * 60 + em;
+    return endMinutes > startMinutes;
+  } catch {
+    return false;
+  }
+}
+
+export const actions: Actions = {
+  createSpecificUnavailability: async (event) => {
+    console.log("=== CREATE SPECIFIC UNAVAILABILITY ===");
+    try {
+      const supabase = createSupabaseServerClient(event);
+      const { data: { session } } = await supabase.auth.getSession();
+
+      if (!session) {
+        return fail(401, { error: "You must be logged in" });
+      }
+
+      const formData = await event.request.formData();
+      const dateRaw = formData.get("date") as string;
+      const allDay = formData.get("allDay") === "true";
+      const startTimeRaw = formData.get("startTime") as string;
+      const endTimeRaw = formData.get("endTime") as string;
+      const reason = (formData.get("reason") as string) || null;
+
+      console.log("Form data received:", {
+        dateRaw,
+        allDay,
+        startTimeRaw,
+        endTimeRaw,
+        reason
+      });
+
+      if (!dateRaw) {
+        return fail(400, { error: "Please select a date" });
+      }
+
+      if (!validateFutureDate(dateRaw)) {
+        return fail(400, { error: "Date must be today or in the future" });
+      }
+
+      const start_time = allDay ? null : normalizeTime(startTimeRaw);
+      const end_time = allDay ? null : normalizeTime(endTimeRaw);
+
+      if (!allDay) {
+        if (!start_time || !end_time) {
+          return fail(400, { error: "Please provide both start and end times" });
+        }
+        if (!validateTimeRange(start_time, end_time)) {
+          return fail(400, { error: "End time must be after start time" });
+        }
+      }
+
+      const insertData = {
+        user_id: session.user.id,
+        unavailability_type: "One-Time",
+        all_day: allDay,
+        start_date: dateRaw,
+        end_date: null,
+        start_time,
+        end_time,
+        days_of_week: null,
+        reason
+      };
+
+      console.log("About to insert:", insertData);
+
+      const { data: inserted, error: insertError } = await supabase
+        .from("driver_unavailability")
+        .insert(insertData)
+        .select();
+
+      if (insertError) {
+        console.error("=== SUPABASE INSERT ERROR ===");
+        console.error("Error object:", insertError);
+        console.error("Error message:", insertError.message);
+        console.error("Error details:", insertError.details);
+        console.error("Error hint:", insertError.hint);
+        console.error("Error code:", insertError.code);
+        return fail(500, { 
+          error: `Database error: ${insertError.message}. Check server logs for details.` 
+        });
+      }
+
+      console.log("Successfully inserted:", inserted);
+      return { success: true };
+    } catch (err: any) {
+      console.error("=== CAUGHT EXCEPTION ===");
+      console.error(err);
+      return fail(500, { error: `Exception: ${err.message}` });
+    }
+  },
+
+  createRangeUnavailability: async (event) => {
+    console.log("=== CREATE RANGE UNAVAILABILITY ===");
+    try {
+      const supabase = createSupabaseServerClient(event);
+      const { data: { session } } = await supabase.auth.getSession();
+
+      if (!session) {
+        return fail(401, { error: "You must be logged in" });
+      }
+
+      const formData = await event.request.formData();
+      const startDateRaw = formData.get("startDate") as string;
+      const endDateRaw = formData.get("endDate") as string;
+      const allDay = formData.get("allDay") === "true";
+      const startTimeRaw = formData.get("startTime") as string;
+      const endTimeRaw = formData.get("endTime") as string;
+      const reason = (formData.get("reason") as string) || null;
+
+      console.log("Form data received:", {
+        startDateRaw,
+        endDateRaw,
+        allDay,
+        startTimeRaw,
+        endTimeRaw,
+        reason
+      });
+
+      if (!startDateRaw || !endDateRaw) {
+        return fail(400, { error: "Please provide both start and end dates" });
+      }
+
+      if (endDateRaw < startDateRaw) {
+        return fail(400, { error: "End date must be on or after start date" });
+      }
+
+      if (!validateFutureDate(startDateRaw)) {
+        return fail(400, { error: "Start date must be today or in the future" });
+      }
+
+      const start_time = allDay ? null : normalizeTime(startTimeRaw);
+      const end_time = allDay ? null : normalizeTime(endTimeRaw);
+
+      if (!allDay) {
+        if (!start_time || !end_time) {
+          return fail(400, { error: "Please provide both start and end times" });
+        }
+        if (!validateTimeRange(start_time, end_time)) {
+          return fail(400, { error: "End time must be after start time" });
+        }
+      }
+
+      const insertData = {
+        user_id: session.user.id,
+        unavailability_type: "Date Range",
+        all_day: allDay,
+        start_date: startDateRaw,
+        end_date: endDateRaw,
+        start_time,
+        end_time,
+        days_of_week: null,
+        reason
+      };
+
+      console.log("About to insert:", insertData);
+
+      const { data: inserted, error: insertError } = await supabase
+        .from("driver_unavailability")
+        .insert(insertData)
+        .select();
+
+      if (insertError) {
+        console.error("=== SUPABASE INSERT ERROR ===");
+        console.error("Error object:", insertError);
+        console.error("Error message:", insertError.message);
+        console.error("Error details:", insertError.details);
+        console.error("Error hint:", insertError.hint);
+        console.error("Error code:", insertError.code);
+        return fail(500, { 
+          error: `Database error: ${insertError.message}. Check server logs for details.` 
+        });
+      }
+
+      console.log("Successfully inserted:", inserted);
+      return { success: true };
+    } catch (err: any) {
+      console.error("=== CAUGHT EXCEPTION ===");
+      console.error(err);
+      return fail(500, { error: `Exception: ${err.message}` });
+    }
+  },
+
+  createRegularUnavailability: async (event) => {
+    console.log("=== CREATE WEEKLY UNAVAILABILITY ===");
+    try {
+      const supabase = createSupabaseServerClient(event);
+      const { data: { session } } = await supabase.auth.getSession();
+
+      if (!session) {
+        return fail(401, { error: "You must be logged in" });
+      }
+
+      const formData = await event.request.formData();
+      const daysRaw = formData.getAll("daysOfWeek") as string[];
+      const allDay = formData.get("allDay") === "true";
+      const startTimeRaw = formData.get("startTime") as string;
+      const endTimeRaw = formData.get("endTime") as string;
+      const endDateRaw = (formData.get("endDate") as string) || null;
+      const reason = (formData.get("reason") as string) || null;
+
+      console.log("Form data received:", {
+        daysRaw,
+        allDay,
+        startTimeRaw,
+        endTimeRaw,
+        endDateRaw,
+        reason
+      });
+
+      if (!daysRaw || daysRaw.length === 0) {
+        return fail(400, { error: "Please select at least one day of the week" });
+      }
+
+      const daysOfWeek = daysRaw.map(d => parseInt(d, 10)).filter(n => !isNaN(n));
+      console.log("Parsed days of week:", daysOfWeek);
+
+      if (daysOfWeek.length === 0) {
+        return fail(400, { error: "Invalid days selected" });
+      }
+
+      const start_time = allDay ? null : normalizeTime(startTimeRaw);
+      const end_time = allDay ? null : normalizeTime(endTimeRaw);
+
+      if (!allDay) {
+        if (!start_time || !end_time) {
+          return fail(400, { error: "Please provide both start and end times" });
+        }
+        if (!validateTimeRange(start_time, end_time)) {
+          return fail(400, { error: "End time must be after start time" });
+        }
+      }
+
+      if (endDateRaw && !validateFutureDate(endDateRaw)) {
+        return fail(400, { error: "End date must be in the future" });
+      }
+
+      const insertData = {
+        user_id: session.user.id,
+        unavailability_type: "Weekly",
+        all_day: allDay,
+        start_date: null,
+        end_date: endDateRaw,
+        start_time,
+        end_time,
+        days_of_week: daysOfWeek,
+        reason
+      };
+
+      console.log("About to insert:", insertData);
+
+      const { data: inserted, error: insertError } = await supabase
+        .from("driver_unavailability")
+        .insert(insertData)
+        .select();
+
+      if (insertError) {
+        console.error("=== SUPABASE INSERT ERROR ===");
+        console.error("Error object:", insertError);
+        console.error("Error message:", insertError.message);
+        console.error("Error details:", insertError.details);
+        console.error("Error hint:", insertError.hint);
+        console.error("Error code:", insertError.code);
+        return fail(500, { 
+          error: `Database error: ${insertError.message}. Check server logs for details.` 
+        });
+      }
+
+      console.log("Successfully inserted:", inserted);
+      return { success: true };
+    } catch (err: any) {
+      console.error("=== CAUGHT EXCEPTION ===");
+      console.error(err);
+      return fail(500, { error: `Exception: ${err.message}` });
+    }
+  },
+
+  deleteUnavailability: async (event) => {
+    try {
+      const supabase = createSupabaseServerClient(event);
+      const { data: { session } } = await supabase.auth.getSession();
+
+      if (!session) {
+        return fail(401, { error: "You must be logged in" });
+      }
+
+      const formData = await event.request.formData();
+      const id = formData.get("id") as string;
+
+      if (!id) {
+        return fail(400, { error: "Invalid unavailability ID" });
+      }
+
+      const { error: deleteError } = await supabase
+        .from("driver_unavailability")
+        .delete()
+        .eq("id", parseInt(id))
+        .eq("user_id", session.user.id);
+
+      if (deleteError) {
+        console.error("Error deleting unavailability:", deleteError);
+        return fail(500, { error: "Failed to delete unavailability" });
+      }
+
+      return { success: true };
+    } catch (err) {
+      console.error("Error deleting unavailability:", err);
+      return fail(500, { error: "An unexpected error occurred" });
+    }
+  }
+};

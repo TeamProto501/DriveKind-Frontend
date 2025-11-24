@@ -173,6 +173,10 @@
         dispatcherItems.push({ label: "Destinations", href: "/dispatcher/destinations" });
       }
 
+      if (hasRole(["Dispatcher", "WSPS Dispatcher Add-on", "BPSR Dispatcher Add-on"])) {
+        dispatcherItems.push({ label: "Driver Schedules", href: "/dispatcher/driver-schedules" });
+      }
+
       groups.push({
         label: "Dispatcher",
         icon: "Truck",
@@ -234,6 +238,10 @@
       // Vehicle Management - Admin, Super Admin only
       if (hasRole(["Admin", "Super Admin"])) {
         adminItems.push({ label: "Vehicle Management", href: "/admin/vehicle_management" });
+      }
+
+      if (hasRole(["Admin", "Super Admin"])) {
+        adminItems.push({ label: "Schedule Management", href: "/admin/schedules" });
       }
 
       // Database - Admin, Super Admin, Report View Only, Report Manager, List Manager
