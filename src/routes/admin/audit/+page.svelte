@@ -467,7 +467,7 @@
   function openCreate() {
     newSelectedDispatcherId = "";
     newSelectedClientId = "";
-    newCallTimeLocal = "";
+    newCallTimeLocal = getNowLocal();
     newPhoneNumber = "";
     newCallType = "";
     newOtherType = "";
@@ -911,7 +911,7 @@
     </div>
   {/if}
 
-  <!-- CREATE CALL MODAL -->
+  <!-- CREATE CALL MODAL - DEBUG VERSION -->
   {#if showCreateModal}
     <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
       <div class="w-full max-w-xl rounded-lg bg-white p-6 shadow-lg">
@@ -928,41 +928,51 @@
           </button>
         </div>
 
+        <!-- Debug info display -->
+        <div class="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded text-xs">
+          <div><strong>Debug Info:</strong></div>
+          <div>Dispatcher: {newSelectedDispatcherId || '(empty)'}</div>
+          <div>Client: {newSelectedClientId || '(empty)'}</div>
+          <div>Call Time: {newCallTimeLocal || '(empty)'}</div>
+          <div>Phone: {newPhoneNumber || '(empty)'}</div>
+          <div>Call Type: {newCallType || '(empty)'}</div>
+          <div>First Name: {newCallerFirstName || '(empty)'}</div>
+          <div>Last Name: {newCallerLastName || '(empty)'}</div>
+        </div>
+
         <form 
           method="POST" 
           action="?/createCall" 
           class="space-y-4"
           onsubmit={(e) => {
-            console.log("=== FORM SUBMITTING ===");
-            console.log("Dispatcher:", newSelectedDispatcherId);
-            console.log("Client:", newSelectedClientId);
-            console.log("Call time:", newCallTimeLocal);
-            console.log("Phone:", newPhoneNumber);
-            console.log("Call type:", newCallType);
-            console.log("Caller first:", newCallerFirstName);
-            console.log("Caller last:", newCallerLastName);
+            e.preventDefault(); // PREVENT SUBMISSION FOR NOW
             
-            // Check for required fields manually
-            if (!newSelectedDispatcherId) {
-              e.preventDefault();
-              alert("Please select a dispatcher");
-              return false;
+            console.log("=== FORM DATA CHECK ===");
+            const formData = new FormData(e.currentTarget);
+            for (const [key, value] of formData.entries()) {
+              console.log(`${key}: ${value}`);
             }
-            if (!newCallTimeLocal) {
-              e.preventDefault();
-              alert("Please select a call time");
-              return false;
-            }
-            if (!newCallType) {
-              e.preventDefault();
-              alert("Please select a call type");
-              return false;
-            }
+            
+            // Validation checks
+            const errors = [];
+            if (!newSelectedDispatcherId) errors.push("No dispatcher selected");
+            if (!newCallTimeLocal) errors.push("No call time");
+            if (!newCallType) errors.push("No call type");
             if (!newSelectedClientId && (!newCallerFirstName || !newCallerLastName)) {
-              e.preventDefault();
-              alert("Please enter caller first and last name");
+              errors.push("No client AND missing caller name");
+            }
+            
+            if (errors.length > 0) {
+              alert("Validation Errors:\n" + errors.join("\n"));
+              console.error("Validation errors:", errors);
               return false;
             }
+            
+            alert("All validation passed! Check console for form data. Remove e.preventDefault() to actually submit.");
+            console.log("✅ Form would submit now");
+            
+            // UNCOMMENT THIS LINE TO ACTUALLY SUBMIT:
+            // e.currentTarget.submit();
           }}
         >
           <!-- Dispatcher / Client selects -->
@@ -977,9 +987,7 @@
                 required
                 class="mt-1 block w-full rounded-md border border-gray-300 px-2 py-1 text-sm bg-white"
               >
-                <option value="">
-                  - Select dispatcher -
-                </option>
+                <option value="">- Select dispatcher -</option>
                 {#each dispatcherOptions as opt}
                   <option value={opt.value}>{opt.label}</option>
                 {/each}
@@ -996,9 +1004,7 @@
                 onchange={handleNewClientChange}
                 class="mt-1 block w-full rounded-md border border-gray-300 px-2 py-1 text-sm bg-white"
               >
-                <option value="">
-                  - No client selected -
-                </option>
+                <option value="">- No client selected -</option>
                 {#each clientOptions as opt}
                   <option value={opt.value}>{opt.label}</option>
                 {/each}
@@ -1044,9 +1050,7 @@
                 required
                 class="mt-1 block w-full rounded-md border border-gray-300 px-2 py-1 text-sm bg-white"
               >
-                <option value="">
-                  - Select call type -
-                </option>
+                <option value="">- Select call type -</option>
                 {#each CALL_TYPE_OPTIONS as opt}
                   <option value={opt}>{opt}</option>
                 {/each}
@@ -1068,7 +1072,7 @@
                   class="mt-1 block w-full rounded-md border border-gray-300 px-2 py-1 text-sm"
                 />
               {:else}
-                <input type="hidden" name="other_type" value={newOtherType} />
+                <input type="hidden" name="other_type" value="" />
               {/if}
             </div>
             <div>
@@ -1114,7 +1118,6 @@
             </div>
           </div>
 
-          <!-- keep us on calls tab -->
           <input type="hidden" name="stayOnTab" value="calls" />
 
           <div class="mt-5 flex justify-end gap-3">
@@ -1129,7 +1132,7 @@
               type="submit"
               class="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
             >
-              Create Call
+              Create Call (DEBUG MODE)
             </button>
           </div>
         </form>
