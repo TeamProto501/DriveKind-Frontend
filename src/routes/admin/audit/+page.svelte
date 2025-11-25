@@ -928,12 +928,48 @@
           </button>
         </div>
 
-        <form method="POST" action="?/createCall" class="space-y-4">
+        <form 
+          method="POST" 
+          action="?/createCall" 
+          class="space-y-4"
+          onsubmit={(e) => {
+            console.log("=== FORM SUBMITTING ===");
+            console.log("Dispatcher:", newSelectedDispatcherId);
+            console.log("Client:", newSelectedClientId);
+            console.log("Call time:", newCallTimeLocal);
+            console.log("Phone:", newPhoneNumber);
+            console.log("Call type:", newCallType);
+            console.log("Caller first:", newCallerFirstName);
+            console.log("Caller last:", newCallerLastName);
+            
+            // Check for required fields manually
+            if (!newSelectedDispatcherId) {
+              e.preventDefault();
+              alert("Please select a dispatcher");
+              return false;
+            }
+            if (!newCallTimeLocal) {
+              e.preventDefault();
+              alert("Please select a call time");
+              return false;
+            }
+            if (!newCallType) {
+              e.preventDefault();
+              alert("Please select a call type");
+              return false;
+            }
+            if (!newSelectedClientId && (!newCallerFirstName || !newCallerLastName)) {
+              e.preventDefault();
+              alert("Please enter caller first and last name");
+              return false;
+            }
+          }}
+        >
           <!-- Dispatcher / Client selects -->
           <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div>
               <label class="block text-xs font-medium text-gray-600">
-                Dispatcher
+                Dispatcher <span class="text-red-500">*</span>
               </label>
               <select
                 name="user_id"
@@ -973,7 +1009,7 @@
           <!-- Call time -->
           <div>
             <label class="block text-xs font-medium text-gray-700">
-              Call Time
+              Call Time <span class="text-red-500">*</span>
             </label>
             <input
               type="datetime-local"
@@ -1000,7 +1036,7 @@
             </div>
             <div>
               <label class="block text-xs font-medium text-gray-700">
-                Call Type
+                Call Type <span class="text-red-500">*</span>
               </label>
               <select
                 name="call_type"
@@ -1052,7 +1088,7 @@
           <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div>
               <label class="block text-xs font-medium text-gray-700">
-                Caller First Name
+                Caller First Name {#if !newCallerLockedToClient}<span class="text-red-500">*</span>{/if}
               </label>
               <input
                 type="text"
@@ -1065,7 +1101,7 @@
             </div>
             <div>
               <label class="block text-xs font-medium text-gray-700">
-                Caller Last Name
+                Caller Last Name {#if !newCallerLockedToClient}<span class="text-red-500">*</span>{/if}
               </label>
               <input
                 type="text"
