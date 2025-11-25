@@ -271,6 +271,7 @@
     rides_phone_number: "",
     client_min_age: "",
     min_days_in_advance_for_ride_requests: "",
+    client_max_weekly_rides: "",
     // Contacts (no phone fields)
     primary_contact_name: "",
     primary_contact_email: "",
@@ -684,6 +685,7 @@
       coerceNumbers(payload, [
         "client_min_age",
         "min_days_in_advance_for_ride_requests",
+        "client_max_weekly_rides",
       ]);
       if ("days_off" in payload) {
         payload["days-off"] = payload.days_off;
@@ -741,6 +743,7 @@
       coerceNumbers(payload, [
         "client_min_age",
         "min_days_in_advance_for_ride_requests",
+        "client_max_weekly_rides",
       ]);
       if ("days_off" in payload) {
         payload["days-off"] = payload.days_off;
@@ -1467,6 +1470,18 @@
                   />
                 </div>
               </div>
+
+              <div>
+                <label class="block text-sm font-medium">
+                  Max Weekly Rides (optional)
+                </label>
+                <input
+                  type="number"
+                  bind:value={form.client_max_weekly_rides}
+                  class="mt-1 w-full border rounded-md px-3 py-2 border-gray-300"
+                  placeholder="Leave blank for no limit"
+                />
+              </div>
             </div>
           {/if}
 
@@ -2080,6 +2095,17 @@
                         : "border-gray-300")}
                   />
                 </div>
+                <div>
+                <label class="block text-sm font-medium">
+                  Max Weekly Rides (optional)
+                </label>
+                <input
+                  type="number"
+                  bind:value={form.client_max_weekly_rides}
+                  class="mt-1 w-full border rounded-md px-3 py-2 border-gray-300"
+                  placeholder="Leave blank for no limit"
+                />
+              </div>
                 <div>
                   <label class="block text-sm font-medium"
                     >{labelWithRequired(
