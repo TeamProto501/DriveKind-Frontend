@@ -1,12 +1,16 @@
 import type { RequestHandler } from './$types';
 import { json } from '@sveltejs/kit';
 import { createSupabaseServerClient } from '$lib/supabase.server';
+import { canDeleteDestinations, type Role } from '$lib/utils/permissions';
 
 export const POST: RequestHandler = async (event) => {
   const supabase = createSupabaseServerClient(event);
-  
+
   // Verify session
-  const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+  const {
+    data: { session },
+    error: sessionError
+  } = await supabase.auth.getSession();
   if (sessionError || !session) {
     return json({ error: 'Unauthorized' }, { status: 401 });
   }
@@ -28,11 +32,14 @@ export const POST: RequestHandler = async (event) => {
     return json({ error: 'Profile not found' }, { status: 404 });
   }
 
-  // Check if user has permission (Admin or Super Admin)
-  const roles = Array.isArray(profile.role) ? profile.role : (profile.role ? [profile.role] : []);
-  const hasPermission = roles.some(r => ['Admin', 'Super Admin'].includes(r));
-  
-  if (!hasPermission) {
+  const roles: Role[] = Array.isArray(profile.role)
+    ? profile.role
+    : profile.role
+      ? [profile.role]
+      : [];
+
+  // Use shared permission helper for DELETE
+  if (!canDeleteDestinations(roles)) {
     return json({ error: 'Insufficient permissions' }, { status: 403 });
   }
 
@@ -64,4 +71,3 @@ export const POST: RequestHandler = async (event) => {
 
   return json({ success: true }, { status: 200 });
 };
-
