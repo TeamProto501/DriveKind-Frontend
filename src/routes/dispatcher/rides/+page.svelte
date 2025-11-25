@@ -863,7 +863,7 @@ function maybeConfirmClientWeeklyLimit(context: "create" | "edit"): boolean {
   }
 
   function openForceAcceptModal(ride: any) {
-    console.log("Opening force accept modal for ride:", ride.ride_id);
+    console.log("Opening auto assign modal for ride:", ride.ride_id);
 
     if (!data.session?.access_token) {
       alert("Session expired. Please refresh the page and try again.");
@@ -1482,7 +1482,7 @@ function goToEditStep(target: number) {
     if (!selectedRideForForceAccept) return;
 
     console.log(
-      "Force accepting ride:",
+      "Auto assigning ride:",
       selectedRideForForceAccept.ride_id,
       "for driver:",
       driverId
@@ -1509,17 +1509,17 @@ function goToEditStep(target: number) {
         driverSearchForForce = "";
         await invalidateAll();
         alert(
-          "Ride force accepted successfully! The driver has been assigned and the ride is now scheduled."
+          "Ride auto assigned successfully! The driver has been assigned and the ride is now scheduled."
         );
       } else {
-        console.error("Failed to force accept ride:", result);
+        console.error("Failed to auto assign ride:", result);
         alert(
-          `Failed to force accept ride: ${result.error || "Unknown error"}`
+          `Failed to auto assign ride: ${result.error || "Unknown error"}`
         );
       }
     } catch (error) {
-      console.error("Error force accepting ride:", error);
-      alert("Error force accepting ride. Please try again.");
+      console.error("Error auto assigning ride:", error);
+      alert("Error auto assigning ride. Please try again.");
     } finally {
       isUpdating = false;
     }
@@ -1811,9 +1811,9 @@ function goToEditStep(target: number) {
                     onclick={() => openForceAcceptModal(ride)}
                     disabled={isUpdating}
                     class="bg-orange-600 hover:bg-orange-700 text-white px-3 py-1.5 rounded-lg text-sm flex items-center gap-1 transition-colors disabled:opacity-50"
-                    title="Force accept ride for a driver (bypasses driver acceptance)"
+                    title="Auto assign ride for a driver (bypasses driver acceptance)"
                   >
-                    <CheckCircle class="w-4 h-4" /> Force Accept
+                    <CheckCircle class="w-4 h-4" /> Auto Assign
                   </button>
                   <button
                     onclick={() => deleteRide(ride.ride_id)}
@@ -1827,9 +1827,9 @@ function goToEditStep(target: number) {
                     onclick={() => openForceAcceptModal(ride)}
                     disabled={isUpdating}
                     class="bg-orange-600 hover:bg-orange-700 text-white px-3 py-1.5 rounded-lg text-sm flex items-center gap-1 transition-colors disabled:opacity-50"
-                    title="Force accept ride for a different driver"
+                    title="Auto assign ride for a different driver"
                   >
-                    <CheckCircle class="w-4 h-4" /> Force Accept
+                    <CheckCircle class="w-4 h-4" /> Auto Assign
                   </button>
                 {/if}
 
@@ -3080,9 +3080,9 @@ function goToEditStep(target: number) {
   <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
     <div class="bg-white rounded-lg p-6 max-w-md w-full mx-4">
       <div class="mb-4">
-        <h2 class="text-xl font-semibold">Force Accept Ride</h2>
+        <h2 class="text-xl font-semibold">Auto Assign Ride</h2>
         <p class="text-sm text-gray-600">
-          Select a driver to force accept this ride. This will bypass the
+          Select a driver to auto assign to this ride. This will bypass the
           driver's acceptance and immediately schedule the ride.
         </p>
       </div>
@@ -3121,7 +3121,7 @@ function goToEditStep(target: number) {
               class="px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-white rounded-lg text-sm transition-colors disabled:opacity-50 flex items-center gap-1"
             >
               <CheckCircle class="w-4 h-4" />
-              Force Accept
+              Auto Assign
             </button>
           </div>
         {/each}

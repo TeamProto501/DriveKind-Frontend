@@ -3,7 +3,7 @@ import type { RequestHandler } from './$types';
 import { createSupabaseServerClient } from '$lib/supabase.server';
 
 export const POST: RequestHandler = async (event) => {
-  console.log('=== FORCE ACCEPT RIDE ENDPOINT CALLED ===');
+  console.log('=== AUTO ASSIGN RIDE ENDPOINT CALLED ===');
   
   try {
     const rideId = parseInt(event.params.rideId);
@@ -44,7 +44,7 @@ export const POST: RequestHandler = async (event) => {
       return json({ error: 'Profile not found' }, { status: 404 });
     }
 
-    // Check role - dispatcher or admin can force accept
+    // Check role - dispatcher or admin can auto assign
     const hasDispatcherRole = profile.role && (
       Array.isArray(profile.role) 
         ? (profile.role.includes('Dispatcher') || profile.role.includes('Admin') || profile.role.includes('Super Admin'))
@@ -98,7 +98,7 @@ export const POST: RequestHandler = async (event) => {
       return json({ error: 'Selected user is not a driver' }, { status: 400 });
     }
 
-    // Force accept: set driver_user_id and status to 'Scheduled' (same as when driver accepts)
+    // Auto assign: set driver_user_id and status to 'Scheduled' (same as when driver accepts)
     const { error: updateError } = await supabase
       .from('rides')
       .update({
@@ -109,14 +109,14 @@ export const POST: RequestHandler = async (event) => {
 
     if (updateError) {
       console.error('Update error:', updateError);
-      return json({ error: `Failed to force accept ride: ${updateError.message}` }, { status: 500 });
+      return json({ error: `Failed to auto assign ride: ${updateError.message}` }, { status: 500 });
     }
 
-    console.log('=== RIDE FORCE ACCEPTED SUCCESSFULLY ===');
+    console.log('=== RIDE AUTO ASSIGNED SUCCESSFULLY ===');
     return json({ success: true });
 
   } catch (error: any) {
-    console.error('=== ERROR IN FORCE ACCEPT ===');
+    console.error('=== ERROR IN AUTO ASSIGN ===');
     console.error(error);
     return json({ error: error.message || 'Internal server error' }, { status: 500 });
   }
