@@ -377,98 +377,113 @@ export const actions: Actions = {
     throw redirect(303, "/admin/audit?tab=calls");
   },
 
-  // Create a new call (directly via Supabase, org-scoped)
-  createCall: async (event) => {
-    const supabase = createSupabaseServerClient(event);
-    const formData = await event.request.formData();
+// Create a new call (directly via Supabase, org-scoped)
+createCall: async (event) => {
+  const supabase = createSupabaseServerClient(event);
+  const formData = await event.request.formData();
 
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser();
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
 
-    if (userError || !user) {
-      return { success: false, error: "Not authenticated." };
-    }
+  if (userError || !user) {
+    console.error("createCall auth error:", userError?.message || "No user");
+    return { success: false, error: "Not authenticated." };
+  }
 
-    const { data: profile, error: profileError } = await supabase
-      .from("staff_profiles")
-      .select("org_id")
-      .eq("user_id", user.id)
+  const { data: profile, error: profileError } = await supabase
+    .from("staff_profiles")
+    .select("org_id")
+    .eq("user_id", user.id)
+    .single();
+
+  if (profileError || !profile?.org_id) {
+    console.error(
+      "createCall profile error:",
+      profileError?.message || "No org_id"
+    );
+    return { success: false, error: "Could not determine user org." };
+  }
+
+  const orgId = profile.org_id;
+
+  const user_id = (formData.get("user_id") as string) || null;
+
+  const clientIdStr = (formData.get("client_id") as string) || "";
+  const client_id = clientIdStr ? Number(clientIdStr) : null;
+
+  const call_type = (formData.get("call_type") as string) || null;
+
+  const call_time_local = formData.get("call_time") as string | null;
+  const formatToSQL = (dateTimeLocal: string) =>
+    dateTimeLocal.replace("T", " ") + ":00";
+  const call_time = call_time_local ? formatToSQL(call_time_local) : null;
+
+  // IMPORTANT: use empty strings instead of null for text fields
+  const other_type = (formData.get("other_type") as string) || "";
+  const phone_number = (formData.get("phone_number") as string) || "";
+  const forwarded_to_name =
+    (formData.get("forwarded_to_name") as string) || "";
+
+  let caller_first_name =
+    (formData.get("caller_first_name") as string) || "";
+  let caller_last_name =
+    (formData.get("caller_last_name") as string) || "";
+
+  // If a client is selected, override caller_* with the client's name
+  if (client_id !== null) {
+    const { data: client, error: clientError } = await supabase
+      .from("clients")
+      .select("first_name, last_name")
+      .eq("client_id", client_id)
       .single();
 
-    if (profileError || !profile?.org_id) {
-      return { success: false, error: "Could not determine user org." };
+    if (!clientError && client) {
+      caller_first_name = client.first_name ?? caller_first_name;
+      caller_last_name = client.last_name ?? caller_last_name;
     }
+  }
 
-    const orgId = profile.org_id;
+  // Enforce rule: if no client selected, require caller first + last
+  if (!client_id && (!caller_first_name || !caller_last_name)) {
+    return {
+      success: false,
+      error:
+        "Caller first and last name are required if no client is selected.",
+    };
+  }
 
-    const user_id = (formData.get("user_id") as string) || null;
-    const clientIdStr = (formData.get("client_id") as string) || "";
-    const client_id = clientIdStr ? Number(clientIdStr) : null;
+  const insertPayload = {
+    org_id: orgId,
+    user_id,
+    client_id,
+    call_time,
+    call_type,
+    other_type,
+    phone_number,
+    forwarded_to_name,
+    caller_first_name,
+    caller_last_name,
+  };
 
-    const call_type = (formData.get("call_type") as string) || null;
+  console.log("createCall inserting:", insertPayload);
 
-    const call_time_local = formData.get("call_time") as string | null;
-    const formatToSQL = (dateTimeLocal: string) =>
-      dateTimeLocal.replace("T", " ") + ":00";
-    const call_time = call_time_local ? formatToSQL(call_time_local) : null;
+  const { data: insertData, error: insertError } = await supabase
+    .from("calls")
+    .insert(insertPayload)
+    .select("call_id");
 
-    const other_type = (formData.get("other_type") as string) || null;
-    const phone_number = (formData.get("phone_number") as string) || null;
-    const forwarded_to_name =
-      (formData.get("forwarded_to_name") as string) || null;
+  if (insertError) {
+    console.error("createCall insert error:", insertError.message);
+    return { success: false, error: insertError.message };
+  }
 
-    let caller_first_name =
-      (formData.get("caller_first_name") as string) || null;
-    let caller_last_name =
-      (formData.get("caller_last_name") as string) || null;
+  const createdId = insertData?.[0]?.call_id ?? null;
+  console.log("createCall successful, new call_id:", createdId);
 
-    // If a client is selected, override caller_* with the client's name
-    if (client_id !== null) {
-      const { data: client, error: clientError } = await supabase
-        .from("clients")
-        .select("first_name, last_name")
-        .eq("client_id", client_id)
-        .single();
+  // After creating, land on calls
+  throw redirect(303, "/admin/audit?tab=calls");
+},
 
-      if (!clientError && client) {
-        caller_first_name = client.first_name ?? caller_first_name;
-        caller_last_name = client.last_name ?? caller_last_name;
-      }
-    }
-
-    // Enforce rule: if no client selected, require caller first + last
-    if (!client_id && (!caller_first_name || !caller_last_name)) {
-      return {
-        success: false,
-        error:
-          "Caller first and last name are required if no client is selected.",
-      };
-    }
-
-    const { data: insertData, error: insertError } = await supabase
-      .from("calls")
-      .insert({
-        org_id: orgId,
-        user_id,
-        client_id,
-        call_time,
-        call_type,
-        other_type,
-        phone_number,
-        forwarded_to_name,
-        caller_first_name,
-        caller_last_name,
-      })
-      .select("call_id");
-
-    if (insertError) {
-      return { success: false, error: insertError.message };
-    }
-
-    const createdId = insertData?.[0]?.call_id ?? null;
-    // After creating, land on calls
-    throw redirect(303, "/admin/audit?tab=calls");
-  },
 };
