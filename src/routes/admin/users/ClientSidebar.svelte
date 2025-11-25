@@ -63,27 +63,15 @@
     other_limitations?: string | null;
     referral_method?: string | null;
     driver_preference?: string | null;
-    // NEW: nullable int4 for ride caps
+    // nullable int4 for ride caps (view-only for now)
     max_weekly_rides?: number | null;
   };
 
   const statusOptions = ["Active", "Inactive", "Temporary Thru"] as const;
-  const mobilityOptions = [
-    "",
-    "cane",
-    "crutches",
-    "light walker",
-    "rollator"
-  ] as const;
+  const mobilityOptions = ["", "cane", "crutches", "light walker", "rollator"] as const;
   const genderOptions = ["Male", "Female", "Other"] as const;
   // No condo; first option is "None selected"
-  const residenceOptions = [
-    "",
-    "house",
-    "apartment",
-    "mobile home",
-    "townhouse"
-  ] as const;
+  const residenceOptions = ["", "house", "apartment", "mobile home", "townhouse"] as const;
   const serviceAnimalSizeOptions = ["", "small", "medium", "large"] as const;
   const contactPrefOptions = ["", "Phone", "Email", "Text"] as const;
 
@@ -106,10 +94,7 @@
     let age = today.getFullYear() - birth.getFullYear();
     const monthDiff = today.getMonth() - birth.getMonth();
 
-    if (
-      monthDiff < 0 ||
-      (monthDiff === 0 && today.getDate() < birth.getDate())
-    ) {
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
       age--;
     }
 
@@ -259,16 +244,11 @@
       // If "None selected" (""), explicitly send null so DB clears the enum
       const cleanedResidence = form.residence_enum ? form.residence_enum : null;
 
-      // Normalize max_weekly_rides to number | null for Supabase
-      const parsedMaxWeekly =
-        form.max_weekly_rides === null ||
-        form.max_weekly_rides === undefined ||
-        (form.max_weekly_rides as any) === ""
-          ? null
-          : Number(form.max_weekly_rides);
+      // Omit max_weekly_rides from the payload for now
+      const { max_weekly_rides: _omitMax, ...formWithoutMax } = form;
 
       const body = {
-        ...form,
+        ...formWithoutMax,
         contact_pref: form.contact_pref || null,
         mobility_assistance_enum: form.mobility_assistance_enum || null,
         service_animal_size_enum: form.service_animal_size_enum || null,
@@ -287,8 +267,8 @@
         other_limitations: form.other_limitations?.trim() || null,
         temp_client_date: form.temp_client_date || null,
         referral_method: form.referral_method?.trim() || null,
-        driver_preference: form.driver_preference?.trim() || null,
-        max_weekly_rides: isNaN(parsedMaxWeekly) ? null : parsedMaxWeekly
+        driver_preference: form.driver_preference?.trim() || null
+        // max_weekly_rides intentionally not sent from this form
       };
 
       if (createMode) {
@@ -307,17 +287,14 @@
         toastStore.success("Client created successfully");
       } else if (client) {
         const { client_id, ...updateData } = body;
-        const res = await fetch(
-          `${API_BASE_URL}/clients/${client.client_id}`,
-          {
-            method: "PUT",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${session.access_token}`
-            },
-            body: JSON.stringify(updateData)
-          }
-        );
+        const res = await fetch(`${API_BASE_URL}/clients/${client.client_id}`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.access_token}`
+          },
+          body: JSON.stringify(updateData)
+        });
         if (!res.ok) {
           throw new Error((await res.text()) || "Failed to update client");
         }
@@ -411,9 +388,7 @@
           <div>
             <div class="text-xs text-gray-500">Address</div>
             <div class="font-medium">
-              {[client.street_address, client.address2]
-                .filter(Boolean)
-                .join(" ")}
+              {[client.street_address, client.address2].filter(Boolean).join(" ")}
             </div>
             <div class="font-medium">
               {client.city}, {client.state}
@@ -457,15 +432,6 @@
             <div>
               <div class="text-xs text-gray-500">Residence</div>
               <div class="font-medium">{client.residence_enum || "—"}</div>
-            </div>
-          </div>
-
-          <div class="grid grid-cols-2 gap-3">
-            <div>
-              <div class="text-xs text-gray-500">Max Weekly Rides</div>
-              <div class="font-medium">
-                {client.max_weekly_rides ?? "—"}
-              </div>
             </div>
           </div>
 
@@ -886,24 +852,6 @@
               />
             </div>
           {/if}
-
-          <!-- NEW: Max weekly rides -->
-          <div>
-            <label class="block text-base font-medium">
-              Max Weekly Rides
-            </label>
-            <input
-              type="number"
-              min="0"
-              class="mt-1 w-full border rounded px-3 py-2 text-base"
-              value={form.max_weekly_rides ?? ""}
-              placeholder="Leave blank for no limit"
-              on:input={(e) => {
-                const v = (e.currentTarget as HTMLInputElement).value;
-                form.max_weekly_rides = v === "" ? null : Number(v);
-              }}
-            />
-          </div>
 
           <div class="grid grid-cols-2 gap-3">
             <div>
