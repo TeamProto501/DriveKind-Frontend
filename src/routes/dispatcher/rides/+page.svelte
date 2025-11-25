@@ -983,7 +983,7 @@ function validateMinDays(localDateTime: string, label: string): string | null {
       );
       console.log("🔍 Validating appointment time:", rideForm.appointment_time);
 
-      // Org days-off rule
+      // Org days-off rule (applies to both create and edit)
       if (rideForm.appointment_time) {
         const daysOffError = validateAppointmentTime(rideForm.appointment_time);
         if (daysOffError) {
@@ -991,22 +991,25 @@ function validateMinDays(localDateTime: string, label: string): string | null {
         }
       }
 
-      // Min days in advance – appointment
-      if (rideForm.appointment_time) {
-        const minErr = validateMinDays(
-          rideForm.appointment_time,
-          "Appointment time"
-        );
-        if (minErr) {
-          errs.push(minErr);
+      // Min days in advance rules – **create only**
+      if (!isEditing()) {
+        // Min days in advance – appointment
+        if (rideForm.appointment_time) {
+          const minErr = validateMinDays(
+            rideForm.appointment_time,
+            "Appointment time"
+          );
+          if (minErr) {
+            errs.push(minErr);
+          }
         }
-      }
 
-      // Min days in advance – pickup (if set)
-      if (rideForm.pickup_time) {
-        const minErr = validateMinDays(rideForm.pickup_time, "Pickup time");
-        if (minErr) {
-          errs.push(minErr);
+        // Min days in advance – pickup (if set)
+        if (rideForm.pickup_time) {
+          const minErr = validateMinDays(rideForm.pickup_time, "Pickup time");
+          if (minErr) {
+            errs.push(minErr);
+          }
         }
       }
 
