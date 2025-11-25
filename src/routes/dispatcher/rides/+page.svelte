@@ -1310,6 +1310,47 @@ function validateMinDays(localDateTime: string, label: string): string | null {
     }
   });
 
+    async function unassignDriver(rideId: number) {
+      const confirmed = confirm(
+        "Are you sure you want to unassign the driver from this ride? This will return the ride to Requested."
+      );
+      if (!confirmed) return;
+
+      isUpdating = true;
+      try {
+        const resp = await fetch("/dispatcher/rides/unassign", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ rideId })
+        });
+
+        if (!resp.ok) {
+          let msg = "";
+          try {
+            const data = await resp.json();
+            msg = data.error || data.message || "";
+          } catch {
+            msg = await resp.text();
+          }
+          alert(
+            `Failed to unassign driver (${resp.status}): ${
+              msg || "Unknown error"
+            }`
+          );
+        } else {
+          await invalidateAll();
+          alert(
+            "Driver unassigned. The ride has been returned to Requested."
+          );
+        }
+      } catch (e) {
+        console.error("Error unassigning driver:", e);
+        alert("Error unassigning driver. Please try again.");
+      } finally {
+        isUpdating = false;
+      }
+    }
+
   async function forceAcceptRide(driverId: string) {
     if (!selectedRideForForceAccept) return;
 
@@ -1616,6 +1657,16 @@ function validateMinDays(localDateTime: string, label: string): string | null {
                     title="Force accept ride for a different driver"
                   >
                     <CheckCircle class="w-4 h-4" /> Force Accept
+                  </button>
+                {/if}
+
+                {#if (ride.status === "Scheduled" || ride.status === "Assigned" || ride.status === "In Progress") && ride.driver_user_id}
+                  <button
+                    onclick={() => unassignDriver(ride.ride_id)}
+                    disabled={isUpdating}
+                    class="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg text-sm flex items-center gap-1 transition-colors disabled:opacity-50"
+                  >
+                    Unassign Driver
                   </button>
                 {/if}
 
