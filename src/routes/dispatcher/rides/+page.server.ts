@@ -136,7 +136,8 @@ export const load: PageServerLoad = async (event) => {
         state,
         zip_code,
         other_limitations,
-        mobility_assistance_enum
+        mobility_assistance_enum,
+        max_weekly_rides
       `
       )
       .eq("org_id", profile.org_id)
