@@ -36,7 +36,12 @@
     service_animal: boolean;
     oxygen: boolean;
     client_status_enum: "Active" | "Inactive" | "Temporary Thru";
-    mobility_assistance_enum?: "cane" | "crutches" | "light walker" | "rollator" | null;
+    mobility_assistance_enum?:
+      | "cane"
+      | "crutches"
+      | "light walker"
+      | "rollator"
+      | null;
     // residence_enum is optional and may be empty string (None selected) or null
     residence_enum?:
       | ""
@@ -58,10 +63,18 @@
     other_limitations?: string | null;
     referral_method?: string | null;
     driver_preference?: string | null;
+    // NEW: nullable int4 for ride caps
+    max_weekly_rides?: number | null;
   };
 
   const statusOptions = ["Active", "Inactive", "Temporary Thru"] as const;
-  const mobilityOptions = ["", "cane", "crutches", "light walker", "rollator"] as const;
+  const mobilityOptions = [
+    "",
+    "cane",
+    "crutches",
+    "light walker",
+    "rollator"
+  ] as const;
   const genderOptions = ["Male", "Female", "Other"] as const;
   // No condo; first option is "None selected"
   const residenceOptions = [
@@ -144,7 +157,8 @@
         other_limitations: null,
         referral_method: null,
         driver_preference: null,
-        org_id: orgId,
+        max_weekly_rides: null,
+        org_id: orgId
       };
     }
 
@@ -152,6 +166,9 @@
     return {
       ...client,
       residence_enum: client.residence_enum ?? "",
+      // if the column was just added, make sure undefined comes through as null
+      max_weekly_rides:
+        client.max_weekly_rides === undefined ? null : client.max_weekly_rides,
       org_id: client.org_id || orgId
     };
   }
@@ -240,9 +257,15 @@
     saving = true;
     try {
       // If "None selected" (""), explicitly send null so DB clears the enum
-      const cleanedResidence = form.residence_enum
-        ? form.residence_enum
-        : null;
+      const cleanedResidence = form.residence_enum ? form.residence_enum : null;
+
+      // Normalize max_weekly_rides to number | null for Supabase
+      const parsedMaxWeekly =
+        form.max_weekly_rides === null ||
+        form.max_weekly_rides === undefined ||
+        (form.max_weekly_rides as any) === ""
+          ? null
+          : Number(form.max_weekly_rides);
 
       const body = {
         ...form,
@@ -265,6 +288,7 @@
         temp_client_date: form.temp_client_date || null,
         referral_method: form.referral_method?.trim() || null,
         driver_preference: form.driver_preference?.trim() || null,
+        max_weekly_rides: isNaN(parsedMaxWeekly) ? null : parsedMaxWeekly
       };
 
       if (createMode) {
@@ -273,9 +297,9 @@
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${session.access_token}`,
+            Authorization: `Bearer ${session.access_token}`
           },
-          body: JSON.stringify(createData),
+          body: JSON.stringify(createData)
         });
         if (!res.ok) {
           throw new Error((await res.text()) || "Failed to create client");
@@ -283,14 +307,17 @@
         toastStore.success("Client created successfully");
       } else if (client) {
         const { client_id, ...updateData } = body;
-        const res = await fetch(`${API_BASE_URL}/clients/${client.client_id}`, {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${session.access_token}`,
-          },
-          body: JSON.stringify(updateData),
-        });
+        const res = await fetch(
+          `${API_BASE_URL}/clients/${client.client_id}`,
+          {
+            method: "PUT",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${session.access_token}`
+            },
+            body: JSON.stringify(updateData)
+          }
+        );
         if (!res.ok) {
           throw new Error((await res.text()) || "Failed to update client");
         }
@@ -332,7 +359,8 @@
   {#if readOnly && !createMode}
     <div class="px-6 py-3 bg-blue-50 border-b border-blue-200">
       <p class="text-sm text-blue-800">
-        <strong>View Only:</strong> You don't have permission to edit this client.
+        <strong>View Only:</strong> You don't have permission to edit this
+        client.
       </p>
     </div>
   {/if}
@@ -407,7 +435,9 @@
           <div class="grid grid-cols-2 gap-3">
             <div>
               <div class="text-xs text-gray-500">Lives Alone</div>
-              <div class="font-medium">{client.lives_alone ? "Yes" : "No"}</div>
+              <div class="font-medium">
+                {client.lives_alone ? "Yes" : "No"}
+              </div>
             </div>
             <div>
               <div class="text-xs text-gray-500">Service Animal</div>
@@ -427,6 +457,15 @@
             <div>
               <div class="text-xs text-gray-500">Residence</div>
               <div class="font-medium">{client.residence_enum || "—"}</div>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <div class="text-xs text-gray-500">Max Weekly Rides</div>
+              <div class="font-medium">
+                {client.max_weekly_rides ?? "—"}
+              </div>
             </div>
           </div>
 
@@ -467,7 +506,9 @@
             </div>
             <div>
               <div class="text-xs text-gray-500">Other Limitations</div>
-              <div class="font-medium">{client.other_limitations || "—"}</div>
+              <div class="font-medium">
+                {client.other_limitations || "—"}
+              </div>
             </div>
           </div>
         </div>
@@ -499,7 +540,7 @@
               on:click={() => goToClientStep(s)}
               class="w-8 h-8 rounded-full flex items-center justify-center text-sm transition-colors
                     {step === s ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}"
-              aria-current={step === s ? 'step' : undefined}
+              aria-current={step === s ? "step" : undefined}
               aria-label={`Step ${s}`}
             >
               {s}
@@ -832,6 +873,7 @@
               />
             </div>
           </div>
+
           {#if form.client_status_enum === "Temporary Thru"}
             <div>
               <label class="block text-base font-medium">
@@ -844,6 +886,25 @@
               />
             </div>
           {/if}
+
+          <!-- NEW: Max weekly rides -->
+          <div>
+            <label class="block text-base font-medium">
+              Max Weekly Rides
+            </label>
+            <input
+              type="number"
+              min="0"
+              class="mt-1 w-full border rounded px-3 py-2 text-base"
+              value={form.max_weekly_rides ?? ""}
+              placeholder="Leave blank for no limit"
+              on:input={(e) => {
+                const v = (e.currentTarget as HTMLInputElement).value;
+                form.max_weekly_rides = v === "" ? null : Number(v);
+              }}
+            />
+          </div>
+
           <div class="grid grid-cols-2 gap-3">
             <div>
               <label class="block text-base font-medium">Referral Method</label>
