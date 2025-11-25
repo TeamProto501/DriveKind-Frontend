@@ -945,7 +945,7 @@
           action="?/createCall" 
           class="space-y-4"
           onsubmit={(e) => {
-            e.preventDefault(); // PREVENT SUBMISSION FOR NOW
+            // e.preventDefault(); // PREVENT SUBMISSION FOR NOW
             
             console.log("=== FORM DATA CHECK ===");
             const formData = new FormData(e.currentTarget);
