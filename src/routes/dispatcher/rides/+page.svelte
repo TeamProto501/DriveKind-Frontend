@@ -463,8 +463,8 @@ function maybeConfirmClientWeeklyLimit(context: "create" | "edit"): boolean {
     (c: any) => String(c.client_id) === String(rawClientId)
   );
 
-  const limit = client?.max_weekly_rides;
-  if (!client || limit == null || limit <= 0) return true;
+  const limit = (data as any)?.organization?.client_max_weekly_rides;
+  if (!limit || limit <= 0) return true;
 
   const already = countClientRidesThisWeek(
     rawClientId,
@@ -474,7 +474,7 @@ function maybeConfirmClientWeeklyLimit(context: "create" | "edit"): boolean {
 
   if (already >= limit) {
     const ok = confirm(
-      `This client has already been scheduled for their max weekly rides of ${limit}. Are you sure you want to schedule another?`
+      `This ride would exceed your organization's weekly ride limit of ${limit}. Are you sure you want to continue?`
     );
 
     if (!ok) {
