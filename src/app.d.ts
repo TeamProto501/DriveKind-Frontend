@@ -4,5 +4,6 @@
 declare namespace App {
   interface Locals {
     userRoles: string[];
+    orgId?: number | null;
   }
 }
