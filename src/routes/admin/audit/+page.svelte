@@ -4,6 +4,7 @@
   import Table from "./table.svelte";
   import { invalidateAll } from "$app/navigation";
   import { onMount } from "svelte";
+  import { enhance } from '$app/forms';
 
   let { data = $bindable(), form = $bindable() }: { data: PageData; form: ActionData | null } = $props();
 
@@ -943,7 +944,7 @@
           </button>
         </div>
 
-        <form method="POST" action="?/createCall" class="space-y-4">
+        <form method="POST" action="/admin/audit?/createCall" class="space-y-4">
           <!-- Dispatcher / Client selects -->
           <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div>

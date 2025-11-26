@@ -379,7 +379,6 @@ export const actions: Actions = {
 
   // Create a new call (directly via Supabase, org-scoped)
   createCall: async (event) => {
-    console.log("!!!!!! CREATECALL ACTION HIT !!!!!!");
     const supabase = createSupabaseServerClient(event);
     const formData = await event.request.formData();
 
