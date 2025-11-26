@@ -44,6 +44,17 @@ export interface ClientProfile {
   lives_alone?: boolean;
 }
 
+export interface VolunteerHoursEntry {
+  entry_id: number;
+  user_id: string;
+  activity_date: string;
+  hours: number;
+  description: string | null;
+  logged_by_user_id: string;
+  logged_by_name?: string;
+  created_at: string;
+}
+
 export const load: PageServerLoad = async (event) => {
   const supabase = createSupabaseServerClient(event);
   const { data: { session } } = await supabase.auth.getSession();
@@ -73,6 +84,11 @@ export const load: PageServerLoad = async (event) => {
   if (!hasPersonalAccess && !hasOrgAccess) {
     throw redirect(302, '/');
   }
+
+  // Check if user can log hours for others (Admin, Dispatcher)
+  const canLogForOthers = userRoles.some((r: string) => 
+    ['Admin', 'Super Admin', 'Dispatcher'].includes(r)
+  );
 
   // Get organization
   const { data: organization } = await supabase
@@ -105,6 +121,7 @@ export const load: PageServerLoad = async (event) => {
     const { data: allStaffData } = await supabase
       .from('staff_profiles')
       .select('user_id, first_name, last_name, role')
+      .eq('org_id', userProfile?.org_id)
       .order('first_name');
 
     drivers = (driversData || []).map((d: any) => ({
@@ -131,7 +148,8 @@ export const load: PageServerLoad = async (event) => {
     drivers,
     clients,
     allStaff,
-    isAdmin: hasOrgAccess // Reuse for backward compatibility
+    canLogForOthers,
+    isAdmin: hasOrgAccess
   };
 };
 
@@ -362,6 +380,277 @@ export const actions: Actions = {
     } catch (err) {
       console.error('Error in fetchRides action:', err);
       return fail(500, { error: 'An unexpected error occurred' });
+    }
+  },
+
+  // ===== VOLUNTEER HOURS ACTIONS =====
+
+  // Log volunteer hours
+  logVolunteerHours: async (event) => {
+    const supabase = createSupabaseServerClient(event);
+    const { request } = event;
+    const { data: { session } } = await supabase.auth.getSession();
+    
+    if (!session) return fail(401, { error: 'Unauthorized' });
+
+    const formData = await request.formData();
+    const targetUserId = formData.get('targetUserId') as string;
+    const activityDate = formData.get('activityDate') as string;
+    const hours = parseFloat(formData.get('hours') as string);
+    const description = formData.get('description') as string || null;
+
+    // Validation
+    if (!targetUserId) {
+      return fail(400, { error: 'Please select a user', action: 'logHours' });
+    }
+    if (!activityDate) {
+      return fail(400, { error: 'Please select a date', action: 'logHours' });
+    }
+    if (isNaN(hours) || hours <= 0) {
+      return fail(400, { error: 'Please enter valid hours (greater than 0)', action: 'logHours' });
+    }
+    if (hours > 24) {
+      return fail(400, { error: 'Hours cannot exceed 24 per entry', action: 'logHours' });
+    }
+
+    try {
+      // Get current user's profile
+      const { data: userProfile } = await supabase
+        .from('staff_profiles')
+        .select('org_id, role')
+        .eq('user_id', session.user.id)
+        .single();
+
+      if (!userProfile?.org_id) {
+        return fail(400, { error: 'User organization not found', action: 'logHours' });
+      }
+
+      const userRoles = Array.isArray(userProfile.role) ? userProfile.role : [userProfile.role];
+      const canLogForOthers = userRoles.some((r: string) => 
+        ['Admin', 'Super Admin', 'Dispatcher'].includes(r)
+      );
+
+      // Check if logging for self or others
+      if (targetUserId !== session.user.id && !canLogForOthers) {
+        return fail(403, { error: 'You can only log hours for yourself', action: 'logHours' });
+      }
+
+      // If logging for someone else, verify they're in the same org
+      if (targetUserId !== session.user.id) {
+        const { data: targetProfile } = await supabase
+          .from('staff_profiles')
+          .select('org_id')
+          .eq('user_id', targetUserId)
+          .single();
+
+        if (!targetProfile || targetProfile.org_id !== userProfile.org_id) {
+          return fail(400, { error: 'User not found in your organization', action: 'logHours' });
+        }
+      }
+
+      // Insert the volunteer hours entry
+      const { error: insertError } = await supabase
+        .from('volunteer_hours')
+        .insert({
+          user_id: targetUserId,
+          org_id: userProfile.org_id,
+          logged_by_user_id: session.user.id,
+          activity_date: activityDate,
+          hours: hours,
+          description: description
+        });
+
+      if (insertError) {
+        console.error('Error inserting volunteer hours:', insertError);
+        return fail(500, { error: 'Failed to log hours', action: 'logHours' });
+      }
+
+      return {
+        success: true,
+        action: 'logHours',
+        message: `Successfully logged ${hours} hours`
+      };
+    } catch (err) {
+      console.error('Error in logVolunteerHours:', err);
+      return fail(500, { error: 'An unexpected error occurred', action: 'logHours' });
+    }
+  },
+
+  // Fetch volunteer hours for a user within date range
+  fetchVolunteerHours: async (event) => {
+    const supabase = createSupabaseServerClient(event);
+    const { request } = event;
+    const { data: { session } } = await supabase.auth.getSession();
+    
+    if (!session) return fail(401, { error: 'Unauthorized' });
+
+    const formData = await request.formData();
+    const targetUserId = formData.get('targetUserId') as string || session.user.id;
+    const fromDate = formData.get('hoursFromDate') as string;
+    const toDate = formData.get('hoursToDate') as string;
+
+    try {
+      // Get current user's profile
+      const { data: userProfile } = await supabase
+        .from('staff_profiles')
+        .select('org_id, role')
+        .eq('user_id', session.user.id)
+        .single();
+
+      if (!userProfile?.org_id) {
+        return fail(400, { error: 'User organization not found', action: 'fetchHours' });
+      }
+
+      const userRoles = Array.isArray(userProfile.role) ? userProfile.role : [userProfile.role];
+      const canViewOthers = userRoles.some((r: string) => 
+        ['Admin', 'Super Admin', 'Dispatcher', 'Report Manager'].includes(r)
+      );
+
+      // Check permissions
+      if (targetUserId !== session.user.id && !canViewOthers) {
+        return fail(403, { error: 'You can only view your own hours', action: 'fetchHours' });
+      }
+
+      // Build query
+      let query = supabase
+        .from('volunteer_hours')
+        .select('*')
+        .eq('user_id', targetUserId)
+        .eq('org_id', userProfile.org_id)
+        .order('activity_date', { ascending: false });
+
+      if (fromDate) {
+        query = query.gte('activity_date', fromDate);
+      }
+      if (toDate) {
+        query = query.lte('activity_date', toDate);
+      }
+
+      const { data: hoursData, error: hoursError } = await query;
+
+      if (hoursError) {
+        console.error('Error fetching volunteer hours:', hoursError);
+        return fail(500, { error: 'Failed to fetch hours', action: 'fetchHours' });
+      }
+
+      // Get logged_by names
+      const loggedByIds = [...new Set(hoursData?.map(h => h.logged_by_user_id).filter(Boolean))];
+      const { data: loggersData } = await supabase
+        .from('staff_profiles')
+        .select('user_id, first_name, last_name')
+        .in('user_id', loggedByIds);
+
+      const loggerMap = new Map(
+        (loggersData || []).map((l: any) => [
+          l.user_id,
+          `${l.first_name || ''} ${l.last_name || ''}`.trim() || 'Unknown'
+        ])
+      );
+
+      // Get target user name
+      const { data: targetUser } = await supabase
+        .from('staff_profiles')
+        .select('first_name, last_name')
+        .eq('user_id', targetUserId)
+        .single();
+
+      const targetUserName = targetUser 
+        ? `${targetUser.first_name || ''} ${targetUser.last_name || ''}`.trim() 
+        : 'Unknown User';
+
+      // Transform data
+      const entries: VolunteerHoursEntry[] = (hoursData || []).map((h: any) => ({
+        entry_id: h.entry_id,
+        user_id: h.user_id,
+        activity_date: h.activity_date,
+        hours: h.hours,
+        description: h.description,
+        logged_by_user_id: h.logged_by_user_id,
+        logged_by_name: loggerMap.get(h.logged_by_user_id) || 'Unknown',
+        created_at: h.created_at
+      }));
+
+      // Calculate total
+      const totalHours = entries.reduce((sum, e) => sum + (e.hours || 0), 0);
+
+      return {
+        success: true,
+        action: 'fetchHours',
+        volunteerHours: entries,
+        volunteerHoursTotal: totalHours,
+        volunteerHoursUserName: targetUserName,
+        volunteerHoursUserId: targetUserId,
+        message: `Found ${entries.length} entries totaling ${totalHours.toFixed(2)} hours`
+      };
+    } catch (err) {
+      console.error('Error in fetchVolunteerHours:', err);
+      return fail(500, { error: 'An unexpected error occurred', action: 'fetchHours' });
+    }
+  },
+
+  // Delete a volunteer hours entry
+  deleteVolunteerHours: async (event) => {
+    const supabase = createSupabaseServerClient(event);
+    const { request } = event;
+    const { data: { session } } = await supabase.auth.getSession();
+    
+    if (!session) return fail(401, { error: 'Unauthorized' });
+
+    const formData = await request.formData();
+    const entryId = parseInt(formData.get('entryId') as string);
+
+    if (isNaN(entryId)) {
+      return fail(400, { error: 'Invalid entry ID', action: 'deleteHours' });
+    }
+
+    try {
+      // Get current user's profile
+      const { data: userProfile } = await supabase
+        .from('staff_profiles')
+        .select('org_id, role')
+        .eq('user_id', session.user.id)
+        .single();
+
+      const userRoles = Array.isArray(userProfile?.role) ? userProfile.role : [userProfile?.role];
+      const isAdmin = userRoles.some((r: string) => 
+        ['Admin', 'Super Admin', 'Dispatcher'].includes(r)
+      );
+
+      // Check if entry exists and user has permission
+      const { data: entry } = await supabase
+        .from('volunteer_hours')
+        .select('user_id, org_id')
+        .eq('entry_id', entryId)
+        .single();
+
+      if (!entry) {
+        return fail(404, { error: 'Entry not found', action: 'deleteHours' });
+      }
+
+      // Check permission: must be own entry or admin
+      if (entry.user_id !== session.user.id && !isAdmin) {
+        return fail(403, { error: 'You can only delete your own entries', action: 'deleteHours' });
+      }
+
+      // Delete the entry
+      const { error: deleteError } = await supabase
+        .from('volunteer_hours')
+        .delete()
+        .eq('entry_id', entryId);
+
+      if (deleteError) {
+        console.error('Error deleting volunteer hours:', deleteError);
+        return fail(500, { error: 'Failed to delete entry', action: 'deleteHours' });
+      }
+
+      return {
+        success: true,
+        action: 'deleteHours',
+        message: 'Entry deleted successfully'
+      };
+    } catch (err) {
+      console.error('Error in deleteVolunteerHours:', err);
+      return fail(500, { error: 'An unexpected error occurred', action: 'deleteHours' });
     }
   }
 };

@@ -38,6 +38,148 @@ function getRoleBasedHomePage(roles: string[]): string {
 	return '/';
 }
 
+// ============================================================================
+// AUDIT LOGGING UTILITIES
+// ============================================================================
+
+// Map form action names to audit action types
+// These must match your action_enum values in the database
+function inferActionType(actionName: string): 'INSERT' | 'UPDATE' | 'DELETE' | null {
+	const lowerAction = actionName.toLowerCase();
+	
+	if (lowerAction.includes('create') || lowerAction.includes('add') || lowerAction.includes('insert') || lowerAction.includes('new')) {
+		return 'INSERT';
+	}
+	if (lowerAction.includes('update') || lowerAction.includes('edit') || lowerAction.includes('save') || lowerAction.includes('modify')) {
+		return 'UPDATE';
+	}
+	if (lowerAction.includes('delete') || lowerAction.includes('remove') || lowerAction.includes('destroy')) {
+		return 'DELETE';
+	}
+	
+	return null;
+}
+
+// Map route paths to table names
+// These must match your table_name_enum values in the database
+function inferTableFromRoute(pathname: string): string | null {
+	const segments = pathname.split('/').filter(Boolean);
+	
+	// Map route segments to table_name_enum values
+	// UPDATE THESE to match your actual enum values!
+	const routeToTable: Record<string, string> = {
+		'rides': 'rides',
+		'clients': 'clients',
+		'users': 'staff_profiles',
+		'drivers': 'staff_profiles',
+		'vehicles': 'vehicles',
+		'organizations': 'organization',
+		'destinations': 'destinations',
+		'unavail': 'driver_unavailability',
+		'driver-schedules': 'driver_unavailability',
+		'schedules': 'driver_unavailability',
+		'calls': 'calls',
+		'reports': 'volunteer_hours',
+		'config': 'organization',
+	};
+	
+	for (const segment of segments) {
+		if (routeToTable[segment]) {
+			return routeToTable[segment];
+		}
+	}
+	
+	return null;
+}
+
+// Extract key identifiers from form data for audit context
+function extractAuditContext(formData: FormData): Record<string, any> {
+	const context: Record<string, any> = {};
+	
+	// Common ID fields to capture
+	const idFields = [
+		'ride_id', 'client_id', 'user_id', 'org_id', 'vehicle_id', 
+		'destination_id', 'call_id', 'entry_id', 'id'
+	];
+	
+	for (const field of idFields) {
+		const value = formData.get(field);
+		if (value !== null && value !== '') {
+			context[field] = value;
+		}
+	}
+	
+	// Capture some common fields for context
+	const contextFields = ['status', 'action', 'type'];
+	for (const field of contextFields) {
+		const value = formData.get(field);
+		if (value !== null && value !== '') {
+			context[field] = value;
+		}
+	}
+	
+	return context;
+}
+
+// Log action to the audit table
+// Respects NOT NULL constraints: user_id, org_id, field_name, old_value, new_value all required
+async function logAuditEntry(
+	supabase: ReturnType<typeof createSupabaseServerClient>,
+	userId: string,
+	orgId: number,
+	action: 'INSERT' | 'UPDATE' | 'DELETE',
+	tableName: string,
+	context: Record<string, any>,
+	actionName: string
+): Promise<void> {
+	try {
+		const contextStr = JSON.stringify(context);
+		const truncatedContext = contextStr.length > 500 ? contextStr.substring(0, 500) + '...' : contextStr;
+		
+		// Per schema: old_value and new_value are NOT NULL
+		// Use empty string for the "missing" value based on action type
+		let oldValue = '';
+		let newValue = '';
+		
+		if (action === 'INSERT') {
+			oldValue = '';  // No old value for inserts
+			newValue = truncatedContext || '{}';
+		} else if (action === 'DELETE') {
+			oldValue = truncatedContext || '{}';
+			newValue = '';  // No new value for deletes
+		} else {
+			// UPDATE - we don't have the old value from form data, just log context
+			oldValue = '';
+			newValue = truncatedContext || '{}';
+		}
+		
+		const { error } = await supabase
+			.from('transactions_audit_log')
+			.insert({
+				user_id: userId,
+				org_id: orgId,
+				action_enum: action,
+				table_name_enum: tableName,
+				field_name: `form_action:${actionName}`,
+				old_value: oldValue,
+				new_value: newValue,
+				// timestamp defaults to now() per schema
+			});
+		
+		if (error) {
+			console.error('[Audit] Failed to log action:', error.message);
+		} else {
+			console.log(`[Audit] Logged ${action} on ${tableName} by user ${userId}`);
+		}
+	} catch (err) {
+		console.error('[Audit] Exception logging action:', err);
+	}
+}
+
+// ============================================================================
+// MAIN HOOK
+// ============================================================================
+
 export const handle: Handle = async ({ event, resolve }) => {
 	const supabase = createSupabaseServerClient(event);
 	const pathname = event.url.pathname;
@@ -52,7 +194,6 @@ export const handle: Handle = async ({ event, resolve }) => {
 		pathname === '/' &&
 		(type === 'recovery' || code || (hash && hash.includes('type=recovery')))
 	) {
-		// Preserve the tokens in the redirect
 		const params = new URLSearchParams();
 		if (code) params.set('code', code);
 		if (type) params.set('type', type);
@@ -91,7 +232,6 @@ export const handle: Handle = async ({ event, resolve }) => {
 
 	// 🔒 GLOBAL WRITE BLOCKER:
 	// If org is inactive/disabled, block ALL non-GET/HEAD requests
-	// (except for public routes like /login, /forgot-password, etc.)
 	if (
 		user &&
 		userOrgId &&
@@ -121,6 +261,50 @@ export const handle: Handle = async ({ event, resolve }) => {
 						headers: { 'Content-Type': 'application/json' }
 					}
 				);
+			}
+		}
+	}
+
+	// =========================================================================
+	// 📝 AUDIT LOGGING FOR FORM ACTIONS
+	// =========================================================================
+	if (
+		user &&
+		userOrgId &&
+		event.request.method === 'POST' &&
+		!isPublicRoute(pathname)
+	) {
+		// Check if this is a form action (has ?/actionName in the URL)
+		const actionMatch = event.url.search.match(/^\?\/(\w+)/);
+		
+		if (actionMatch) {
+			const actionName = actionMatch[1];
+			const actionType = inferActionType(actionName);
+			const tableName = inferTableFromRoute(pathname);
+			
+			// Only log if we can determine both action type AND table name
+			// (table must exist in your table_name_enum)
+			if (actionType && tableName) {
+				try {
+					// Clone the request so we can read the body without consuming it
+					const clonedRequest = event.request.clone();
+					const formData = await clonedRequest.formData();
+					const context = extractAuditContext(formData);
+					
+					// Log the action (fire and forget - don't block the request)
+					logAuditEntry(
+						supabase,
+						user.id,
+						userOrgId,
+						actionType,
+						tableName,
+						context,
+						actionName
+					);
+				} catch (err) {
+					// Don't block the request if audit logging fails
+					console.error('[Audit] Error extracting form data:', err);
+				}
 			}
 		}
 	}

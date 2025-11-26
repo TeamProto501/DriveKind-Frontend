@@ -180,11 +180,16 @@ export const load = async (event) => {
     }
   }
 
-  // Fetch my rides
+  // Fetch my rides - only Scheduled and In Progress for drivers; add Requested/Pending for admins
+  const myRidesStatusFilter = isAdminOrDispatcher 
+    ? ['Scheduled', 'In Progress', 'Requested', 'Pending']
+    : ['Scheduled', 'In Progress'];
+
   const { data: myRidesData } = await supabase
     .from('rides')
     .select('*')
     .eq('driver_user_id', session.user.id)
+    .in('status', myRidesStatusFilter)
     .order('appointment_time', { ascending: true });
 
   let myRidesWithDetails: any[] = [];
@@ -215,14 +220,15 @@ export const load = async (event) => {
     }));
   }
 
-  // Fetch ALL rides for organization
+  // Fetch ALL rides for organization - only relevant statuses
   let allRidesWithDetails: any[] = [];
   if (isAdminOrDispatcher) {
     const { data: allRidesData } = await supabase
       .from('rides')
       .select('*')
       .eq('org_id', userProfile.org_id)
-      .order('appointment_time', { ascending: true});
+      .in('status', ['Scheduled', 'In Progress', 'Requested', 'Pending'])
+      .order('appointment_time', { ascending: true });
     
     if (allRidesData && allRidesData.length > 0) {
       const allClientIds = [...new Set(allRidesData.map(r => r.client_id).filter(Boolean))];
