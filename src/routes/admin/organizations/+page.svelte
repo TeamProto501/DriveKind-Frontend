@@ -4,7 +4,6 @@
     Plus,
     Search,
     Edit,
-    Trash2,
     Save,
     X,
     Mail,
@@ -12,267 +11,67 @@
     MapPin,
     Link as LinkIcon,
   } from "@lucide/svelte";
-  import { onMount } from "svelte";
-  import { supabase } from "$lib/supabase";
+  import { enhance } from "$app/forms";
+  import { invalidateAll } from "$app/navigation";
+  import type { PageData, ActionData } from "./$types";
 
-  type OrgRow = Record<string, any> & { org_id: number; name: string };
+  // Import constants and helpers from server
+  import {
+    type OrgRow,
+    type WorkingHoursUI,
+    type DayCode,
+    DAYS,
+    HOUR_OPTS_12,
+    PERIOD_OPTS,
+    STEP_LABELS,
+    FIELD_LABELS,
+    REQUIRED_BY_STEP,
+    formatDaysOff,
+    defaultWorkingHoursUI,
+    parseWorkingHoursToUI,
+    packWorkingHours,
+    hourTo24,
+    getOrgStatus,
+    labelWithRequired,
+  } from "./+page.server";
 
-  // ---------- Constants ----------
-  const MONTHS = [
-    "January",
-    "February",
-    "March",
-    "April",
-    "May",
-    "June",
-    "July",
-    "August",
-    "September",
-    "October",
-    "November",
-    "December",
-  ];
-  const dayMap: Record<string, string> = {
-    Su: "Sunday",
-    Mo: "Monday",
-    Tu: "Tuesday",
-    We: "Wednesday",
-    Th: "Thursday",
-    Fr: "Friday",
-    Sa: "Saturday",
-  };
-  const DAYS: Array<{
-    code: "Su" | "Mo" | "Tu" | "We" | "Th" | "Fr" | "Sa";
-    label: string;
-  }> = [
-    { code: "Su", label: "Sunday" },
-    { code: "Mo", label: "Monday" },
-    { code: "Tu", label: "Tuesday" },
-    { code: "We", label: "Wednesday" },
-    { code: "Th", label: "Thursday" },
-    { code: "Fr", label: "Friday" },
-    { code: "Sa", label: "Saturday" },
-  ];
-  const HOUR_OPTS = Array.from({ length: 24 }, (_, i) =>
-    String(i).padStart(2, "0")
-  ); // '00'..'23'
-  const HOUR_OPTS_12 = Array.from({ length: 12 }, (_, i) =>
-    String(i === 0 ? 12 : i).padStart(2, "0")
-  ); // '12', '01'..'11'
-  const PERIOD_OPTS = ["AM", "PM"];
-  // ---------- Helpers ----------
-  function ordinal(n: number) {
-    const s = ["th", "st", "nd", "rd"];
-    const v = n % 100;
-    return n + (s[(v - 20) % 10] || s[v] || s[0]);
-  }
-  function formatDaysOff(str?: string | null): string[] {
-    if (!str) return [];
-    return String(str)
-      .split(",")
-      .map((s) => s.trim())
-      .filter(Boolean)
-      .map((tok) => {
-        const m = tok.match(/^(\d{1,2})\/(\d{1,2})$/);
-        if (!m) return "";
-        const mm = Math.max(1, Math.min(12, parseInt(m[1], 10)));
-        const dd = Math.max(1, Math.min(31, parseInt(m[2], 10)));
-        return `${MONTHS[mm - 1]} ${ordinal(dd)}`;
-      })
-      .filter(Boolean);
-  }
-  /* function usernameExample(
-    code: string | null | undefined,
-    first = "John",
-    last = "Doe"
-  ) {
-    if (!code) return "";
-    const c = String(code).toUpperCase().trim();
-    if (c === "F1L") {
-      const ex = `${(first[0] ?? "").toLowerCase()}${(last ?? "").toLowerCase()}`;
-      return `Format “F1L”: first initial + last name. Example: ${first} ${last} → ${ex}`;
-    }
-    const m = c.match(/^F(\d+)L(\d+)$/);
-    if (m) {
-      const n = parseInt(m[1], 10);
-      const k = parseInt(m[2], 10);
-      const firstPart = (first ?? "").slice(0, Math.max(0, n));
-      const lastPart = (last ?? "").slice(0, Math.max(0, k)).toLowerCase();
-      const ex = `${firstPart}${lastPart}`;
-      return `Format “F${n}L${k}”: first ${n} of first + first ${k} of last. Example: ${first} ${last} → ${ex}`;
-    }
-    return "";  
-  } */
+  // ==================== PROPS ====================
+  let { data, form: formResult }: { data: PageData; form: ActionData } = $props();
 
-  // Working hours UI <-> compact string
-  type DayHours = {
-    open: boolean;
-    start: string;
-    end: string;
-    startHour: string;
-    startPeriod: string;
-    endHour: string;
-    endPeriod: string;
-  }; // '07'..'18'
-  function militaryTo12Hour(military: string): {
-    hour: string;
-    period: string;
-  } {
-    const h = parseInt(military, 10);
-    if (h === 0) return { hour: "12", period: "AM" };
-    if (h < 12) return { hour: String(h).padStart(2, "0"), period: "AM" };
-    if (h === 12) return { hour: "12", period: "PM" };
-    return { hour: String(h - 12).padStart(2, "0"), period: "PM" };
-  }
-  function hourTo24(hour: string, period: string): string {
-    const h = parseInt(hour, 10);
-    if (period === "AM") {
-      return h === 12 ? "00" : String(h).padStart(2, "0");
-    } else {
-      return h === 12 ? "12" : String(h + 12).padStart(2, "0");
-    }
-  }
-  type WorkingHoursUI = Record<
-    "Su" | "Mo" | "Tu" | "We" | "Th" | "Fr" | "Sa",
-    DayHours
-  >;
+  // ==================== REACTIVE DATA ====================
+  let organizations = $derived((data.organizations as OrgRow[]) || []);
+  let searchTerm = $state("");
 
-  function defaultWorkingHoursUI(): WorkingHoursUI {
-    const d: WorkingHoursUI = {
-      Su: {
-        open: false,
-        start: "09",
-        end: "17",
-        startHour: "09",
-        startPeriod: "AM",
-        endHour: "05",
-        endPeriod: "PM",
-      },
-      Mo: {
-        open: true,
-        start: "09",
-        end: "17",
-        startHour: "09",
-        startPeriod: "AM",
-        endHour: "05",
-        endPeriod: "PM",
-      },
-      Tu: {
-        open: true,
-        start: "09",
-        end: "17",
-        startHour: "09",
-        startPeriod: "AM",
-        endHour: "05",
-        endPeriod: "PM",
-      },
-      We: {
-        open: true,
-        start: "09",
-        end: "17",
-        startHour: "09",
-        startPeriod: "AM",
-        endHour: "05",
-        endPeriod: "PM",
-      },
-      Th: {
-        open: true,
-        start: "09",
-        end: "17",
-        startHour: "09",
-        startPeriod: "AM",
-        endHour: "05",
-        endPeriod: "PM",
-      },
-      Fr: {
-        open: true,
-        start: "09",
-        end: "17",
-        startHour: "09",
-        startPeriod: "AM",
-        endHour: "05",
-        endPeriod: "PM",
-      },
-      Sa: {
-        open: false,
-        start: "09",
-        end: "17",
-        startHour: "09",
-        startPeriod: "AM",
-        endHour: "05",
-        endPeriod: "PM",
-      },
-    };
-    return d;
-  }
-  function parseWorkingHoursToUI(input?: string | null): WorkingHoursUI {
-    const ui = defaultWorkingHoursUI();
-    if (!input) return ui;
-    for (const token of String(input)
-      .split(",")
-      .map((s) => s.trim())
-      .filter(Boolean)) {
-      const m = token.match(/^([A-Z][a-z])(\d{2})-(\d{2})$/);
-      if (!m) continue;
-      const [, code, start, end] = m as unknown as [
-        string,
-        "Su" | "Mo" | "Tu" | "We" | "Th" | "Fr" | "Sa",
-        string,
-        string,
-      ];
-      if (ui[code]) {
-        const startTime = militaryTo12Hour(start);
-        const endTime = militaryTo12Hour(end);
-        ui[code] = {
-          open: true,
-          start,
-          end,
-          startHour: startTime.hour,
-          startPeriod: startTime.period,
-          endHour: endTime.hour,
-          endPeriod: endTime.period,
-        };
-      }
-    }
-    return ui;
-  }
-  function packWorkingHours(ui: WorkingHoursUI): string {
-    const parts: string[] = [];
-    for (const d of DAYS) {
-      const v = ui[d.code];
-      if (v?.open) {
-        // clamp order if needed
-        let s = v.start,
-          e = v.end;
-        if (parseInt(e) < parseInt(s)) e = s; // never let end < start
-        parts.push(`${d.code}${s}-${e}`);
-      }
-    }
-    return parts.join(", ");
-  }
+  let filteredOrganizations = $derived.by(() => {
+    if (!searchTerm.trim()) return organizations;
+    const q = searchTerm.toLowerCase();
+    return organizations.filter(
+      (org) =>
+        (org.name ?? "").toLowerCase().includes(q) ||
+        (org.org_email ?? "").toLowerCase().includes(q) ||
+        (org.org_city ?? "").toLowerCase().includes(q) ||
+        (org.org_state ?? "").toLowerCase().includes(q)
+    );
+  });
 
-  // ---------- Form model ----------
-  let form = $state({
-    // Overview
+  // ==================== FORM STATE ====================
+  let formState = $state({
     name: "",
     org_status: "",
     org_email: "",
     org_phone: "",
     org_website: "",
-    // Address
     org_address: "",
     org_address2: "",
     org_city: "",
     org_state: "",
     org_zip_code: "",
-    // Operations
-    working_hours: "", // NOT directly used; we fill from UI pack
+    working_hours: "",
     days_off: "",
     rides_phone_number: "",
     client_min_age: "",
     min_days_in_advance_for_ride_requests: "",
     client_max_weekly_rides: "",
-    // Contacts (no phone fields)
     primary_contact_name: "",
     primary_contact_email: "",
     primary_contact_address: "",
@@ -287,307 +86,131 @@
     secondary_contact_city: "",
     secondary_contact_state: "",
     secondary_contact_zipcode: "",
-    // Login / username
-    //username_format: "",
     user_initial_password: "",
-    // Meta (read only)
-    org_creation_date: "",
-    first_ride_date: "",
-    last_activity_in_portal: "",
   });
 
-  // Wizard state
-  const STEP_LABELS = [
-    "Overview",
-    "Address",
-    "Operations",
-    "Primary Contact",
-    "Secondary Contact",
-    "Login",
-    "Review",
-  ] as const;
+  // ==================== MODAL STATE ====================
+  let showAddModal = $state(false);
+  let showEditModal = $state(false);
+  let showDeleteModal = $state(false);
+  let showPasswordModal = $state(false);
+  let selectedOrg: OrgRow | null = $state(null);
+  let editingOrg: OrgRow | null = $state(null);
+
+  // ==================== WIZARD STATE ====================
   let addStep = $state(0);
   let editStep = $state(0);
-
-  // Working hours UI for add/edit
   let whAdd = $state<WorkingHoursUI>(defaultWorkingHoursUI());
   let whEdit = $state<WorkingHoursUI>(defaultWorkingHoursUI());
-
-  const OPTIONAL_KEYS = new Set<string>([
-    "days_off",
-    "org_address2",
-    "first_ride_date",
-    "last_activity_in_portal",
-    "primary_contact_address2",
-    "secondary_contact_name",
-    "secondary_contact_email",
-    "secondary_contact_address",
-    "secondary_contact_address2",
-    "secondary_contact_city",
-    "secondary_contact_state",
-    "secondary_contact_zipcode",
-    "org_website", // <--- NEW: website is optional
-  ]);
-
-  function isRequired(key: string) {
-    return !OPTIONAL_KEYS.has(key);
-  }
-  const FIELD_LABELS: Record<string, string> = {
-    name: "Name",
-    org_status: "Organization Status",
-    org_email: "Organization Email",
-    org_phone: "Organization Phone",
-    org_website: "Website",
-    org_address: "Street",
-    org_address2: "Street 2",
-    org_city: "City",
-    org_state: "State",
-    org_zip_code: "Zip Code",
-    working_hours: "Working Hours",
-    days_off: "Days Off",
-    rides_phone_number: "Rides Phone",
-    client_min_age: "Client Minimum Age",
-    min_days_in_advance_for_ride_requests: "Min Days in Advance",
-    primary_contact_name: "Primary Contact Name",
-    primary_contact_email: "Primary Contact Email",
-    primary_contact_address: "Primary Contact Address",
-    primary_contact_address2: "Primary Contact Address 2",
-    primary_contact_city: "Primary Contact City",
-    primary_contact_state: "Primary Contact State",
-    primary_contact_zipcode: "Primary Contact Zip",
-    secondary_contact_name: "Secondary Contact Name",
-    secondary_contact_email: "Secondary Contact Email",
-    secondary_contact_address: "Secondary Contact Address",
-    secondary_contact_address2: "Secondary Contact Address 2",
-    secondary_contact_city: "Secondary Contact City",
-    secondary_contact_state: "Secondary Contact State",
-    secondary_contact_zipcode: "Secondary Contact Zip",
-    //username_format: "Username Format",
-    user_initial_password: "Initial Password",
-  };
   let fieldErrors = $state<Record<string, string>>({});
 
+  // ==================== MESSAGE STATE ====================
+  let message = $state("");
+  let messageSuccess = $state(false);
+
+  // ==================== PASSWORD STATE ====================
+  let passwordInput = $state("");
+  let passwordError = $state("");
+
+  // ==================== MESSAGE HELPER ====================
+  function showMessage(msg: string, success: boolean) {
+    message = msg;
+    messageSuccess = success;
+    setTimeout(() => {
+      message = "";
+    }, 5000);
+  }
+
+  // ==================== FORM RESULT HANDLER ====================
+  $effect(() => {
+    if (formResult?.success) {
+      showMessage(formResult.message || "Operation successful!", true);
+      closeModals();
+      invalidateAll();
+    } else if (formResult?.error) {
+      showMessage(formResult.error, false);
+    }
+  });
+
+  // ==================== VALIDATION ====================
   function validateRequiredForStep(stepIdx: number): string[] {
-    // step-specific requireds to reduce overwhelm
     fieldErrors = {};
-    const requiredByStep: Record<number, string[]> = {
-      0: ["name", "org_status", "org_email", "org_phone"],
-      1: ["org_address", "org_city", "org_state", "org_zip_code"],
-      2: [
-        "rides_phone_number",
-        "client_min_age",
-        "min_days_in_advance_for_ride_requests",
-      ], // working hours via UI
-      3: [
-        "primary_contact_name",
-        "primary_contact_email",
-        "primary_contact_address",
-        "primary_contact_city",
-        "primary_contact_state",
-        "primary_contact_zipcode",
-      ],
-      4: [], // secondary optional
-      5: ["user_initial_password"],
-      6: [], // review
-    };
-    const keys = requiredByStep[stepIdx] ?? [];
+    const keys = REQUIRED_BY_STEP[stepIdx] ?? [];
     const missing: string[] = [];
+
     for (const key of keys) {
-      const val = (form as any)[key];
+      const val = (formState as any)[key];
       const empty = val == null || String(val).trim() === "";
       if (empty) {
         missing.push(key);
         fieldErrors[key] = "Required";
       }
     }
-    // Also require at least one open day in step 2:
+
+    // Also require at least one open day in step 2
     if (stepIdx === 2) {
-      const anyOpen = DAYS.some(
-        (d) => whAdd[d.code].open || whEdit[d.code].open
-      );
-      if (!anyOpen) missing.push("working_hours");
+      const wh = showEditModal ? whEdit : whAdd;
+      const anyOpen = DAYS.some((d) => wh[d.code].open);
+      if (!anyOpen) {
+        missing.push("working_hours");
+        fieldErrors["working_hours"] = "At least one day must be open";
+      }
     }
+
     return missing;
   }
 
-  function labelWithRequired(label: string, key: string) {
-    return isRequired(key) ? `${label} *` : label;
-  }
-  function emptyToNull(obj: Record<string, any>) {
-    const out: Record<string, any> = {};
-    for (const k in obj) out[k] = obj[k] === "" ? null : obj[k];
-    return out;
-  }
-  function coerceNumbers(payload: Record<string, any>, keys: string[]) {
-    for (const k of keys) {
-      if (
-        payload[k] === null ||
-        payload[k] === undefined ||
-        payload[k] === ""
-      ) {
-        payload[k] = null;
-        continue;
-      }
-      const n = Number(payload[k]);
-      payload[k] = isNaN(n) ? null : n;
+  // ==================== MODAL FUNCTIONS ====================
+  function resetForm() {
+    for (const k of Object.keys(formState)) {
+      (formState as any)[k] = "";
     }
-  }
-
-  // ---------- Data / UI State ----------
-  let organizations: OrgRow[] = [];
-  let filteredOrganizations: OrgRow[] = [];
-  let isLoading = $state(true);
-  let searchTerm = $state("");
-  let showAddModal = $state(false);
-  let showEditModal = $state(false);
-  let showDeleteModal = $state(false);
-  let showPasswordModal = $state(false);
-  let selectedOrg: OrgRow | null = null;
-  let editingOrg: OrgRow | null = null;
-  let editMessage = $state("");
-  let editMessageSuccess = $state(false);
-  let passwordInput = $state("");
-  let passwordError = $state("");
-
-  function showEditMessage(message: string, success: boolean) {
-    editMessage = message;
-    editMessageSuccess = success;
-    setTimeout(() => {
-      editMessage = "";
-    }, 5000);
-  }
-
-  onMount(async () => {
-    await loadOrganizations();
-    if (filteredOrganizations.length === 0 && organizations.length > 0) {
-      filteredOrganizations = organizations;
-    }
-  });
-
-  async function loadOrganizations() {
-    try {
-      isLoading = true;
-      // Order by org_id ASC (lowest on top)
-      const { data, error } = await supabase
-        .from("organization")
-        .select("*")
-        .order("org_id", { ascending: true });
-      if (error) {
-        showEditMessage(
-          "Failed to load organizations: " + error.message,
-          false
-        );
-        return;
-      }
-      // Client-side safety sort as well
-      organizations = (data || []).sort(
-        (a, b) => (a.org_id ?? 0) - (b.org_id ?? 0)
-      );
-      applyFilter();
-    } catch (e: any) {
-      showEditMessage(
-        "Failed to load organizations: " + (e?.message ?? "Unknown error"),
-        false
-      );
-    } finally {
-      isLoading = false;
-    }
-  }
-  async function refreshOrganizations() {
-    try {
-      isLoading = true;
-      const { data, error } = await supabase
-        .from("organization")
-        .select("*")
-        .order("org_id", { ascending: true });
-      if (error) {
-        showEditMessage(
-          "Failed to refresh organizations: " + error.message,
-          false
-        );
-        return;
-      }
-      organizations = (data || []).sort(
-        (a, b) => (a.org_id ?? 0) - (b.org_id ?? 0)
-      );
-      applyFilter();
-    } catch (e: any) {
-      showEditMessage(
-        "Failed to refresh organizations: " + (e?.message ?? "Unknown error"),
-        false
-      );
-    } finally {
-      isLoading = false;
-    }
-  }
-
-  function applyFilter() {
-    if (!searchTerm.trim()) {
-      filteredOrganizations = organizations;
-    } else {
-      const q = searchTerm.toLowerCase();
-      filteredOrganizations = organizations.filter(
-        (org) =>
-          (org.name ?? "").toLowerCase().includes(q) ||
-          (org.org_email ?? "").toLowerCase().includes(q) ||
-          (org.org_city ?? "").toLowerCase().includes(q) ||
-          (org.org_state ?? "").toLowerCase().includes(q)
-      );
-    }
-    // keep UI order by org_id asc
-    filteredOrganizations = filteredOrganizations
-      .slice()
-      .sort((a, b) => (a.org_id ?? 0) - (b.org_id ?? 0));
-  }
-  $effect(() => {
-    if (organizations) applyFilter();
-  });
-
-  // ---------- Modals ----------
-  function openAddModal() {
-    // reset form + wizard
-    for (const k of Object.keys(form)) (form as any)[k] = "";
     fieldErrors = {};
+  }
+
+  function openAddModal() {
+    resetForm();
     addStep = 0;
     whAdd = defaultWorkingHoursUI();
     showAddModal = true;
   }
+
   function openEditModal(org: OrgRow) {
     editingOrg = org;
-    for (const k of Object.keys(form)) {
+
+    for (const k of Object.keys(formState)) {
       let v = (org as any)[k];
-      if (k === "days_off" && (v == null || v === ""))
+      if (k === "days_off" && (v == null || v === "")) {
         v = (org as any)["days-off"];
-      (form as any)[k] = v == null ? "" : String(v);
+      }
+      (formState as any)[k] = v == null ? "" : String(v);
     }
+
     // Normalize org_status
-    const rawStatus = (org.org_status ??
-      org.org_status_enum ??
-      org.status ??
-      "") as string;
+    const rawStatus = (org.org_status ?? org.org_status_enum ?? org.status ?? "") as string;
     const s = String(rawStatus).trim().toLowerCase();
-    form.org_status =
-      s === "active" ? "Active" : s === "inactive" ? "Inactive" : "Inactive";
+    formState.org_status = s === "active" ? "Active" : "Inactive";
 
     // Seed working-hours UI from existing DB value
-    whEdit = parseWorkingHoursToUI(
-      org.working_hours ?? org["working_hours"] ?? ""
-    );
+    whEdit = parseWorkingHoursToUI(org.working_hours ?? "");
 
     fieldErrors = {};
     editStep = 0;
     showEditModal = true;
   }
+
   function openDeleteModal(org: OrgRow) {
     selectedOrg = org;
     showDeleteModal = true;
   }
+
   function openPasswordModal() {
     passwordInput = "";
     passwordError = "";
     showDeleteModal = false;
     showPasswordModal = true;
   }
+
   function closeModals() {
     showAddModal = false;
     showEditModal = false;
@@ -599,16 +222,17 @@
     passwordError = "";
   }
 
-  // ---------- Step navigation ----------
+  // ==================== STEP NAVIGATION ====================
   function nextAddStep() {
     const missing = validateRequiredForStep(addStep);
     if (missing.length) {
       const names = missing.map((k) => FIELD_LABELS[k] ?? k).join(", ");
-      showEditMessage(`Please fill in: ${names}.`, false);
+      showMessage(`Please fill in: ${names}.`, false);
       return;
     }
     if (addStep < STEP_LABELS.length - 1) addStep += 1;
   }
+
   function prevAddStep() {
     if (addStep > 0) addStep -= 1;
   }
@@ -617,222 +241,46 @@
     const missing = validateRequiredForStep(editStep);
     if (missing.length) {
       const names = missing.map((k) => FIELD_LABELS[k] ?? k).join(", ");
-      showEditMessage(`Please fill in: ${names}.`, false);
+      showMessage(`Please fill in: ${names}.`, false);
       return;
     }
     if (editStep < STEP_LABELS.length - 1) editStep += 1;
   }
+
   function prevEditStep() {
     if (editStep > 0) editStep -= 1;
   }
 
-  // ---------- CRUD ----------
-  function getOrgStatus(org: OrgRow): "Active" | "Inactive" {
-    const raw = (org.org_status_enum ?? org.org_status ?? org.status ?? "") as string;
-    const s = String(raw).trim().toLowerCase();
-    return s === "active" ? "Active" : "Inactive";
+  // ==================== WORKING HOURS HELPERS ====================
+  function getPackedWorkingHours(isEdit: boolean): string {
+    return packWorkingHours(isEdit ? whEdit : whAdd);
   }
 
-  async function toggleOrgStatus(org: OrgRow) {
-    const current = getOrgStatus(org);
-    const next = current === "Active" ? "Inactive" : "Active";
-
-    try {
-      const { error } = await supabase
-        .from("organization")
-        .update({ org_status_enum: next })
-        .eq("org_id", org.org_id);
-
-      if (error) {
-        showEditMessage(
-          "Failed to update organization status: " + error.message,
-          false
-        );
-        return;
-      }
-
-      showEditMessage(
-        `Organization marked as ${next}.`,
-        true
-      );
-      await refreshOrganizations();
-    } catch (e: any) {
-      showEditMessage(
-        "Failed to update organization status: " + (e?.message ?? "Unknown error"),
-        false
-      );
+  function handleHourChange(dayCode: DayCode, field: "start" | "end", isEdit: boolean) {
+    const wh = isEdit ? whEdit : whAdd;
+    if (field === "start") {
+      wh[dayCode].start = hourTo24(wh[dayCode].startHour, wh[dayCode].startPeriod);
+    } else {
+      wh[dayCode].end = hourTo24(wh[dayCode].endHour, wh[dayCode].endPeriod);
     }
   }
 
-  async function addOrganization(e: Event) {
-    e.preventDefault();
-    // final step validation
+  // ==================== FORM SUBMISSION VALIDATION ====================
+  function validateAllSteps(): boolean {
     for (let s = 0; s <= 5; s++) {
       const miss = validateRequiredForStep(s);
       if (miss.length) {
-        addStep = s;
+        if (showEditModal) {
+          editStep = s;
+        } else {
+          addStep = s;
+        }
         const names = miss.map((k) => FIELD_LABELS[k] ?? k).join(", ");
-        showEditMessage(`Please fill in: ${names}.`, false);
-        return;
+        showMessage(`Please fill in: ${names}.`, false);
+        return false;
       }
     }
-    try {
-      const payload: Record<string, any> = emptyToNull({ ...form });
-      // set working_hours from UI
-      payload.working_hours = packWorkingHours(whAdd);
-
-      // remap + numeric coercion
-      coerceNumbers(payload, [
-        "client_min_age",
-        "min_days_in_advance_for_ride_requests",
-        "client_max_weekly_rides",
-      ]);
-      if ("days_off" in payload) {
-        payload["days-off"] = payload.days_off;
-        delete payload.days_off;
-      }
-      if ("org_status" in payload) {
-        payload.org_status_enum = payload.org_status;
-        delete payload.org_status;
-      }
-      delete payload.org_creation_date;
-      delete payload.first_ride_date;
-      delete payload.last_activity_in_portal;
-
-      const { error } = await supabase
-        .from("organization")
-        .insert([payload])
-        .select()
-        .single();
-      if (error) {
-        showEditMessage("Failed to add organization: " + error.message, false);
-        return;
-      }
-
-      showEditMessage("Organization added successfully!", true);
-      closeModals();
-      await refreshOrganizations();
-    } catch (e: any) {
-      showEditMessage(
-        "Failed to add organization: " + (e?.message ?? "Unknown error"),
-        false
-      );
-    }
-  }
-
-  async function updateOrganization(e: Event) {
-    e.preventDefault();
-    if (!editingOrg) return;
-
-    // final step validation
-    for (let s = 0; s <= 5; s++) {
-      const miss = validateRequiredForStep(s);
-      if (miss.length) {
-        editStep = s;
-        const names = miss.map((k) => FIELD_LABELS[k] ?? k).join(", ");
-        showEditMessage(`Please fill in: ${names}.`, false);
-        return;
-      }
-    }
-    try {
-      const payload: Record<string, any> = emptyToNull({ ...form });
-
-      // set working_hours from UI
-      payload.working_hours = packWorkingHours(whEdit);
-
-      coerceNumbers(payload, [
-        "client_min_age",
-        "min_days_in_advance_for_ride_requests",
-        "client_max_weekly_rides",
-      ]);
-      if ("days_off" in payload) {
-        payload["days-off"] = payload.days_off;
-        delete payload.days_off;
-      }
-      if ("org_status" in payload) {
-        payload.org_status_enum = payload.org_status;
-        delete payload.org_status;
-      }
-      delete payload.org_creation_date;
-      delete payload.first_ride_date;
-      delete payload.last_activity_in_portal;
-      console.log("Updating org_id:", editingOrg.org_id);
-      console.log("Payload:", payload);
-      const { error } = await supabase
-        .from("organization")
-        .update(payload)
-        .eq("org_id", editingOrg.org_id)
-        .select();
-
-      if (error) {
-        showEditMessage(
-          "Failed to update organization: " + error.message,
-          false
-        );
-        return;
-      }
-
-      showEditMessage("Organization updated successfully!", true);
-      closeModals();
-      await refreshOrganizations();
-    } catch (e: any) {
-      showEditMessage(
-        "Failed to update organization: " + (e?.message ?? "Unknown error"),
-        false
-      );
-    }
-  }
-
-  async function deleteOrganization() {
-    if (!selectedOrg) return;
-    try {
-      const { error } = await supabase
-        .from("organization")
-        .delete()
-        .eq("org_id", selectedOrg.org_id);
-      if (error) {
-        showEditMessage(
-          "Failed to delete organization: " + error.message,
-          false
-        );
-        return;
-      }
-      showEditMessage("Organization deleted successfully!", true);
-      closeModals();
-      await refreshOrganizations();
-    } catch (e: any) {
-      showEditMessage(
-        "Failed to delete organization: " + (e?.message ?? "Unknown error"),
-        false
-      );
-    }
-  }
-  async function confirmDeleteWithPassword() {
-    if (!passwordInput.trim()) {
-      passwordError = "Please enter your password to confirm deletion.";
-      return;
-    }
-    try {
-      passwordError = "";
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user?.email) {
-        passwordError = "Unable to verify user identity.";
-        return;
-      }
-      const { error: signInError } = await supabase.auth.signInWithPassword({
-        email: user.email,
-        password: passwordInput,
-      });
-      if (signInError) {
-        passwordError = "Invalid password. Please try again.";
-        return;
-      }
-      await deleteOrganization();
-    } catch {
-      passwordError = "Error verifying password. Please try again.";
-    }
+    return true;
   }
 </script>
 
@@ -846,12 +294,8 @@
             <Building2 class="w-6 h-6 text-blue-600" />
           </div>
           <div>
-            <h1 class="text-2xl font-bold text-gray-900">
-              Organizations Management
-            </h1>
-            <p class="text-sm text-gray-600">
-              Manage organizations in the database
-            </p>
+            <h1 class="text-2xl font-bold text-gray-900">Organizations Management</h1>
+            <p class="text-sm text-gray-600">Manage organizations in the database</p>
           </div>
         </div>
         <button
@@ -865,25 +309,21 @@
   </div>
 
   <!-- Messages -->
-  {#if editMessage}
+  {#if message}
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
       <div
-        class="rounded-md p-4 {editMessageSuccess
+        class="rounded-md p-4 {messageSuccess
           ? 'bg-green-50 border border-green-200'
           : 'bg-red-50 border border-red-200'}"
       >
-        <p
-          class="text-base font-medium {editMessageSuccess
-            ? 'text-green-800'
-            : 'text-red-800'}"
-        >
-          {editMessage}
+        <p class="text-base font-medium {messageSuccess ? 'text-green-800' : 'text-red-800'}">
+          {message}
         </p>
       </div>
     </div>
   {/if}
 
-  <!-- Main -->
+  <!-- Main Content -->
   <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
     <!-- Search -->
     <div class="mb-6">
@@ -891,23 +331,17 @@
         <div class="flex items-center space-x-4">
           <div class="flex-1 max-w-md">
             <div class="relative">
-              <Search
-                class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4"
-              />
+              <Search class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
               <input
                 type="text"
                 placeholder="Search organizations..."
                 bind:value={searchTerm}
-                oninput={applyFilter}
                 class="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
           </div>
           <div class="text-sm text-gray-500">
-            {filteredOrganizations.length} organization{filteredOrganizations.length !==
-            1
-              ? "s"
-              : ""} found
+            {filteredOrganizations.length} organization{filteredOrganizations.length !== 1 ? "s" : ""} found
           </div>
         </div>
       </div>
@@ -915,23 +349,14 @@
 
     <!-- Table -->
     <div class="bg-white rounded-lg shadow-sm border border-gray-200">
-      {#if isLoading}
-        <div class="p-8 text-center">
-          <div
-            class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"
-          ></div>
-          <p class="mt-2 text-gray-500">Loading organizations...</p>
-        </div>
-      {:else if filteredOrganizations.length === 0}
+      {#if filteredOrganizations.length === 0}
         <div class="p-8 text-center">
           <Building2 class="w-16 h-16 text-gray-400 mx-auto mb-4" />
           <h3 class="text-lg font-medium text-gray-900 mb-2">
             {searchTerm ? "No organizations found" : "No organizations yet"}
           </h3>
           <p class="text-gray-500 mb-4">
-            {searchTerm
-              ? "Try adjusting your search terms."
-              : "Get started by adding your first organization."}
+            {searchTerm ? "Try adjusting your search terms." : "Get started by adding your first organization."}
           </p>
           {#if !searchTerm}
             <button
@@ -947,22 +372,10 @@
           <table class="min-w-full divide-y divide-gray-200">
             <thead class="bg-gray-50">
               <tr>
-                <th
-                  class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase"
-                  >Organization</th
-                >
-                <th
-                  class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase"
-                  >Contact</th
-                >
-                <th
-                  class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase"
-                  >Location</th
-                >
-                <th
-                  class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase"
-                  >Actions</th
-                >
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Organization</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Contact</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Location</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
               </tr>
             </thead>
             <tbody class="bg-white divide-y divide-gray-200">
@@ -970,14 +383,10 @@
                 <tr class="hover:bg-gray-50">
                   <td class="px-6 py-4 whitespace-nowrap">
                     <div class="space-y-0.5">
-                      <div
-                        class="text-sm font-medium text-gray-900 flex items-center gap-2"
-                      >
+                      <div class="text-sm font-medium text-gray-900 flex items-center gap-2">
                         {#if org.org_website}
                           <a
-                            href={/^https?:\/\//.test(org.org_website)
-                              ? org.org_website
-                              : `https://${org.org_website}`}
+                            href={/^https?:\/\//.test(org.org_website) ? org.org_website : `https://${org.org_website}`}
                             class="text-blue-600 hover:underline inline-flex items-center gap-1"
                             target="_blank"
                             rel="noopener noreferrer"
@@ -1009,9 +418,7 @@
                       <MapPin class="w-4 h-4 mr-1 mt-0.5 text-gray-400" />
                       <div>
                         <div>{org.org_city ?? "-"}, {org.org_state ?? "-"}</div>
-                        <div class="text-gray-500">
-                          {org.org_zip_code ?? ""}
-                        </div>
+                        <div class="text-gray-500">{org.org_zip_code ?? ""}</div>
                       </div>
                     </div>
                   </td>
@@ -1023,21 +430,23 @@
                       >
                         <Edit class="w-4 h-4 mr-1" /> Edit
                       </button>
-                      <button
-                        onclick={() => toggleOrgStatus(org)}
-                        class={
-                          "inline-flex items-center px-3 py-2 rounded-md text-white " +
-                          (getOrgStatus(org) === "Active"
-                            ? "bg-red-600 hover:bg-red-700"
-                            : "bg-green-600 hover:bg-green-700")
-                        }
-                      >
-                        {#if getOrgStatus(org) === "Active"}
-                          <X class="w-4 h-4 mr-1" /> Deactivate
-                        {:else}
-                          <Save class="w-4 h-4 mr-1" /> Activate
-                        {/if}
-                      </button>
+                      <form method="POST" action="?/toggleStatus" use:enhance>
+                        <input type="hidden" name="org_id" value={org.org_id} />
+                        <input type="hidden" name="current_status" value={getOrgStatus(org)} />
+                        <button
+                          type="submit"
+                          class={"inline-flex items-center px-3 py-2 rounded-md text-white " +
+                            (getOrgStatus(org) === "Active"
+                              ? "bg-red-600 hover:bg-red-700"
+                              : "bg-green-600 hover:bg-green-700")}
+                        >
+                          {#if getOrgStatus(org) === "Active"}
+                            <X class="w-4 h-4 mr-1" /> Deactivate
+                          {:else}
+                            <Save class="w-4 h-4 mr-1" /> Activate
+                          {/if}
+                        </button>
+                      </form>
                     </div>
                   </td>
                 </tr>
@@ -1049,91 +458,77 @@
     </div>
   </div>
 
-  <!-- Delete Confirmation -->
+  <!-- Delete Confirmation Modal -->
   {#if showDeleteModal && selectedOrg}
-    <div
-      class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50"
-    >
-      <div
-        class="relative top-20 mx-auto p-5 border w-full max-w-md shadow-lg rounded-md bg-white"
-      >
+    <div class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+      <div class="relative top-20 mx-auto p-5 border w-full max-w-md shadow-lg rounded-md bg-white">
         <div class="mt-3">
           <div class="flex items-center justify-between mb-4">
-            <h3 class="text-lg font-medium text-gray-900">
-              Delete Organization
-            </h3>
-            <button
-              onclick={closeModals}
-              class="text-gray-400 hover:text-gray-600"
-              ><X class="w-5 h-5" /></button
-            >
+            <h3 class="text-lg font-medium text-gray-900">Delete Organization</h3>
+            <button onclick={closeModals} class="text-gray-400 hover:text-gray-600">
+              <X class="w-5 h-5" />
+            </button>
           </div>
           <p class="text-sm text-gray-600 mb-6">
-            Are you sure you want to delete <strong>{selectedOrg.name}</strong>?
-            This action cannot be undone.
+            Are you sure you want to delete <strong>{selectedOrg.name}</strong>? This action cannot be undone.
           </p>
           <div class="flex justify-end gap-3">
-            <button
-              onclick={closeModals}
-              class="px-4 py-2 border border-gray-300 rounded-md">Cancel</button
-            >
-            <button
-              onclick={openPasswordModal}
-              class="px-4 py-2 bg-red-600 text-white rounded-md"
-              >Yes, Delete</button
-            >
+            <button onclick={closeModals} class="px-4 py-2 border border-gray-300 rounded-md">Cancel</button>
+            <button onclick={openPasswordModal} class="px-4 py-2 bg-red-600 text-white rounded-md">Yes, Delete</button>
           </div>
         </div>
       </div>
     </div>
   {/if}
 
-  <!-- Password Confirm -->
+  <!-- Password Confirmation Modal -->
   {#if showPasswordModal && selectedOrg}
-    <div
-      class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50"
-    >
-      <div
-        class="relative top-20 mx-auto p-5 border w-full max-w-md shadow-lg rounded-md bg-white"
-      >
+    <div class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+      <div class="relative top-20 mx-auto p-5 border w-full max-w-md shadow-lg rounded-md bg-white">
         <div class="mt-3">
           <div class="flex items-center justify-between mb-4">
             <h3 class="text-lg font-medium text-gray-900">Confirm Deletion</h3>
-            <button
-              onclick={closeModals}
-              class="text-gray-400 hover:text-gray-600"
-              ><X class="w-5 h-5" /></button
-            >
+            <button onclick={closeModals} class="text-gray-400 hover:text-gray-600">
+              <X class="w-5 h-5" />
+            </button>
           </div>
-          <div class="mb-6">
-            <p class="text-sm text-gray-600 mb-4">
-              Enter your password to delete <strong>{selectedOrg.name}</strong>.
-            </p>
-            <label class="block text-sm font-medium text-gray-700 mb-2"
-              >Password</label
-            >
-            <input
-              type="password"
-              bind:value={passwordInput}
-              class="w-full px-3 py-2 border {passwordError
-                ? 'border-red-300'
-                : 'border-gray-300'} rounded-md"
-            />
-            {#if passwordError}<p class="mt-2 text-sm text-red-600">
-                {passwordError}
-              </p>{/if}
-          </div>
-          <div class="flex justify-end gap-3">
-            <button
-              onclick={closeModals}
-              class="px-4 py-2 border border-gray-300 rounded-md">Cancel</button
-            >
-            <button
-              onclick={confirmDeleteWithPassword}
-              class="px-4 py-2 bg-red-600 text-white rounded-md"
-              >Delete Organization</button
-            >
-          </div>
+          <form
+            method="POST"
+            action="?/deleteOrganization"
+            use:enhance={() => {
+              return async ({ result }) => {
+                if (result.type === "failure") {
+                  passwordError = (result.data as any)?.error || "Error deleting organization";
+                } else {
+                  closeModals();
+                  invalidateAll();
+                }
+              };
+            }}
+          >
+            <input type="hidden" name="org_id" value={selectedOrg.org_id} />
+            <div class="mb-6">
+              <p class="text-sm text-gray-600 mb-4">
+                Enter your password to delete <strong>{selectedOrg.name}</strong>.
+              </p>
+              <label class="block text-sm font-medium text-gray-700 mb-2">Password</label>
+              <input
+                type="password"
+                name="password"
+                bind:value={passwordInput}
+                class="w-full px-3 py-2 border {passwordError ? 'border-red-300' : 'border-gray-300'} rounded-md"
+              />
+              {#if passwordError}
+                <p class="mt-2 text-sm text-red-600">{passwordError}</p>
+              {/if}
+            </div>
+            <div class="flex justify-end gap-3">
+              <button type="button" onclick={closeModals} class="px-4 py-2 border border-gray-300 rounded-md">
+                Cancel
+              </button>
+              <button type="submit" class="px-4 py-2 bg-red-600 text-white rounded-md">Delete Organization</button>
+            </div>
+          </form>
         </div>
       </div>
     </div>
@@ -1141,19 +536,13 @@
 
   <!-- ADD Organization Wizard -->
   {#if showAddModal}
-    <div
-      class="fixed inset-0 bg-gray-600/50 overflow-y-auto h-full w-full z-50"
-    >
-      <div
-        class="relative top-10 mx-auto p-5 w-full max-w-4xl shadow-lg rounded-2xl bg-white"
-      >
+    <div class="fixed inset-0 bg-gray-600/50 overflow-y-auto h-full w-full z-50">
+      <div class="relative top-10 mx-auto p-5 w-full max-w-4xl shadow-lg rounded-2xl bg-white">
         <div class="flex items-center justify-between mb-3">
           <h3 class="text-xl font-semibold">Add Organization</h3>
-          <button
-            onclick={closeModals}
-            class="text-gray-400 hover:text-gray-600"
-            ><X class="w-5 h-5" /></button
-          >
+          <button onclick={closeModals} class="text-gray-400 hover:text-gray-600">
+            <X class="w-5 h-5" />
+          </button>
         </div>
         <p class="text-sm text-gray-500 mb-4">
           <span class="text-red-600">*</span> indicates required fields.
@@ -1165,71 +554,77 @@
           <span class="font-medium">{STEP_LABELS[addStep]}</span>
         </div>
 
-        <form onsubmit={addOrganization} class="space-y-6">
+        <form
+          method="POST"
+          action="?/addOrganization"
+          use:enhance={() => {
+            if (!validateAllSteps()) {
+              return async () => {};
+            }
+            return async ({ result }) => {
+              if (result.type === "success") {
+                showMessage("Organization added successfully!", true);
+                closeModals();
+                invalidateAll();
+              } else if (result.type === "failure") {
+                showMessage((result.data as any)?.error || "Failed to add organization", false);
+              }
+            };
+          }}
+          class="space-y-6"
+        >
+          <!-- Hidden fields for form submission -->
+          <input type="hidden" name="working_hours" value={getPackedWorkingHours(false)} />
+
           <!-- STEP 0: Overview -->
           {#if addStep === 0}
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               <div>
-                <label class="block text-sm font-medium"
-                  >{labelWithRequired("Name", "name")}</label
-                ><input
+                <label class="block text-sm font-medium">{labelWithRequired("Name", "name")}</label>
+                <input
                   type="text"
-                  bind:value={form.name}
-                  class={"mt-1 w-full border rounded-md px-3 py-2 " +
-                    (fieldErrors.name ? "border-red-500" : "border-gray-300")}
+                  name="name"
+                  bind:value={formState.name}
+                  class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.name ? "border-red-500" : "border-gray-300")}
                 />
               </div>
               <div>
-                <label class="block text-sm font-medium"
-                  >{labelWithRequired(
-                    "Organization Status",
-                    "org_status"
-                  )}</label
-                ><select
-                  bind:value={form.org_status}
-                  class={"mt-1 w-full border rounded-md px-3 py-2 " +
-                    (fieldErrors.org_status
-                      ? "border-red-500"
-                      : "border-gray-300")}
-                  ><option value="">—</option><option value="Active"
-                    >Active</option
-                  ><option value="Inactive">Inactive</option></select
+                <label class="block text-sm font-medium">{labelWithRequired("Organization Status", "org_status")}</label>
+                <select
+                  name="org_status"
+                  bind:value={formState.org_status}
+                  class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.org_status ? "border-red-500" : "border-gray-300")}
                 >
+                  <option value="">—</option>
+                  <option value="Active">Active</option>
+                  <option value="Inactive">Inactive</option>
+                </select>
               </div>
               <div>
-                <label class="block text-sm font-medium"
-                  >{labelWithRequired("Website", "org_website")}</label
-                ><input
+                <label class="block text-sm font-medium">{labelWithRequired("Website", "org_website")}</label>
+                <input
                   type="text"
-                  bind:value={form.org_website}
-                  class={"mt-1 w-full border rounded-md px-3 py-2 " +
-                    (fieldErrors.org_website
-                      ? "border-red-500"
-                      : "border-gray-300")}
+                  name="org_website"
+                  bind:value={formState.org_website}
+                  class="mt-1 w-full border rounded-md px-3 py-2 border-gray-300"
                 />
               </div>
               <div>
-                <label class="block text-sm font-medium"
-                  >{labelWithRequired("Organization Email", "org_email")}</label
-                ><input
+                <label class="block text-sm font-medium">{labelWithRequired("Organization Email", "org_email")}</label>
+                <input
                   type="email"
-                  bind:value={form.org_email}
-                  class={"mt-1 w-full border rounded-md px-3 py-2 " +
-                    (fieldErrors.org_email
-                      ? "border-red-500"
-                      : "border-gray-300")}
+                  name="org_email"
+                  bind:value={formState.org_email}
+                  class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.org_email ? "border-red-500" : "border-gray-300")}
                 />
               </div>
               <div>
-                <label class="block text-sm font-medium"
-                  >{labelWithRequired("Organization Phone", "org_phone")}</label
-                ><input
+                <label class="block text-sm font-medium">{labelWithRequired("Organization Phone", "org_phone")}</label>
+                <input
                   type="tel"
-                  bind:value={form.org_phone}
-                  class={"mt-1 w-full border rounded-md px-3 py-2 " +
-                    (fieldErrors.org_phone
-                      ? "border-red-500"
-                      : "border-gray-300")}
+                  name="org_phone"
+                  bind:value={formState.org_phone}
+                  class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.org_phone ? "border-red-500" : "border-gray-300")}
                 />
               </div>
             </div>
@@ -1239,73 +634,59 @@
           {#if addStep === 1}
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div class="md:col-span-2">
-                <label class="block text-sm font-medium"
-                  >{labelWithRequired("Street", "org_address")}</label
-                ><input
+                <label class="block text-sm font-medium">{labelWithRequired("Street", "org_address")}</label>
+                <input
                   type="text"
-                  bind:value={form.org_address}
-                  class={"mt-1 w-full border rounded-md px-3 py-2 " +
-                    (fieldErrors.org_address
-                      ? "border-red-500"
-                      : "border-gray-300")}
+                  name="org_address"
+                  bind:value={formState.org_address}
+                  class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.org_address ? "border-red-500" : "border-gray-300")}
                 />
               </div>
               <div class="md:col-span-2">
-                <label class="block text-sm font-medium"
-                  >{labelWithRequired("Street 2", "org_address2")}</label
-                ><input
+                <label class="block text-sm font-medium">{labelWithRequired("Street 2", "org_address2")}</label>
+                <input
                   type="text"
-                  bind:value={form.org_address2}
+                  name="org_address2"
+                  bind:value={formState.org_address2}
                   class="mt-1 w-full border rounded-md px-3 py-2 border-gray-300"
                 />
               </div>
               <div>
-                <label class="block text-sm font-medium"
-                  >{labelWithRequired("City", "org_city")}</label
-                ><input
+                <label class="block text-sm font-medium">{labelWithRequired("City", "org_city")}</label>
+                <input
                   type="text"
-                  bind:value={form.org_city}
-                  class={"mt-1 w-full border rounded-md px-3 py-2 " +
-                    (fieldErrors.org_city
-                      ? "border-red-500"
-                      : "border-gray-300")}
+                  name="org_city"
+                  bind:value={formState.org_city}
+                  class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.org_city ? "border-red-500" : "border-gray-300")}
                 />
               </div>
               <div>
-                <label class="block text-sm font-medium"
-                  >{labelWithRequired("State", "org_state")}</label
-                ><input
+                <label class="block text-sm font-medium">{labelWithRequired("State", "org_state")}</label>
+                <input
                   type="text"
+                  name="org_state"
                   maxlength="2"
-                  bind:value={form.org_state}
-                  class={"mt-1 w-full border rounded-md px-3 py-2 " +
-                    (fieldErrors.org_state
-                      ? "border-red-500"
-                      : "border-gray-300")}
+                  bind:value={formState.org_state}
+                  class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.org_state ? "border-red-500" : "border-gray-300")}
                 />
               </div>
               <div>
-                <label class="block text-sm font-medium"
-                  >{labelWithRequired("Zip Code", "org_zip_code")}</label
-                ><input
+                <label class="block text-sm font-medium">{labelWithRequired("Zip Code", "org_zip_code")}</label>
+                <input
                   type="text"
-                  bind:value={form.org_zip_code}
-                  class={"mt-1 w-full border rounded-md px-3 py-2 " +
-                    (fieldErrors.org_zip_code
-                      ? "border-red-500"
-                      : "border-gray-300")}
+                  name="org_zip_code"
+                  bind:value={formState.org_zip_code}
+                  class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.org_zip_code ? "border-red-500" : "border-gray-300")}
                 />
               </div>
             </div>
           {/if}
 
-          <!-- STEP 2: Operations (Working Hours UI + others) -->
+          <!-- STEP 2: Operations -->
           {#if addStep === 2}
             <div class="space-y-4">
               <div>
-                <label class="block text-sm font-medium"
-                  >Working Hours <span class="text-red-600">*</span></label
-                >
+                <label class="block text-sm font-medium">Working Hours <span class="text-red-600">*</span></label>
                 <div class="mt-2 border rounded-lg overflow-hidden">
                   <table class="w-full text-sm">
                     <thead class="bg-gray-50">
@@ -1321,10 +702,7 @@
                         <tr class="border-t">
                           <td class="px-3 py-2">{d.label}</td>
                           <td class="px-3 py-2">
-                            <input
-                              type="checkbox"
-                              bind:checked={whAdd[d.code].open}
-                            />
+                            <input type="checkbox" bind:checked={whAdd[d.code].open} />
                           </td>
                           <td class="px-3 py-2">
                             <div class="flex gap-1">
@@ -1332,31 +710,17 @@
                                 class="border rounded px-2 py-1"
                                 bind:value={whAdd[d.code].startHour}
                                 disabled={!whAdd[d.code].open}
-                                onchange={() => {
-                                  whAdd[d.code].start = hourTo24(
-                                    whAdd[d.code].startHour,
-                                    whAdd[d.code].startPeriod
-                                  );
-                                }}
+                                onchange={() => handleHourChange(d.code, "start", false)}
                               >
-                                {#each HOUR_OPTS_12 as h}<option value={h}
-                                    >{h}</option
-                                  >{/each}
+                                {#each HOUR_OPTS_12 as h}<option value={h}>{h}</option>{/each}
                               </select>
                               <select
                                 class="border rounded px-2 py-1"
                                 bind:value={whAdd[d.code].startPeriod}
-                                onchange={() => {
-                                  whAdd[d.code].start = hourTo24(
-                                    whAdd[d.code].startHour,
-                                    whAdd[d.code].startPeriod
-                                  );
-                                }}
                                 disabled={!whAdd[d.code].open}
+                                onchange={() => handleHourChange(d.code, "start", false)}
                               >
-                                {#each PERIOD_OPTS as p}<option value={p}
-                                    >{p}</option
-                                  >{/each}
+                                {#each PERIOD_OPTS as p}<option value={p}>{p}</option>{/each}
                               </select>
                             </div>
                           </td>
@@ -1365,32 +729,18 @@
                               <select
                                 class="border rounded px-2 py-1"
                                 bind:value={whAdd[d.code].endHour}
-                                onchange={() => {
-                                  whAdd[d.code].end = hourTo24(
-                                    whAdd[d.code].endHour,
-                                    whAdd[d.code].endPeriod
-                                  );
-                                }}
                                 disabled={!whAdd[d.code].open}
+                                onchange={() => handleHourChange(d.code, "end", false)}
                               >
-                                {#each HOUR_OPTS_12 as h}<option value={h}
-                                    >{h}</option
-                                  >{/each}
+                                {#each HOUR_OPTS_12 as h}<option value={h}>{h}</option>{/each}
                               </select>
                               <select
                                 class="border rounded px-2 py-1"
                                 bind:value={whAdd[d.code].endPeriod}
-                                onchange={() => {
-                                  whAdd[d.code].end = hourTo24(
-                                    whAdd[d.code].endHour,
-                                    whAdd[d.code].endPeriod
-                                  );
-                                }}
                                 disabled={!whAdd[d.code].open}
+                                onchange={() => handleHourChange(d.code, "end", false)}
                               >
-                                {#each PERIOD_OPTS as p}<option value={p}
-                                    >{p}</option
-                                  >{/each}
+                                {#each PERIOD_OPTS as p}<option value={p}>{p}</option>{/each}
                               </select>
                             </div>
                           </td>
@@ -1399,85 +749,58 @@
                     </tbody>
                   </table>
                 </div>
-                {#if fieldErrors.working_hours}<p
-                    class="text-xs text-red-600 mt-1"
-                  >
-                    {fieldErrors.working_hours}
-                  </p>{/if}
+                {#if fieldErrors.working_hours}
+                  <p class="text-xs text-red-600 mt-1">{fieldErrors.working_hours}</p>
+                {/if}
               </div>
 
               <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label class="block text-sm font-medium"
-                    >{labelWithRequired("Days Off", "days_off")}</label
-                  >
+                  <label class="block text-sm font-medium">{labelWithRequired("Days Off", "days_off")}</label>
                   <input
                     type="text"
+                    name="days_off"
                     placeholder="MM/DD, MM/DD"
-                    bind:value={form.days_off}
+                    bind:value={formState.days_off}
                     class="mt-1 w-full border rounded-md px-3 py-2 border-gray-300"
                   />
-                  <p class="text-xs text-gray-500 mt-1">
-                    Will render like: {formatDaysOff(form.days_off).join(", ")}
-                  </p>
+                  <p class="text-xs text-gray-500 mt-1">Will render like: {formatDaysOff(formState.days_off).join(", ")}</p>
                 </div>
                 <div>
-                  <label class="block text-sm font-medium"
-                    >{labelWithRequired(
-                      "Rides Phone",
-                      "rides_phone_number"
-                    )}</label
-                  >
+                  <label class="block text-sm font-medium">{labelWithRequired("Rides Phone", "rides_phone_number")}</label>
                   <input
                     type="tel"
-                    bind:value={form.rides_phone_number}
-                    class={"mt-1 w-full border rounded-md px-3 py-2 " +
-                      (fieldErrors.rides_phone_number
-                        ? "border-red-500"
-                        : "border-gray-300")}
+                    name="rides_phone_number"
+                    bind:value={formState.rides_phone_number}
+                    class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.rides_phone_number ? "border-red-500" : "border-gray-300")}
                   />
                 </div>
                 <div>
-                  <label class="block text-sm font-medium"
-                    >{labelWithRequired(
-                      "Client Minimum Age",
-                      "client_min_age"
-                    )}</label
-                  >
+                  <label class="block text-sm font-medium">{labelWithRequired("Client Minimum Age", "client_min_age")}</label>
                   <input
                     type="number"
-                    bind:value={form.client_min_age}
-                    class={"mt-1 w-full border rounded-md px-3 py-2 " +
-                      (fieldErrors.client_min_age
-                        ? "border-red-500"
-                        : "border-gray-300")}
+                    name="client_min_age"
+                    bind:value={formState.client_min_age}
+                    class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.client_min_age ? "border-red-500" : "border-gray-300")}
                   />
                 </div>
                 <div>
-                  <label class="block text-sm font-medium"
-                    >{labelWithRequired(
-                      "Min Days in Advance",
-                      "min_days_in_advance_for_ride_requests"
-                    )}</label
-                  >
+                  <label class="block text-sm font-medium">{labelWithRequired("Min Days in Advance", "min_days_in_advance_for_ride_requests")}</label>
                   <input
                     type="number"
-                    bind:value={form.min_days_in_advance_for_ride_requests}
-                    class={"mt-1 w-full border rounded-md px-3 py-2 " +
-                      (fieldErrors.min_days_in_advance_for_ride_requests
-                        ? "border-red-500"
-                        : "border-gray-300")}
+                    name="min_days_in_advance_for_ride_requests"
+                    bind:value={formState.min_days_in_advance_for_ride_requests}
+                    class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.min_days_in_advance_for_ride_requests ? "border-red-500" : "border-gray-300")}
                   />
                 </div>
               </div>
 
               <div>
-                <label class="block text-sm font-medium">
-                  Max Weekly Rides (optional)
-                </label>
+                <label class="block text-sm font-medium">Max Weekly Rides (optional)</label>
                 <input
                   type="number"
-                  bind:value={form.client_max_weekly_rides}
+                  name="client_max_weekly_rides"
+                  bind:value={formState.client_max_weekly_rides}
                   class="mt-1 w-full border rounded-md px-3 py-2 border-gray-300"
                   placeholder="Leave blank for no limit"
                 />
@@ -1489,91 +812,67 @@
           {#if addStep === 3}
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label class="block text-sm font-medium"
-                  >{labelWithRequired("Name", "primary_contact_name")}</label
-                ><input
+                <label class="block text-sm font-medium">{labelWithRequired("Name", "primary_contact_name")}</label>
+                <input
                   type="text"
-                  bind:value={form.primary_contact_name}
-                  class={"mt-1 w-full border rounded-md px-3 py-2 " +
-                    (fieldErrors.primary_contact_name
-                      ? "border-red-500"
-                      : "border-gray-300")}
+                  name="primary_contact_name"
+                  bind:value={formState.primary_contact_name}
+                  class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.primary_contact_name ? "border-red-500" : "border-gray-300")}
                 />
               </div>
               <div>
-                <label class="block text-sm font-medium"
-                  >{labelWithRequired("Email", "primary_contact_email")}</label
-                ><input
+                <label class="block text-sm font-medium">{labelWithRequired("Email", "primary_contact_email")}</label>
+                <input
                   type="email"
-                  bind:value={form.primary_contact_email}
-                  class={"mt-1 w-full border rounded-md px-3 py-2 " +
-                    (fieldErrors.primary_contact_email
-                      ? "border-red-500"
-                      : "border-gray-300")}
+                  name="primary_contact_email"
+                  bind:value={formState.primary_contact_email}
+                  class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.primary_contact_email ? "border-red-500" : "border-gray-300")}
                 />
               </div>
               <div class="md:col-span-2">
-                <label class="block text-sm font-medium"
-                  >{labelWithRequired(
-                    "Address",
-                    "primary_contact_address"
-                  )}</label
-                ><input
+                <label class="block text-sm font-medium">{labelWithRequired("Address", "primary_contact_address")}</label>
+                <input
                   type="text"
-                  bind:value={form.primary_contact_address}
-                  class={"mt-1 w-full border rounded-md px-3 py-2 " +
-                    (fieldErrors.primary_contact_address
-                      ? "border-red-500"
-                      : "border-gray-300")}
+                  name="primary_contact_address"
+                  bind:value={formState.primary_contact_address}
+                  class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.primary_contact_address ? "border-red-500" : "border-gray-300")}
                 />
               </div>
               <div class="md:col-span-2">
-                <label class="block text-sm font-medium"
-                  >{labelWithRequired(
-                    "Address 2",
-                    "primary_contact_address2"
-                  )}</label
-                ><input
+                <label class="block text-sm font-medium">{labelWithRequired("Address 2", "primary_contact_address2")}</label>
+                <input
                   type="text"
-                  bind:value={form.primary_contact_address2}
+                  name="primary_contact_address2"
+                  bind:value={formState.primary_contact_address2}
                   class="mt-1 w-full border rounded-md px-3 py-2 border-gray-300"
                 />
               </div>
               <div>
-                <label class="block text-sm font-medium"
-                  >{labelWithRequired("City", "primary_contact_city")}</label
-                ><input
+                <label class="block text-sm font-medium">{labelWithRequired("City", "primary_contact_city")}</label>
+                <input
                   type="text"
-                  bind:value={form.primary_contact_city}
-                  class={"mt-1 w-full border rounded-md px-3 py-2 " +
-                    (fieldErrors.primary_contact_city
-                      ? "border-red-500"
-                      : "border-gray-300")}
+                  name="primary_contact_city"
+                  bind:value={formState.primary_contact_city}
+                  class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.primary_contact_city ? "border-red-500" : "border-gray-300")}
                 />
               </div>
               <div>
-                <label class="block text-sm font-medium"
-                  >{labelWithRequired("State", "primary_contact_state")}</label
-                ><input
+                <label class="block text-sm font-medium">{labelWithRequired("State", "primary_contact_state")}</label>
+                <input
                   type="text"
+                  name="primary_contact_state"
                   maxlength="2"
-                  bind:value={form.primary_contact_state}
-                  class={"mt-1 w-full border rounded-md px-3 py-2 " +
-                    (fieldErrors.primary_contact_state
-                      ? "border-red-500"
-                      : "border-gray-300")}
+                  bind:value={formState.primary_contact_state}
+                  class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.primary_contact_state ? "border-red-500" : "border-gray-300")}
                 />
               </div>
               <div>
-                <label class="block text-sm font-medium"
-                  >{labelWithRequired("Zip", "primary_contact_zipcode")}</label
-                ><input
+                <label class="block text-sm font-medium">{labelWithRequired("Zip", "primary_contact_zipcode")}</label>
+                <input
                   type="text"
-                  bind:value={form.primary_contact_zipcode}
-                  class={"mt-1 w-full border rounded-md px-3 py-2 " +
-                    (fieldErrors.primary_contact_zipcode
-                      ? "border-red-500"
-                      : "border-gray-300")}
+                  name="primary_contact_zipcode"
+                  bind:value={formState.primary_contact_zipcode}
+                  class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.primary_contact_zipcode ? "border-red-500" : "border-gray-300")}
                 />
               </div>
             </div>
@@ -1583,81 +882,66 @@
           {#if addStep === 4}
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label class="block text-sm font-medium"
-                  >{labelWithRequired("Name", "secondary_contact_name")}</label
-                ><input
+                <label class="block text-sm font-medium">{labelWithRequired("Name", "secondary_contact_name")}</label>
+                <input
                   type="text"
-                  bind:value={form.secondary_contact_name}
+                  name="secondary_contact_name"
+                  bind:value={formState.secondary_contact_name}
                   class="mt-1 w-full border rounded-md px-3 py-2 border-gray-300"
                 />
               </div>
               <div>
-                <label class="block text-sm font-medium"
-                  >{labelWithRequired(
-                    "Email",
-                    "secondary_contact_email"
-                  )}</label
-                ><input
+                <label class="block text-sm font-medium">{labelWithRequired("Email", "secondary_contact_email")}</label>
+                <input
                   type="email"
-                  bind:value={form.secondary_contact_email}
+                  name="secondary_contact_email"
+                  bind:value={formState.secondary_contact_email}
                   class="mt-1 w-full border rounded-md px-3 py-2 border-gray-300"
                 />
               </div>
               <div class="md:col-span-2">
-                <label class="block text-sm font-medium"
-                  >{labelWithRequired(
-                    "Address",
-                    "secondary_contact_address"
-                  )}</label
-                ><input
+                <label class="block text-sm font-medium">{labelWithRequired("Address", "secondary_contact_address")}</label>
+                <input
                   type="text"
-                  bind:value={form.secondary_contact_address}
+                  name="secondary_contact_address"
+                  bind:value={formState.secondary_contact_address}
                   class="mt-1 w-full border rounded-md px-3 py-2 border-gray-300"
                 />
               </div>
               <div class="md:col-span-2">
-                <label class="block text-sm font-medium"
-                  >{labelWithRequired(
-                    "Address 2",
-                    "secondary_contact_address2"
-                  )}</label
-                ><input
+                <label class="block text-sm font-medium">{labelWithRequired("Address 2", "secondary_contact_address2")}</label>
+                <input
                   type="text"
-                  bind:value={form.secondary_contact_address2}
+                  name="secondary_contact_address2"
+                  bind:value={formState.secondary_contact_address2}
                   class="mt-1 w-full border rounded-md px-3 py-2 border-gray-300"
                 />
               </div>
               <div>
-                <label class="block text-sm font-medium"
-                  >{labelWithRequired("City", "secondary_contact_city")}</label
-                ><input
+                <label class="block text-sm font-medium">{labelWithRequired("City", "secondary_contact_city")}</label>
+                <input
                   type="text"
-                  bind:value={form.secondary_contact_city}
+                  name="secondary_contact_city"
+                  bind:value={formState.secondary_contact_city}
                   class="mt-1 w-full border rounded-md px-3 py-2 border-gray-300"
                 />
               </div>
               <div>
-                <label class="block text-sm font-medium"
-                  >{labelWithRequired(
-                    "State",
-                    "secondary_contact_state"
-                  )}</label
-                ><input
+                <label class="block text-sm font-medium">{labelWithRequired("State", "secondary_contact_state")}</label>
+                <input
                   type="text"
+                  name="secondary_contact_state"
                   maxlength="2"
-                  bind:value={form.secondary_contact_state}
+                  bind:value={formState.secondary_contact_state}
                   class="mt-1 w-full border rounded-md px-3 py-2 border-gray-300"
                 />
               </div>
               <div>
-                <label class="block text-sm font-medium"
-                  >{labelWithRequired(
-                    "Zip",
-                    "secondary_contact_zipcode"
-                  )}</label
-                ><input
+                <label class="block text-sm font-medium">{labelWithRequired("Zip", "secondary_contact_zipcode")}</label>
+                <input
                   type="text"
-                  bind:value={form.secondary_contact_zipcode}
+                  name="secondary_contact_zipcode"
+                  bind:value={formState.secondary_contact_zipcode}
                   class="mt-1 w-full border rounded-md px-3 py-2 border-gray-300"
                 />
               </div>
@@ -1667,39 +951,13 @@
           <!-- STEP 5: Login -->
           {#if addStep === 5}
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <!--  <div>
-                <label class="block text-sm font-medium"
-                  >{labelWithRequired(
-                    "Username Format",
-                    "username_format"
-                  )}</label
-                >
-                <input
-                  type="text"
-                  bind:value={form.username_format}
-                  class={"mt-1 w-full border rounded-md px-3 py-2 " +
-                    (fieldErrors.username_format
-                      ? "border-red-500"
-                      : "border-gray-300")}
-                />
-                <p class="mt-1 text-xs text-gray-500">
-                  {usernameExample(form.username_format, "John", "Doe")}
-                </p>
-              </div> -->
               <div>
-                <label class="block text-sm font-medium"
-                  >{labelWithRequired(
-                    "Initial Password",
-                    "user_initial_password"
-                  )}</label
-                >
+                <label class="block text-sm font-medium">{labelWithRequired("Initial Password", "user_initial_password")}</label>
                 <input
                   type="text"
-                  bind:value={form.user_initial_password}
-                  class={"mt-1 w-full border rounded-md px-3 py-2 " +
-                    (fieldErrors.user_initial_password
-                      ? "border-red-500"
-                      : "border-gray-300")}
+                  name="user_initial_password"
+                  bind:value={formState.user_initial_password}
+                  class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.user_initial_password ? "border-red-500" : "border-gray-300")}
                 />
               </div>
             </div>
@@ -1708,50 +966,21 @@
           <!-- STEP 6: Review -->
           {#if addStep === 6}
             <div class="text-sm text-gray-700 space-y-2">
-              <p class="font-medium">
-                Please review your entries. You can go Back to make changes.
-              </p>
-              <p><span class="font-medium">Name:</span> {form.name}</p>
-              <p><span class="font-medium">Status:</span> {form.org_status}</p>
-              <p>
-                <span class="font-medium">Website:</span>
-                {form.org_website}
-              </p>
-              <p>
-                <span class="font-medium">Email/Phone:</span>
-                {form.org_email} / {form.org_phone}
-              </p>
+              <p class="font-medium">Please review your entries. You can go Back to make changes.</p>
+              <p><span class="font-medium">Name:</span> {formState.name}</p>
+              <p><span class="font-medium">Status:</span> {formState.org_status}</p>
+              <p><span class="font-medium">Website:</span> {formState.org_website}</p>
+              <p><span class="font-medium">Email/Phone:</span> {formState.org_email} / {formState.org_phone}</p>
               <p>
                 <span class="font-medium">Address:</span>
-                {form.org_address}
-                {form.org_address2 ? `, ${form.org_address2}` : ""}, {form.org_city},
-                {form.org_state}
-                {form.org_zip_code}
+                {formState.org_address}{formState.org_address2 ? `, ${formState.org_address2}` : ""}, {formState.org_city}, {formState.org_state} {formState.org_zip_code}
               </p>
-              <p>
-                <span class="font-medium">Working Hours:</span>
-                {packWorkingHours(whAdd) || "—"}
-              </p>
-              <p>
-                <span class="font-medium">Days Off:</span>
-                {formatDaysOff(form.days_off).join(", ") || "—"}
-              </p>
-              <p>
-                <span class="font-medium">Rides Phone:</span>
-                {form.rides_phone_number}
-              </p>
-              <p>
-                <span class="font-medium">Client Min Age / Min Days:</span>
-                {form.client_min_age} / {form.min_days_in_advance_for_ride_requests}
-              </p>
-              <p>
-                <span class="font-medium">Primary Contact:</span>
-                {form.primary_contact_name} ({form.primary_contact_email})
-              </p>
-              <!--  <p>
-                <span class="font-medium">Username Format:</span>
-                {form.username_format}
-              </p> -->
+              <p><span class="font-medium">Working Hours:</span> {getPackedWorkingHours(false) || "—"}</p>
+              <p><span class="font-medium">Days Off:</span> {formatDaysOff(formState.days_off).join(", ") || "—"}</p>
+              <p><span class="font-medium">Rides Phone:</span> {formState.rides_phone_number}</p>
+              <p><span class="font-medium">Client Min Age / Min Days:</span> {formState.client_min_age} / {formState.min_days_in_advance_for_ride_requests}</p>
+              <p><span class="font-medium">Max Weekly Rides:</span> {formState.client_max_weekly_rides || "No limit"}</p>
+              <p><span class="font-medium">Primary Contact:</span> {formState.primary_contact_name} ({formState.primary_contact_email})</p>
             </div>
           {/if}
 
@@ -1765,16 +994,11 @@
               {addStep === 0 ? "Cancel" : "Back"}
             </button>
             {#if addStep < STEP_LABELS.length - 1}
-              <button
-                type="button"
-                onclick={nextAddStep}
-                class="px-4 py-2 bg-blue-600 text-white rounded-md">Next</button
-              >
+              <button type="button" onclick={nextAddStep} class="px-4 py-2 bg-blue-600 text-white rounded-md">
+                Next
+              </button>
             {:else}
-              <button
-                type="submit"
-                class="px-4 py-2 bg-blue-600 text-white rounded-md inline-flex items-center gap-2"
-              >
+              <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-md inline-flex items-center gap-2">
                 <Save class="w-4 h-4" /><span>Add Organization</span>
               </button>
             {/if}
@@ -1785,20 +1009,14 @@
   {/if}
 
   <!-- EDIT Organization Wizard -->
-  {#if showEditModal}
-    <div
-      class="fixed inset-0 bg-gray-600/50 overflow-y-auto h-full w-full z-50"
-    >
-      <div
-        class="relative top-10 mx-auto p-5 w-full max-w-4xl shadow-lg rounded-2xl bg-white"
-      >
+  {#if showEditModal && editingOrg}
+    <div class="fixed inset-0 bg-gray-600/50 overflow-y-auto h-full w-full z-50">
+      <div class="relative top-10 mx-auto p-5 w-full max-w-4xl shadow-lg rounded-2xl bg-white">
         <div class="flex items-center justify-between mb-3">
           <h3 class="text-xl font-semibold">Edit Organization</h3>
-          <button
-            onclick={closeModals}
-            class="text-gray-400 hover:text-gray-600"
-            ><X class="w-5 h-5" /></button
-          >
+          <button onclick={closeModals} class="text-gray-400 hover:text-gray-600">
+            <X class="w-5 h-5" />
+          </button>
         </div>
         <p class="text-sm text-gray-500 mb-4">
           <span class="text-red-600">*</span> indicates required fields.
@@ -1809,145 +1027,140 @@
           <span class="font-medium">{STEP_LABELS[editStep]}</span>
         </div>
 
-        <form onsubmit={updateOrganization} class="space-y-6">
-          <!-- Steps mirror Add but bind to whEdit and same form -->
+        <form
+          method="POST"
+          action="?/updateOrganization"
+          use:enhance={() => {
+            if (!validateAllSteps()) {
+              return async () => {};
+            }
+            return async ({ result }) => {
+              if (result.type === "success") {
+                showMessage("Organization updated successfully!", true);
+                closeModals();
+                invalidateAll();
+              } else if (result.type === "failure") {
+                showMessage((result.data as any)?.error || "Failed to update organization", false);
+              }
+            };
+          }}
+          class="space-y-6"
+        >
+          <!-- Hidden fields -->
+          <input type="hidden" name="org_id" value={editingOrg.org_id} />
+          <input type="hidden" name="working_hours" value={getPackedWorkingHours(true)} />
+
+          <!-- STEP 0: Overview -->
           {#if editStep === 0}
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               <div>
-                <label class="block text-sm font-medium"
-                  >{labelWithRequired("Name", "name")}</label
-                ><input
+                <label class="block text-sm font-medium">{labelWithRequired("Name", "name")}</label>
+                <input
                   type="text"
-                  bind:value={form.name}
-                  class={"mt-1 w-full border rounded-md px-3 py-2 " +
-                    (fieldErrors.name ? "border-red-500" : "border-gray-300")}
+                  name="name"
+                  bind:value={formState.name}
+                  class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.name ? "border-red-500" : "border-gray-300")}
                 />
               </div>
               <div>
-                <label class="block text-sm font-medium"
-                  >{labelWithRequired(
-                    "Organization Status",
-                    "org_status"
-                  )}</label
-                ><select
-                  bind:value={form.org_status}
-                  class={"mt-1 w-full border rounded-md px-3 py-2 " +
-                    (fieldErrors.org_status
-                      ? "border-red-500"
-                      : "border-gray-300")}
-                  ><option value="">—</option><option value="Active"
-                    >Active</option
-                  ><option value="Inactive">Inactive</option></select
+                <label class="block text-sm font-medium">{labelWithRequired("Organization Status", "org_status")}</label>
+                <select
+                  name="org_status"
+                  bind:value={formState.org_status}
+                  class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.org_status ? "border-red-500" : "border-gray-300")}
                 >
+                  <option value="">—</option>
+                  <option value="Active">Active</option>
+                  <option value="Inactive">Inactive</option>
+                </select>
               </div>
               <div>
-                <label class="block text-sm font-medium"
-                  >{labelWithRequired("Website", "org_website")}</label
-                ><input
+                <label class="block text-sm font-medium">{labelWithRequired("Website", "org_website")}</label>
+                <input
                   type="text"
-                  bind:value={form.org_website}
-                  class={"mt-1 w-full border rounded-md px-3 py-2 " +
-                    (fieldErrors.org_website
-                      ? "border-red-500"
-                      : "border-gray-300")}
-                />
-              </div>
-              <div>
-                <label class="block text-sm font-medium"
-                  >{labelWithRequired("Organization Email", "org_email")}</label
-                ><input
-                  type="email"
-                  bind:value={form.org_email}
-                  class={"mt-1 w-full border rounded-md px-3 py-2 " +
-                    (fieldErrors.org_email
-                      ? "border-red-500"
-                      : "border-gray-300")}
-                />
-              </div>
-              <div>
-                <label class="block text-sm font-medium"
-                  >{labelWithRequired("Organization Phone", "org_phone")}</label
-                ><input
-                  type="tel"
-                  bind:value={form.org_phone}
-                  class={"mt-1 w-full border rounded-md px-3 py-2 " +
-                    (fieldErrors.org_phone
-                      ? "border-red-500"
-                      : "border-gray-300")}
-                />
-              </div>
-            </div>
-          {/if}
-
-          {#if editStep === 1}
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div class="md:col-span-2">
-                <label class="block text-sm font-medium"
-                  >{labelWithRequired("Street", "org_address")}</label
-                ><input
-                  type="text"
-                  bind:value={form.org_address}
-                  class={"mt-1 w-full border rounded-md px-3 py-2 " +
-                    (fieldErrors.org_address
-                      ? "border-red-500"
-                      : "border-gray-300")}
-                />
-              </div>
-              <div class="md:col-span-2">
-                <label class="block text-sm font-medium"
-                  >{labelWithRequired("Street 2", "org_address2")}</label
-                ><input
-                  type="text"
-                  bind:value={form.org_address2}
+                  name="org_website"
+                  bind:value={formState.org_website}
                   class="mt-1 w-full border rounded-md px-3 py-2 border-gray-300"
                 />
               </div>
               <div>
-                <label class="block text-sm font-medium"
-                  >{labelWithRequired("City", "org_city")}</label
-                ><input
-                  type="text"
-                  bind:value={form.org_city}
-                  class={"mt-1 w-full border rounded-md px-3 py-2 " +
-                    (fieldErrors.org_city
-                      ? "border-red-500"
-                      : "border-gray-300")}
+                <label class="block text-sm font-medium">{labelWithRequired("Organization Email", "org_email")}</label>
+                <input
+                  type="email"
+                  name="org_email"
+                  bind:value={formState.org_email}
+                  class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.org_email ? "border-red-500" : "border-gray-300")}
                 />
               </div>
               <div>
-                <label class="block text-sm font-medium"
-                  >{labelWithRequired("State", "org_state")}</label
-                ><input
-                  type="text"
-                  maxlength="2"
-                  bind:value={form.org_state}
-                  class={"mt-1 w-full border rounded-md px-3 py-2 " +
-                    (fieldErrors.org_state
-                      ? "border-red-500"
-                      : "border-gray-300")}
-                />
-              </div>
-              <div>
-                <label class="block text-sm font-medium"
-                  >{labelWithRequired("Zip Code", "org_zip_code")}</label
-                ><input
-                  type="text"
-                  bind:value={form.org_zip_code}
-                  class={"mt-1 w-full border rounded-md px-3 py-2 " +
-                    (fieldErrors.org_zip_code
-                      ? "border-red-500"
-                      : "border-gray-300")}
+                <label class="block text-sm font-medium">{labelWithRequired("Organization Phone", "org_phone")}</label>
+                <input
+                  type="tel"
+                  name="org_phone"
+                  bind:value={formState.org_phone}
+                  class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.org_phone ? "border-red-500" : "border-gray-300")}
                 />
               </div>
             </div>
           {/if}
 
+          <!-- STEP 1: Address -->
+          {#if editStep === 1}
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div class="md:col-span-2">
+                <label class="block text-sm font-medium">{labelWithRequired("Street", "org_address")}</label>
+                <input
+                  type="text"
+                  name="org_address"
+                  bind:value={formState.org_address}
+                  class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.org_address ? "border-red-500" : "border-gray-300")}
+                />
+              </div>
+              <div class="md:col-span-2">
+                <label class="block text-sm font-medium">{labelWithRequired("Street 2", "org_address2")}</label>
+                <input
+                  type="text"
+                  name="org_address2"
+                  bind:value={formState.org_address2}
+                  class="mt-1 w-full border rounded-md px-3 py-2 border-gray-300"
+                />
+              </div>
+              <div>
+                <label class="block text-sm font-medium">{labelWithRequired("City", "org_city")}</label>
+                <input
+                  type="text"
+                  name="org_city"
+                  bind:value={formState.org_city}
+                  class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.org_city ? "border-red-500" : "border-gray-300")}
+                />
+              </div>
+              <div>
+                <label class="block text-sm font-medium">{labelWithRequired("State", "org_state")}</label>
+                <input
+                  type="text"
+                  name="org_state"
+                  maxlength="2"
+                  bind:value={formState.org_state}
+                  class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.org_state ? "border-red-500" : "border-gray-300")}
+                />
+              </div>
+              <div>
+                <label class="block text-sm font-medium">{labelWithRequired("Zip Code", "org_zip_code")}</label>
+                <input
+                  type="text"
+                  name="org_zip_code"
+                  bind:value={formState.org_zip_code}
+                  class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.org_zip_code ? "border-red-500" : "border-gray-300")}
+                />
+              </div>
+            </div>
+          {/if}
+
+          <!-- STEP 2: Operations -->
           {#if editStep === 2}
             <div class="space-y-4">
               <div>
-                <label class="block text-sm font-medium"
-                  >Working Hours <span class="text-red-600">*</span></label
-                >
+                <label class="block text-sm font-medium">Working Hours <span class="text-red-600">*</span></label>
                 <div class="mt-2 border rounded-lg overflow-hidden">
                   <table class="w-full text-sm">
                     <thead class="bg-gray-50">
@@ -1962,43 +1175,26 @@
                       {#each DAYS as d}
                         <tr class="border-t">
                           <td class="px-3 py-2">{d.label}</td>
-                          <td class="px-3 py-2"
-                            ><input
-                              type="checkbox"
-                              bind:checked={whEdit[d.code].open}
-                            /></td
-                          >
+                          <td class="px-3 py-2">
+                            <input type="checkbox" bind:checked={whEdit[d.code].open} />
+                          </td>
                           <td class="px-3 py-2">
                             <div class="flex gap-1">
                               <select
                                 class="border rounded px-2 py-1"
                                 bind:value={whEdit[d.code].startHour}
-                                onchange={() => {
-                                  whEdit[d.code].start = hourTo24(
-                                    whEdit[d.code].startHour,
-                                    whEdit[d.code].startPeriod
-                                  );
-                                }}
                                 disabled={!whEdit[d.code].open}
+                                onchange={() => handleHourChange(d.code, "start", true)}
                               >
-                                {#each HOUR_OPTS_12 as h}<option value={h}
-                                    >{h}</option
-                                  >{/each}
+                                {#each HOUR_OPTS_12 as h}<option value={h}>{h}</option>{/each}
                               </select>
                               <select
                                 class="border rounded px-2 py-1"
                                 bind:value={whEdit[d.code].startPeriod}
-                                onchange={() => {
-                                  whEdit[d.code].start = hourTo24(
-                                    whEdit[d.code].startHour,
-                                    whEdit[d.code].startPeriod
-                                  );
-                                }}
                                 disabled={!whEdit[d.code].open}
+                                onchange={() => handleHourChange(d.code, "start", true)}
                               >
-                                {#each PERIOD_OPTS as p}<option value={p}
-                                    >{p}</option
-                                  >{/each}
+                                {#each PERIOD_OPTS as p}<option value={p}>{p}</option>{/each}
                               </select>
                             </div>
                           </td>
@@ -2007,32 +1203,18 @@
                               <select
                                 class="border rounded px-2 py-1"
                                 bind:value={whEdit[d.code].endHour}
-                                onchange={() => {
-                                  whEdit[d.code].end = hourTo24(
-                                    whEdit[d.code].endHour,
-                                    whEdit[d.code].endPeriod
-                                  );
-                                }}
                                 disabled={!whEdit[d.code].open}
+                                onchange={() => handleHourChange(d.code, "end", true)}
                               >
-                                {#each HOUR_OPTS_12 as h}<option value={h}
-                                    >{h}</option
-                                  >{/each}
+                                {#each HOUR_OPTS_12 as h}<option value={h}>{h}</option>{/each}
                               </select>
                               <select
                                 class="border rounded px-2 py-1"
                                 bind:value={whEdit[d.code].endPeriod}
-                                onchange={() => {
-                                  whEdit[d.code].end = hourTo24(
-                                    whEdit[d.code].endHour,
-                                    whEdit[d.code].endPeriod
-                                  );
-                                }}
                                 disabled={!whEdit[d.code].open}
+                                onchange={() => handleHourChange(d.code, "end", true)}
                               >
-                                {#each PERIOD_OPTS as p}<option value={p}
-                                    >{p}</option
-                                  >{/each}
+                                {#each PERIOD_OPTS as p}<option value={p}>{p}</option>{/each}
                               </select>
                             </div>
                           </td>
@@ -2041,355 +1223,241 @@
                     </tbody>
                   </table>
                 </div>
-                {#if fieldErrors.working_hours}<p
-                    class="text-xs text-red-600 mt-1"
-                  >
-                    {fieldErrors.working_hours}
-                  </p>{/if}
+                {#if fieldErrors.working_hours}
+                  <p class="text-xs text-red-600 mt-1">{fieldErrors.working_hours}</p>
+                {/if}
               </div>
 
               <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label class="block text-sm font-medium"
-                    >{labelWithRequired("Days Off", "days_off")}</label
-                  >
+                  <label class="block text-sm font-medium">{labelWithRequired("Days Off", "days_off")}</label>
                   <input
                     type="text"
+                    name="days_off"
                     placeholder="MM/DD, MM/DD"
-                    bind:value={form.days_off}
+                    bind:value={formState.days_off}
                     class="mt-1 w-full border rounded-md px-3 py-2 border-gray-300"
                   />
-                  <p class="text-xs text-gray-500 mt-1">
-                    Will render like: {formatDaysOff(form.days_off).join(", ")}
-                  </p>
+                  <p class="text-xs text-gray-500 mt-1">Will render like: {formatDaysOff(formState.days_off).join(", ")}</p>
                 </div>
                 <div>
-                  <label class="block text-sm font-medium"
-                    >{labelWithRequired(
-                      "Rides Phone",
-                      "rides_phone_number"
-                    )}</label
-                  >
+                  <label class="block text-sm font-medium">{labelWithRequired("Rides Phone", "rides_phone_number")}</label>
                   <input
                     type="tel"
-                    bind:value={form.rides_phone_number}
-                    class={"mt-1 w-full border rounded-md px-3 py-2 " +
-                      (fieldErrors.rides_phone_number
-                        ? "border-red-500"
-                        : "border-gray-300")}
+                    name="rides_phone_number"
+                    bind:value={formState.rides_phone_number}
+                    class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.rides_phone_number ? "border-red-500" : "border-gray-300")}
                   />
                 </div>
                 <div>
-                  <label class="block text-sm font-medium"
-                    >{labelWithRequired(
-                      "Client Minimum Age",
-                      "client_min_age"
-                    )}</label
-                  >
+                  <label class="block text-sm font-medium">{labelWithRequired("Client Minimum Age", "client_min_age")}</label>
                   <input
                     type="number"
-                    bind:value={form.client_min_age}
-                    class={"mt-1 w-full border rounded-md px-3 py-2 " +
-                      (fieldErrors.client_min_age
-                        ? "border-red-500"
-                        : "border-gray-300")}
+                    name="client_min_age"
+                    bind:value={formState.client_min_age}
+                    class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.client_min_age ? "border-red-500" : "border-gray-300")}
                   />
                 </div>
                 <div>
-                <label class="block text-sm font-medium">
-                  Max Weekly Rides (optional)
-                </label>
-                <input
-                  type="number"
-                  bind:value={form.client_max_weekly_rides}
-                  class="mt-1 w-full border rounded-md px-3 py-2 border-gray-300"
-                  placeholder="Leave blank for no limit"
-                />
-              </div>
-                <div>
-                  <label class="block text-sm font-medium"
-                    >{labelWithRequired(
-                      "Min Days in Advance",
-                      "min_days_in_advance_for_ride_requests"
-                    )}</label
-                  >
+                  <label class="block text-sm font-medium">Max Weekly Rides (optional)</label>
                   <input
                     type="number"
-                    bind:value={form.min_days_in_advance_for_ride_requests}
-                    class={"mt-1 w-full border rounded-md px-3 py-2 " +
-                      (fieldErrors.min_days_in_advance_for_ride_requests
-                        ? "border-red-500"
-                        : "border-gray-300")}
+                    name="client_max_weekly_rides"
+                    bind:value={formState.client_max_weekly_rides}
+                    class="mt-1 w-full border rounded-md px-3 py-2 border-gray-300"
+                    placeholder="Leave blank for no limit"
+                  />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium">{labelWithRequired("Min Days in Advance", "min_days_in_advance_for_ride_requests")}</label>
+                  <input
+                    type="number"
+                    name="min_days_in_advance_for_ride_requests"
+                    bind:value={formState.min_days_in_advance_for_ride_requests}
+                    class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.min_days_in_advance_for_ride_requests ? "border-red-500" : "border-gray-300")}
                   />
                 </div>
               </div>
             </div>
           {/if}
 
+          <!-- STEP 3: Primary Contact -->
           {#if editStep === 3}
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label class="block text-sm font-medium"
-                  >{labelWithRequired("Name", "primary_contact_name")}</label
-                ><input
+                <label class="block text-sm font-medium">{labelWithRequired("Name", "primary_contact_name")}</label>
+                <input
                   type="text"
-                  bind:value={form.primary_contact_name}
-                  class={"mt-1 w-full border rounded-md px-3 py-2 " +
-                    (fieldErrors.primary_contact_name
-                      ? "border-red-500"
-                      : "border-gray-300")}
+                  name="primary_contact_name"
+                  bind:value={formState.primary_contact_name}
+                  class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.primary_contact_name ? "border-red-500" : "border-gray-300")}
                 />
               </div>
               <div>
-                <label class="block text-sm font-medium"
-                  >{labelWithRequired("Email", "primary_contact_email")}</label
-                ><input
+                <label class="block text-sm font-medium">{labelWithRequired("Email", "primary_contact_email")}</label>
+                <input
                   type="email"
-                  bind:value={form.primary_contact_email}
-                  class={"mt-1 w-full border rounded-md px-3 py-2 " +
-                    (fieldErrors.primary_contact_email
-                      ? "border-red-500"
-                      : "border-gray-300")}
+                  name="primary_contact_email"
+                  bind:value={formState.primary_contact_email}
+                  class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.primary_contact_email ? "border-red-500" : "border-gray-300")}
                 />
               </div>
               <div class="md:col-span-2">
-                <label class="block text-sm font-medium"
-                  >{labelWithRequired(
-                    "Address",
-                    "primary_contact_address"
-                  )}</label
-                ><input
+                <label class="block text-sm font-medium">{labelWithRequired("Address", "primary_contact_address")}</label>
+                <input
                   type="text"
-                  bind:value={form.primary_contact_address}
-                  class={"mt-1 w-full border rounded-md px-3 py-2 " +
-                    (fieldErrors.primary_contact_address
-                      ? "border-red-500"
-                      : "border-gray-300")}
+                  name="primary_contact_address"
+                  bind:value={formState.primary_contact_address}
+                  class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.primary_contact_address ? "border-red-500" : "border-gray-300")}
                 />
               </div>
               <div class="md:col-span-2">
-                <label class="block text-sm font-medium"
-                  >{labelWithRequired(
-                    "Address 2",
-                    "primary_contact_address2"
-                  )}</label
-                ><input
+                <label class="block text-sm font-medium">{labelWithRequired("Address 2", "primary_contact_address2")}</label>
+                <input
                   type="text"
-                  bind:value={form.primary_contact_address2}
+                  name="primary_contact_address2"
+                  bind:value={formState.primary_contact_address2}
                   class="mt-1 w-full border rounded-md px-3 py-2 border-gray-300"
                 />
               </div>
               <div>
-                <label class="block text-sm font-medium"
-                  >{labelWithRequired("City", "primary_contact_city")}</label
-                ><input
+                <label class="block text-sm font-medium">{labelWithRequired("City", "primary_contact_city")}</label>
+                <input
                   type="text"
-                  bind:value={form.primary_contact_city}
-                  class={"mt-1 w-full border rounded-md px-3 py-2 " +
-                    (fieldErrors.primary_contact_city
-                      ? "border-red-500"
-                      : "border-gray-300")}
+                  name="primary_contact_city"
+                  bind:value={formState.primary_contact_city}
+                  class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.primary_contact_city ? "border-red-500" : "border-gray-300")}
                 />
               </div>
               <div>
-                <label class="block text-sm font-medium"
-                  >{labelWithRequired("State", "primary_contact_state")}</label
-                ><input
+                <label class="block text-sm font-medium">{labelWithRequired("State", "primary_contact_state")}</label>
+                <input
                   type="text"
+                  name="primary_contact_state"
                   maxlength="2"
-                  bind:value={form.primary_contact_state}
-                  class={"mt-1 w-full border rounded-md px-3 py-2 " +
-                    (fieldErrors.primary_contact_state
-                      ? "border-red-500"
-                      : "border-gray-300")}
+                  bind:value={formState.primary_contact_state}
+                  class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.primary_contact_state ? "border-red-500" : "border-gray-300")}
                 />
               </div>
               <div>
-                <label class="block text-sm font-medium"
-                  >{labelWithRequired("Zip", "primary_contact_zipcode")}</label
-                ><input
+                <label class="block text-sm font-medium">{labelWithRequired("Zip", "primary_contact_zipcode")}</label>
+                <input
                   type="text"
-                  bind:value={form.primary_contact_zipcode}
-                  class={"mt-1 w-full border rounded-md px-3 py-2 " +
-                    (fieldErrors.primary_contact_zipcode
-                      ? "border-red-500"
-                      : "border-gray-300")}
+                  name="primary_contact_zipcode"
+                  bind:value={formState.primary_contact_zipcode}
+                  class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.primary_contact_zipcode ? "border-red-500" : "border-gray-300")}
                 />
               </div>
             </div>
           {/if}
 
+          <!-- STEP 4: Secondary Contact -->
           {#if editStep === 4}
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label class="block text-sm font-medium"
-                  >{labelWithRequired("Name", "secondary_contact_name")}</label
-                ><input
+                <label class="block text-sm font-medium">{labelWithRequired("Name", "secondary_contact_name")}</label>
+                <input
                   type="text"
-                  bind:value={form.secondary_contact_name}
+                  name="secondary_contact_name"
+                  bind:value={formState.secondary_contact_name}
                   class="mt-1 w-full border rounded-md px-3 py-2 border-gray-300"
                 />
               </div>
               <div>
-                <label class="block text-sm font-medium"
-                  >{labelWithRequired(
-                    "Email",
-                    "secondary_contact_email"
-                  )}</label
-                ><input
+                <label class="block text-sm font-medium">{labelWithRequired("Email", "secondary_contact_email")}</label>
+                <input
                   type="email"
-                  bind:value={form.secondary_contact_email}
+                  name="secondary_contact_email"
+                  bind:value={formState.secondary_contact_email}
                   class="mt-1 w-full border rounded-md px-3 py-2 border-gray-300"
                 />
               </div>
               <div class="md:col-span-2">
-                <label class="block text-sm font-medium"
-                  >{labelWithRequired(
-                    "Address",
-                    "secondary_contact_address"
-                  )}</label
-                ><input
+                <label class="block text-sm font-medium">{labelWithRequired("Address", "secondary_contact_address")}</label>
+                <input
                   type="text"
-                  bind:value={form.secondary_contact_address}
+                  name="secondary_contact_address"
+                  bind:value={formState.secondary_contact_address}
                   class="mt-1 w-full border rounded-md px-3 py-2 border-gray-300"
                 />
               </div>
               <div class="md:col-span-2">
-                <label class="block text-sm font-medium"
-                  >{labelWithRequired(
-                    "Address 2",
-                    "secondary_contact_address2"
-                  )}</label
-                ><input
+                <label class="block text-sm font-medium">{labelWithRequired("Address 2", "secondary_contact_address2")}</label>
+                <input
                   type="text"
-                  bind:value={form.secondary_contact_address2}
+                  name="secondary_contact_address2"
+                  bind:value={formState.secondary_contact_address2}
                   class="mt-1 w-full border rounded-md px-3 py-2 border-gray-300"
                 />
               </div>
               <div>
-                <label class="block text-sm font-medium"
-                  >{labelWithRequired("City", "secondary_contact_city")}</label
-                ><input
+                <label class="block text-sm font-medium">{labelWithRequired("City", "secondary_contact_city")}</label>
+                <input
                   type="text"
-                  bind:value={form.secondary_contact_city}
+                  name="secondary_contact_city"
+                  bind:value={formState.secondary_contact_city}
                   class="mt-1 w-full border rounded-md px-3 py-2 border-gray-300"
                 />
               </div>
               <div>
-                <label class="block text-sm font-medium"
-                  >{labelWithRequired(
-                    "State",
-                    "secondary_contact_state"
-                  )}</label
-                ><input
+                <label class="block text-sm font-medium">{labelWithRequired("State", "secondary_contact_state")}</label>
+                <input
                   type="text"
+                  name="secondary_contact_state"
                   maxlength="2"
-                  bind:value={form.secondary_contact_state}
+                  bind:value={formState.secondary_contact_state}
                   class="mt-1 w-full border rounded-md px-3 py-2 border-gray-300"
                 />
               </div>
               <div>
-                <label class="block text-sm font-medium"
-                  >{labelWithRequired(
-                    "Zip",
-                    "secondary_contact_zipcode"
-                  )}</label
-                ><input
+                <label class="block text-sm font-medium">{labelWithRequired("Zip", "secondary_contact_zipcode")}</label>
+                <input
                   type="text"
-                  bind:value={form.secondary_contact_zipcode}
+                  name="secondary_contact_zipcode"
+                  bind:value={formState.secondary_contact_zipcode}
                   class="mt-1 w-full border rounded-md px-3 py-2 border-gray-300"
                 />
               </div>
             </div>
           {/if}
 
+          <!-- STEP 5: Login -->
           {#if editStep === 5}
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <!-- <div>
-                <label class="block text-sm font-medium"
-                  >{labelWithRequired(
-                    "Username Format",
-                    "username_format"
-                  )}</label
-                >
-                <input
-                  type="text"
-                  bind:value={form.username_format}
-                  class={"mt-1 w-full border rounded-md px-3 py-2 " +
-                    (fieldErrors.username_format
-                      ? "border-red-500"
-                      : "border-gray-300")}
-                />
-                <p class="mt-1 text-xs text-gray-500">
-                  {usernameExample(form.username_format, "John", "Doe")}
-                </p>
-              </div> -->
               <div>
-                <label class="block text-sm font-medium"
-                  >{labelWithRequired(
-                    "Initial Password",
-                    "user_initial_password"
-                  )}</label
-                >
+                <label class="block text-sm font-medium">{labelWithRequired("Initial Password", "user_initial_password")}</label>
                 <input
                   type="text"
-                  bind:value={form.user_initial_password}
-                  class={"mt-1 w-full border rounded-md px-3 py-2 " +
-                    (fieldErrors.user_initial_password
-                      ? "border-red-500"
-                      : "border-gray-300")}
+                  name="user_initial_password"
+                  bind:value={formState.user_initial_password}
+                  class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.user_initial_password ? "border-red-500" : "border-gray-300")}
                 />
               </div>
             </div>
           {/if}
 
+          <!-- STEP 6: Review -->
           {#if editStep === 6}
             <div class="text-sm text-gray-700 space-y-2">
               <p class="font-medium">Review and save changes.</p>
-              <p><span class="font-medium">Name:</span> {form.name}</p>
-              <p><span class="font-medium">Status:</span> {form.org_status}</p>
-              <p>
-                <span class="font-medium">Website:</span>
-                {form.org_website}
-              </p>
-              <p>
-                <span class="font-medium">Email/Phone:</span>
-                {form.org_email} / {form.org_phone}
-              </p>
+              <p><span class="font-medium">Name:</span> {formState.name}</p>
+              <p><span class="font-medium">Status:</span> {formState.org_status}</p>
+              <p><span class="font-medium">Website:</span> {formState.org_website}</p>
+              <p><span class="font-medium">Email/Phone:</span> {formState.org_email} / {formState.org_phone}</p>
               <p>
                 <span class="font-medium">Address:</span>
-                {form.org_address}
-                {form.org_address2 ? `, ${form.org_address2}` : ""}, {form.org_city},
-                {form.org_state}
-                {form.org_zip_code}
+                {formState.org_address}{formState.org_address2 ? `, ${formState.org_address2}` : ""}, {formState.org_city}, {formState.org_state} {formState.org_zip_code}
               </p>
-              <p>
-                <span class="font-medium">Working Hours:</span>
-                {packWorkingHours(whEdit) || "—"}
-              </p>
-              <p>
-                <span class="font-medium">Days Off:</span>
-                {formatDaysOff(form.days_off).join(", ") || "—"}
-              </p>
-              <p>
-                <span class="font-medium">Rides Phone:</span>
-                {form.rides_phone_number}
-              </p>
-              <p>
-                <span class="font-medium">Client Min Age / Min Days:</span>
-                {form.client_min_age} / {form.min_days_in_advance_for_ride_requests}
-              </p>
-              <p>
-                <span class="font-medium">Primary Contact:</span>
-                {form.primary_contact_name} ({form.primary_contact_email})
-              </p>
-              <!-- <p>
-                <span class="font-medium">Username Format:</span>
-                {form.username_format}
-              </p> -->
+              <p><span class="font-medium">Working Hours:</span> {getPackedWorkingHours(true) || "—"}</p>
+              <p><span class="font-medium">Days Off:</span> {formatDaysOff(formState.days_off).join(", ") || "—"}</p>
+              <p><span class="font-medium">Rides Phone:</span> {formState.rides_phone_number}</p>
+              <p><span class="font-medium">Client Min Age / Min Days:</span> {formState.client_min_age} / {formState.min_days_in_advance_for_ride_requests}</p>
+              <p><span class="font-medium">Max Weekly Rides:</span> {formState.client_max_weekly_rides || "No limit"}</p>
+              <p><span class="font-medium">Primary Contact:</span> {formState.primary_contact_name} ({formState.primary_contact_email})</p>
             </div>
           {/if}
 
+          <!-- Wizard controls -->
           <div class="flex justify-between pt-2">
             <button
               type="button"
@@ -2399,16 +1467,11 @@
               {editStep === 0 ? "Cancel" : "Back"}
             </button>
             {#if editStep < STEP_LABELS.length - 1}
-              <button
-                type="button"
-                onclick={nextEditStep}
-                class="px-4 py-2 bg-blue-600 text-white rounded-md">Next</button
-              >
+              <button type="button" onclick={nextEditStep} class="px-4 py-2 bg-blue-600 text-white rounded-md">
+                Next
+              </button>
             {:else}
-              <button
-                type="submit"
-                class="px-4 py-2 bg-blue-600 text-white rounded-md inline-flex items-center gap-2"
-              >
+              <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-md inline-flex items-center gap-2">
                 <Save class="w-4 h-4" /><span>Save Changes</span>
               </button>
             {/if}
