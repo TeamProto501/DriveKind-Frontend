@@ -128,7 +128,7 @@
     return map;
   });
 
-    // For audits: show dispatcher name instead of user id
+  // For audits: show dispatcher name instead of user id
   let filteredAuditRows = $derived.by(() => {
     const baseRows = Array.isArray(auditRowsBase) ? auditRowsBase : [];
 
@@ -523,7 +523,7 @@
   <!-- Tabs -->
   <div class="border-b border-gray-200">
     <nav class="-mb-px flex space-x-6 text-sm">
-      <a
+      
         href="?tab=audits"
         class="inline-flex items-center border-b-2 px-1 pb-2 font-medium
         {activeTab === 'audits'
@@ -533,7 +533,7 @@
         <FileText class="w-4 h-4 mr-1.5" />
         Audits
       </a>
-      <a
+      
         href="?tab=calls"
         class="inline-flex items-center border-b-2 px-1 pb-2 font-medium
         {activeTab === 'calls'
@@ -686,7 +686,6 @@
         <form method="POST" action="?/updateCall" class="space-y-4">
           <!-- hidden fields -->
           <input type="hidden" name="call_id" value={editRow.call_id} />
-          <!-- keep us on calls tab after submit -->
           <input type="hidden" name="stayOnTab" value="calls" />
 
           <!-- Dispatcher / Client selects -->
@@ -800,7 +799,6 @@
                   class="mt-1 block w-full rounded-md border border-gray-300 px-2 py-1 text-sm"
                 />
               {:else}
-                <!-- Keep other_type in sync but hidden -->
                 <input type="hidden" name="other_type" value={editRow.other_type ?? ""} />
               {/if}
             </div>
@@ -823,27 +821,45 @@
               <label class="block text-xs font-medium text-gray-700">
                 Caller First Name
               </label>
-              <input
-                type="text"
-                name="caller_first_name"
-                bind:value={editRow.caller_first_name}
-                disabled={callerLockedToClient}
-                required={!callerLockedToClient}
-                class="mt-1 block w-full rounded-md border border-gray-300 px-2 py-1 text-sm disabled:bg-gray-100"
-              />
+              {#if callerLockedToClient}
+                <input
+                  type="text"
+                  value={editRow.caller_first_name}
+                  disabled
+                  class="mt-1 block w-full rounded-md border border-gray-300 px-2 py-1 text-sm bg-gray-100"
+                />
+                <input type="hidden" name="caller_first_name" value={editRow.caller_first_name ?? ""} />
+              {:else}
+                <input
+                  type="text"
+                  name="caller_first_name"
+                  bind:value={editRow.caller_first_name}
+                  required
+                  class="mt-1 block w-full rounded-md border border-gray-300 px-2 py-1 text-sm"
+                />
+              {/if}
             </div>
             <div>
               <label class="block text-xs font-medium text-gray-700">
                 Caller Last Name
               </label>
-              <input
-                type="text"
-                name="caller_last_name"
-                bind:value={editRow.caller_last_name}
-                disabled={callerLockedToClient}
-                required={!callerLockedToClient}
-                class="mt-1 block w-full rounded-md border border-gray-300 px-2 py-1 text-sm disabled:bg-gray-100"
-              />
+              {#if callerLockedToClient}
+                <input
+                  type="text"
+                  value={editRow.caller_last_name}
+                  disabled
+                  class="mt-1 block w-full rounded-md border border-gray-300 px-2 py-1 text-sm bg-gray-100"
+                />
+                <input type="hidden" name="caller_last_name" value={editRow.caller_last_name ?? ""} />
+              {:else}
+                <input
+                  type="text"
+                  name="caller_last_name"
+                  bind:value={editRow.caller_last_name}
+                  required
+                  class="mt-1 block w-full rounded-md border border-gray-300 px-2 py-1 text-sm"
+                />
+              {/if}
             </div>
           </div>
 
@@ -890,7 +906,6 @@
 
         <form method="POST" action="?/deleteCall" class="mt-4 flex justify-end gap-3">
           <input type="hidden" name="call_id" value={deleteRow.call_id} />
-          <!-- keep us on calls tab -->
           <input type="hidden" name="stayOnTab" value="calls" />
 
           <button
@@ -911,7 +926,7 @@
     </div>
   {/if}
 
-  <!-- CREATE CALL MODAL - DEBUG VERSION -->
+  <!-- CREATE CALL MODAL -->
   {#if showCreateModal}
     <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
       <div class="w-full max-w-xl rounded-lg bg-white p-6 shadow-lg">
@@ -928,53 +943,7 @@
           </button>
         </div>
 
-        <!-- Debug info display -->
-        <div class="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded text-xs">
-          <div><strong>Debug Info:</strong></div>
-          <div>Dispatcher: {newSelectedDispatcherId || '(empty)'}</div>
-          <div>Client: {newSelectedClientId || '(empty)'}</div>
-          <div>Call Time: {newCallTimeLocal || '(empty)'}</div>
-          <div>Phone: {newPhoneNumber || '(empty)'}</div>
-          <div>Call Type: {newCallType || '(empty)'}</div>
-          <div>First Name: {newCallerFirstName || '(empty)'}</div>
-          <div>Last Name: {newCallerLastName || '(empty)'}</div>
-        </div>
-
-        <form 
-          method="POST" 
-          action="?/createCall" 
-          class="space-y-4"
-          onsubmit={(e) => {
-            // e.preventDefault(); // PREVENT SUBMISSION FOR NOW
-            
-            console.log("=== FORM DATA CHECK ===");
-            const formData = new FormData(e.currentTarget);
-            for (const [key, value] of formData.entries()) {
-              console.log(`${key}: ${value}`);
-            }
-            
-            // Validation checks
-            const errors = [];
-            if (!newSelectedDispatcherId) errors.push("No dispatcher selected");
-            if (!newCallTimeLocal) errors.push("No call time");
-            if (!newCallType) errors.push("No call type");
-            if (!newSelectedClientId && (!newCallerFirstName || !newCallerLastName)) {
-              errors.push("No client AND missing caller name");
-            }
-            
-            if (errors.length > 0) {
-              alert("Validation Errors:\n" + errors.join("\n"));
-              console.error("Validation errors:", errors);
-              return false;
-            }
-            
-            alert("All validation passed! Check console for form data. Remove e.preventDefault() to actually submit.");
-            console.log("✅ Form would submit now");
-            
-            // UNCOMMENT THIS LINE TO ACTUALLY SUBMIT:
-            // e.currentTarget.submit();
-          }}
-        >
+        <form method="POST" action="?/createCall" class="space-y-4">
           <!-- Dispatcher / Client selects -->
           <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div>
@@ -1094,27 +1063,45 @@
               <label class="block text-xs font-medium text-gray-700">
                 Caller First Name {#if !newCallerLockedToClient}<span class="text-red-500">*</span>{/if}
               </label>
-              <input
-                type="text"
-                name="caller_first_name"
-                bind:value={newCallerFirstName}
-                disabled={newCallerLockedToClient}
-                required={!newCallerLockedToClient}
-                class="mt-1 block w-full rounded-md border border-gray-300 px-2 py-1 text-sm disabled:bg-gray-100"
-              />
+              {#if newCallerLockedToClient}
+                <input
+                  type="text"
+                  value={newCallerFirstName}
+                  disabled
+                  class="mt-1 block w-full rounded-md border border-gray-300 px-2 py-1 text-sm bg-gray-100"
+                />
+                <input type="hidden" name="caller_first_name" value={newCallerFirstName} />
+              {:else}
+                <input
+                  type="text"
+                  name="caller_first_name"
+                  bind:value={newCallerFirstName}
+                  required
+                  class="mt-1 block w-full rounded-md border border-gray-300 px-2 py-1 text-sm"
+                />
+              {/if}
             </div>
             <div>
               <label class="block text-xs font-medium text-gray-700">
                 Caller Last Name {#if !newCallerLockedToClient}<span class="text-red-500">*</span>{/if}
               </label>
-              <input
-                type="text"
-                name="caller_last_name"
-                bind:value={newCallerLastName}
-                disabled={newCallerLockedToClient}
-                required={!newCallerLockedToClient}
-                class="mt-1 block w-full rounded-md border border-gray-300 px-2 py-1 text-sm disabled:bg-gray-100"
-              />
+              {#if newCallerLockedToClient}
+                <input
+                  type="text"
+                  value={newCallerLastName}
+                  disabled
+                  class="mt-1 block w-full rounded-md border border-gray-300 px-2 py-1 text-sm bg-gray-100"
+                />
+                <input type="hidden" name="caller_last_name" value={newCallerLastName} />
+              {:else}
+                <input
+                  type="text"
+                  name="caller_last_name"
+                  bind:value={newCallerLastName}
+                  required
+                  class="mt-1 block w-full rounded-md border border-gray-300 px-2 py-1 text-sm"
+                />
+              {/if}
             </div>
           </div>
 
@@ -1132,7 +1119,7 @@
               type="submit"
               class="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
             >
-              Create Call (DEBUG MODE)
+              Create Call
             </button>
           </div>
         </form>
