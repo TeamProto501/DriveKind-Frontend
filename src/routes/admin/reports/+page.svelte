@@ -17,7 +17,10 @@
   import DownloadIcon from "@lucide/svelte/icons/download";
   import ClockIcon from "@lucide/svelte/icons/clock";
   import FileTextIcon from "@lucide/svelte/icons/file-text";
-  import type { RideReportData } from './+page.server';
+  import PlusIcon from "@lucide/svelte/icons/plus";
+  import TrashIcon from "@lucide/svelte/icons/trash-2";
+  import CalendarIcon from "@lucide/svelte/icons/calendar";
+  import type { RideReportData, VolunteerHoursEntry } from './+page.server';
   import {
     canAccessPersonalReports,
     canAccessOrgReports,
@@ -35,9 +38,10 @@
   const hasPersonalAccess = canAccessPersonalReports(userRoles);
   const hasOrgAccess = canAccessOrgReports(userRoles);
   const canExport = canExportReports(userRoles);
+  const canLogForOthers = data.canLogForOthers || false;
 
   // Tab state - default based on permissions
-  let activeTab = $state<'personal' | 'organization'>(
+  let activeTab = $state<'personal' | 'organization' | 'hours'>(
     hasPersonalAccess ? 'personal' : hasOrgAccess ? 'organization' : 'personal'
   );
 
@@ -80,7 +84,29 @@
   let filterDateTo = $state('');
   let showFilters = $state(false);
 
+  // ===== VOLUNTEER HOURS STATE =====
+  let hoursTargetUserId = $state<string>(data.userProfile?.user_id || '');
+  let hoursActivityDate = $state<string>(new Date().toISOString().split('T')[0]);
+  let hoursAmount = $state<number | string>('');
+  let hoursDescription = $state<string>('');
+  let isLoggingHours = $state(false);
+  
+  let hoursViewUserId = $state<string>(data.userProfile?.user_id || '');
+  let hoursFromDate = $state<string>('');
+  let hoursToDate = $state<string>('');
+  let volunteerHoursEntries = $state<VolunteerHoursEntry[]>([]);
+  let volunteerHoursTotal = $state<number>(0);
+  let volunteerHoursUserName = $state<string>('');
+  let isLoadingHours = $state(false);
+  let hasSearchedHours = $state(false);
+  let isDeletingEntry = $state<number | null>(null);
+
+  // User search filter for hours logging
+  let userSearchQuery = $state('');
+
   let formElement: HTMLFormElement;
+  let hoursLogFormElement: HTMLFormElement;
+  let hoursViewFormElement: HTMLFormElement;
 
   const firstName = data.userProfile?.first_name || 'User';
   const lastName = data.userProfile?.last_name || 'Report';
@@ -95,6 +121,15 @@
   if (availableRoles.length > 0 && !selectedRole) {
     selectedRole = availableRoles[0];
   }
+
+  // Filter staff for user search
+  const filteredStaff = $derived(() => {
+    if (!userSearchQuery.trim()) return data.allStaff || [];
+    const query = userSearchQuery.toLowerCase();
+    return (data.allStaff || []).filter((s: any) => 
+      `${s.first_name} ${s.last_name}`.toLowerCase().includes(query)
+    );
+  });
 
   // Generate default filename based on selection
   function generateDefaultFileName() {
@@ -150,10 +185,59 @@
           toastStore.success(form.message);
         }
       }
-    } else if (form?.error) {
+    } else if (form?.error && form?.action !== 'logHours' && form?.action !== 'fetchHours' && form?.action !== 'deleteHours') {
       toastStore.error(form.error);
       rides = [];
       hasSearched = false;
+    }
+  });
+
+  // Handle volunteer hours responses
+  $effect(() => {
+    if (form?.action === 'logHours') {
+      if (form?.success) {
+        toastStore.success(form.message || 'Hours logged successfully');
+        // Reset form
+        hoursAmount = '';
+        hoursDescription = '';
+        // Refresh the view if viewing same user
+        if (hasSearchedHours && hoursViewUserId === hoursTargetUserId) {
+          hoursViewFormElement?.requestSubmit();
+        }
+      } else if (form?.error) {
+        toastStore.error(form.error);
+      }
+    }
+  });
+
+  $effect(() => {
+    if (form?.action === 'fetchHours') {
+      if (form?.success && form.volunteerHours) {
+        volunteerHoursEntries = form.volunteerHours;
+        volunteerHoursTotal = form.volunteerHoursTotal || 0;
+        volunteerHoursUserName = form.volunteerHoursUserName || '';
+        hasSearchedHours = true;
+        if (form.message) {
+          toastStore.success(form.message);
+        }
+      } else if (form?.error) {
+        toastStore.error(form.error);
+        volunteerHoursEntries = [];
+        hasSearchedHours = false;
+      }
+    }
+  });
+
+  $effect(() => {
+    if (form?.action === 'deleteHours') {
+      if (form?.success) {
+        toastStore.success(form.message || 'Entry deleted');
+        // Refresh the view
+        hoursViewFormElement?.requestSubmit();
+      } else if (form?.error) {
+        toastStore.error(form.error);
+      }
+      isDeletingEntry = null;
     }
   });
 
@@ -610,6 +694,46 @@
     toastStore.success(`Exported ${filteredRides.length} rides to CSV`);
   };
 
+  // Export volunteer hours to CSV
+  const exportVolunteerHoursCSV = () => {
+    if (!canExport) {
+      toastStore.error('You don\'t have permission to export reports');
+      return;
+    }
+
+    if (volunteerHoursEntries.length === 0) {
+      toastStore.error('No hours to export');
+      return;
+    }
+
+    const headers = ['Date', 'Hours', 'Description', 'Logged By', 'Created At'];
+    const csvContent = [
+      headers.join(','),
+      ...volunteerHoursEntries.map(entry => {
+        return [
+          `"${entry.activity_date}"`,
+          entry.hours,
+          `"${entry.description || ''}"`,
+          `"${entry.logged_by_name || 'Unknown'}"`,
+          `"${new Date(entry.created_at).toLocaleString()}"`
+        ].join(',');
+      }),
+      '',
+      `"Total Hours",${volunteerHoursTotal.toFixed(2)}`
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const today = new Date().toISOString().split('T')[0];
+    a.download = `Volunteer_Hours_${volunteerHoursUserName.replace(/\s+/g, '_')}_${today}.csv`;
+    a.click();
+    window.URL.revokeObjectURL(url);
+    
+    toastStore.success('Volunteer hours exported');
+  };
+
   $effect(() => {
     filterType;
     if (filterType !== 'organization') {
@@ -654,13 +778,7 @@
       <div class="mb-8">
         <h1 class="text-3xl font-bold text-gray-900">Reports</h1>
         <p class="text-gray-600 mt-2">
-          {#if hasPersonalAccess && hasOrgAccess}
-            Generate personal reports and organization analytics
-          {:else if hasPersonalAccess}
-            Generate your personal volunteer reports
-          {:else if hasOrgAccess}
-            View and export organization analytics
-          {/if}
+          Generate reports, view analytics, and log volunteer hours
         </p>
       </div>
 
@@ -694,6 +812,17 @@
                 Organization Reports
               </button>
             {/if}
+            <button
+              onclick={() => activeTab = 'hours'}
+              class={`whitespace-nowrap pb-4 px-1 border-b-2 font-medium text-sm ${
+                activeTab === 'hours'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <ClockIcon class="w-4 h-4 inline mr-2" />
+              Log Hours
+            </button>
           </nav>
         </div>
       {/if}
@@ -1334,6 +1463,311 @@
               </CardContent>
             </Card>
           {/if}
+        </div>
+      {/if}
+
+      <!-- VOLUNTEER HOURS TAB -->
+      {#if activeTab === 'hours'}
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <!-- Log Hours Section -->
+          <Card>
+            <CardHeader>
+              <CardTitle class="flex items-center gap-2">
+                <PlusIcon class="w-5 h-5 text-green-600" />
+                Log Volunteer Hours
+              </CardTitle>
+              <p class="text-sm text-muted-foreground">
+                {#if canLogForOthers}
+                  Log hours for yourself or any team member
+                {:else}
+                  Log your volunteer hours (non-ride activities)
+                {/if}
+              </p>
+            </CardHeader>
+            
+            <CardContent>
+              <form
+                bind:this={hoursLogFormElement}
+                method="POST"
+                action="?/logVolunteerHours"
+                use:enhance={() => {
+                  isLoggingHours = true;
+                  return async ({ update }) => {
+                    isLoggingHours = false;
+                    await update();
+                  };
+                }}
+                class="space-y-4"
+              >
+                <!-- User Selection (for admins/dispatchers) -->
+                {#if canLogForOthers}
+                  <div>
+                    <Label class="block text-sm font-medium text-gray-700 mb-2">
+                      <UserIcon class="w-4 h-4 inline mr-1" />
+                      Volunteer *
+                    </Label>
+                    <Input
+                      placeholder="Search users..."
+                      bind:value={userSearchQuery}
+                      class="mb-2"
+                    />
+                    <select
+                      name="targetUserId"
+                      bind:value={hoursTargetUserId}
+                      required
+                      class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    >
+                      <option value="">Select a user...</option>
+                      {#each filteredStaff() as staff}
+                        <option value={staff.user_id}>
+                          {staff.first_name} {staff.last_name}
+                          {#if staff.user_id === data.userProfile?.user_id}(You){/if}
+                        </option>
+                      {/each}
+                    </select>
+                  </div>
+                {:else}
+                  <input type="hidden" name="targetUserId" value={data.userProfile?.user_id} />
+                  <div class="bg-gray-50 rounded-lg p-3 border border-gray-200">
+                    <p class="text-sm text-gray-600">
+                      Logging hours for: <span class="font-medium">{firstName} {lastName}</span>
+                    </p>
+                  </div>
+                {/if}
+
+                <!-- Date -->
+                <div>
+                  <Label class="block text-sm font-medium text-gray-700 mb-2">
+                    <CalendarIcon class="w-4 h-4 inline mr-1" />
+                    Date *
+                  </Label>
+                  <input
+                    type="date"
+                    name="activityDate"
+                    bind:value={hoursActivityDate}
+                    required
+                    max={new Date().toISOString().split('T')[0]}
+                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+
+                <!-- Hours -->
+                <div>
+                  <Label class="block text-sm font-medium text-gray-700 mb-2">
+                    <ClockIcon class="w-4 h-4 inline mr-1" />
+                    Hours *
+                  </Label>
+                  <Input
+                    type="number"
+                    name="hours"
+                    bind:value={hoursAmount}
+                    min="0.25"
+                    max="24"
+                    step="0.25"
+                    required
+                    placeholder="e.g., 2.5"
+                  />
+                  <p class="text-xs text-gray-500 mt-1">Enter hours in increments of 0.25 (15 min)</p>
+                </div>
+
+                <!-- Description -->
+                <div>
+                  <Label class="block text-sm font-medium text-gray-700 mb-2">
+                    Description (optional)
+                  </Label>
+                  <textarea
+                    name="description"
+                    bind:value={hoursDescription}
+                    rows="2"
+                    placeholder="What did you work on?"
+                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  ></textarea>
+                </div>
+
+                <Button type="submit" disabled={isLoggingHours} class="w-full">
+                  {#if isLoggingHours}
+                    <LoaderIcon class="w-4 h-4 mr-2 animate-spin" />
+                    Logging...
+                  {:else}
+                    <PlusIcon class="w-4 h-4 mr-2" />
+                    Log Hours
+                  {/if}
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
+
+          <!-- View Hours Section -->
+          <Card>
+            <CardHeader>
+              <CardTitle class="flex items-center gap-2">
+                <ClockIcon class="w-5 h-5 text-blue-600" />
+                View Logged Hours
+              </CardTitle>
+              <p class="text-sm text-muted-foreground">
+                Search hours by date range
+              </p>
+            </CardHeader>
+            
+            <CardContent>
+              <form
+                bind:this={hoursViewFormElement}
+                method="POST"
+                action="?/fetchVolunteerHours"
+                use:enhance={() => {
+                  isLoadingHours = true;
+                  return async ({ update }) => {
+                    isLoadingHours = false;
+                    await update();
+                  };
+                }}
+                class="space-y-4"
+              >
+                <!-- User Selection (for admins/dispatchers) -->
+                {#if canLogForOthers}
+                  <div>
+                    <Label class="block text-sm font-medium text-gray-700 mb-2">
+                      <UserIcon class="w-4 h-4 inline mr-1" />
+                      View Hours For
+                    </Label>
+                    <select
+                      name="targetUserId"
+                      bind:value={hoursViewUserId}
+                      class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    >
+                      <option value={data.userProfile?.user_id}>
+                        {firstName} {lastName} (You)
+                      </option>
+                      {#each (data.allStaff || []).filter(s => s.user_id !== data.userProfile?.user_id) as staff}
+                        <option value={staff.user_id}>
+                          {staff.first_name} {staff.last_name}
+                        </option>
+                      {/each}
+                    </select>
+                  </div>
+                {:else}
+                  <input type="hidden" name="targetUserId" value={data.userProfile?.user_id} />
+                {/if}
+
+                <!-- Date Range -->
+                <div class="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label class="text-xs text-gray-500 mb-1 block">From Date</Label>
+                    <input
+                      type="date"
+                      name="hoursFromDate"
+                      bind:value={hoursFromDate}
+                      class="w-full px-3 py-2 border rounded-md text-sm"
+                    />
+                  </div>
+                  <div>
+                    <Label class="text-xs text-gray-500 mb-1 block">To Date</Label>
+                    <input
+                      type="date"
+                      name="hoursToDate"
+                      bind:value={hoursToDate}
+                      class="w-full px-3 py-2 border rounded-md text-sm"
+                    />
+                  </div>
+                </div>
+
+                <Button type="submit" disabled={isLoadingHours} class="w-full" variant="outline">
+                  {#if isLoadingHours}
+                    <LoaderIcon class="w-4 h-4 mr-2 animate-spin" />
+                    Loading...
+                  {:else}
+                    <SearchIcon class="w-4 h-4 mr-2" />
+                    Search Hours
+                  {/if}
+                </Button>
+              </form>
+
+              <!-- Results -->
+              {#if hasSearchedHours}
+                <div class="mt-6 border-t pt-4">
+                  <div class="flex items-center justify-between mb-4">
+                    <div>
+                      <h4 class="font-medium text-gray-900">
+                        {volunteerHoursUserName}'s Hours
+                      </h4>
+                      <p class="text-sm text-gray-600">
+                        {volunteerHoursEntries.length} entries found
+                      </p>
+                    </div>
+                    <div class="text-right">
+                      <div class="text-2xl font-bold text-blue-600">
+                        {volunteerHoursTotal.toFixed(2)}
+                      </div>
+                      <div class="text-xs text-gray-500">Total Hours</div>
+                    </div>
+                  </div>
+
+                  {#if volunteerHoursEntries.length > 0}
+                    <div class="space-y-2 max-h-64 overflow-y-auto">
+                      {#each volunteerHoursEntries as entry}
+                        <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200">
+                          <div class="flex-1">
+                            <div class="flex items-center gap-2">
+                              <span class="font-medium">{formatDateShort(entry.activity_date)}</span>
+                              <span class="text-blue-600 font-semibold">{entry.hours} hrs</span>
+                            </div>
+                            {#if entry.description}
+                              <p class="text-sm text-gray-600 mt-1">{entry.description}</p>
+                            {/if}
+                            <p class="text-xs text-gray-400 mt-1">
+                              Logged by {entry.logged_by_name}
+                            </p>
+                          </div>
+                          <form
+                            method="POST"
+                            action="?/deleteVolunteerHours"
+                            use:enhance={() => {
+                              isDeletingEntry = entry.entry_id;
+                              return async ({ update }) => {
+                                await update();
+                              };
+                            }}
+                          >
+                            <input type="hidden" name="entryId" value={entry.entry_id} />
+                            <Button
+                              type="submit"
+                              variant="ghost"
+                              size="sm"
+                              disabled={isDeletingEntry === entry.entry_id}
+                              class="text-red-600 hover:text-red-700 hover:bg-red-50"
+                            >
+                              {#if isDeletingEntry === entry.entry_id}
+                                <LoaderIcon class="w-4 h-4 animate-spin" />
+                              {:else}
+                                <TrashIcon class="w-4 h-4" />
+                              {/if}
+                            </Button>
+                          </form>
+                        </div>
+                      {/each}
+                    </div>
+
+                    {#if canExport}
+                      <Button 
+                        variant="outline" 
+                        onclick={exportVolunteerHoursCSV} 
+                        class="w-full mt-4"
+                        size="sm"
+                      >
+                        <DownloadIcon class="w-4 h-4 mr-2" />
+                        Export Hours CSV
+                      </Button>
+                    {/if}
+                  {:else}
+                    <div class="text-center py-6 text-gray-500">
+                      <ClockIcon class="w-8 h-8 mx-auto mb-2 opacity-50" />
+                      <p>No hours logged for this period</p>
+                    </div>
+                  {/if}
+                </div>
+              {/if}
+            </CardContent>
+          </Card>
         </div>
       {/if}
 

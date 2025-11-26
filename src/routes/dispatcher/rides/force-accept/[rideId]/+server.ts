@@ -12,7 +12,7 @@ import {
 
 // Environment variables
 const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
-const FROM_EMAIL = process.env.FROM_EMAIL || 'notifications@drivekind.info';
+const FROM_EMAIL = process.env.FROM_EMAIL || 'team@drivekind.info';
 const APP_URL = process.env.PUBLIC_APP_URL || 'https://drivekind.info';
 
 export const POST: RequestHandler = async (event) => {
