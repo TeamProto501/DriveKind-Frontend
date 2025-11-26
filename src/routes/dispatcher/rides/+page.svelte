@@ -394,11 +394,114 @@ function validateMinDays(localDateTime: string, label: string): string | null {
       .slice(0, 25);
   }
 
+    // ---------- Weekly ride cap helpers ----------
+  function stripZ(ts: string) {
+    return ts ? ts.replace(/Z$/, "") : ts;
+  }
+
+  // ----- Weekly ride limit helpers -----
+
+function getWeekBoundsFor(localDateTime: string) {
+  const d = new Date(localDateTime);
+  if (Number.isNaN(d.getTime())) return null;
+
+  // Week = Sunday (0) through Saturday (6)
+  const day = d.getDay(); // 0 = Sunday
+  const start = new Date(d);
+  start.setHours(0, 0, 0, 0);
+  start.setDate(start.getDate() - day);
+
+  const end = new Date(start);
+  end.setDate(start.getDate() + 7); // exclusive
+
+  return { start, end };
+}
+
+function countClientRidesThisWeek(
+  clientIdStr: string,
+  apptLocalStr: string,
+  excludeRideId?: number
+): number {
+  const clientId = parseInt(clientIdStr || "0", 10);
+  if (!clientId || !apptLocalStr) return 0;
+
+  const bounds = getWeekBoundsFor(apptLocalStr);
+  if (!bounds) return 0;
+
+  const allRides = data?.rides ?? [];
+
+  return allRides.filter((r: any) => {
+    if (r.client_id !== clientId) return false;
+    if (userOrgId && r.org_id !== userOrgId) return false;
+    if (!r.appointment_time) return false;
+    if (r.status === "Cancelled") return false;
+    if (excludeRideId && r.ride_id === excludeRideId) return false;
+
+    const dt = new Date(String(r.appointment_time).replace(/Z$/, ""));
+    if (Number.isNaN(dt.getTime())) return false;
+
+    return dt >= bounds.start && dt < bounds.end;
+  }).length;
+}
+
+function maybeConfirmClientWeeklyLimit(context: "create" | "edit"): boolean {
+  const rawClientId =
+    rideForm.client_id ||
+    (context === "edit" && selectedRide
+      ? String(selectedRide.client_id ?? "")
+      : "");
+
+  const apptLocal =
+    rideForm.appointment_time ||
+    (context === "edit" && selectedRide
+      ? toLocalDateTimeInput(selectedRide.appointment_time) || ""
+      : "");
+
+  if (!rawClientId || !apptLocal) return true;
+
+  const client = filteredClients().find(
+    (c: any) => String(c.client_id) === String(rawClientId)
+  );
+
+  const limit = (data as any)?.organization?.client_max_weekly_rides;
+  if (!limit || limit <= 0) return true;
+
+  const already = countClientRidesThisWeek(
+    rawClientId,
+    apptLocal,
+    context === "edit" && selectedRide ? selectedRide.ride_id : undefined
+  );
+
+  if (already >= limit) {
+    const ok = confirm(
+      `This ride would exceed your organization's weekly ride limit of ${limit}. Are you sure you want to continue?`
+    );
+
+    if (!ok) {
+      // Unselect client and keep them on step 1
+      rideForm.client_id = "";
+      if (context === "create") {
+        clientQueryCreate = "";
+      } else {
+        clientQueryEdit = "";
+      }
+      return false;
+    }
+  }
+
+  return true;
+}
+
   function selectClientById(clientId: number, isEdit = false) {
+    // Just select the client now;
+    // weekly limit confirmation happens when leaving step 1
     rideForm.client_id = String(clientId);
+
     if (rideForm.pickup_from_home) applyClientAddressToPickup();
+
     const sel = filteredClients().find((c: any) => c.client_id === clientId);
     const label = sel ? fullName(sel) : "";
+
     if (isEdit) {
       showClientListEdit = false;
       clientQueryEdit = label;
@@ -653,12 +756,6 @@ function validateMinDays(localDateTime: string, label: string): string | null {
       applyClientAddressToPickup();
   });
 
-  function onClientChange(e: Event) {
-    const val = (e.target as HTMLSelectElement).value;
-    rideForm.client_id = val;
-    if (rideForm.pickup_from_home) applyClientAddressToPickup();
-  }
-
   function openCreateModal() {
     resetRideForm();
     resetDestinationSelection();
@@ -766,7 +863,7 @@ function validateMinDays(localDateTime: string, label: string): string | null {
   }
 
   function openForceAcceptModal(ride: any) {
-    console.log("Opening force accept modal for ride:", ride.ride_id);
+    console.log("Opening auto assign modal for ride:", ride.ride_id);
 
     if (!data.session?.access_token) {
       alert("Session expired. Please refresh the page and try again.");
@@ -983,7 +1080,7 @@ function validateMinDays(localDateTime: string, label: string): string | null {
       );
       console.log("🔍 Validating appointment time:", rideForm.appointment_time);
 
-      // Org days-off rule
+      // Org days-off rule (applies to both create and edit)
       if (rideForm.appointment_time) {
         const daysOffError = validateAppointmentTime(rideForm.appointment_time);
         if (daysOffError) {
@@ -991,22 +1088,25 @@ function validateMinDays(localDateTime: string, label: string): string | null {
         }
       }
 
-      // Min days in advance – appointment
-      if (rideForm.appointment_time) {
-        const minErr = validateMinDays(
-          rideForm.appointment_time,
-          "Appointment time"
-        );
-        if (minErr) {
-          errs.push(minErr);
+      // Min days in advance rules – **create only**
+      if (!isEditing()) {
+        // Min days in advance – appointment
+        if (rideForm.appointment_time) {
+          const minErr = validateMinDays(
+            rideForm.appointment_time,
+            "Appointment time"
+          );
+          if (minErr) {
+            errs.push(minErr);
+          }
         }
-      }
 
-      // Min days in advance – pickup (if set)
-      if (rideForm.pickup_time) {
-        const minErr = validateMinDays(rideForm.pickup_time, "Pickup time");
-        if (minErr) {
-          errs.push(minErr);
+        // Min days in advance – pickup (if set)
+        if (rideForm.pickup_time) {
+          const minErr = validateMinDays(rideForm.pickup_time, "Pickup time");
+          if (minErr) {
+            errs.push(minErr);
+          }
         }
       }
 
@@ -1087,45 +1187,72 @@ function validateMinDays(localDateTime: string, label: string): string | null {
     return true;
   }
 
-  function nextCreate() {
-    if (validateStep(createStep)) createStep = Math.min(3, createStep + 1);
+function nextCreate() {
+  if (!validateStep(createStep)) return;
+
+  if (createStep === 1) {
+    // Check weekly limit when leaving step 1
+    if (!maybeConfirmClientWeeklyLimit("create")) return;
   }
+
+  createStep = Math.min(3, createStep + 1);
+}
 
   function prevCreate() {
     createStep = Math.max(1, createStep - 1);
     stepErrors = [];
   }
 
-  function nextEdit() {
-    if (validateStep(editStep)) editStep = Math.min(4, editStep + 1);
+function nextEdit() {
+  if (!validateStep(editStep)) return;
+
+  if (editStep === 1) {
+    // Check weekly limit when leaving step 1 (edit flow)
+    if (!maybeConfirmClientWeeklyLimit("edit")) return;
   }
+
+  editStep = Math.min(4, editStep + 1);
+}
 
   function prevEdit() {
     editStep = Math.max(1, editStep - 1);
     stepErrors = [];
   }
 
-  function goToCreateStep(target: number) {
-    if (target <= createStep) {
-      createStep = Math.max(1, Math.min(3, target));
-      stepErrors = [];
-      return;
-    }
-    if (validateStep(createStep)) {
-      createStep = Math.max(1, Math.min(3, target));
-    }
+function goToCreateStep(target: number) {
+  if (target <= createStep) {
+    createStep = Math.max(1, Math.min(3, target));
+    stepErrors = [];
+    return;
   }
 
-  function goToEditStep(target: number) {
-    if (target <= editStep) {
-      editStep = Math.max(1, Math.min(4, target));
-      stepErrors = [];
-      return;
-    }
-    if (validateStep(editStep)) {
-      editStep = Math.max(1, Math.min(4, target));
-    }
+  // We are trying to move forward
+  if (!validateStep(createStep)) return;
+
+  if (createStep === 1 && target > 1) {
+    // Leaving page 1 → run weekly limit check
+    if (!maybeConfirmClientWeeklyLimit("create")) return;
   }
+
+  createStep = Math.max(1, Math.min(3, target));
+}
+
+function goToEditStep(target: number) {
+  if (target <= editStep) {
+    editStep = Math.max(1, Math.min(4, target));
+    stepErrors = [];
+    return;
+  }
+
+  if (!validateStep(editStep)) return;
+
+  if (editStep === 1 && target > 1) {
+    // Leaving page 1 in edit flow
+    if (!maybeConfirmClientWeeklyLimit("edit")) return;
+  }
+
+  editStep = Math.max(1, Math.min(4, target));
+}
 
   /* ---------------- submit ---------------- */
   async function createRide() {
@@ -1310,11 +1437,52 @@ function validateMinDays(localDateTime: string, label: string): string | null {
     }
   });
 
+    async function unassignDriver(rideId: number) {
+      const confirmed = confirm(
+        "Are you sure you want to unassign the driver from this ride? This will return the ride to Requested."
+      );
+      if (!confirmed) return;
+
+      isUpdating = true;
+      try {
+        const resp = await fetch("/dispatcher/rides/unassign", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ rideId })
+        });
+
+        if (!resp.ok) {
+          let msg = "";
+          try {
+            const data = await resp.json();
+            msg = data.error || data.message || "";
+          } catch {
+            msg = await resp.text();
+          }
+          alert(
+            `Failed to unassign driver (${resp.status}): ${
+              msg || "Unknown error"
+            }`
+          );
+        } else {
+          await invalidateAll();
+          alert(
+            "Driver unassigned. The ride has been returned to Requested."
+          );
+        }
+      } catch (e) {
+        console.error("Error unassigning driver:", e);
+        alert("Error unassigning driver. Please try again.");
+      } finally {
+        isUpdating = false;
+      }
+    }
+
   async function forceAcceptRide(driverId: string) {
     if (!selectedRideForForceAccept) return;
 
     console.log(
-      "Force accepting ride:",
+      "Auto assigning ride:",
       selectedRideForForceAccept.ride_id,
       "for driver:",
       driverId
@@ -1341,17 +1509,56 @@ function validateMinDays(localDateTime: string, label: string): string | null {
         driverSearchForForce = "";
         await invalidateAll();
         alert(
-          "Ride force accepted successfully! The driver has been assigned and the ride is now scheduled."
+          "Ride auto assigned successfully! The driver has been assigned and the ride is now scheduled."
         );
       } else {
-        console.error("Failed to force accept ride:", result);
+        console.error("Failed to auto assign ride:", result);
         alert(
-          `Failed to force accept ride: ${result.error || "Unknown error"}`
+          `Failed to auto assign ride: ${result.error || "Unknown error"}`
         );
       }
     } catch (error) {
-      console.error("Error force accepting ride:", error);
-      alert("Error force accepting ride. Please try again.");
+      console.error("Error auto assigning ride:", error);
+      alert("Error auto assigning ride. Please try again.");
+    } finally {
+      isUpdating = false;
+    }
+  }
+
+  async function deleteRide(rideId: number) {
+    const confirmed = confirm(
+      "Are you sure you want to delete this ride request? This cannot be undone."
+    );
+    if (!confirmed) return;
+
+    isUpdating = true;
+    try {
+      const resp = await fetch("/dispatcher/rides/delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rideId })
+      });
+
+      if (!resp.ok) {
+        let msg = "";
+        try {
+          const data = await resp.json();
+          msg = data.error || data.message || "";
+        } catch {
+          msg = await resp.text();
+        }
+        alert(
+          `Failed to delete ride request (${resp.status}): ${
+            msg || "Unknown error"
+          }`
+        );
+      } else {
+        await invalidateAll();
+        alert("Ride request deleted.");
+      }
+    } catch (e) {
+      console.error("Error deleting ride:", e);
+      alert("Error deleting ride. Please try again.");
     } finally {
       isUpdating = false;
     }
@@ -1604,18 +1811,35 @@ function validateMinDays(localDateTime: string, label: string): string | null {
                     onclick={() => openForceAcceptModal(ride)}
                     disabled={isUpdating}
                     class="bg-orange-600 hover:bg-orange-700 text-white px-3 py-1.5 rounded-lg text-sm flex items-center gap-1 transition-colors disabled:opacity-50"
-                    title="Force accept ride for a driver (bypasses driver acceptance)"
+                    title="Auto assign ride for a driver (bypasses driver acceptance)"
                   >
-                    <CheckCircle class="w-4 h-4" /> Force Accept
+                    <CheckCircle class="w-4 h-4" /> Auto Assign
+                  </button>
+                  <button
+                    onclick={() => deleteRide(ride.ride_id)}
+                    disabled={isUpdating}
+                    class="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg text-sm flex items-center gap-1 transition-colors disabled:opacity-50"
+                  >
+                    Delete
                   </button>
                 {:else if ride.status === "Assigned"}
                   <button
                     onclick={() => openForceAcceptModal(ride)}
                     disabled={isUpdating}
                     class="bg-orange-600 hover:bg-orange-700 text-white px-3 py-1.5 rounded-lg text-sm flex items-center gap-1 transition-colors disabled:opacity-50"
-                    title="Force accept ride for a different driver"
+                    title="Auto assign ride for a different driver"
                   >
-                    <CheckCircle class="w-4 h-4" /> Force Accept
+                    <CheckCircle class="w-4 h-4" /> Auto Assign
+                  </button>
+                {/if}
+
+                {#if (ride.status === "Scheduled" || ride.status === "Assigned" || ride.status === "In Progress") && ride.driver_user_id}
+                  <button
+                    onclick={() => unassignDriver(ride.ride_id)}
+                    disabled={isUpdating}
+                    class="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg text-sm flex items-center gap-1 transition-colors disabled:opacity-50"
+                  >
+                    Unassign Driver
                   </button>
                 {/if}
 
@@ -2856,9 +3080,9 @@ function validateMinDays(localDateTime: string, label: string): string | null {
   <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
     <div class="bg-white rounded-lg p-6 max-w-md w-full mx-4">
       <div class="mb-4">
-        <h2 class="text-xl font-semibold">Force Accept Ride</h2>
+        <h2 class="text-xl font-semibold">Auto Assign Ride</h2>
         <p class="text-sm text-gray-600">
-          Select a driver to force accept this ride. This will bypass the
+          Select a driver to auto assign to this ride. This will bypass the
           driver's acceptance and immediately schedule the ride.
         </p>
       </div>
@@ -2897,7 +3121,7 @@ function validateMinDays(localDateTime: string, label: string): string | null {
               class="px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-white rounded-lg text-sm transition-colors disabled:opacity-50 flex items-center gap-1"
             >
               <CheckCircle class="w-4 h-4" />
-              Force Accept
+              Auto Assign
             </button>
           </div>
         {/each}

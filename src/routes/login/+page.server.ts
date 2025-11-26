@@ -135,41 +135,6 @@ export const actions: Actions = {
     // Extract roles once (no duplicate!)
     const roles = Array.isArray(profile?.role) ? profile.role : (profile?.role ? [profile.role] : []);
 
-    // 3) If user has an org, check that org's status via org_status_enum
-    if (profile?.org_id != null) {
-      const { data: org, error: orgError } = await supabase
-        .from('organization')
-        .select('org_id, org_status_enum')
-        .eq('org_id', profile.org_id)
-        .maybeSingle();
-
-      console.log('Org lookup result:', { org, orgError });
-
-      if (orgError || !org) {
-        console.error('Org lookup error or missing org:', orgError, org);
-        await supabase.auth.signOut();
-        return fail(400, {
-          error: 'Unable to verify your organization. Please contact your administrator.'
-        });
-      }
-
-      const rawStatus = (org as any).org_status_enum;
-      const normalizedStatus = rawStatus
-        ? String(rawStatus).trim().toLowerCase()
-        : '';
-
-      console.log('Normalized org_status_enum:', normalizedStatus);
-
-      const isInactive = normalizedStatus === 'inactive' || normalizedStatus === 'disabled';
-
-      if (isInactive) {
-        await supabase.auth.signOut();
-        return fail(400, {
-          error: 'Your organization is inactive. Please contact your administrator.'
-        });
-      }
-    }
-
     // 4) Org is OK (or no org) – redirect to role-based home
     const homePage = getRoleBasedHomePage(roles);
     throw redirect(302, homePage);

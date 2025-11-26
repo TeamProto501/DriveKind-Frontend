@@ -203,6 +203,7 @@
     rides_phone_number: "",
     client_min_age: "",
     min_days_in_advance_for_ride_requests: "",
+    client_max_weekly_rides: "", // NEW
     // Contacts (no phone fields)
     primary_contact_name: "",
     primary_contact_email: "",
@@ -401,6 +402,7 @@
     "secondary_contact_state",
     "secondary_contact_zipcode",
     "org_website", // <-- make website optional here
+    "client_max_weekly_rides", // NEW (nullable int4)
   ]);
   function isRequired(key: string) {
     return !OPTIONAL_KEYS.has(key);
@@ -421,6 +423,7 @@
     rides_phone_number: "Rides Phone",
     client_min_age: "Client Minimum Age",
     min_days_in_advance_for_ride_requests: "Min Days in Advance",
+    client_max_weekly_rides: "Client Max Weekly Rides", // NEW
     primary_contact_name: "Primary Contact Name",
     primary_contact_email: "Primary Contact Email",
     primary_contact_address: "Primary Contact Address",
@@ -572,6 +575,7 @@
       coerceNumbers(payload, [
         "client_min_age",
         "min_days_in_advance_for_ride_requests",
+        "client_max_weekly_rides", // NEW
       ]);
 
       // map "days_off" -> "days-off"
@@ -590,13 +594,29 @@
       delete payload.org_creation_date;
       delete payload.first_ride_date;
       delete payload.last_activity_in_portal;
-      console.log(payload);
-      const { error } = await supabase
+      console.log("Updating org", orgId, payload);
+
+      const { data, error } = await supabase
         .from("organization")
         .update(payload)
-        .eq("org_id", orgId);
+        .eq("org_id", orgId)
+        .select("*"); // returns an array of rows
 
-      if (error) throw error;
+      console.log("Update result", { data, error });
+
+      if (error) {
+        console.error("Supabase update error:", error);
+        throw error;
+      }
+
+      if (!data || data.length === 0) {
+        console.error("No organization rows updated for org_id:", orgId);
+        throw new Error("No rows were updated — check orgId / RLS");
+      }
+
+      // If multiple rows somehow match, take the first one
+      org = data[0] as any;
+
       showEditModal = false;
     } catch (e: any) {
       console.error("Save error:", e?.message ?? e);
@@ -856,6 +876,15 @@
                   >
                   <p class="mt-1 text-gray-900">
                     {org.min_days_in_advance_for_ride_requests ?? "-"}
+                  </p>
+                </div>
+
+                                <div>
+                  <label class="block text-sm font-medium text-gray-700"
+                    >Client Max Weekly Rides</label
+                  >
+                  <p class="mt-1 text-gray-900">
+                    {org.client_max_weekly_rides ?? "-"}
                   </p>
                 </div>
               </div>
@@ -1399,6 +1428,27 @@
                         : "border-gray-300")}
                   />
                 </div>
+
+                                <div>
+                  <label class="block text-sm font-medium">
+                    {labelWithRequired(
+                      "Client Max Weekly Rides",
+                      "client_max_weekly_rides"
+                    )}
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    bind:value={form.client_max_weekly_rides}
+                    class={"mt-1 w-full border rounded-md px-3 py-2 " +
+                      (fieldErrors.client_max_weekly_rides
+                        ? "border-red-500"
+                        : "border-gray-300")}
+                  />
+                  <p class="mt-1 text-xs text-gray-500">
+                    Optional: maximum rides per client per week (leave blank for no limit).
+                  </p>
+                </div>
               </div>
             </div>
           {/if}
@@ -1647,6 +1697,10 @@
               <p>
                 <span class="font-medium">Client Min Age / Min Days:</span>
                 {form.client_min_age} / {form.min_days_in_advance_for_ride_requests}
+              </p>
+              <p>
+                <span class="font-medium">Client Max Weekly Rides:</span>
+                {form.client_max_weekly_rides || "—"}
               </p>
               <p>
                 <span class="font-medium">Primary Contact:</span>

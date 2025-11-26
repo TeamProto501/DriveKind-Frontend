@@ -150,7 +150,7 @@ export const load: PageServerLoad = async (event) => {
     if (profile?.org_id) {
       const { data: orgData } = await supabase
         .from("organization")
-        .select('org_id, "days-off", min_days_in_advance_for_ride_requests')
+        .select('org_id, "days-off", min_days_in_advance_for_ride_requests, client_max_weekly_rides')
         .eq("org_id", profile.org_id)
         .single();
 

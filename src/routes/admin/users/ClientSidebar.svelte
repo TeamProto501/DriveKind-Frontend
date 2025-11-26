@@ -9,7 +9,7 @@
   export let session: any = undefined;
   export let orgId: number;
   export let minimumAge: number = 0;
-  export let readOnly: boolean = false; // NEW: Read-only mode for view-only roles
+  export let readOnly: boolean = false; // Read-only mode for view-only roles
   const dispatch = createEventDispatcher();
 
   type Client = {
@@ -36,13 +36,20 @@
     service_animal: boolean;
     oxygen: boolean;
     client_status_enum: "Active" | "Inactive" | "Temporary Thru";
-    mobility_assistance_enum?: "cane" | "crutches" | "light walker" | "rollator" | null;
-    residence_enum:
+    mobility_assistance_enum?:
+      | "cane"
+      | "crutches"
+      | "light walker"
+      | "rollator"
+      | null;
+    // residence_enum is optional and may be empty string (None selected) or null
+    residence_enum?:
+      | ""
       | "house"
       | "apartment"
       | "mobile home"
       | "townhouse"
-      | "condo";
+      | null;
     service_animal_size_enum?: "small" | "medium" | "large" | null;
     date_enrolled: string;
     temp_client_date?: string | null;
@@ -56,18 +63,15 @@
     other_limitations?: string | null;
     referral_method?: string | null;
     driver_preference?: string | null;
+    // nullable int4 for ride caps (view-only for now)
+    max_weekly_rides?: number | null;
   };
 
   const statusOptions = ["Active", "Inactive", "Temporary Thru"] as const;
   const mobilityOptions = ["", "cane", "crutches", "light walker", "rollator"] as const;
   const genderOptions = ["Male", "Female", "Other"] as const;
-  const residenceOptions = [
-    "house",
-    "apartment",
-    "mobile home",
-    "townhouse",
-    "condo",
-  ] as const;
+  // No condo; first option is "None selected"
+  const residenceOptions = ["", "house", "apartment", "mobile home", "townhouse"] as const;
   const serviceAnimalSizeOptions = ["", "small", "medium", "large"] as const;
   const contactPrefOptions = ["", "Phone", "Email", "Text"] as const;
 
@@ -78,7 +82,7 @@
   let saving = false;
   let errorMessage: string | null = null;
 
-  // NEW: If readOnly, force view mode
+  // If readOnly, force view mode
   $: if (readOnly && mode === "edit" && !createMode) {
     mode = "view";
   }
@@ -90,17 +94,16 @@
     let age = today.getFullYear() - birth.getFullYear();
     const monthDiff = today.getMonth() - birth.getMonth();
 
-    if (
-      monthDiff < 0 ||
-      (monthDiff === 0 && today.getDate() < birth.getDate())
-    ) {
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
       age--;
     }
 
     return age;
   }
+
   function initForm(): Client {
     if (!client || createMode) {
+      // New client
       return {
         first_name: "",
         last_name: "",
@@ -124,7 +127,8 @@
         oxygen: false,
         client_status_enum: "Active",
         mobility_assistance_enum: null,
-        residence_enum: "house",
+        // residence optional by default
+        residence_enum: "",
         service_animal_size_enum: null,
         date_enrolled: new Date().toISOString().split("T")[0],
         temp_client_date: null,
@@ -138,12 +142,23 @@
         other_limitations: null,
         referral_method: null,
         driver_preference: null,
-        org_id: orgId,
+        max_weekly_rides: null,
+        org_id: orgId
       };
     }
-    return { ...client, org_id: client.org_id || orgId };
+
+    // Existing client: map null/undefined residence_enum to "" so select shows "None selected"
+    return {
+      ...client,
+      residence_enum: client.residence_enum ?? "",
+      // if the column was just added, make sure undefined comes through as null
+      max_weekly_rides:
+        client.max_weekly_rides === undefined ? null : client.max_weekly_rides,
+      org_id: client.org_id || orgId
+    };
   }
 
+  // Re-init if client/createMode/orgId change
   $: form = initForm();
 
   function errsStep(s: number): string[] {
@@ -191,6 +206,7 @@
     errorMessage = null;
     step = Math.min(4, step + 1);
   }
+
   function back() {
     step = Math.max(1, step - 1);
     errorMessage = null;
@@ -225,11 +241,18 @@
     }
     saving = true;
     try {
+      // If "None selected" (""), explicitly send null so DB clears the enum
+      const cleanedResidence = form.residence_enum ? form.residence_enum : null;
+
+      // Omit max_weekly_rides from the payload for now
+      const { max_weekly_rides: _omitMax, ...formWithoutMax } = form;
+
       const body = {
-        ...form,
+        ...formWithoutMax,
         contact_pref: form.contact_pref || null,
         mobility_assistance_enum: form.mobility_assistance_enum || null,
         service_animal_size_enum: form.service_animal_size_enum || null,
+        residence_enum: cleanedResidence,
         email: form.email?.trim() || null,
         secondary_phone: form.secondary_phone?.trim() || null,
         address2: form.address2?.trim() || null,
@@ -244,7 +267,8 @@
         other_limitations: form.other_limitations?.trim() || null,
         temp_client_date: form.temp_client_date || null,
         referral_method: form.referral_method?.trim() || null,
-        driver_preference: form.driver_preference?.trim() || null,
+        driver_preference: form.driver_preference?.trim() || null
+        // max_weekly_rides intentionally not sent from this form
       };
 
       if (createMode) {
@@ -253,9 +277,9 @@
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${session.access_token}`,
+            Authorization: `Bearer ${session.access_token}`
           },
-          body: JSON.stringify(createData),
+          body: JSON.stringify(createData)
         });
         if (!res.ok) {
           throw new Error((await res.text()) || "Failed to create client");
@@ -267,9 +291,9 @@
           method: "PUT",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${session.access_token}`,
+            Authorization: `Bearer ${session.access_token}`
           },
-          body: JSON.stringify(updateData),
+          body: JSON.stringify(updateData)
         });
         if (!res.ok) {
           throw new Error((await res.text()) || "Failed to update client");
@@ -308,11 +332,12 @@
     </button>
   </div>
 
-  <!-- NEW: Read-Only Banner -->
+  <!-- Read-Only Banner -->
   {#if readOnly && !createMode}
     <div class="px-6 py-3 bg-blue-50 border-b border-blue-200">
       <p class="text-sm text-blue-800">
-        <strong>View Only:</strong> You don't have permission to edit this client.
+        <strong>View Only:</strong> You don't have permission to edit this
+        client.
       </p>
     </div>
   {/if}
@@ -363,9 +388,7 @@
           <div>
             <div class="text-xs text-gray-500">Address</div>
             <div class="font-medium">
-              {[client.street_address, client.address2]
-                .filter(Boolean)
-                .join(" ")}
+              {[client.street_address, client.address2].filter(Boolean).join(" ")}
             </div>
             <div class="font-medium">
               {client.city}, {client.state}
@@ -387,7 +410,9 @@
           <div class="grid grid-cols-2 gap-3">
             <div>
               <div class="text-xs text-gray-500">Lives Alone</div>
-              <div class="font-medium">{client.lives_alone ? "Yes" : "No"}</div>
+              <div class="font-medium">
+                {client.lives_alone ? "Yes" : "No"}
+              </div>
             </div>
             <div>
               <div class="text-xs text-gray-500">Service Animal</div>
@@ -406,7 +431,7 @@
             </div>
             <div>
               <div class="text-xs text-gray-500">Residence</div>
-              <div class="font-medium">{client.residence_enum}</div>
+              <div class="font-medium">{client.residence_enum || "—"}</div>
             </div>
           </div>
 
@@ -447,13 +472,14 @@
             </div>
             <div>
               <div class="text-xs text-gray-500">Other Limitations</div>
-              <div class="font-medium">{client.other_limitations || "—"}</div>
+              <div class="font-medium">
+                {client.other_limitations || "—"}
+              </div>
             </div>
           </div>
         </div>
       </div>
 
-      <!-- Only show Edit button if NOT readOnly -->
       {#if !readOnly}
         <div class="px-6 pb-6 pt-2">
           <button
@@ -468,7 +494,8 @@
         </div>
       {/if}
     {:else}
-      <!-- EDIT/CREATE FORM - Rest of the form code stays the same -->
+      <!-- EDIT/CREATE FORM -->
+
       <!-- CLICKABLE STEPPER -->
       <div class="flex items-center justify-center gap-3 mb-2 select-none">
         {#each [1, 2, 3, 4] as s}
@@ -479,7 +506,7 @@
               on:click={() => goToClientStep(s)}
               class="w-8 h-8 rounded-full flex items-center justify-center text-sm transition-colors
                     {step === s ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}"
-              aria-current={step === s ? 'step' : undefined}
+              aria-current={step === s ? "step" : undefined}
               aria-label={`Step ${s}`}
             >
               {s}
@@ -497,18 +524,19 @@
       </div>
 
       {#if step === 1}
-        <!-- Basic Info - keeping original form content -->
+        <!-- Basic Info -->
         <div class="space-y-3">
           <div>
-            <label class="block text-base font-medium">First Name *</label
-            ><input
+            <label class="block text-base font-medium">First Name *</label>
+            <input
               required
               class="mt-1 w-full border rounded px-3 py-2 text-base"
               bind:value={form.first_name}
             />
           </div>
           <div>
-            <label class="block text-base font-medium">Last Name *</label><input
+            <label class="block text-base font-medium">Last Name *</label>
+            <input
               required
               class="mt-1 w-full border rounded px-3 py-2 text-base"
               bind:value={form.last_name}
@@ -516,8 +544,8 @@
           </div>
           <div class="grid grid-cols-2 gap-3">
             <div>
-              <label class="block text-base font-medium">Date of Birth *</label
-              ><input
+              <label class="block text-base font-medium">Date of Birth *</label>
+              <input
                 required
                 type="date"
                 class="mt-1 w-full border rounded px-3 py-2 text-base"
@@ -531,12 +559,15 @@
                 class="mt-1 w-full border rounded px-3 py-2 text-base"
                 bind:value={form.gender}
               >
-                {#each genderOptions as g}<option value={g}>{g}</option>{/each}
+                {#each genderOptions as g}
+                  <option value={g}>{g}</option>
+                {/each}
               </select>
             </div>
           </div>
           <div>
-            <label class="block text-base font-medium">Email</label><input
+            <label class="block text-base font-medium">Email</label>
+            <input
               type="email"
               class="mt-1 w-full border rounded px-3 py-2 text-base"
               bind:value={form.email}
@@ -544,33 +575,33 @@
           </div>
           <div class="grid grid-cols-2 gap-3">
             <div>
-              <label class="block text-base font-medium">Primary Phone *</label
-              ><input
+              <label class="block text-base font-medium">Primary Phone *</label>
+              <input
                 required
                 class="mt-1 w-full border rounded px-3 py-2 text-base"
                 bind:value={form.primary_phone}
               />
             </div>
             <div>
-              <label class="block text-base font-medium">Secondary Phone</label
-              ><input
+              <label class="block text-base font-medium">Secondary Phone</label>
+              <input
                 class="mt-1 w-full border rounded px-3 py-2 text-base"
                 bind:value={form.secondary_phone}
               />
             </div>
           </div>
           <div>
-            <label class="block text-base font-medium"
-              >Contact Preference *</label
-            >
+            <label class="block text-base font-medium">
+              Contact Preference *
+            </label>
             <select
               required
               class="mt-1 w-full border rounded px-3 py-2 text-base"
               bind:value={form.contact_pref}
             >
-              {#each contactPrefOptions as p}<option value={p}
-                  >{p || "None"}</option
-                >{/each}
+              {#each contactPrefOptions as p}
+                <option value={p}>{p || "None"}</option>
+              {/each}
             </select>
           </div>
         </div>
@@ -580,16 +611,16 @@
         <!-- Address -->
         <div class="space-y-3">
           <div>
-            <label class="block text-base font-medium">Street Address *</label
-            ><input
+            <label class="block text-base font-medium">Street Address *</label>
+            <input
               required
               class="mt-1 w-full border rounded px-3 py-2 text-base"
               bind:value={form.street_address}
             />
           </div>
           <div>
-            <label class="block text-base font-medium">Address Line 2</label
-            ><input
+            <label class="block text-base font-medium">Address Line 2</label>
+            <input
               class="mt-1 w-full border rounded px-3 py-2 text-base"
               bind:value={form.address2}
               placeholder="Apt, Suite, etc."
@@ -597,14 +628,16 @@
           </div>
           <div class="grid grid-cols-2 gap-3">
             <div>
-              <label class="block text-base font-medium">City *</label><input
+              <label class="block text-base font-medium">City *</label>
+              <input
                 required
                 class="mt-1 w-full border rounded px-3 py-2 text-base"
                 bind:value={form.city}
               />
             </div>
             <div>
-              <label class="block text-base font-medium">State *</label><input
+              <label class="block text-base font-medium">State *</label>
+              <input
                 required
                 class="mt-1 w-full border rounded px-3 py-2 text-base uppercase"
                 maxlength="2"
@@ -614,7 +647,8 @@
             </div>
           </div>
           <div>
-            <label class="block text-base font-medium">Zip Code *</label><input
+            <label class="block text-base font-medium">Zip Code *</label>
+            <input
               required
               class="mt-1 w-full border rounded px-3 py-2 text-base"
               bind:value={form.zip_code}
@@ -622,37 +656,36 @@
             />
           </div>
           <div class="grid grid-cols-2 gap-3">
-            <label class="flex items-center gap-2 text-base"
-              ><input type="checkbox" bind:checked={form.lives_alone} /> Lives alone</label
-            >
-            <label class="flex items-center gap-2 text-base"
-              ><input
-                type="checkbox"
-                bind:checked={form.primaryPhone_is_cell}
-              /> Primary phone is cell</label
-            >
+            <label class="flex items-center gap-2 text-base">
+              <input type="checkbox" bind:checked={form.lives_alone} />
+              Lives alone
+            </label>
+            <label class="flex items-center gap-2 text-base">
+              <input type="checkbox" bind:checked={form.primaryPhone_is_cell} />
+              Primary phone is cell
+            </label>
           </div>
           <div class="grid grid-cols-2 gap-3">
-            <label class="flex items-center gap-2 text-base"
-              ><input
-                type="checkbox"
-                bind:checked={form.primaryPhone_can_text}
-              /> Primary can text</label
-            >
-            <label class="flex items-center gap-2 text-base"
-              ><input
+            <label class="flex items-center gap-2 text-base">
+              <input type="checkbox" bind:checked={form.primaryPhone_can_text} />
+              Primary can text
+            </label>
+            <label class="flex items-center gap-2 text-base">
+              <input
                 type="checkbox"
                 bind:checked={form.secondaryPhone_is_cell}
-              /> Secondary phone is cell</label
-            >
+              />
+              Secondary phone is cell
+            </label>
           </div>
           <div class="grid grid-cols-2 gap-3">
-            <label class="flex items-center gap-2 text-base"
-              ><input
+            <label class="flex items-center gap-2 text-base">
+              <input
                 type="checkbox"
                 bind:checked={form.secondaryPhone_can_text}
-              /> Secondary can text</label
-            >
+              />
+              Secondary can text
+            </label>
             <span></span>
           </div>
         </div>
@@ -664,76 +697,78 @@
           <div class="grid grid-cols-2 gap-3">
             <div>
               <!-- svelte-ignore a11y_label_has_associated_control -->
-              <label class="block text-base font-medium"
-                >Mobility Assistance</label
-              >
+              <label class="block text-base font-medium">
+                Mobility Assistance
+              </label>
               <select
                 class="mt-1 w-full border rounded px-3 py-2 text-base"
                 bind:value={form.mobility_assistance_enum}
               >
-                {#each mobilityOptions as m}<option value={m}
-                    >{m || "None"}</option
-                  >{/each}
+                {#each mobilityOptions as m}
+                  <option value={m}>{m || "None"}</option>
+                {/each}
               </select>
             </div>
             <div>
               <!-- svelte-ignore a11y_label_has_associated_control -->
-              <label class="block text-base font-medium">Residence *</label>
+              <label class="block text-base font-medium">Residence</label>
               <select
-                required
                 class="mt-1 w-full border rounded px-3 py-2 text-base"
                 bind:value={form.residence_enum}
               >
-                {#each residenceOptions as r}<option value={r}>{r}</option
-                  >{/each}
+                {#each residenceOptions as r}
+                  <option value={r}>{r || "None selected"}</option>
+                {/each}
               </select>
             </div>
           </div>
           <div class="grid grid-cols-2 gap-3">
-            <label class="flex items-center gap-2 text-base"
-              ><input type="checkbox" bind:checked={form.service_animal} /> Service
-              animal</label
-            >
-            <label class="flex items-center gap-2 text-base"
-              ><input type="checkbox" bind:checked={form.oxygen} /> Requires oxygen</label
-            >
+            <label class="flex items-center gap-2 text-base">
+              <input type="checkbox" bind:checked={form.service_animal} />
+              Service animal
+            </label>
+            <label class="flex items-center gap-2 text-base">
+              <input type="checkbox" bind:checked={form.oxygen} />
+              Requires oxygen
+            </label>
           </div>
           <div>
             <!-- svelte-ignore a11y_label_has_associated_control -->
-            <label class="block text-base font-medium"
-              >Service Animal Size</label
-            >
+            <label class="block text-base font-medium">
+              Service Animal Size
+            </label>
             <select
               class="mt-1 w-full border rounded px-3 py-2 text-base"
               bind:value={form.service_animal_size_enum}
             >
-              {#each serviceAnimalSizeOptions as s}<option value={s}
-                  >{s || "None"}</option
-                >{/each}
+              {#each serviceAnimalSizeOptions as s}
+                <option value={s}>{s || "None"}</option>
+              {/each}
             </select>
           </div>
 
           <div class="grid grid-cols-1 gap-3">
             <div>
-              <label class="block text-base font-medium">Allergies</label
-              ><textarea
+              <label class="block text-base font-medium">Allergies</label>
+              <textarea
                 rows="2"
                 class="mt-1 w-full border rounded px-3 py-2 text-base"
                 bind:value={form.allergies}
               />
             </div>
             <div>
-              <label class="block text-base font-medium">Other Allergies</label
-              ><textarea
+              <label class="block text-base font-medium">Other Allergies</label>
+              <textarea
                 rows="2"
                 class="mt-1 w-full border rounded px-3 py-2 text-base"
                 bind:value={form.other_allergies}
               />
             </div>
             <div>
-              <label class="block text-base font-medium"
-                >Other Limitations</label
-              ><textarea
+              <label class="block text-base font-medium">
+                Other Limitations
+              </label>
+              <textarea
                 rows="2"
                 class="mt-1 w-full border rounded px-3 py-2 text-base"
                 bind:value={form.other_limitations}
@@ -755,7 +790,9 @@
               </div>
               <div class="grid grid-cols-2 gap-3">
                 <div>
-                  <label class="block text-base font-medium">Relationship</label>
+                  <label class="block text-base font-medium">
+                    Relationship
+                  </label>
                   <input
                     class="mt-1 w-full border rounded px-3 py-2 text-base"
                     bind:value={form.emergency_contact_relationship}
@@ -787,7 +824,9 @@
                 class="mt-1 w-full border rounded px-3 py-2 text-base"
                 bind:value={form.client_status_enum}
               >
-                {#each statusOptions as s}<option value={s}>{s}</option>{/each}
+                {#each statusOptions as s}
+                  <option value={s}>{s}</option>
+                {/each}
               </select>
             </div>
             <div>
@@ -800,11 +839,12 @@
               />
             </div>
           </div>
+
           {#if form.client_status_enum === "Temporary Thru"}
             <div>
-              <label class="block text-base font-medium"
-                >Temporary Client Date</label
-              >
+              <label class="block text-base font-medium">
+                Temporary Client Date
+              </label>
               <input
                 type="date"
                 class="mt-1 w-full border rounded px-3 py-2 text-base"
@@ -812,18 +852,20 @@
               />
             </div>
           {/if}
+
           <div class="grid grid-cols-2 gap-3">
             <div>
-              <label class="block text-base font-medium">Referral Method</label
-              ><input
+              <label class="block text-base font-medium">Referral Method</label>
+              <input
                 class="mt-1 w-full border rounded px-3 py-2 text-base"
                 bind:value={form.referral_method}
               />
             </div>
             <div>
-              <label class="block text-base font-medium"
-                >Driver Preference</label
-              ><input
+              <label class="block text-base font-medium">
+                Driver Preference
+              </label>
+              <input
                 class="mt-1 w-full border rounded px-3 py-2 text-base"
                 bind:value={form.driver_preference}
               />
@@ -831,17 +873,18 @@
           </div>
           <div class="grid grid-cols-1 gap-3">
             <div>
-              <label class="block text-base font-medium"
-                >Pickup Instructions</label
-              ><textarea
+              <label class="block text-base font-medium">
+                Pickup Instructions
+              </label>
+              <textarea
                 rows="2"
                 class="mt-1 w-full border rounded px-3 py-2 text-base"
                 bind:value={form.pick_up_instructions}
               />
             </div>
             <div>
-              <label class="block text-base font-medium">Comments</label
-              ><textarea
+              <label class="block text-base font-medium">Comments</label>
+              <textarea
                 rows="3"
                 class="mt-1 w-full border rounded px-3 py-2 text-base"
                 bind:value={form.comments}
@@ -857,21 +900,29 @@
   {#if createMode || (mode === "edit" && !readOnly)}
     <div class="px-6 py-4 border-t flex items-center justify-between">
       <div>
-        {#if step > 1}<button
+        {#if step > 1}
+          <button
             on:click={back}
-            class="px-4 py-2 rounded-lg border">Back</button
-          >{/if}
+            class="px-4 py-2 rounded-lg border"
+          >
+            Back
+          </button>
+        {/if}
       </div>
       <div class="flex gap-2">
         <button
           on:click={() => dispatch("close")}
-          class="px-4 py-2 rounded-lg border">Cancel</button
+          class="px-4 py-2 rounded-lg border"
         >
+          Cancel
+        </button>
         {#if step < 4}
           <button
             on:click={next}
-            class="px-4 py-2 rounded-lg bg-blue-600 text-white">Next</button
+            class="px-4 py-2 rounded-lg bg-blue-600 text-white"
           >
+            Next
+          </button>
         {:else}
           <button
             on:click={saveClient}

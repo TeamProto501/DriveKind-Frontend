@@ -173,6 +173,10 @@
         dispatcherItems.push({ label: "Destinations", href: "/dispatcher/destinations" });
       }
 
+      if (hasRole(["Dispatcher", "WSPS Dispatcher Add-on", "BPSR Dispatcher Add-on"])) {
+        dispatcherItems.push({ label: "Driver Schedules", href: "/dispatcher/driver-schedules" });
+      }
+
       groups.push({
         label: "Dispatcher",
         icon: "Truck",
@@ -236,6 +240,10 @@
         adminItems.push({ label: "Vehicle Management", href: "/admin/vehicle_management" });
       }
 
+      if (hasRole(["Admin", "Super Admin"])) {
+        adminItems.push({ label: "Schedule Management", href: "/admin/schedules" });
+      }
+
       // Database - Admin, Super Admin, Report View Only, Report Manager, List Manager
       if (hasRole(["Admin", "Super Admin", "Report View Only", "Report Manager", "List Manager"])) {
         adminItems.push({ label: "Database", href: "/admin/database" });
@@ -244,7 +252,7 @@
       // Configuration - Admin, Super Admin only
       if (hasRole(["Admin", "Super Admin"])) {
         adminItems.push({ label: "Configuration", href: "/admin/config" });
-        adminItems.push({ label: "Audit Logs", href: "/admin/audit" });
+        adminItems.push({ label: "Audits & Calls", href: "/admin/audit" });
       }
 
       // Organizations - Super Admin only

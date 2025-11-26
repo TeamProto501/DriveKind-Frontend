@@ -377,26 +377,26 @@ export const actions: Actions = {
     throw redirect(303, "/admin/audit?tab=calls");
   },
 
-  // Create a new call (directly via Supabase, org-scoped)
-  createCall: async (event) => {
-    const supabase = createSupabaseServerClient(event);
-    const formData = await event.request.formData();
+// Create a new call (directly via Supabase, org-scoped)
+createCall: async (event) => {
+  const supabase = createSupabaseServerClient(event);
+  const formData = await event.request.formData();
 
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser();
+  const {
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
 
     if (userError || !user) {
       console.error("createCall auth error:", userError?.message || "No user");
       return { success: false, error: "Not authenticated." };
     }
 
-    const { data: profile, error: profileError } = await supabase
-      .from("staff_profiles")
-      .select("org_id")
-      .eq("user_id", user.id)
-      .single();
+  const { data: profile, error: profileError } = await supabase
+    .from("staff_profiles")
+    .select("org_id")
+    .eq("user_id", user.id)
+    .single();
 
     if (profileError || !profile?.org_id) {
       console.error(
@@ -406,14 +406,15 @@ export const actions: Actions = {
       return { success: false, error: "Could not determine user org." };
     }
 
-    const orgId = profile.org_id;
+  const orgId = profile.org_id;
 
     const user_id = (formData.get("user_id") as string) || null;
 
     const clientIdStr = (formData.get("client_id") as string) || "";
     const client_id = clientIdStr ? Number(clientIdStr) : null;
 
-    const call_type = (formData.get("call_type") as string) || null;
+  const clientIdStr = (formData.get("client_id") as string) || "";
+  const client_id = clientIdStr ? Number(clientIdStr) : null;
 
     // Validate call_type is provided
     if (!call_type) {
@@ -438,19 +439,18 @@ export const actions: Actions = {
     let caller_first_name = (formData.get("caller_first_name") as string) || "";
     let caller_last_name = (formData.get("caller_last_name") as string) || "";
 
-    // If a client is selected, override caller_* with the client's name
-    if (client_id !== null) {
-      const { data: client, error: clientError } = await supabase
-        .from("clients")
-        .select("first_name, last_name")
-        .eq("client_id", client_id)
-        .single();
+  let caller_first_name =
+    (formData.get("caller_first_name") as string) || "";
+  let caller_last_name =
+    (formData.get("caller_last_name") as string) || "";
 
-      if (!clientError && client) {
-        caller_first_name = client.first_name ?? caller_first_name;
-        caller_last_name = client.last_name ?? caller_last_name;
-      }
-    }
+  // If a client is selected, override caller_* with the client's name
+  if (client_id !== null) {
+    const { data: client, error: clientError } = await supabase
+      .from("clients")
+      .select("first_name, last_name")
+      .eq("client_id", client_id)
+      .single();
 
     // Enforce rule: if no client selected, require caller first + last
     if (!client_id && (!caller_first_name || !caller_last_name)) {
@@ -459,6 +459,7 @@ export const actions: Actions = {
         error: "Caller first and last name are required if no client is selected.",
       };
     }
+  }
 
     // Validate required fields match database constraints
     if (!phone_number) {

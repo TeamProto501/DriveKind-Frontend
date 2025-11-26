@@ -1,11 +1,15 @@
 import type { RequestHandler } from './$types';
 import { json } from '@sveltejs/kit';
 import { createSupabaseServerClient } from '$lib/supabase.server';
+import { canCreateDestinations, type Role } from '$lib/utils/permissions';
 
 export const POST: RequestHandler = async (event) => {
   const supabase = createSupabaseServerClient(event);
-  
-  const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+  const {
+    data: { session },
+    error: sessionError
+  } = await supabase.auth.getSession();
   if (sessionError || !session) {
     return json({ error: 'Unauthorized' }, { status: 401 });
   }
@@ -20,17 +24,19 @@ export const POST: RequestHandler = async (event) => {
     return json({ error: 'Profile not found' }, { status: 404 });
   }
 
-  const roles = Array.isArray(profile.role) ? profile.role : (profile.role ? [profile.role] : []);
-  const hasPermission = roles.some(r => ['Admin', 'Super Admin'].includes(r));
-  
-  if (!hasPermission) {
+  const roles: Role[] = Array.isArray(profile.role)
+    ? profile.role
+    : profile.role
+      ? [profile.role]
+      : [];
+
+  // Use shared permission helper for CREATE
+  if (!canCreateDestinations(roles)) {
     return json({ error: 'Insufficient permissions' }, { status: 403 });
   }
 
   const body = await event.request.json();
   const { location_name, address, address2, city, state, zipcode, org_id } = body;
-
-  // Location name is now optional
 
   if (!address?.trim() || !city?.trim() || !state?.trim()) {
     return json({ error: 'Address, City, and State are required' }, { status: 400 });
