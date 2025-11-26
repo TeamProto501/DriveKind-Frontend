@@ -524,7 +524,7 @@
   <div class="border-b border-gray-200">
     <nav class="-mb-px flex space-x-6 text-sm">
       
-        href="?tab=audits"
+        <a href="?tab=audits"
         class="inline-flex items-center border-b-2 px-1 pb-2 font-medium
         {activeTab === 'audits'
           ? 'border-blue-600 text-blue-600'
@@ -534,7 +534,7 @@
         Audits
       </a>
       
-        href="?tab=calls"
+        <a href="?tab=calls"
         class="inline-flex items-center border-b-2 px-1 pb-2 font-medium
         {activeTab === 'calls'
           ? 'border-blue-600 text-blue-600'
