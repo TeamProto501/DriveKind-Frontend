@@ -123,7 +123,15 @@
     const platformItems = [];
 
     // Home (available to all)
-    platformItems.push({ label: "Home", href: "/", icon: "Home" });
+    let homeHref = "/calendar"; // Default fallback
+    if (hasRole(["Admin", "Super Admin"])) {
+      homeHref = "/admin/dash";
+    } else if (hasRole(["Dispatcher"])) {
+      homeHref = "/dispatcher/dashboard";
+    } else if (hasRole(["Driver"])) {
+      homeHref = "/driver/rides";
+    }
+    platformItems.push({ label: "Home", href: homeHref, icon: "Home" });
 
     // Calendar (available to all)
     platformItems.push({
