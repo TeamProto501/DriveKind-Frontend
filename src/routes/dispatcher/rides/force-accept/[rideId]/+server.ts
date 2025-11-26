@@ -11,7 +11,7 @@ import {
 } from '$lib/utils/email.server';
 
 // Environment variables
-const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
+const RESEND_ASSIGN_KEY = process.env.RESEND_ASSIGN_KEY || '';
 const FROM_EMAIL = process.env.FROM_EMAIL || 'team@drivekind.info';
 const APP_URL = process.env.PUBLIC_APP_URL || 'https://drivekind.info';
 
@@ -141,7 +141,7 @@ export const POST: RequestHandler = async (event) => {
     let emailError: string | undefined;
     let emailMessageId: string | undefined;
     
-    if (driver.email && RESEND_API_KEY) {
+    if (driver.email && RESEND_ASSIGN_KEY) {
       try {
         // Determine client address (pickup location)
         let clientAddress = ride.clients?.street_address || '';
@@ -198,7 +198,7 @@ export const POST: RequestHandler = async (event) => {
           appUrl: APP_URL
         };
         
-        const result = await sendDriverAssignmentEmail(emailData, RESEND_API_KEY, FROM_EMAIL);
+        const result = await sendDriverAssignmentEmail(emailData, RESEND_ASSIGN_KEY, FROM_EMAIL);
         
         if (result.success) {
           emailSent = true;
@@ -216,8 +216,8 @@ export const POST: RequestHandler = async (event) => {
     } else if (!driver.email) {
       console.log('Driver has no email address, skipping notification');
       emailError = 'Driver has no email address';
-    } else if (!RESEND_API_KEY) {
-      console.log('RESEND_API_KEY not configured, skipping email');
+    } else if (!RESEND_ASSIGN_KEY) {
+      console.log('RESEND_ASSIGN_KEY not configured, skipping email');
       emailError = 'Email service not configured';
     }
     
