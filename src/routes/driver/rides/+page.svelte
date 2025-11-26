@@ -24,6 +24,8 @@
   import RideCompletionModal from "$lib/components/RideCompletionModal.svelte";
   import { validateRideCompletion, sanitizeInput } from "$lib/utils/validation";
   import { supabase } from "$lib/supabase";
+  import { page } from "$app/stores";
+  import { onMount } from "svelte";
 
   let { data }: { data: PageData } = $props();
 
@@ -551,6 +553,54 @@
   ];
 
   const DONATION_TYPE_OPTIONS = ["Cash", "Envelope"];
+
+  let expandedRideId = $state<number | null>(null);
+
+  onMount(() => {
+    // Check for view parameter from email link
+    const viewParam = $page.url.searchParams.get("view");
+    if (viewParam) {
+      const rideId = parseInt(viewParam);
+      if (!isNaN(rideId)) {
+        // Find the ride to determine which tab it's in
+        const rideToView = data.rides?.find((r: any) => r.ride_id === rideId);
+        if (rideToView) {
+          // Switch to the correct tab based on ride status
+          if (rideToView.status === "Pending") {
+            activeTab = "requests";
+          } else if (rideToView.status === "Scheduled" || rideToView.status === "Assigned") {
+            activeTab = "scheduled";
+          } else if (rideToView.status === "In Progress") {
+            activeTab = "active";
+          } else if (rideToView.status === "Completed" || rideToView.status === "Cancelled") {
+            activeTab = "completed";
+          }
+          
+          // Expand the ride card
+          expandedRideId = rideId;
+          
+          // Scroll to the ride after a short delay (to allow tab switch and render)
+          setTimeout(() => {
+            const element = document.getElementById(`ride-${rideId}`);
+            if (element) {
+              element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              element.classList.add('ring-2', 'ring-blue-500', 'ring-offset-2');
+              
+              // Remove highlight after 3 seconds
+              setTimeout(() => {
+                element.classList.remove('ring-2', 'ring-blue-500', 'ring-offset-2');
+              }, 3000);
+            }
+          }, 200);
+        }
+        
+        // Clean up URL
+        const url = new URL(window.location.href);
+        url.searchParams.delete("view");
+        window.history.replaceState({}, "", url.toString());
+      }
+    }
+  });
 </script>
 
 <svelte:head>
@@ -694,7 +744,7 @@
 
   <div class="grid gap-4">
     {#each filteredRides() as ride}
-      <Card>
+      <Card id={`ride-${ride.ride_id}`} class="transition-all duration-300">
         <CardContent class="p-6">
           <div class="flex items-start justify-between">
             <div class="space-y-2 flex-1">

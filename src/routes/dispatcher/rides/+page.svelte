@@ -622,6 +622,7 @@ function maybeConfirmClientWeeklyLimit(context: "create" | "edit"): boolean {
     pickup_from_home: boolean;
     call_id: string;
     completion_status: string;
+    using_org_car: boolean;
   };
 
   let rideForm = $state<RideForm>({
@@ -655,6 +656,7 @@ function maybeConfirmClientWeeklyLimit(context: "create" | "edit"): boolean {
     pickup_from_home: true,
     call_id: "",
     completion_status: "Completed Round Trip",
+    using_org_car: false
   });
 
   type Destination = {
@@ -731,6 +733,7 @@ function maybeConfirmClientWeeklyLimit(context: "create" | "edit"): boolean {
       pickup_from_home: true,
       call_id: "",
       completion_status: "Completed Round Trip",
+      using_org_car: false
     };
     stepErrors = [];
   }
@@ -836,6 +839,7 @@ function maybeConfirmClientWeeklyLimit(context: "create" | "edit"): boolean {
       pickup_from_home: !!ride.pickup_from_home,
       call_id: (ride.call_id ?? "").toString(),
       completion_status: ride.completion_status ?? "Completed Round Trip",
+      using_org_car: !!ride.usingZ_org_car
     };
 
     if (rideForm.pickup_from_home && rideForm.client_id)
@@ -1006,6 +1010,8 @@ function maybeConfirmClientWeeklyLimit(context: "create" | "edit"): boolean {
       completion_status: has(form.completion_status)
         ? form.completion_status
         : (base.completion_status ?? "Completed Round Trip"),
+
+      using_org_car: form.using_org_car ?? false
     };
 
     if (DEBUG) console.debug("🧾 Payload:", payload);
@@ -2345,6 +2351,17 @@ function goToEditStep(target: number) {
                 </div>
               </div>
             </div>
+          </div>
+
+          <div class="flex items-center gap-2 md:col-span-3">
+            <input
+              id="using_org_car"
+              type="checkbox"
+              bind:checked={rideForm.using_org_car}
+            />
+            <label for="using_org_car" class="text-sm font-medium text-gray-700">
+              Using organization vehicle
+            </label>
           </div>
 
           <!-- Notes (create) -->
