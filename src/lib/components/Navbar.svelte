@@ -252,7 +252,7 @@
       // Configuration - Admin, Super Admin only
       if (hasRole(["Admin", "Super Admin"])) {
         adminItems.push({ label: "Configuration", href: "/admin/config" });
-        adminItems.push({ label: "Audit Logs", href: "/admin/audit" });
+        adminItems.push({ label: "Audits & Calls", href: "/admin/audit" });
       }
 
       // Organizations - Super Admin only
