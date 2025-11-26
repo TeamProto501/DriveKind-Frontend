@@ -519,25 +519,56 @@
           }
           return async () => { invalidateAll(); closeModals(); };
         }} class="space-y-6">
+          <!-- Hidden inputs to ensure all values are submitted regardless of step -->
+          <input type="hidden" name="name" value={form.name} />
+          <input type="hidden" name="org_status" value={form.org_status} />
+          <input type="hidden" name="org_email" value={form.org_email} />
+          <input type="hidden" name="org_phone" value={form.org_phone} />
+          <input type="hidden" name="org_website" value={form.org_website} />
+          <input type="hidden" name="org_address" value={form.org_address} />
+          <input type="hidden" name="org_address2" value={form.org_address2} />
+          <input type="hidden" name="org_city" value={form.org_city} />
+          <input type="hidden" name="org_state" value={form.org_state} />
+          <input type="hidden" name="org_zip_code" value={form.org_zip_code} />
           <input type="hidden" name="working_hours" value={packWorkingHours(whAdd)} />
+          <input type="hidden" name="days_off" value={form.days_off} />
+          <input type="hidden" name="rides_phone_number" value={form.rides_phone_number} />
+          <input type="hidden" name="client_min_age" value={form.client_min_age} />
+          <input type="hidden" name="min_days_in_advance_for_ride_requests" value={form.min_days_in_advance_for_ride_requests} />
+          <input type="hidden" name="client_max_weekly_rides" value={form.client_max_weekly_rides} />
+          <input type="hidden" name="primary_contact_name" value={form.primary_contact_name} />
+          <input type="hidden" name="primary_contact_email" value={form.primary_contact_email} />
+          <input type="hidden" name="primary_contact_address" value={form.primary_contact_address} />
+          <input type="hidden" name="primary_contact_address2" value={form.primary_contact_address2} />
+          <input type="hidden" name="primary_contact_city" value={form.primary_contact_city} />
+          <input type="hidden" name="primary_contact_state" value={form.primary_contact_state} />
+          <input type="hidden" name="primary_contact_zipcode" value={form.primary_contact_zipcode} />
+          <input type="hidden" name="secondary_contact_name" value={form.secondary_contact_name} />
+          <input type="hidden" name="secondary_contact_email" value={form.secondary_contact_email} />
+          <input type="hidden" name="secondary_contact_address" value={form.secondary_contact_address} />
+          <input type="hidden" name="secondary_contact_address2" value={form.secondary_contact_address2} />
+          <input type="hidden" name="secondary_contact_city" value={form.secondary_contact_city} />
+          <input type="hidden" name="secondary_contact_state" value={form.secondary_contact_state} />
+          <input type="hidden" name="secondary_contact_zipcode" value={form.secondary_contact_zipcode} />
+          <input type="hidden" name="user_initial_password" value={form.user_initial_password} />
 
           {#if addStep === 0}
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              <div><label class="block text-sm font-medium">{labelWithRequired("Name", "name")}</label><input type="text" name="name" bind:value={form.name} class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.name ? "border-red-500" : "border-gray-300")} /></div>
-              <div><label class="block text-sm font-medium">{labelWithRequired("Organization Status", "org_status")}</label><select name="org_status" bind:value={form.org_status} class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.org_status ? "border-red-500" : "border-gray-300")}><option value="">—</option><option value="Active">Active</option><option value="Inactive">Inactive</option></select></div>
-              <div><label class="block text-sm font-medium">{labelWithRequired("Website", "org_website")}</label><input type="text" name="org_website" bind:value={form.org_website} class="mt-1 w-full border rounded-md px-3 py-2 border-gray-300" /></div>
-              <div><label class="block text-sm font-medium">{labelWithRequired("Organization Email", "org_email")}</label><input type="email" name="org_email" bind:value={form.org_email} class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.org_email ? "border-red-500" : "border-gray-300")} /></div>
-              <div><label class="block text-sm font-medium">{labelWithRequired("Organization Phone", "org_phone")}</label><input type="tel" name="org_phone" bind:value={form.org_phone} class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.org_phone ? "border-red-500" : "border-gray-300")} /></div>
+              <div><label class="block text-sm font-medium">{labelWithRequired("Name", "name")}</label><input type="text" bind:value={form.name} class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.name ? "border-red-500" : "border-gray-300")} /></div>
+              <div><label class="block text-sm font-medium">{labelWithRequired("Organization Status", "org_status")}</label><select bind:value={form.org_status} class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.org_status ? "border-red-500" : "border-gray-300")}><option value="">—</option><option value="Active">Active</option><option value="Inactive">Inactive</option></select></div>
+              <div><label class="block text-sm font-medium">{labelWithRequired("Website", "org_website")}</label><input type="text" bind:value={form.org_website} class="mt-1 w-full border rounded-md px-3 py-2 border-gray-300" /></div>
+              <div><label class="block text-sm font-medium">{labelWithRequired("Organization Email", "org_email")}</label><input type="email" bind:value={form.org_email} class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.org_email ? "border-red-500" : "border-gray-300")} /></div>
+              <div><label class="block text-sm font-medium">{labelWithRequired("Organization Phone", "org_phone")}</label><input type="tel" bind:value={form.org_phone} class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.org_phone ? "border-red-500" : "border-gray-300")} /></div>
             </div>
           {/if}
 
           {#if addStep === 1}
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div class="md:col-span-2"><label class="block text-sm font-medium">{labelWithRequired("Street", "org_address")}</label><input type="text" name="org_address" bind:value={form.org_address} class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.org_address ? "border-red-500" : "border-gray-300")} /></div>
-              <div class="md:col-span-2"><label class="block text-sm font-medium">{labelWithRequired("Street 2", "org_address2")}</label><input type="text" name="org_address2" bind:value={form.org_address2} class="mt-1 w-full border rounded-md px-3 py-2 border-gray-300" /></div>
-              <div><label class="block text-sm font-medium">{labelWithRequired("City", "org_city")}</label><input type="text" name="org_city" bind:value={form.org_city} class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.org_city ? "border-red-500" : "border-gray-300")} /></div>
-              <div><label class="block text-sm font-medium">{labelWithRequired("State", "org_state")}</label><input type="text" name="org_state" maxlength="2" bind:value={form.org_state} class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.org_state ? "border-red-500" : "border-gray-300")} /></div>
-              <div><label class="block text-sm font-medium">{labelWithRequired("Zip Code", "org_zip_code")}</label><input type="text" name="org_zip_code" bind:value={form.org_zip_code} class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.org_zip_code ? "border-red-500" : "border-gray-300")} /></div>
+              <div class="md:col-span-2"><label class="block text-sm font-medium">{labelWithRequired("Street", "org_address")}</label><input type="text" bind:value={form.org_address} class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.org_address ? "border-red-500" : "border-gray-300")} /></div>
+              <div class="md:col-span-2"><label class="block text-sm font-medium">{labelWithRequired("Street 2", "org_address2")}</label><input type="text" bind:value={form.org_address2} class="mt-1 w-full border rounded-md px-3 py-2 border-gray-300" /></div>
+              <div><label class="block text-sm font-medium">{labelWithRequired("City", "org_city")}</label><input type="text" bind:value={form.org_city} class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.org_city ? "border-red-500" : "border-gray-300")} /></div>
+              <div><label class="block text-sm font-medium">{labelWithRequired("State", "org_state")}</label><input type="text" maxlength="2" bind:value={form.org_state} class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.org_state ? "border-red-500" : "border-gray-300")} /></div>
+              <div><label class="block text-sm font-medium">{labelWithRequired("Zip Code", "org_zip_code")}</label><input type="text" bind:value={form.org_zip_code} class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.org_zip_code ? "border-red-500" : "border-gray-300")} /></div>
             </div>
           {/if}
 
@@ -562,42 +593,42 @@
                 </div>
               </div>
               <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div><label class="block text-sm font-medium">{labelWithRequired("Days Off", "days_off")}</label><input type="text" name="days_off" placeholder="MM/DD, MM/DD" bind:value={form.days_off} class="mt-1 w-full border rounded-md px-3 py-2 border-gray-300" /><p class="text-xs text-gray-500 mt-1">Will render like: {formatDaysOff(form.days_off).join(", ")}</p></div>
-                <div><label class="block text-sm font-medium">{labelWithRequired("Rides Phone", "rides_phone_number")}</label><input type="tel" name="rides_phone_number" bind:value={form.rides_phone_number} class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.rides_phone_number ? "border-red-500" : "border-gray-300")} /></div>
-                <div><label class="block text-sm font-medium">{labelWithRequired("Client Minimum Age", "client_min_age")}</label><input type="number" name="client_min_age" bind:value={form.client_min_age} class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.client_min_age ? "border-red-500" : "border-gray-300")} /></div>
-                <div><label class="block text-sm font-medium">{labelWithRequired("Min Days in Advance", "min_days_in_advance_for_ride_requests")}</label><input type="number" name="min_days_in_advance_for_ride_requests" bind:value={form.min_days_in_advance_for_ride_requests} class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.min_days_in_advance_for_ride_requests ? "border-red-500" : "border-gray-300")} /></div>
+                <div><label class="block text-sm font-medium">{labelWithRequired("Days Off", "days_off")}</label><input type="text" placeholder="MM/DD, MM/DD" bind:value={form.days_off} class="mt-1 w-full border rounded-md px-3 py-2 border-gray-300" /><p class="text-xs text-gray-500 mt-1">Will render like: {formatDaysOff(form.days_off).join(", ")}</p></div>
+                <div><label class="block text-sm font-medium">{labelWithRequired("Rides Phone", "rides_phone_number")}</label><input type="tel" bind:value={form.rides_phone_number} class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.rides_phone_number ? "border-red-500" : "border-gray-300")} /></div>
+                <div><label class="block text-sm font-medium">{labelWithRequired("Client Minimum Age", "client_min_age")}</label><input type="number" bind:value={form.client_min_age} class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.client_min_age ? "border-red-500" : "border-gray-300")} /></div>
+                <div><label class="block text-sm font-medium">{labelWithRequired("Min Days in Advance", "min_days_in_advance_for_ride_requests")}</label><input type="number" bind:value={form.min_days_in_advance_for_ride_requests} class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.min_days_in_advance_for_ride_requests ? "border-red-500" : "border-gray-300")} /></div>
               </div>
-              <div><label class="block text-sm font-medium">Max Weekly Rides (optional)</label><input type="number" name="client_max_weekly_rides" bind:value={form.client_max_weekly_rides} class="mt-1 w-full border rounded-md px-3 py-2 border-gray-300" placeholder="Leave blank for no limit" /></div>
+              <div><label class="block text-sm font-medium">Max Weekly Rides (optional)</label><input type="number" bind:value={form.client_max_weekly_rides} class="mt-1 w-full border rounded-md px-3 py-2 border-gray-300" placeholder="Leave blank for no limit" /></div>
             </div>
           {/if}
 
           {#if addStep === 3}
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div><label class="block text-sm font-medium">{labelWithRequired("Name", "primary_contact_name")}</label><input type="text" name="primary_contact_name" bind:value={form.primary_contact_name} class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.primary_contact_name ? "border-red-500" : "border-gray-300")} /></div>
-              <div><label class="block text-sm font-medium">{labelWithRequired("Email", "primary_contact_email")}</label><input type="email" name="primary_contact_email" bind:value={form.primary_contact_email} class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.primary_contact_email ? "border-red-500" : "border-gray-300")} /></div>
-              <div class="md:col-span-2"><label class="block text-sm font-medium">{labelWithRequired("Address", "primary_contact_address")}</label><input type="text" name="primary_contact_address" bind:value={form.primary_contact_address} class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.primary_contact_address ? "border-red-500" : "border-gray-300")} /></div>
-              <div class="md:col-span-2"><label class="block text-sm font-medium">{labelWithRequired("Address 2", "primary_contact_address2")}</label><input type="text" name="primary_contact_address2" bind:value={form.primary_contact_address2} class="mt-1 w-full border rounded-md px-3 py-2 border-gray-300" /></div>
-              <div><label class="block text-sm font-medium">{labelWithRequired("City", "primary_contact_city")}</label><input type="text" name="primary_contact_city" bind:value={form.primary_contact_city} class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.primary_contact_city ? "border-red-500" : "border-gray-300")} /></div>
-              <div><label class="block text-sm font-medium">{labelWithRequired("State", "primary_contact_state")}</label><input type="text" name="primary_contact_state" maxlength="2" bind:value={form.primary_contact_state} class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.primary_contact_state ? "border-red-500" : "border-gray-300")} /></div>
-              <div><label class="block text-sm font-medium">{labelWithRequired("Zip", "primary_contact_zipcode")}</label><input type="text" name="primary_contact_zipcode" bind:value={form.primary_contact_zipcode} class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.primary_contact_zipcode ? "border-red-500" : "border-gray-300")} /></div>
+              <div><label class="block text-sm font-medium">{labelWithRequired("Name", "primary_contact_name")}</label><input type="text" bind:value={form.primary_contact_name} class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.primary_contact_name ? "border-red-500" : "border-gray-300")} /></div>
+              <div><label class="block text-sm font-medium">{labelWithRequired("Email", "primary_contact_email")}</label><input type="email" bind:value={form.primary_contact_email} class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.primary_contact_email ? "border-red-500" : "border-gray-300")} /></div>
+              <div class="md:col-span-2"><label class="block text-sm font-medium">{labelWithRequired("Address", "primary_contact_address")}</label><input type="text" bind:value={form.primary_contact_address} class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.primary_contact_address ? "border-red-500" : "border-gray-300")} /></div>
+              <div class="md:col-span-2"><label class="block text-sm font-medium">{labelWithRequired("Address 2", "primary_contact_address2")}</label><input type="text" bind:value={form.primary_contact_address2} class="mt-1 w-full border rounded-md px-3 py-2 border-gray-300" /></div>
+              <div><label class="block text-sm font-medium">{labelWithRequired("City", "primary_contact_city")}</label><input type="text" bind:value={form.primary_contact_city} class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.primary_contact_city ? "border-red-500" : "border-gray-300")} /></div>
+              <div><label class="block text-sm font-medium">{labelWithRequired("State", "primary_contact_state")}</label><input type="text" maxlength="2" bind:value={form.primary_contact_state} class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.primary_contact_state ? "border-red-500" : "border-gray-300")} /></div>
+              <div><label class="block text-sm font-medium">{labelWithRequired("Zip", "primary_contact_zipcode")}</label><input type="text" bind:value={form.primary_contact_zipcode} class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.primary_contact_zipcode ? "border-red-500" : "border-gray-300")} /></div>
             </div>
           {/if}
 
           {#if addStep === 4}
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div><label class="block text-sm font-medium">{labelWithRequired("Name", "secondary_contact_name")}</label><input type="text" name="secondary_contact_name" bind:value={form.secondary_contact_name} class="mt-1 w-full border rounded-md px-3 py-2 border-gray-300" /></div>
-              <div><label class="block text-sm font-medium">{labelWithRequired("Email", "secondary_contact_email")}</label><input type="email" name="secondary_contact_email" bind:value={form.secondary_contact_email} class="mt-1 w-full border rounded-md px-3 py-2 border-gray-300" /></div>
-              <div class="md:col-span-2"><label class="block text-sm font-medium">{labelWithRequired("Address", "secondary_contact_address")}</label><input type="text" name="secondary_contact_address" bind:value={form.secondary_contact_address} class="mt-1 w-full border rounded-md px-3 py-2 border-gray-300" /></div>
-              <div class="md:col-span-2"><label class="block text-sm font-medium">{labelWithRequired("Address 2", "secondary_contact_address2")}</label><input type="text" name="secondary_contact_address2" bind:value={form.secondary_contact_address2} class="mt-1 w-full border rounded-md px-3 py-2 border-gray-300" /></div>
-              <div><label class="block text-sm font-medium">{labelWithRequired("City", "secondary_contact_city")}</label><input type="text" name="secondary_contact_city" bind:value={form.secondary_contact_city} class="mt-1 w-full border rounded-md px-3 py-2 border-gray-300" /></div>
-              <div><label class="block text-sm font-medium">{labelWithRequired("State", "secondary_contact_state")}</label><input type="text" name="secondary_contact_state" maxlength="2" bind:value={form.secondary_contact_state} class="mt-1 w-full border rounded-md px-3 py-2 border-gray-300" /></div>
-              <div><label class="block text-sm font-medium">{labelWithRequired("Zip", "secondary_contact_zipcode")}</label><input type="text" name="secondary_contact_zipcode" bind:value={form.secondary_contact_zipcode} class="mt-1 w-full border rounded-md px-3 py-2 border-gray-300" /></div>
+              <div><label class="block text-sm font-medium">{labelWithRequired("Name", "secondary_contact_name")}</label><input type="text" bind:value={form.secondary_contact_name} class="mt-1 w-full border rounded-md px-3 py-2 border-gray-300" /></div>
+              <div><label class="block text-sm font-medium">{labelWithRequired("Email", "secondary_contact_email")}</label><input type="email" bind:value={form.secondary_contact_email} class="mt-1 w-full border rounded-md px-3 py-2 border-gray-300" /></div>
+              <div class="md:col-span-2"><label class="block text-sm font-medium">{labelWithRequired("Address", "secondary_contact_address")}</label><input type="text" bind:value={form.secondary_contact_address} class="mt-1 w-full border rounded-md px-3 py-2 border-gray-300" /></div>
+              <div class="md:col-span-2"><label class="block text-sm font-medium">{labelWithRequired("Address 2", "secondary_contact_address2")}</label><input type="text" bind:value={form.secondary_contact_address2} class="mt-1 w-full border rounded-md px-3 py-2 border-gray-300" /></div>
+              <div><label class="block text-sm font-medium">{labelWithRequired("City", "secondary_contact_city")}</label><input type="text" bind:value={form.secondary_contact_city} class="mt-1 w-full border rounded-md px-3 py-2 border-gray-300" /></div>
+              <div><label class="block text-sm font-medium">{labelWithRequired("State", "secondary_contact_state")}</label><input type="text" maxlength="2" bind:value={form.secondary_contact_state} class="mt-1 w-full border rounded-md px-3 py-2 border-gray-300" /></div>
+              <div><label class="block text-sm font-medium">{labelWithRequired("Zip", "secondary_contact_zipcode")}</label><input type="text" bind:value={form.secondary_contact_zipcode} class="mt-1 w-full border rounded-md px-3 py-2 border-gray-300" /></div>
             </div>
           {/if}
 
           {#if addStep === 5}
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div><label class="block text-sm font-medium">{labelWithRequired("Initial Password", "user_initial_password")}</label><input type="text" name="user_initial_password" bind:value={form.user_initial_password} class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.user_initial_password ? "border-red-500" : "border-gray-300")} /></div>
+              <div><label class="block text-sm font-medium">{labelWithRequired("Initial Password", "user_initial_password")}</label><input type="text" bind:value={form.user_initial_password} class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.user_initial_password ? "border-red-500" : "border-gray-300")} /></div>
             </div>
           {/if}
 
@@ -648,26 +679,57 @@
           }
           return async () => { invalidateAll(); closeModals(); };
         }} class="space-y-6">
+          <!-- Hidden inputs to ensure all values are submitted regardless of step -->
           <input type="hidden" name="org_id" value={editingOrg.org_id} />
+          <input type="hidden" name="name" value={form.name} />
+          <input type="hidden" name="org_status" value={form.org_status} />
+          <input type="hidden" name="org_email" value={form.org_email} />
+          <input type="hidden" name="org_phone" value={form.org_phone} />
+          <input type="hidden" name="org_website" value={form.org_website} />
+          <input type="hidden" name="org_address" value={form.org_address} />
+          <input type="hidden" name="org_address2" value={form.org_address2} />
+          <input type="hidden" name="org_city" value={form.org_city} />
+          <input type="hidden" name="org_state" value={form.org_state} />
+          <input type="hidden" name="org_zip_code" value={form.org_zip_code} />
           <input type="hidden" name="working_hours" value={packWorkingHours(whEdit)} />
+          <input type="hidden" name="days_off" value={form.days_off} />
+          <input type="hidden" name="rides_phone_number" value={form.rides_phone_number} />
+          <input type="hidden" name="client_min_age" value={form.client_min_age} />
+          <input type="hidden" name="min_days_in_advance_for_ride_requests" value={form.min_days_in_advance_for_ride_requests} />
+          <input type="hidden" name="client_max_weekly_rides" value={form.client_max_weekly_rides} />
+          <input type="hidden" name="primary_contact_name" value={form.primary_contact_name} />
+          <input type="hidden" name="primary_contact_email" value={form.primary_contact_email} />
+          <input type="hidden" name="primary_contact_address" value={form.primary_contact_address} />
+          <input type="hidden" name="primary_contact_address2" value={form.primary_contact_address2} />
+          <input type="hidden" name="primary_contact_city" value={form.primary_contact_city} />
+          <input type="hidden" name="primary_contact_state" value={form.primary_contact_state} />
+          <input type="hidden" name="primary_contact_zipcode" value={form.primary_contact_zipcode} />
+          <input type="hidden" name="secondary_contact_name" value={form.secondary_contact_name} />
+          <input type="hidden" name="secondary_contact_email" value={form.secondary_contact_email} />
+          <input type="hidden" name="secondary_contact_address" value={form.secondary_contact_address} />
+          <input type="hidden" name="secondary_contact_address2" value={form.secondary_contact_address2} />
+          <input type="hidden" name="secondary_contact_city" value={form.secondary_contact_city} />
+          <input type="hidden" name="secondary_contact_state" value={form.secondary_contact_state} />
+          <input type="hidden" name="secondary_contact_zipcode" value={form.secondary_contact_zipcode} />
+          <input type="hidden" name="user_initial_password" value={form.user_initial_password} />
 
           {#if editStep === 0}
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              <div><label class="block text-sm font-medium">{labelWithRequired("Name", "name")}</label><input type="text" name="name" bind:value={form.name} class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.name ? "border-red-500" : "border-gray-300")} /></div>
-              <div><label class="block text-sm font-medium">{labelWithRequired("Organization Status", "org_status")}</label><select name="org_status" bind:value={form.org_status} class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.org_status ? "border-red-500" : "border-gray-300")}><option value="">—</option><option value="Active">Active</option><option value="Inactive">Inactive</option></select></div>
-              <div><label class="block text-sm font-medium">{labelWithRequired("Website", "org_website")}</label><input type="text" name="org_website" bind:value={form.org_website} class="mt-1 w-full border rounded-md px-3 py-2 border-gray-300" /></div>
-              <div><label class="block text-sm font-medium">{labelWithRequired("Organization Email", "org_email")}</label><input type="email" name="org_email" bind:value={form.org_email} class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.org_email ? "border-red-500" : "border-gray-300")} /></div>
-              <div><label class="block text-sm font-medium">{labelWithRequired("Organization Phone", "org_phone")}</label><input type="tel" name="org_phone" bind:value={form.org_phone} class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.org_phone ? "border-red-500" : "border-gray-300")} /></div>
+              <div><label class="block text-sm font-medium">{labelWithRequired("Name", "name")}</label><input type="text" bind:value={form.name} class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.name ? "border-red-500" : "border-gray-300")} /></div>
+              <div><label class="block text-sm font-medium">{labelWithRequired("Organization Status", "org_status")}</label><select bind:value={form.org_status} class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.org_status ? "border-red-500" : "border-gray-300")}><option value="">—</option><option value="Active">Active</option><option value="Inactive">Inactive</option></select></div>
+              <div><label class="block text-sm font-medium">{labelWithRequired("Website", "org_website")}</label><input type="text" bind:value={form.org_website} class="mt-1 w-full border rounded-md px-3 py-2 border-gray-300" /></div>
+              <div><label class="block text-sm font-medium">{labelWithRequired("Organization Email", "org_email")}</label><input type="email" bind:value={form.org_email} class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.org_email ? "border-red-500" : "border-gray-300")} /></div>
+              <div><label class="block text-sm font-medium">{labelWithRequired("Organization Phone", "org_phone")}</label><input type="tel" bind:value={form.org_phone} class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.org_phone ? "border-red-500" : "border-gray-300")} /></div>
             </div>
           {/if}
 
           {#if editStep === 1}
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div class="md:col-span-2"><label class="block text-sm font-medium">{labelWithRequired("Street", "org_address")}</label><input type="text" name="org_address" bind:value={form.org_address} class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.org_address ? "border-red-500" : "border-gray-300")} /></div>
-              <div class="md:col-span-2"><label class="block text-sm font-medium">{labelWithRequired("Street 2", "org_address2")}</label><input type="text" name="org_address2" bind:value={form.org_address2} class="mt-1 w-full border rounded-md px-3 py-2 border-gray-300" /></div>
-              <div><label class="block text-sm font-medium">{labelWithRequired("City", "org_city")}</label><input type="text" name="org_city" bind:value={form.org_city} class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.org_city ? "border-red-500" : "border-gray-300")} /></div>
-              <div><label class="block text-sm font-medium">{labelWithRequired("State", "org_state")}</label><input type="text" name="org_state" maxlength="2" bind:value={form.org_state} class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.org_state ? "border-red-500" : "border-gray-300")} /></div>
-              <div><label class="block text-sm font-medium">{labelWithRequired("Zip Code", "org_zip_code")}</label><input type="text" name="org_zip_code" bind:value={form.org_zip_code} class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.org_zip_code ? "border-red-500" : "border-gray-300")} /></div>
+              <div class="md:col-span-2"><label class="block text-sm font-medium">{labelWithRequired("Street", "org_address")}</label><input type="text" bind:value={form.org_address} class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.org_address ? "border-red-500" : "border-gray-300")} /></div>
+              <div class="md:col-span-2"><label class="block text-sm font-medium">{labelWithRequired("Street 2", "org_address2")}</label><input type="text" bind:value={form.org_address2} class="mt-1 w-full border rounded-md px-3 py-2 border-gray-300" /></div>
+              <div><label class="block text-sm font-medium">{labelWithRequired("City", "org_city")}</label><input type="text" bind:value={form.org_city} class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.org_city ? "border-red-500" : "border-gray-300")} /></div>
+              <div><label class="block text-sm font-medium">{labelWithRequired("State", "org_state")}</label><input type="text" maxlength="2" bind:value={form.org_state} class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.org_state ? "border-red-500" : "border-gray-300")} /></div>
+              <div><label class="block text-sm font-medium">{labelWithRequired("Zip Code", "org_zip_code")}</label><input type="text" bind:value={form.org_zip_code} class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.org_zip_code ? "border-red-500" : "border-gray-300")} /></div>
             </div>
           {/if}
 
@@ -692,42 +754,42 @@
                 </div>
               </div>
               <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div><label class="block text-sm font-medium">{labelWithRequired("Days Off", "days_off")}</label><input type="text" name="days_off" placeholder="MM/DD, MM/DD" bind:value={form.days_off} class="mt-1 w-full border rounded-md px-3 py-2 border-gray-300" /><p class="text-xs text-gray-500 mt-1">Will render like: {formatDaysOff(form.days_off).join(", ")}</p></div>
-                <div><label class="block text-sm font-medium">{labelWithRequired("Rides Phone", "rides_phone_number")}</label><input type="tel" name="rides_phone_number" bind:value={form.rides_phone_number} class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.rides_phone_number ? "border-red-500" : "border-gray-300")} /></div>
-                <div><label class="block text-sm font-medium">{labelWithRequired("Client Minimum Age", "client_min_age")}</label><input type="number" name="client_min_age" bind:value={form.client_min_age} class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.client_min_age ? "border-red-500" : "border-gray-300")} /></div>
-                <div><label class="block text-sm font-medium">Max Weekly Rides (optional)</label><input type="number" name="client_max_weekly_rides" bind:value={form.client_max_weekly_rides} class="mt-1 w-full border rounded-md px-3 py-2 border-gray-300" placeholder="Leave blank for no limit" /></div>
-                <div><label class="block text-sm font-medium">{labelWithRequired("Min Days in Advance", "min_days_in_advance_for_ride_requests")}</label><input type="number" name="min_days_in_advance_for_ride_requests" bind:value={form.min_days_in_advance_for_ride_requests} class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.min_days_in_advance_for_ride_requests ? "border-red-500" : "border-gray-300")} /></div>
+                <div><label class="block text-sm font-medium">{labelWithRequired("Days Off", "days_off")}</label><input type="text" placeholder="MM/DD, MM/DD" bind:value={form.days_off} class="mt-1 w-full border rounded-md px-3 py-2 border-gray-300" /><p class="text-xs text-gray-500 mt-1">Will render like: {formatDaysOff(form.days_off).join(", ")}</p></div>
+                <div><label class="block text-sm font-medium">{labelWithRequired("Rides Phone", "rides_phone_number")}</label><input type="tel" bind:value={form.rides_phone_number} class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.rides_phone_number ? "border-red-500" : "border-gray-300")} /></div>
+                <div><label class="block text-sm font-medium">{labelWithRequired("Client Minimum Age", "client_min_age")}</label><input type="number" bind:value={form.client_min_age} class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.client_min_age ? "border-red-500" : "border-gray-300")} /></div>
+                <div><label class="block text-sm font-medium">Max Weekly Rides (optional)</label><input type="number" bind:value={form.client_max_weekly_rides} class="mt-1 w-full border rounded-md px-3 py-2 border-gray-300" placeholder="Leave blank for no limit" /></div>
+                <div><label class="block text-sm font-medium">{labelWithRequired("Min Days in Advance", "min_days_in_advance_for_ride_requests")}</label><input type="number" bind:value={form.min_days_in_advance_for_ride_requests} class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.min_days_in_advance_for_ride_requests ? "border-red-500" : "border-gray-300")} /></div>
               </div>
             </div>
           {/if}
 
           {#if editStep === 3}
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div><label class="block text-sm font-medium">{labelWithRequired("Name", "primary_contact_name")}</label><input type="text" name="primary_contact_name" bind:value={form.primary_contact_name} class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.primary_contact_name ? "border-red-500" : "border-gray-300")} /></div>
-              <div><label class="block text-sm font-medium">{labelWithRequired("Email", "primary_contact_email")}</label><input type="email" name="primary_contact_email" bind:value={form.primary_contact_email} class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.primary_contact_email ? "border-red-500" : "border-gray-300")} /></div>
-              <div class="md:col-span-2"><label class="block text-sm font-medium">{labelWithRequired("Address", "primary_contact_address")}</label><input type="text" name="primary_contact_address" bind:value={form.primary_contact_address} class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.primary_contact_address ? "border-red-500" : "border-gray-300")} /></div>
-              <div class="md:col-span-2"><label class="block text-sm font-medium">{labelWithRequired("Address 2", "primary_contact_address2")}</label><input type="text" name="primary_contact_address2" bind:value={form.primary_contact_address2} class="mt-1 w-full border rounded-md px-3 py-2 border-gray-300" /></div>
-              <div><label class="block text-sm font-medium">{labelWithRequired("City", "primary_contact_city")}</label><input type="text" name="primary_contact_city" bind:value={form.primary_contact_city} class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.primary_contact_city ? "border-red-500" : "border-gray-300")} /></div>
-              <div><label class="block text-sm font-medium">{labelWithRequired("State", "primary_contact_state")}</label><input type="text" name="primary_contact_state" maxlength="2" bind:value={form.primary_contact_state} class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.primary_contact_state ? "border-red-500" : "border-gray-300")} /></div>
-              <div><label class="block text-sm font-medium">{labelWithRequired("Zip", "primary_contact_zipcode")}</label><input type="text" name="primary_contact_zipcode" bind:value={form.primary_contact_zipcode} class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.primary_contact_zipcode ? "border-red-500" : "border-gray-300")} /></div>
+              <div><label class="block text-sm font-medium">{labelWithRequired("Name", "primary_contact_name")}</label><input type="text" bind:value={form.primary_contact_name} class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.primary_contact_name ? "border-red-500" : "border-gray-300")} /></div>
+              <div><label class="block text-sm font-medium">{labelWithRequired("Email", "primary_contact_email")}</label><input type="email" bind:value={form.primary_contact_email} class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.primary_contact_email ? "border-red-500" : "border-gray-300")} /></div>
+              <div class="md:col-span-2"><label class="block text-sm font-medium">{labelWithRequired("Address", "primary_contact_address")}</label><input type="text" bind:value={form.primary_contact_address} class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.primary_contact_address ? "border-red-500" : "border-gray-300")} /></div>
+              <div class="md:col-span-2"><label class="block text-sm font-medium">{labelWithRequired("Address 2", "primary_contact_address2")}</label><input type="text" bind:value={form.primary_contact_address2} class="mt-1 w-full border rounded-md px-3 py-2 border-gray-300" /></div>
+              <div><label class="block text-sm font-medium">{labelWithRequired("City", "primary_contact_city")}</label><input type="text" bind:value={form.primary_contact_city} class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.primary_contact_city ? "border-red-500" : "border-gray-300")} /></div>
+              <div><label class="block text-sm font-medium">{labelWithRequired("State", "primary_contact_state")}</label><input type="text" maxlength="2" bind:value={form.primary_contact_state} class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.primary_contact_state ? "border-red-500" : "border-gray-300")} /></div>
+              <div><label class="block text-sm font-medium">{labelWithRequired("Zip", "primary_contact_zipcode")}</label><input type="text" bind:value={form.primary_contact_zipcode} class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.primary_contact_zipcode ? "border-red-500" : "border-gray-300")} /></div>
             </div>
           {/if}
 
           {#if editStep === 4}
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div><label class="block text-sm font-medium">{labelWithRequired("Name", "secondary_contact_name")}</label><input type="text" name="secondary_contact_name" bind:value={form.secondary_contact_name} class="mt-1 w-full border rounded-md px-3 py-2 border-gray-300" /></div>
-              <div><label class="block text-sm font-medium">{labelWithRequired("Email", "secondary_contact_email")}</label><input type="email" name="secondary_contact_email" bind:value={form.secondary_contact_email} class="mt-1 w-full border rounded-md px-3 py-2 border-gray-300" /></div>
-              <div class="md:col-span-2"><label class="block text-sm font-medium">{labelWithRequired("Address", "secondary_contact_address")}</label><input type="text" name="secondary_contact_address" bind:value={form.secondary_contact_address} class="mt-1 w-full border rounded-md px-3 py-2 border-gray-300" /></div>
-              <div class="md:col-span-2"><label class="block text-sm font-medium">{labelWithRequired("Address 2", "secondary_contact_address2")}</label><input type="text" name="secondary_contact_address2" bind:value={form.secondary_contact_address2} class="mt-1 w-full border rounded-md px-3 py-2 border-gray-300" /></div>
-              <div><label class="block text-sm font-medium">{labelWithRequired("City", "secondary_contact_city")}</label><input type="text" name="secondary_contact_city" bind:value={form.secondary_contact_city} class="mt-1 w-full border rounded-md px-3 py-2 border-gray-300" /></div>
-              <div><label class="block text-sm font-medium">{labelWithRequired("State", "secondary_contact_state")}</label><input type="text" name="secondary_contact_state" maxlength="2" bind:value={form.secondary_contact_state} class="mt-1 w-full border rounded-md px-3 py-2 border-gray-300" /></div>
-              <div><label class="block text-sm font-medium">{labelWithRequired("Zip", "secondary_contact_zipcode")}</label><input type="text" name="secondary_contact_zipcode" bind:value={form.secondary_contact_zipcode} class="mt-1 w-full border rounded-md px-3 py-2 border-gray-300" /></div>
+              <div><label class="block text-sm font-medium">{labelWithRequired("Name", "secondary_contact_name")}</label><input type="text" bind:value={form.secondary_contact_name} class="mt-1 w-full border rounded-md px-3 py-2 border-gray-300" /></div>
+              <div><label class="block text-sm font-medium">{labelWithRequired("Email", "secondary_contact_email")}</label><input type="email" bind:value={form.secondary_contact_email} class="mt-1 w-full border rounded-md px-3 py-2 border-gray-300" /></div>
+              <div class="md:col-span-2"><label class="block text-sm font-medium">{labelWithRequired("Address", "secondary_contact_address")}</label><input type="text" bind:value={form.secondary_contact_address} class="mt-1 w-full border rounded-md px-3 py-2 border-gray-300" /></div>
+              <div class="md:col-span-2"><label class="block text-sm font-medium">{labelWithRequired("Address 2", "secondary_contact_address2")}</label><input type="text" bind:value={form.secondary_contact_address2} class="mt-1 w-full border rounded-md px-3 py-2 border-gray-300" /></div>
+              <div><label class="block text-sm font-medium">{labelWithRequired("City", "secondary_contact_city")}</label><input type="text" bind:value={form.secondary_contact_city} class="mt-1 w-full border rounded-md px-3 py-2 border-gray-300" /></div>
+              <div><label class="block text-sm font-medium">{labelWithRequired("State", "secondary_contact_state")}</label><input type="text" maxlength="2" bind:value={form.secondary_contact_state} class="mt-1 w-full border rounded-md px-3 py-2 border-gray-300" /></div>
+              <div><label class="block text-sm font-medium">{labelWithRequired("Zip", "secondary_contact_zipcode")}</label><input type="text" bind:value={form.secondary_contact_zipcode} class="mt-1 w-full border rounded-md px-3 py-2 border-gray-300" /></div>
             </div>
           {/if}
 
           {#if editStep === 5}
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div><label class="block text-sm font-medium">{labelWithRequired("Initial Password", "user_initial_password")}</label><input type="text" name="user_initial_password" bind:value={form.user_initial_password} class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.user_initial_password ? "border-red-500" : "border-gray-300")} /></div>
+              <div><label class="block text-sm font-medium">{labelWithRequired("Initial Password", "user_initial_password")}</label><input type="text" bind:value={form.user_initial_password} class={"mt-1 w-full border rounded-md px-3 py-2 " + (fieldErrors.user_initial_password ? "border-red-500" : "border-gray-300")} /></div>
             </div>
           {/if}
 
