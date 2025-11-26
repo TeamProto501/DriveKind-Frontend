@@ -944,7 +944,21 @@
           </button>
         </div>
 
-        <form method="POST" action="/admin/audit?/createCall" class="space-y-4">
+        <form 
+          method="POST" 
+          action="?/createCall" 
+          class="space-y-4"
+          use:enhance={() => {
+            console.log("Form submitting via enhance...");
+            return async ({ result }) => {
+              console.log("Form result:", result);
+              if (result.type === 'redirect') {
+                closeCreate();
+                invalidateAll();
+              }
+            };
+          }}
+        >
           <!-- Dispatcher / Client selects -->
           <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div>
