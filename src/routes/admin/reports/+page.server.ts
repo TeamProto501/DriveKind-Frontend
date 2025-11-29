@@ -45,6 +45,9 @@ export const load: PageServerLoad = async (event) => {
   
   if (!session) throw redirect(302, '/login');
 
+  const urlTab = event.url.searchParams.get('tab');
+  const activeTab = urlTab === 'callLogs' || urlTab === 'logHours' ? urlTab : null;
+
   // Get user profile
   const { data: userProfile, error: profileError } = await supabase
     .from('staff_profiles')
@@ -71,6 +74,68 @@ export const load: PageServerLoad = async (event) => {
   let drivers: StaffProfile[] = [];
   let clients: ClientProfile[] = [];
   let allStaff: StaffProfile[] = [];
+  let calls: any[] = [];
+  let timecards: any[] = [];
+  let staffProfiles: any[] = [];
+  let callClients: any[] = [];
+
+  // Load data for Call Logs or Log Hours tabs
+  if (activeTab === 'callLogs' && userProfile?.org_id) {
+    // Fetch calls for this org
+    const { data: callData, error: callError } = await supabase
+      .from('calls')
+      .select('*')
+      .eq('org_id', userProfile.org_id)
+      .order('call_time', { ascending: false });
+
+    if (!callError) {
+      calls = callData || [];
+    }
+
+    // Fetch staff profiles for dispatcher dropdown
+    const { data: staffData, error: staffError } = await supabase
+      .from('staff_profiles')
+      .select('user_id, org_id, first_name, last_name')
+      .eq('org_id', userProfile.org_id);
+
+    if (!staffError) {
+      staffProfiles = staffData || [];
+    }
+
+    // Fetch clients for this org
+    const { data: clientData, error: clientError } = await supabase
+      .from('clients')
+      .select('client_id, org_id, first_name, last_name, primary_phone')
+      .eq('org_id', userProfile.org_id);
+
+    if (!clientError) {
+      callClients = clientData || [];
+    }
+  }
+
+  // Load data for Log Hours tab
+  if (activeTab === 'logHours') {
+    // Fetch timecards for current user (or all if admin)
+    let timecardQuery = supabase
+      .from('timecards')
+      .select('*');
+
+    if (userProfile?.org_id) {
+      timecardQuery = timecardQuery.eq('org_id', userProfile.org_id);
+    }
+
+    // If not admin, only show user's own timecards
+    if (!isAdmin) {
+      timecardQuery = timecardQuery.eq('user_id', session.user.id);
+    }
+
+    const { data: timecardData, error: timecardError } = await timecardQuery
+      .order('shift_start', { ascending: false });
+
+    if (!timecardError) {
+      timecards = timecardData || [];
+    }
+  }
 
   if (isAdmin) {
     // Fetch drivers
@@ -110,58 +175,6 @@ export const load: PageServerLoad = async (event) => {
     }));
   }
 
-  // Load calls, staff profiles, and clients for Call Logs tab
-  let calls: any[] = [];
-  let staffProfiles: any[] = [];
-  let callClients: any[] = [];
-
-  // Load timecards for Log Hours tab
-  let timecards: any[] = [];
-
-  if (userProfile?.org_id) {
-    // Fetch calls for this org
-    const { data: callsData, error: callsError } = await supabase
-      .from('calls')
-      .select('*')
-      .eq('org_id', userProfile.org_id)
-      .order('call_time', { ascending: false });
-
-    if (!callsError) {
-      calls = callsData || [];
-    }
-
-    // Fetch staff profiles for dispatcher dropdown
-    const { data: staffData, error: staffError } = await supabase
-      .from('staff_profiles')
-      .select('user_id, org_id, first_name, last_name')
-      .eq('org_id', userProfile.org_id);
-
-    if (!staffError) {
-      staffProfiles = staffData || [];
-    }
-
-    // Fetch clients for call log
-    const { data: clientData, error: clientError } = await supabase
-      .from('clients')
-      .select('client_id, org_id, first_name, last_name, primary_phone')
-      .eq('org_id', userProfile.org_id);
-
-    if (!clientError) {
-      callClients = clientData || [];
-    }
-
-    // Fetch timecards for logged hours
-    const { data: timecardsData, error: timecardsError } = await supabase
-      .from('timecards')
-      .select('*')
-      .eq('org_id', userProfile.org_id)
-      .order('shift_start', { ascending: false });
-
-    if (!timecardsError) {
-      timecards = timecardsData || [];
-    }
-  }
-
   return {
     session,
     userProfile,
@@ -171,9 +184,9 @@ export const load: PageServerLoad = async (event) => {
     allStaff,
     isAdmin,
     calls,
+    timecards,
     staffProfiles,
-    callClients,
-    timecards
+    callClients
   };
 };
 
@@ -436,7 +449,7 @@ export const actions: Actions = {
     }
   },
 
-  // Create a new call (for Call Logs tab)
+  // Create a new call (same pattern as audit page)
   createCall: async (event) => {
     const supabase = createSupabaseServerClient(event);
     const formData = await event.request.formData();
@@ -447,48 +460,48 @@ export const actions: Actions = {
     } = await supabase.auth.getUser();
 
     if (userError || !user) {
-      return fail(401, { error: 'Not authenticated.' });
+      return fail(401, { error: "Not authenticated." });
     }
 
     const { data: profile, error: profileError } = await supabase
-      .from('staff_profiles')
-      .select('org_id')
-      .eq('user_id', user.id)
+      .from("staff_profiles")
+      .select("org_id")
+      .eq("user_id", user.id)
       .single();
 
     if (profileError || !profile?.org_id) {
-      return fail(400, { error: 'Could not determine user org.' });
+      return fail(500, { error: "Could not determine user org." });
     }
 
     const orgId = profile.org_id;
 
-    const user_id = (formData.get('user_id') as string) || null;
-    const clientIdStr = (formData.get('client_id') as string) || '';
+    const user_id = (formData.get("user_id") as string) || null;
+    const clientIdStr = (formData.get("client_id") as string) || "";
     const client_id = clientIdStr ? Number(clientIdStr) : null;
 
-    const call_type = (formData.get('call_type') as string) || null;
+    const call_type = (formData.get("call_type") as string) || null;
 
-    const call_time_local = formData.get('call_time') as string | null;
+    const call_time_local = formData.get("call_time") as string | null;
     const formatToSQL = (dateTimeLocal: string) =>
-      dateTimeLocal.replace('T', ' ') + ':00';
+      dateTimeLocal.replace("T", " ") + ":00";
     const call_time = call_time_local ? formatToSQL(call_time_local) : null;
 
-    const other_type = (formData.get('other_type') as string) || null;
-    const phone_number = (formData.get('phone_number') as string) || null;
+    const other_type = (formData.get("other_type") as string) || null;
+    const phone_number = (formData.get("phone_number") as string) || null;
     const forwarded_to_name =
-      (formData.get('forwarded_to_name') as string) || null;
+      (formData.get("forwarded_to_name") as string) || null;
 
     let caller_first_name =
-      (formData.get('caller_first_name') as string) || null;
+      (formData.get("caller_first_name") as string) || null;
     let caller_last_name =
-      (formData.get('caller_last_name') as string) || null;
+      (formData.get("caller_last_name") as string) || null;
 
     // If a client is selected, override caller_* with the client's name
     if (client_id !== null) {
       const { data: client, error: clientError } = await supabase
-        .from('clients')
-        .select('first_name, last_name')
-        .eq('client_id', client_id)
+        .from("clients")
+        .select("first_name, last_name")
+        .eq("client_id", client_id)
         .single();
 
       if (!clientError && client) {
@@ -501,12 +514,12 @@ export const actions: Actions = {
     if (!client_id && (!caller_first_name || !caller_last_name)) {
       return fail(400, {
         error:
-          'Caller first and last name are required if no client is selected.',
+          "Caller first and last name are required if no client is selected.",
       });
     }
 
     const { data: insertData, error: insertError } = await supabase
-      .from('calls')
+      .from("calls")
       .insert({
         org_id: orgId,
         user_id,
@@ -519,16 +532,16 @@ export const actions: Actions = {
         caller_first_name,
         caller_last_name,
       })
-      .select('call_id');
+      .select("call_id");
 
     if (insertError) {
       return fail(500, { error: insertError.message });
     }
 
-    throw redirect(303, '/admin/reports?tab=callLogs');
+    throw redirect(303, "/admin/reports?tab=callLogs");
   },
 
-  // Create a new timecard entry (for Log Hours tab)
+  // Create a new timecard for log hours
   createTimecard: async (event) => {
     const supabase = createSupabaseServerClient(event);
     const formData = await event.request.formData();
@@ -539,62 +552,62 @@ export const actions: Actions = {
     } = await supabase.auth.getUser();
 
     if (userError || !user) {
-      return fail(401, { error: 'Not authenticated.' });
+      return fail(401, { error: "Not authenticated." });
     }
 
     const { data: profile, error: profileError } = await supabase
-      .from('staff_profiles')
-      .select('org_id')
-      .eq('user_id', user.id)
+      .from("staff_profiles")
+      .select("org_id")
+      .eq("user_id", user.id)
       .single();
 
     if (profileError || !profile?.org_id) {
-      return fail(400, { error: 'Could not determine user org.' });
+      return fail(500, { error: "Could not determine user org." });
     }
 
     const orgId = profile.org_id;
 
-    const shiftStartStr = formData.get('shift_start') as string;
-    const shiftEndStr = formData.get('shift_end') as string;
-    const hoursStr = formData.get('hours') as string;
+    const shift_start_local = formData.get("shift_start") as string | null;
+    const shift_end_local = formData.get("shift_end") as string | null;
+    const hoursStr = formData.get("hours") as string | null;
 
-    if (!shiftStartStr || !shiftEndStr) {
-      return fail(400, { error: 'Shift start and end times are required.' });
+    if (!shift_start_local || !shift_end_local) {
+      return fail(400, { error: "Shift start and end times are required." });
     }
 
-    // Format datetime strings
     const formatToSQL = (dateTimeLocal: string) =>
-      dateTimeLocal.replace('T', ' ') + ':00';
-    const shift_start = formatToSQL(shiftStartStr);
-    const shift_end = formatToSQL(shiftEndStr);
+      dateTimeLocal.replace("T", " ") + ":00";
+
+    const shift_start = formatToSQL(shift_start_local);
+    const shift_end = formatToSQL(shift_end_local);
 
     // Calculate hours if not provided
     let hours: number | null = null;
-    if (hoursStr) {
+    if (hoursStr && hoursStr.trim() !== "") {
       hours = parseFloat(hoursStr);
     } else {
-      // Calculate from start/end times
-      const start = new Date(shift_start);
-      const end = new Date(shift_end);
-      const diffMs = end.getTime() - start.getTime();
+      // Auto-calculate hours from start/end times
+      const startDate = new Date(shift_start_local);
+      const endDate = new Date(shift_end_local);
+      const diffMs = endDate.getTime() - startDate.getTime();
       hours = diffMs / (1000 * 60 * 60); // Convert to hours
     }
 
     const { data: insertData, error: insertError } = await supabase
-      .from('timecards')
+      .from("timecards")
       .insert({
-        user_id: user.id,
         org_id: orgId,
+        user_id: user.id,
         shift_start,
         shift_end,
         hours,
       })
-      .select('timecard_id');
+      .select("timecard_id");
 
     if (insertError) {
       return fail(500, { error: insertError.message });
     }
 
-    throw redirect(303, '/admin/reports?tab=logHours');
+    throw redirect(303, "/admin/reports?tab=logHours");
   }
 };
