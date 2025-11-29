@@ -7,6 +7,8 @@
   import { Card, CardContent, CardHeader, CardTitle } from '$lib/components/ui/card';
   import { toastStore } from '$lib/toast';
   import { enhance } from '$app/forms';
+  import { page } from '$app/stores';
+  import { goto } from '$app/navigation';
   import RoleGuard from '$lib/components/RoleGuard.svelte';
   import Breadcrumbs from '$lib/components/Breadcrumbs.svelte';
   import SearchIcon from "@lucide/svelte/icons/search";
@@ -17,12 +19,19 @@
   import DownloadIcon from "@lucide/svelte/icons/download";
   import ClockIcon from "@lucide/svelte/icons/clock";
   import FileTextIcon from "@lucide/svelte/icons/file-text";
+  import PhoneCallIcon from "@lucide/svelte/icons/phone-call";
+  import XIcon from "@lucide/svelte/icons/x";
+  import PlusIcon from "@lucide/svelte/icons/plus";
   import type { RideReportData } from './+page.server';
 
   let { data, form }: { data: PageData; form?: ActionData } = $props();
 
-  // Tab state
-  let activeTab = $state<'personal' | 'organization'>('personal');
+  // Tab state - initialize from URL or default to 'personal'
+  const urlTab = $page.url.searchParams.get('tab');
+  const initialTab = (urlTab === 'callLogs' || urlTab === 'organization' || urlTab === 'personal') 
+    ? urlTab 
+    : 'personal';
+  let activeTab = $state<'personal' | 'organization' | 'callLogs'>(initialTab as any);
 
   // Personal Report State
   let selectedRole = $state<string>('');
@@ -606,6 +615,218 @@
     sortColumn = 'appointment_time';
     sortDirection = 'desc';
   });
+
+  // -----------------------------
+  // CALL LOGS TAB STATE
+  // -----------------------------
+
+  type CallRowFromServer = {
+    call_id: number;
+    user_id: string | null;
+    client_id: number | null;
+    org_id: number | null;
+    call_type: string | null;
+    call_time: string | null;
+    other_type: string | null;
+    phone_number: string | null;
+    forwarded_to_name: string | null;
+    caller_first_name: string | null;
+    caller_last_name: string | null;
+  };
+
+  type DisplayCallRow = {
+    call_id: number;
+    dispatcher: string;
+    client: string;
+    caller_name: string;
+    call_time: string | null;
+    phone_number: string | null;
+    call_type: string | null;
+    other_type: string | null;
+    forwarded_to_name: string | null;
+  };
+
+  const CALL_TYPE_OPTIONS = [
+    "Ride Request",
+    "Cancelled Ride",
+    "Hasnt heard from driver",
+    "Prospective Volunteer",
+    "Other",
+  ];
+
+  // Get calls data from server
+  let rawCallRows = $derived(((data as any).calls ?? []) as CallRowFromServer[]);
+  let staffProfilesForCalls = $derived(((data as any).staffProfiles ?? []) as any[]);
+  let clientsForCalls = $derived(((data as any).callClients ?? []) as any[]);
+
+  // Helper functions
+  function formatCallTime(dt: string | null): string | null {
+    if (!dt) return null;
+    const isoish = dt.replace(" ", "T");
+    const d = new Date(isoish);
+    if (Number.isNaN(d.getTime())) return dt;
+    return d.toLocaleString(undefined, {
+      year: "numeric",
+      month: "short",
+      day: "2-digit",
+      hour: "numeric",
+      minute: "2-digit",
+    });
+  }
+
+  function toMillis(dt: string | null): number {
+    if (!dt) return 0;
+    const isoish = dt.replace(" ", "T");
+    const t = Date.parse(isoish);
+    return Number.isNaN(t) ? 0 : t;
+  }
+
+  function getNowLocal(): string {
+    const d = new Date();
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const yyyy = d.getFullYear();
+    const mm = pad(d.getMonth() + 1);
+    const dd = pad(d.getDate());
+    const hh = pad(d.getHours());
+    const mi = pad(d.getMinutes());
+    return `${yyyy}-${mm}-${dd}T${hh}:${mi}`;
+  }
+
+  // Create maps for lookup
+  let staffById = $derived.by(() => {
+    const map = new Map<string, any>();
+    for (const sp of staffProfilesForCalls) {
+      if (sp.user_id) map.set(sp.user_id, sp);
+    }
+    return map;
+  });
+
+  let clientById = $derived.by(() => {
+    const map = new Map<number, any>();
+    for (const c of clientsForCalls) {
+      if (c.client_id != null) map.set(c.client_id, c);
+    }
+    return map;
+  });
+
+  // Sort calls by time descending
+  let sortedCallRows = $derived(
+    [...rawCallRows].sort(
+      (a, b) => toMillis(b.call_time) - toMillis(a.call_time)
+    )
+  );
+
+  // Build display rows
+  let displayCallRows = $derived.by(() => {
+    return sortedCallRows.map((row) => {
+      const dispatcher = row.user_id ? staffById.get(row.user_id) : undefined;
+      const dispatcherName = dispatcher
+        ? `${dispatcher.first_name ?? ""} ${dispatcher.last_name ?? ""}`.trim()
+        : row.user_id ?? "";
+
+      const client =
+        row.client_id != null ? clientById.get(row.client_id) : undefined;
+      const clientName = client
+        ? `${client.first_name ?? ""} ${client.last_name ?? ""}`.trim()
+        : "";
+
+      const manualCallerName = `${row.caller_first_name ?? ""} ${
+        row.caller_last_name ?? ""
+      }`.trim();
+
+      const callerName = clientName || manualCallerName;
+
+      return {
+        call_id: row.call_id,
+        dispatcher: dispatcherName,
+        client: clientName,
+        caller_name: callerName,
+        call_time: formatCallTime(row.call_time),
+        phone_number: row.phone_number,
+        call_type: row.call_type,
+        other_type: row.other_type,
+        forwarded_to_name: row.forwarded_to_name,
+      };
+    });
+  });
+
+  // Create Call Modal State
+  let showCreateCallModal = $state(false);
+  let newSelectedDispatcherId = $state("");
+  let newSelectedClientId = $state("");
+  let newCallTimeLocal = $state("");
+  let newPhoneNumber = $state("");
+  let newCallType = $state("");
+  let newOtherType = $state("");
+  let newForwardedToName = $state("");
+  let newCallerFirstName = $state("");
+  let newCallerLastName = $state("");
+
+  let newCallerLockedToClient = $derived(!!newSelectedClientId);
+
+  // Options for dropdowns
+  let dispatcherOptions = $derived(
+    staffProfilesForCalls.map((sp) => {
+      const name = `${sp.first_name ?? ""} ${sp.last_name ?? ""}`.trim();
+      return {
+        value: sp.user_id,
+        label: name || sp.user_id
+      };
+    })
+  );
+
+  let clientOptions = $derived(
+    clientsForCalls.map((c) => {
+      const name = `${c.first_name ?? ""} ${c.last_name ?? ""}`.trim();
+      return {
+        value: String(c.client_id),
+        label: name || `Client #${c.client_id}`
+      };
+    })
+  );
+
+  function openCreateCall() {
+    newSelectedDispatcherId = "";
+    newSelectedClientId = "";
+    newCallTimeLocal = getNowLocal();
+    newPhoneNumber = "";
+    newCallType = "";
+    newOtherType = "";
+    newForwardedToName = "";
+    newCallerFirstName = "";
+    newCallerLastName = "";
+    showCreateCallModal = true;
+  }
+
+  function closeCreateCall() {
+    showCreateCallModal = false;
+  }
+
+  function handleNewClientChange(event: Event) {
+    const select = event.target as HTMLSelectElement;
+    newSelectedClientId = select.value;
+
+    if (!newSelectedClientId) {
+      return;
+    }
+
+    const client = clientById.get(Number(newSelectedClientId));
+    if (client) {
+      newCallerFirstName = client.first_name ?? "";
+      newCallerLastName = client.last_name ?? "";
+      if (client.primary_phone) {
+        newPhoneNumber = client.primary_phone;
+      }
+    }
+  }
+
+  // Handle form submission response
+  $effect(() => {
+    if (form?.error && activeTab === 'callLogs') {
+      toastStore.error(form.error);
+      showCreateCallModal = true; // Keep modal open on error
+    }
+  });
 </script>
 
 <svelte:head>
@@ -627,7 +848,7 @@
       <div class="border-b border-gray-200">
         <nav class="-mb-px flex space-x-8">
           <button
-            onclick={() => activeTab = 'personal'}
+            onclick={() => { activeTab = 'personal'; goto('?tab=personal', { replaceState: true }); }}
             class={`whitespace-nowrap pb-4 px-1 border-b-2 font-medium text-sm ${
               activeTab === 'personal'
                 ? 'border-blue-500 text-blue-600'
@@ -639,7 +860,7 @@
           </button>
           {#if isAdmin}
             <button
-              onclick={() => activeTab = 'organization'}
+              onclick={() => { activeTab = 'organization'; goto('?tab=organization', { replaceState: true }); }}
               class={`whitespace-nowrap pb-4 px-1 border-b-2 font-medium text-sm ${
                 activeTab === 'organization'
                   ? 'border-blue-500 text-blue-600'
@@ -650,6 +871,17 @@
               Organization Reports
             </button>
           {/if}
+          <button
+            onclick={() => { activeTab = 'callLogs'; goto('?tab=callLogs', { replaceState: true }); }}
+            class={`whitespace-nowrap pb-4 px-1 border-b-2 font-medium text-sm ${
+              activeTab === 'callLogs'
+                ? 'border-blue-500 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            <PhoneCallIcon class="w-4 h-4 inline mr-2" />
+            Call Logs
+          </button>
         </nav>
       </div>
 
@@ -1272,6 +1504,255 @@
           {/if}
         </div>
       {/if}
+
+      <!-- CALL LOGS TAB -->
+      {#if activeTab === 'callLogs'}
+        <div class="space-y-4">
+          <div class="flex justify-between items-center">
+            <div>
+              <h2 class="text-base font-semibold text-gray-900">Call Logs</h2>
+              <p class="text-sm text-gray-600 mt-1">View and log all incoming and outgoing calls</p>
+            </div>
+            <Button onclick={openCreateCall}>
+              <PlusIcon class="w-4 h-4 mr-2" />
+              Add Call
+            </Button>
+          </div>
+
+          <Card>
+            <CardContent class="pt-6">
+              {#if displayCallRows.length > 0}
+                <div class="rounded-md border overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Call ID</TableHead>
+                        <TableHead>Dispatcher</TableHead>
+                        <TableHead>Client</TableHead>
+                        <TableHead>Caller Name</TableHead>
+                        <TableHead>Call Time</TableHead>
+                        <TableHead>Phone Number</TableHead>
+                        <TableHead>Call Type</TableHead>
+                        <TableHead>Other Type</TableHead>
+                        <TableHead>Forwarded To</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {#each displayCallRows as call}
+                        <TableRow>
+                          <TableCell class="font-medium">{call.call_id}</TableCell>
+                          <TableCell>{call.dispatcher || 'N/A'}</TableCell>
+                          <TableCell>{call.client || 'N/A'}</TableCell>
+                          <TableCell>{call.caller_name || 'N/A'}</TableCell>
+                          <TableCell>{call.call_time || 'N/A'}</TableCell>
+                          <TableCell>{call.phone_number || 'N/A'}</TableCell>
+                          <TableCell>{call.call_type || 'N/A'}</TableCell>
+                          <TableCell>{call.other_type || 'N/A'}</TableCell>
+                          <TableCell>{call.forwarded_to_name || 'N/A'}</TableCell>
+                        </TableRow>
+                      {/each}
+                    </TableBody>
+                  </Table>
+                </div>
+              {:else}
+                <div class="text-center py-8">
+                  <PhoneCallIcon class="h-12 w-12 mx-auto text-gray-400" />
+                  <h3 class="mt-4 text-lg font-medium">No calls logged</h3>
+                  <p class="text-gray-600">
+                    Get started by adding your first call log.
+                  </p>
+                </div>
+              {/if}
+            </CardContent>
+          </Card>
+        </div>
+      {/if}
     </div>
   </div>
 </RoleGuard>
+
+<!-- CREATE CALL MODAL -->
+{#if showCreateCallModal}
+  <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+    <div class="w-full max-w-xl rounded-lg bg-white p-6 shadow-lg">
+      <div class="mb-4 flex items-center justify-between">
+        <h3 class="text-lg font-semibold">
+          Add Call
+        </h3>
+        <button
+          type="button"
+          class="text-gray-400 hover:text-gray-600"
+          onclick={closeCreateCall}
+        >
+          <XIcon class="h-5 w-5" />
+        </button>
+      </div>
+
+      <form method="POST" action="?/createCall" use:enhance class="space-y-4">
+        <!-- Dispatcher / Client selects -->
+        <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div>
+            <Label class="block text-sm font-medium text-gray-700 mb-1">
+              Dispatcher *
+            </Label>
+            <select
+              name="user_id"
+              bind:value={newSelectedDispatcherId}
+              required
+              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            >
+              <option value="">
+                — Select dispatcher —
+              </option>
+              {#each dispatcherOptions as opt}
+                <option value={opt.value}>{opt.label}</option>
+              {/each}
+            </select>
+          </div>
+
+          <div>
+            <Label class="block text-sm font-medium text-gray-700 mb-1">
+              Client (optional)
+            </Label>
+            <select
+              name="client_id"
+              bind:value={newSelectedClientId}
+              onchange={handleNewClientChange}
+              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            >
+              <option value="">
+                — No client selected —
+              </option>
+              {#each clientOptions as opt}
+                <option value={opt.value}>{opt.label}</option>
+              {/each}
+            </select>
+          </div>
+        </div>
+
+        <!-- Call time -->
+        <div>
+          <Label class="block text-sm font-medium text-gray-700 mb-1">
+            Call Time *
+          </Label>
+          <input
+            type="datetime-local"
+            name="call_time"
+            bind:value={newCallTimeLocal}
+            max={getNowLocal()}
+            required
+            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          />
+        </div>
+
+        <!-- Phone / Call Type -->
+        <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div>
+            <Label class="block text-sm font-medium text-gray-700 mb-1">
+              Phone Number
+            </Label>
+            <Input
+              type="text"
+              name="phone_number"
+              bind:value={newPhoneNumber}
+              placeholder="(555) 123-4567"
+            />
+          </div>
+          <div>
+            <Label class="block text-sm font-medium text-gray-700 mb-1">
+              Call Type *
+            </Label>
+            <select
+              name="call_type"
+              bind:value={newCallType}
+              required
+              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            >
+              <option value="">
+                — Select call type —
+              </option>
+              {#each CALL_TYPE_OPTIONS as opt}
+                <option value={opt}>{opt}</option>
+              {/each}
+            </select>
+          </div>
+        </div>
+
+        <!-- Other type / Forwarded to -->
+        <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div>
+            {#if newCallType === "Other"}
+              <Label class="block text-sm font-medium text-gray-700 mb-1">
+                Other Type
+              </Label>
+              <Input
+                type="text"
+                name="other_type"
+                bind:value={newOtherType}
+                placeholder="Specify other type..."
+              />
+            {:else}
+              <input type="hidden" name="other_type" value={newOtherType} />
+            {/if}
+          </div>
+          <div>
+            <Label class="block text-sm font-medium text-gray-700 mb-1">
+              Forwarded To (Name)
+            </Label>
+            <Input
+              type="text"
+              name="forwarded_to_name"
+              bind:value={newForwardedToName}
+              placeholder="Name if forwarded..."
+            />
+          </div>
+        </div>
+
+        <!-- Caller name (manual vs client) -->
+        <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div>
+            <Label class="block text-sm font-medium text-gray-700 mb-1">
+              Caller First Name {newCallerLockedToClient ? '' : '*'}
+            </Label>
+            <Input
+              type="text"
+              name="caller_first_name"
+              bind:value={newCallerFirstName}
+              disabled={newCallerLockedToClient}
+              required={!newCallerLockedToClient}
+              placeholder="First name"
+            />
+          </div>
+          <div>
+            <Label class="block text-sm font-medium text-gray-700 mb-1">
+              Caller Last Name {newCallerLockedToClient ? '' : '*'}
+            </Label>
+            <Input
+              type="text"
+              name="caller_last_name"
+              bind:value={newCallerLastName}
+              disabled={newCallerLockedToClient}
+              required={!newCallerLockedToClient}
+              placeholder="Last name"
+            />
+          </div>
+        </div>
+
+        <div class="mt-6 flex justify-end gap-3">
+          <Button
+            type="button"
+            variant="outline"
+            onclick={closeCreateCall}
+          >
+            Cancel
+          </Button>
+          <Button
+            type="submit"
+          >
+            Create Call
+          </Button>
+        </div>
+      </form>
+    </div>
+  </div>
+{/if}

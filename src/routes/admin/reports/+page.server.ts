@@ -110,6 +110,44 @@ export const load: PageServerLoad = async (event) => {
     }));
   }
 
+  // Load calls, staff profiles, and clients for Call Logs tab
+  let calls: any[] = [];
+  let staffProfiles: any[] = [];
+  let callClients: any[] = [];
+
+  if (userProfile?.org_id) {
+    // Fetch calls for this org
+    const { data: callsData, error: callsError } = await supabase
+      .from('calls')
+      .select('*')
+      .eq('org_id', userProfile.org_id)
+      .order('call_time', { ascending: false });
+
+    if (!callsError) {
+      calls = callsData || [];
+    }
+
+    // Fetch staff profiles for dispatcher dropdown
+    const { data: staffData, error: staffError } = await supabase
+      .from('staff_profiles')
+      .select('user_id, org_id, first_name, last_name')
+      .eq('org_id', userProfile.org_id);
+
+    if (!staffError) {
+      staffProfiles = staffData || [];
+    }
+
+    // Fetch clients for call log
+    const { data: clientData, error: clientError } = await supabase
+      .from('clients')
+      .select('client_id, org_id, first_name, last_name, primary_phone')
+      .eq('org_id', userProfile.org_id);
+
+    if (!clientError) {
+      callClients = clientData || [];
+    }
+  }
+
   return {
     session,
     userProfile,
@@ -117,7 +155,10 @@ export const load: PageServerLoad = async (event) => {
     drivers,
     clients,
     allStaff,
-    isAdmin
+    isAdmin,
+    calls,
+    staffProfiles,
+    callClients
   };
 };
 
@@ -378,5 +419,97 @@ export const actions: Actions = {
       console.error('Error in fetchRides action:', err);
       return fail(500, { error: 'An unexpected error occurred' });
     }
+  },
+
+  // Create a new call (for Call Logs tab)
+  createCall: async (event) => {
+    const supabase = createSupabaseServerClient(event);
+    const formData = await event.request.formData();
+
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
+
+    if (userError || !user) {
+      return fail(401, { error: 'Not authenticated.' });
+    }
+
+    const { data: profile, error: profileError } = await supabase
+      .from('staff_profiles')
+      .select('org_id')
+      .eq('user_id', user.id)
+      .single();
+
+    if (profileError || !profile?.org_id) {
+      return fail(400, { error: 'Could not determine user org.' });
+    }
+
+    const orgId = profile.org_id;
+
+    const user_id = (formData.get('user_id') as string) || null;
+    const clientIdStr = (formData.get('client_id') as string) || '';
+    const client_id = clientIdStr ? Number(clientIdStr) : null;
+
+    const call_type = (formData.get('call_type') as string) || null;
+
+    const call_time_local = formData.get('call_time') as string | null;
+    const formatToSQL = (dateTimeLocal: string) =>
+      dateTimeLocal.replace('T', ' ') + ':00';
+    const call_time = call_time_local ? formatToSQL(call_time_local) : null;
+
+    const other_type = (formData.get('other_type') as string) || null;
+    const phone_number = (formData.get('phone_number') as string) || null;
+    const forwarded_to_name =
+      (formData.get('forwarded_to_name') as string) || null;
+
+    let caller_first_name =
+      (formData.get('caller_first_name') as string) || null;
+    let caller_last_name =
+      (formData.get('caller_last_name') as string) || null;
+
+    // If a client is selected, override caller_* with the client's name
+    if (client_id !== null) {
+      const { data: client, error: clientError } = await supabase
+        .from('clients')
+        .select('first_name, last_name')
+        .eq('client_id', client_id)
+        .single();
+
+      if (!clientError && client) {
+        caller_first_name = client.first_name ?? caller_first_name;
+        caller_last_name = client.last_name ?? caller_last_name;
+      }
+    }
+
+    // Enforce rule: if no client selected, require caller first + last
+    if (!client_id && (!caller_first_name || !caller_last_name)) {
+      return fail(400, {
+        error:
+          'Caller first and last name are required if no client is selected.',
+      });
+    }
+
+    const { data: insertData, error: insertError } = await supabase
+      .from('calls')
+      .insert({
+        org_id: orgId,
+        user_id,
+        client_id,
+        call_time,
+        call_type,
+        other_type,
+        phone_number,
+        forwarded_to_name,
+        caller_first_name,
+        caller_last_name,
+      })
+      .select('call_id');
+
+    if (insertError) {
+      return fail(500, { error: insertError.message });
+    }
+
+    throw redirect(303, '/admin/reports?tab=callLogs');
   }
 };
