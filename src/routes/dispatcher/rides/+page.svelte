@@ -1832,7 +1832,7 @@ function goToEditStep(target: number) {
                   <button
                     onclick={() => openForceAcceptModal(ride)}
                     disabled={isUpdating}
-                    class="bg-orange-600 hover:bg-orange-700 text-white px-3 py-1.5 rounded-lg text-sm flex items-center gap-1 transition-colors disabled:opacity-50"
+                    class="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg text-sm flex items-center gap-1 transition-colors disabled:opacity-50"
                     title="Auto assign ride for a different driver"
                   >
                     <CheckCircle class="w-4 h-4" /> Auto Assign
@@ -3135,7 +3135,7 @@ function goToEditStep(target: number) {
             <button
               onclick={() => forceAcceptRide(driver.user_id)}
               disabled={isUpdating}
-              class="px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-white rounded-lg text-sm transition-colors disabled:opacity-50 flex items-center gap-1"
+              class="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm transition-colors disabled:opacity-50 flex items-center gap-1"
             >
               <CheckCircle class="w-4 h-4" />
               Auto Assign
