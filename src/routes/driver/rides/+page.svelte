@@ -371,27 +371,19 @@
     }
   }
 
-  // Decline
-  async function declineRide(rideId: number) {
-    // Get access token from client-side Supabase session
-    const {
-      data: { session },
-      error: sessionError
-    } = await supabase.auth.getSession();
 
-    if (sessionError || !session?.access_token) {
-      alert("Session expired. Please refresh the page and try again.");
+  // Decline a pending ride request
+  async function declineRide(rideId: number) {
+    if (!confirm("Are you sure you want to decline this ride request?")) {
       return;
     }
 
     isUpdating = true;
     try {
-      const resp = await fetch(`${API_BASE}/rides/${rideId}/decline`, {
+      const resp = await fetch("/driver/rides/decline", {
         method: "POST",
-        headers: {
-          // no content-type since no body
-          Authorization: `Bearer ${session.access_token}`
-        }
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rideId })
       });
 
       if (!resp.ok) {
@@ -413,6 +405,7 @@
       isUpdating = false;
     }
   }
+
 
   // Cancel scheduled/assigned ride (unassign driver, set to Pending)
   async function cancelScheduledRide(rideId: number) {
