@@ -28,10 +28,10 @@
 
   // Tab state - initialize from URL or default to 'personal'
   const urlTab = $page.url.searchParams.get('tab');
-  const initialTab = (urlTab === 'callLogs' || urlTab === 'organization' || urlTab === 'personal') 
+  const initialTab = (urlTab === 'callLogs' || urlTab === 'logHours' || urlTab === 'organization' || urlTab === 'personal') 
     ? urlTab 
     : 'personal';
-  let activeTab = $state<'personal' | 'organization' | 'callLogs'>(initialTab as any);
+  let activeTab = $state<'personal' | 'organization' | 'logHours' | 'callLogs'>(initialTab as any);
 
   // Personal Report State
   let selectedRole = $state<string>('');
@@ -826,7 +826,100 @@
       toastStore.error(form.error);
       showCreateCallModal = true; // Keep modal open on error
     }
+    if (form?.error && activeTab === 'logHours') {
+      toastStore.error(form.error);
+      showCreateTimecardModal = true; // Keep modal open on error
+    }
   });
+
+  // -----------------------------
+  // LOG HOURS TAB STATE
+  // -----------------------------
+
+  type TimecardRow = {
+    timecard_id: number;
+    user_id: string | null;
+    org_id: number | null;
+    shift_start: string | null;
+    shift_end: string | null;
+    hours: number | null;
+  };
+
+  type DisplayTimecardRow = {
+    timecard_id: number;
+    date: string;
+    shift_start: string;
+    shift_end: string;
+    hours: number | null;
+  };
+
+  // Get timecards data from server
+  let rawTimecardRows = $derived(((data as any).timecards ?? []) as TimecardRow[]);
+
+  // Format timecard rows for display
+  let displayTimecardRows = $derived.by(() => {
+    return rawTimecardRows.map((row) => {
+      const startDate = row.shift_start ? new Date(row.shift_start) : null;
+      const endDate = row.shift_end ? new Date(row.shift_end) : null;
+
+      const formatDateTime = (dt: Date | null): string => {
+        if (!dt) return 'N/A';
+        return dt.toLocaleString(undefined, {
+          year: 'numeric',
+          month: 'short',
+          day: '2-digit',
+          hour: 'numeric',
+          minute: '2-digit',
+        });
+      };
+
+      const formatDate = (dt: Date | null): string => {
+        if (!dt) return 'N/A';
+        return dt.toLocaleDateString(undefined, {
+          year: 'numeric',
+          month: 'short',
+          day: '2-digit',
+        });
+      };
+
+      return {
+        timecard_id: row.timecard_id,
+        date: formatDate(startDate),
+        shift_start: formatDateTime(startDate),
+        shift_end: formatDateTime(endDate),
+        hours: row.hours,
+      };
+    });
+  });
+
+  // Create Timecard Modal State
+  let showCreateTimecardModal = $state(false);
+  let newShiftStart = $state("");
+  let newShiftEnd = $state("");
+  let newHours = $state("");
+
+  function openCreateTimecard() {
+    const now = new Date();
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const yyyy = now.getFullYear();
+    const mm = pad(now.getMonth() + 1);
+    const dd = pad(now.getDate());
+    const hh = pad(now.getHours());
+    const mi = pad(now.getMinutes());
+
+    newShiftStart = `${yyyy}-${mm}-${dd}T${hh}:${mi}`;
+    // Default to 2 hours later
+    const endTime = new Date(now.getTime() + 2 * 60 * 60 * 1000);
+    const endHh = pad(endTime.getHours());
+    const endMi = pad(endTime.getMinutes());
+    newShiftEnd = `${yyyy}-${mm}-${dd}T${endHh}:${endMi}`;
+    newHours = "";
+    showCreateTimecardModal = true;
+  }
+
+  function closeCreateTimecard() {
+    showCreateTimecardModal = false;
+  }
 </script>
 
 <svelte:head>
@@ -871,6 +964,17 @@
               Organization Reports
             </button>
           {/if}
+          <button
+            onclick={() => { activeTab = 'logHours'; goto('?tab=logHours', { replaceState: true }); }}
+            class={`whitespace-nowrap pb-4 px-1 border-b-2 font-medium text-sm ${
+              activeTab === 'logHours'
+                ? 'border-blue-500 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            <ClockIcon class="w-4 h-4 inline mr-2" />
+            Log Hours
+          </button>
           <button
             onclick={() => { activeTab = 'callLogs'; goto('?tab=callLogs', { replaceState: true }); }}
             class={`whitespace-nowrap pb-4 px-1 border-b-2 font-medium text-sm ${
@@ -1505,6 +1609,59 @@
         </div>
       {/if}
 
+      <!-- LOG HOURS TAB -->
+      {#if activeTab === 'logHours'}
+        <div class="space-y-4">
+          <div class="flex justify-between items-center">
+            <div>
+              <h2 class="text-base font-semibold text-gray-900">Log Hours</h2>
+              <p class="text-sm text-gray-600 mt-1">Track and log your volunteer hours</p>
+            </div>
+            <Button onclick={() => showCreateTimecardModal = true}>
+              <PlusIcon class="w-4 h-4 mr-2" />
+              Log Hours
+            </Button>
+          </div>
+
+          <Card>
+            <CardContent class="pt-6">
+              {#if displayTimecardRows.length > 0}
+                <div class="rounded-md border overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Date</TableHead>
+                        <TableHead>Shift Start</TableHead>
+                        <TableHead>Shift End</TableHead>
+                        <TableHead>Hours</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {#each displayTimecardRows as timecard}
+                        <TableRow>
+                          <TableCell>{timecard.date || 'N/A'}</TableCell>
+                          <TableCell>{timecard.shift_start || 'N/A'}</TableCell>
+                          <TableCell>{timecard.shift_end || 'N/A'}</TableCell>
+                          <TableCell class="font-medium">{timecard.hours ? `${timecard.hours.toFixed(2)} hrs` : 'N/A'}</TableCell>
+                        </TableRow>
+                      {/each}
+                    </TableBody>
+                  </Table>
+                </div>
+              {:else}
+                <div class="text-center py-8">
+                  <ClockIcon class="h-12 w-12 mx-auto text-gray-400" />
+                  <h3 class="mt-4 text-lg font-medium">No hours logged</h3>
+                  <p class="text-gray-600">
+                    Get started by logging your first volunteer hours.
+                  </p>
+                </div>
+              {/if}
+            </CardContent>
+          </Card>
+        </div>
+      {/if}
+
       <!-- CALL LOGS TAB -->
       {#if activeTab === 'callLogs'}
         <div class="space-y-4">
@@ -1750,6 +1907,89 @@
             type="submit"
           >
             Create Call
+          </Button>
+        </div>
+      </form>
+    </div>
+  </div>
+{/if}
+
+<!-- CREATE TIMECARD MODAL -->
+{#if showCreateTimecardModal}
+  <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+    <div class="w-full max-w-xl rounded-lg bg-white p-6 shadow-lg">
+      <div class="mb-4 flex items-center justify-between">
+        <h3 class="text-lg font-semibold">
+          Log Hours
+        </h3>
+        <button
+          type="button"
+          class="text-gray-400 hover:text-gray-600"
+          onclick={closeCreateTimecard}
+        >
+          <XIcon class="h-5 w-5" />
+        </button>
+      </div>
+
+      <form method="POST" action="?/createTimecard" use:enhance class="space-y-4">
+        <!-- Shift Start / End -->
+        <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div>
+            <Label class="block text-sm font-medium text-gray-700 mb-1">
+              Shift Start *
+            </Label>
+            <input
+              type="datetime-local"
+              name="shift_start"
+              bind:value={newShiftStart}
+              required
+              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            />
+          </div>
+          <div>
+            <Label class="block text-sm font-medium text-gray-700 mb-1">
+              Shift End *
+            </Label>
+            <input
+              type="datetime-local"
+              name="shift_end"
+              bind:value={newShiftEnd}
+              required
+              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            />
+          </div>
+        </div>
+
+        <!-- Hours (optional - will be calculated if not provided) -->
+        <div>
+          <Label class="block text-sm font-medium text-gray-700 mb-1">
+            Hours (optional)
+          </Label>
+          <Input
+            type="number"
+            name="hours"
+            bind:value={newHours}
+            step="0.25"
+            min="0"
+            placeholder="Leave blank to auto-calculate from start/end times"
+          />
+          <p class="text-xs text-gray-500 mt-1">
+            If left blank, hours will be automatically calculated from shift start and end times
+          </p>
+        </div>
+
+        <div class="mt-6 flex justify-end gap-3">
+          <Button
+            type="button"
+            variant="outline"
+            onclick={closeCreateTimecard}
+          >
+            Cancel
+          </Button>
+          <Button
+            type="submit"
+          >
+            Log Hours
           </Button>
         </div>
       </form>

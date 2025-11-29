@@ -115,6 +115,9 @@ export const load: PageServerLoad = async (event) => {
   let staffProfiles: any[] = [];
   let callClients: any[] = [];
 
+  // Load timecards for Log Hours tab
+  let timecards: any[] = [];
+
   if (userProfile?.org_id) {
     // Fetch calls for this org
     const { data: callsData, error: callsError } = await supabase
@@ -146,6 +149,17 @@ export const load: PageServerLoad = async (event) => {
     if (!clientError) {
       callClients = clientData || [];
     }
+
+    // Fetch timecards for logged hours
+    const { data: timecardsData, error: timecardsError } = await supabase
+      .from('timecards')
+      .select('*')
+      .eq('org_id', userProfile.org_id)
+      .order('shift_start', { ascending: false });
+
+    if (!timecardsError) {
+      timecards = timecardsData || [];
+    }
   }
 
   return {
@@ -158,7 +172,8 @@ export const load: PageServerLoad = async (event) => {
     isAdmin,
     calls,
     staffProfiles,
-    callClients
+    callClients,
+    timecards
   };
 };
 
@@ -511,5 +526,75 @@ export const actions: Actions = {
     }
 
     throw redirect(303, '/admin/reports?tab=callLogs');
+  },
+
+  // Create a new timecard entry (for Log Hours tab)
+  createTimecard: async (event) => {
+    const supabase = createSupabaseServerClient(event);
+    const formData = await event.request.formData();
+
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
+
+    if (userError || !user) {
+      return fail(401, { error: 'Not authenticated.' });
+    }
+
+    const { data: profile, error: profileError } = await supabase
+      .from('staff_profiles')
+      .select('org_id')
+      .eq('user_id', user.id)
+      .single();
+
+    if (profileError || !profile?.org_id) {
+      return fail(400, { error: 'Could not determine user org.' });
+    }
+
+    const orgId = profile.org_id;
+
+    const shiftStartStr = formData.get('shift_start') as string;
+    const shiftEndStr = formData.get('shift_end') as string;
+    const hoursStr = formData.get('hours') as string;
+
+    if (!shiftStartStr || !shiftEndStr) {
+      return fail(400, { error: 'Shift start and end times are required.' });
+    }
+
+    // Format datetime strings
+    const formatToSQL = (dateTimeLocal: string) =>
+      dateTimeLocal.replace('T', ' ') + ':00';
+    const shift_start = formatToSQL(shiftStartStr);
+    const shift_end = formatToSQL(shiftEndStr);
+
+    // Calculate hours if not provided
+    let hours: number | null = null;
+    if (hoursStr) {
+      hours = parseFloat(hoursStr);
+    } else {
+      // Calculate from start/end times
+      const start = new Date(shift_start);
+      const end = new Date(shift_end);
+      const diffMs = end.getTime() - start.getTime();
+      hours = diffMs / (1000 * 60 * 60); // Convert to hours
+    }
+
+    const { data: insertData, error: insertError } = await supabase
+      .from('timecards')
+      .insert({
+        user_id: user.id,
+        org_id: orgId,
+        shift_start,
+        shift_end,
+        hours,
+      })
+      .select('timecard_id');
+
+    if (insertError) {
+      return fail(500, { error: insertError.message });
+    }
+
+    throw redirect(303, '/admin/reports?tab=logHours');
   }
 };
