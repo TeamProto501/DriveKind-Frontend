@@ -25,18 +25,17 @@ export const GET: RequestHandler = async (event) => {
 		console.log('Code exchanged successfully, session:', !!data?.session);
 
 		// Check if this is a password reset flow
-		// Password reset codes have type='recovery' or we can check the session
+		// Password reset codes have type='recovery'
 		if (type === 'recovery') {
 			console.log('Recovery type detected, redirecting to reset-password');
-			// Pass the code along so reset-password can use it
-			throw redirect(303, `/reset-password?code=${code}&type=recovery`);
+			// Session is already set after code exchange, just redirect to reset-password
+			// The reset-password page will check for the session
+			throw redirect(303, '/reset-password');
 		}
 
 		// For other flows (sign up, email confirmation), check if we have a session
 		if (data?.session) {
-			// Check if user needs to set password (recovery flow)
-			// For now, if we have a session from a recovery code, go to reset-password
-			// Otherwise, redirect to home
+			// Redirect to home for successful authentication
 			throw redirect(303, '/');
 		}
 	}

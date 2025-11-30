@@ -31,16 +31,13 @@ export const actions: Actions = {
       return fail(400, { error: 'Please enter a valid email address' });
     }
 
-    // Redirect directly to reset-password page
-    // The reset-password page will handle both code exchange (query params) and hash fragments
-    const resetPasswordUrl = `${event.url.origin}/reset-password`;
-    console.log('Sending password reset email with redirect URL:', resetPasswordUrl);
+    // Redirect to auth callback which will handle code exchange and redirect to reset-password
+    const authCallbackUrl = `${event.url.origin}/auth/callback`;
+    console.log('Sending password reset email with redirect URL:', authCallbackUrl);
     console.log('Event URL origin:', event.url.origin);
     
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: resetPasswordUrl,
-      // Add email options to ensure proper redirect
-      emailRedirectTo: resetPasswordUrl,
+      redirectTo: authCallbackUrl,
     });
 
     if (error) {
