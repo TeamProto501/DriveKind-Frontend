@@ -611,12 +611,11 @@
 
       if (!data || data.length === 0) {
         console.error("No organization rows updated for org_id:", orgId);
-        throw new Error("No rows were updated — check orgId / RLS");
+        throw new Error("No rows were updated — check orgId / RLS. This usually means the RLS policy blocked the update or the org_id doesn't match.");
       }
 
       // If multiple rows somehow match, take the first one
       org = data[0] as any;
-
       showEditModal = false;
     } catch (e: any) {
       console.error("Save error:", e?.message ?? e);
