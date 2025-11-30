@@ -1816,7 +1816,7 @@ function goToEditStep(target: number) {
                   <button
                     onclick={() => openForceAcceptModal(ride)}
                     disabled={isUpdating}
-                    class="bg-orange-600 hover:bg-orange-700 text-white px-3 py-1.5 rounded-lg text-sm flex items-center gap-1 transition-colors disabled:opacity-50"
+                    class="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg text-sm flex items-center gap-1 transition-colors disabled:opacity-50"
                     title="Auto assign ride for a driver (bypasses driver acceptance)"
                   >
                     <CheckCircle class="w-4 h-4" /> Auto Assign
@@ -3114,7 +3114,7 @@ function goToEditStep(target: number) {
             type="text"
             bind:value={driverSearchForForce}
             placeholder="Search drivers..."
-            class="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+            class="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
           />
         </div>
       </div>
