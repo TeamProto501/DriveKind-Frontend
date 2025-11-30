@@ -16,9 +16,13 @@
     X,
     AlertTriangle,
   } from "@lucide/svelte";
-  import { supabase } from "$lib/supabase";
+  import { enhance } from '$app/forms';
+  import { invalidateAll } from '$app/navigation';
+  import { page } from '$app/stores';
+  import type { ActionData } from './$types';
 
   let { data } = $props();
+  let formData = $derived($page.form as ActionData);
 
   // Use data.session instead of getContext
   const session = data.session;
@@ -549,10 +553,7 @@
     if (editStep > 0) editStep -= 1;
   }
 
-  async function saveOrg(e: Event) {
-    e.preventDefault();
-    if (!org || !orgId) return;
-
+  function handleSaveStart() {
     // Validate every step before submit
     for (let s = 0; s <= 5; s++) {
       const miss = validateRequiredForStep(s);
@@ -560,68 +561,25 @@
         editStep = s;
         const names = miss.map((k) => FIELD_LABELS[k] ?? k).join(", ");
         alert(`Please fill in: ${names}.`);
-        return;
+        return false; // Prevent form submission
       }
     }
-
     isSaving = true;
-    try {
-      const payload: Record<string, any> = emptyToNull({ ...form });
+    return true;
+  }
 
-      // set working_hours from the UI picker
-      payload.working_hours = packWorkingHours(whEdit);
-
-      // numeric coercions
-      coerceNumbers(payload, [
-        "client_min_age",
-        "min_days_in_advance_for_ride_requests",
-        "client_max_weekly_rides", // NEW
-      ]);
-
-      // map "days_off" -> "days-off"
-      if ("days_off" in payload) {
-        payload["days-off"] = payload.days_off;
-        delete payload.days_off;
-      }
-
-      // map org_status (form) -> org_status_enum (DB)
-      if ("org_status" in payload) {
-        payload.org_status_enum = payload.org_status;
-        delete payload.org_status;
-      }
-
-      // do not overwrite meta
-      delete payload.org_creation_date;
-      delete payload.first_ride_date;
-      delete payload.last_activity_in_portal;
-      console.log("Updating org", orgId, payload);
-
-      const { data, error } = await supabase
-        .from("organization")
-        .update(payload)
-        .eq("org_id", orgId)
-        .select("*"); // returns an array of rows
-
-      console.log("Update result", { data, error });
-
-      if (error) {
-        console.error("Supabase update error:", error);
-        throw error;
-      }
-
-      if (!data || data.length === 0) {
-        console.error("No organization rows updated for org_id:", orgId);
-        throw new Error("No rows were updated — check orgId / RLS. This usually means the RLS policy blocked the update or the org_id doesn't match.");
-      }
-
-      // If multiple rows somehow match, take the first one
-      org = data[0] as any;
+  async function handleSaveResult({ result, update }: { result: any; update: () => Promise<void> }) {
+    isSaving = false;
+    
+    if (result.type === 'success' && result.data?.organization) {
+      org = result.data.organization;
+      await update();
+      await invalidateAll();
       showEditModal = false;
-    } catch (e: any) {
-      console.error("Save error:", e?.message ?? e);
-      alert("Failed to save organization: " + (e?.message ?? "Unknown error"));
-    } finally {
-      isSaving = false;
+    } else if (result.type === 'failure' && result.data?.error) {
+      alert("Failed to save organization: " + result.data.error);
+    } else {
+      alert("Failed to save organization: Unknown error occurred");
     }
   }
 </script>
@@ -1093,7 +1051,60 @@
           <span class="font-medium">{STEP_LABELS[editStep]}</span>
         </div>
 
-        <form onsubmit={saveOrg} class="space-y-6">
+        <form 
+          method="POST"
+          action="?/updateOrganization"
+          use:enhance={({ formData, cancel }) => {
+            // Prepare payload before submission
+            if (!org || !orgId) {
+              cancel();
+              return;
+            }
+
+            if (!handleSaveStart()) {
+              cancel();
+              return;
+            }
+
+            const payload: Record<string, any> = emptyToNull({ ...form });
+
+            // set working_hours from the UI picker
+            payload.working_hours = packWorkingHours(whEdit);
+
+            // numeric coercions
+            coerceNumbers(payload, [
+              "client_min_age",
+              "min_days_in_advance_for_ride_requests",
+              "client_max_weekly_rides",
+            ]);
+
+            // map "days_off" -> "days-off"
+            if ("days_off" in payload) {
+              payload["days-off"] = payload.days_off;
+              delete payload.days_off;
+            }
+
+            // map org_status (form) -> org_status_enum (DB)
+            if ("org_status" in payload) {
+              payload.org_status_enum = payload.org_status;
+              delete payload.org_status;
+            }
+
+            // do not overwrite meta
+            delete payload.org_creation_date;
+            delete payload.first_ride_date;
+            delete payload.last_activity_in_portal;
+
+            // Add to form data
+            formData.append('org_id', String(orgId));
+            formData.append('payload', JSON.stringify(payload));
+
+            return async ({ result, update }) => {
+              await handleSaveResult({ result, update });
+            };
+          }}
+          class="space-y-6"
+        >
           <!-- STEP 0: Overview -->
           {#if editStep === 0}
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
