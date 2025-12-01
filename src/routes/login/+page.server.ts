@@ -69,6 +69,15 @@ export const load: PageServerLoad = async (event) => {
   const supabase = createSupabaseServerClient(event);
   const { data: { session } } = await supabase.auth.getSession();
 
+  // Check if there's a recovery code or type parameter (from password reset flow)
+  const code = event.url.searchParams.get('code');
+  const type = event.url.searchParams.get('type');
+  
+  // If we have a recovery code, redirect to reset-password page
+  if (code && type === 'recovery') {
+    throw redirect(302, `/reset-password?code=${code}&type=recovery`);
+  }
+
   // If already logged in, redirect to role-based home
   if (session) {
     const { data: profile } = await supabase
