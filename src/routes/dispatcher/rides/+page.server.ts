@@ -59,6 +59,10 @@ export const load: PageServerLoad = async (event) => {
         org_id,
         client_id,
         dispatcher_user_id,
+        dispatchers:dispatcher_user_id (
+          first_name,
+          last_name
+        ),
         created_at,
         alt_pickup_address,
         dropoff_address,

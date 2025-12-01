@@ -134,6 +134,9 @@ import {
 
   let filteredRides = $derived(() => {
     if (!data.rides) return [];
+
+    const term = searchTerm.toLowerCase().trim();
+
     return data.rides.filter((ride: any) => {
       // Dispatcher filter (My Rides vs All Rides)
       if (
@@ -143,8 +146,6 @@ import {
         return false;
       }
 
-      const term = searchTerm.toLowerCase();
-
       const clientName = ride.clients
         ? `${ride.clients.first_name} ${ride.clients.last_name}`
         : "Unknown Client";
@@ -153,30 +154,31 @@ import {
         ? `${ride.drivers.first_name} ${ride.drivers.last_name}`
         : "";
 
-      // Pending driver names – use the array we attached on the server
-      const pendingNames = Array.isArray(ride.pendingDrivers)
-        ? ride.pendingDrivers
-            .map(
-              (d: any) => `${d.first_name ?? ""} ${d.last_name ?? ""}`.trim()
-            )
-            .join(" ")
-        // Fallback to helper if for some reason pendingDrivers isn't present
-        : hasPendingRequests(ride.ride_id)
-          ? getPendingDriverNames(ride.ride_id).join(" ")
-          : "";
-
-      // Created-at timestamp as a searchable string
       const createdAtStr = ride.created_at
-        ? new Date(ride.created_at).toLocaleString().toLowerCase()
+        ? new Date(ride.created_at).toLocaleString([], {
+            year: "numeric",
+            month: "short",
+            day: "numeric",
+            hour: "numeric",
+            minute: "2-digit",
+          })
         : "";
 
+      const pendingNamesJoined = getPendingDriverNames(ride.ride_id).join(", ");
+
+      const createdByName = (getDispatcherName(ride) || "").toLowerCase();
+
       const matches =
+        !term ||
         clientName.toLowerCase().includes(term) ||
         driverName.toLowerCase().includes(term) ||
-        pendingNames.toLowerCase().includes(term) ||
-        (ride.destination_name?.toLowerCase() || "").includes(term) ||
-        (ride.alt_pickup_address?.toLowerCase() || "").includes(term) ||
-        createdAtStr.includes(term);
+        (ride.destination_name &&
+          ride.destination_name.toLowerCase().includes(term)) ||
+        (ride.alt_pickup_address &&
+          ride.alt_pickup_address.toLowerCase().includes(term)) ||
+        createdAtStr.toLowerCase().includes(term) ||
+        pendingNamesJoined.toLowerCase().includes(term) ||
+        createdByName.includes(term);
 
       let matchesTab = false;
       if (activeTab === "requested") matchesTab = ride.status === "Requested";
@@ -190,6 +192,7 @@ import {
       return matches && matchesTab;
     });
   });
+
 
   let rideCounts = $derived(() => {
     if (!data.rides) return { requested: 0, active: 0, completed: 0 };
@@ -372,10 +375,44 @@ function validateMinDays(localDateTime: string, label: string): string | null {
       : "Unknown Client";
   const getClientPhone = (ride: any) =>
     ride.clients?.primary_phone || "No phone";
-  const getDriverName = (ride: any) =>
-    ride.drivers
-      ? `${ride.drivers.first_name} ${ride.drivers.last_name}`
-      : "Unassigned";
+  const getDestinationFull = (ride: any) => {
+    const parts: string[] = [];
+
+    if (ride.destination_name) {
+      parts.push(String(ride.destination_name));
+    }
+
+    const streetLine = [ride.dropoff_address, ride.dropoff_address2]
+      .map((v: any) => (v ?? "").toString().trim())
+      .filter(Boolean)
+      .join(", ");
+
+    if (streetLine) {
+      parts.push(streetLine);
+    }
+
+    const cityStateParts = [
+      (ride.dropoff_city ?? "").toString().trim(),
+      (ride.dropoff_state ?? "").toString().trim()
+    ].filter(Boolean);
+
+    const cityState = cityStateParts.join(", ");
+    const zip = (ride.dropoff_zipcode ?? "").toString().trim();
+
+    if (cityState || zip) {
+      const line = [cityState, zip].filter(Boolean).join(" ");
+      parts.push(line);
+    }
+
+    return parts.length > 0 ? parts.join(" • ") : "—";
+  };
+  const getDispatcherName = (ride: any) => {
+    if (ride.dispatchers) {
+      return `${ride.dispatchers.first_name} ${ride.dispatchers.last_name}`;
+    }
+    return "Unknown";
+  };
+
 
   /* ---------------- Searchable Client Picker ---------------- */
   let clientQueryCreate = $state("");
@@ -1778,15 +1815,6 @@ function goToEditStep(target: number) {
                   <h3 class="text-lg font-semibold text-gray-900">
                     {getClientName(ride)}
                   </h3>
-                    <p class="text-xs text-gray-500 mt-1">
-                      Created: {new Date(ride.created_at).toLocaleString([], { 
-                        year: "numeric",
-                        month: "short",
-                        day: "numeric",
-                        hour: "numeric",
-                        minute: "2-digit"
-                      })}
-                    </p>
                     <span
                       class="px-2 py-1 text-xs font-medium rounded-full {getStatusColor(
                         ride.status === 'Requested' && ride.hasPendingRequests
@@ -1817,6 +1845,21 @@ function goToEditStep(target: number) {
                     {ride.purpose}
                   </span>
                 </div>
+
+                <div class="mt-1 flex flex-wrap items-center gap-4 text-xs text-gray-500">
+                <p>
+                  Created: {new Date(ride.created_at).toLocaleString([], {
+                    year: "numeric",
+                    month: "short",
+                    day: "numeric",
+                    hour: "numeric",
+                    minute: "2-digit",
+                  })}
+                </p>
+                <p>
+                  Created by: {getDispatcherName(ride)}
+                </p>
+              </div>
 
                 <!-- 2 columns × 3 rows -->
                 <div
@@ -1850,7 +1893,7 @@ function goToEditStep(target: number) {
                     <MapPin class="w-4 h-4 text-gray-400" />
                     <div>
                       <span class="font-medium">Destination:</span>
-                      <span class="ml-1">{ride.destination_name || "—"}</span>
+                      <span class="ml-1">{getDestinationFull(ride)}</span>
                     </div>
                   </div>
 
