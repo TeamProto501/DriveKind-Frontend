@@ -11,6 +11,7 @@
     ChevronDown,
     ChevronsUpDown,
     X,
+    FileText
   } from "@lucide/svelte";
   import UserSidebar from "./UserSidebar.svelte";
   import ClientSidebar from "./ClientSidebar.svelte";
@@ -30,7 +31,12 @@
     isReadOnly
   } from "$lib/utils/permissions";
 
+  // 🔗 Replace this with the real URL where you host the PDF
+  const ROLE_ACCESS_DOC_URL = "https://your-domain.com/docs/DriveKind-Page-Based-Access.pdf";
+
   export let data: PageData;
+
+  const ROLE_ACCESS_DOC_PATH = "/docs/DriveKind-Page-Based-Access.pdf";
 
   // ---------- Local types ----------
   type StaffRow = {
@@ -638,6 +644,17 @@
             <Users class="w-4 h-4" />
             {isRefreshing ? "Refreshing..." : "Refresh"}
           </button>
+
+          {#if activeTab === "users"}
+            <a
+              href={ROLE_ACCESS_DOC_PATH}
+              download="DriveKind-Page-Based-Access.pdf"
+              class="inline-flex items-center gap-2 bg-white text-blue-700 px-4 py-2 rounded-lg border border-blue-200 shadow hover:bg-blue-50 transition"
+            >
+              <FileText class="w-4 h-4" />
+              Download Role Access PDF
+            </a>
+          {/if}
 
           {#if activeTab === "users" && canEditUsersData}
             <button
