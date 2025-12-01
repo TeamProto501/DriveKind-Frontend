@@ -45,8 +45,10 @@
           console.error('Client-side code exchange error:', exchangeError);
           
           // Check if it's a PKCE error - this means the code verifier is missing
-          if (exchangeError.message?.includes('code verifier') || exchangeError.message?.includes('PKCE')) {
-            error = 'This reset link cannot be used directly. Please click the link from your email again, or request a new password reset link.';
+          // This happens because Supabase is using PKCE flow which requires browser-stored code_verifier
+          // Email links can't work with PKCE because the code_verifier isn't stored
+          if (exchangeError.message?.includes('code verifier') || exchangeError.message?.includes('PKCE') || exchangeError.message?.includes('non-empty')) {
+            error = 'This password reset link cannot be used because it requires a security code that isn\'t available when clicking from email. This is a known limitation. Please contact your administrator or try requesting a new password reset link - Supabase configuration may need to be updated to use hash fragments instead of PKCE.';
           } else {
             error = `Invalid or expired reset token: ${exchangeError.message}. Please request a new password reset link.`;
           }
