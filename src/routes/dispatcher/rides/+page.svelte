@@ -133,64 +133,127 @@ import {
   });
 
   let filteredRides = $derived(() => {
-    if (!data.rides) return [];
+    try {
+      const all = data?.rides ?? [];
+      const term = searchTerm.toLowerCase().trim();
+      const tab = activeTab;
 
-    const term = searchTerm.toLowerCase().trim();
+      console.log("[filteredRides] recompute", {
+        tab,
+        term,
+        totalRides: all.length,
+        showOnlyMyRides,
+      });
 
-    return data.rides.filter((ride: any) => {
-      // Dispatcher filter (My Rides vs All Rides)
-      if (
-        showOnlyMyRides &&
-        ride.dispatcher_user_id !== data.profile?.user_id
-      ) {
-        return false;
-      }
+      return all.filter((ride: any, index: number) => {
+        try {
+          // Dispatcher filter (My Rides vs All Rides)
+          if (
+            showOnlyMyRides &&
+            ride.dispatcher_user_id !== data.profile?.user_id
+          ) {
+            return false;
+          }
 
-      const clientName = ride.clients
-        ? `${ride.clients.first_name} ${ride.clients.last_name}`
-        : "Unknown Client";
+          const clientName = ride.clients
+            ? `${ride.clients.first_name} ${ride.clients.last_name}`
+            : "Unknown Client";
 
-      const driverName = ride.drivers
-        ? `${ride.drivers.first_name} ${ride.drivers.last_name}`
-        : "";
+          const driverName = ride.drivers
+            ? `${ride.drivers.first_name} ${ride.drivers.last_name}`
+            : "";
 
-      const createdAtStr = ride.created_at
-        ? new Date(ride.created_at).toLocaleString([], {
-            year: "numeric",
-            month: "short",
-            day: "numeric",
-            hour: "numeric",
-            minute: "2-digit",
-          })
-        : "";
+          const createdAtStr = (() => {
+            if (!ride.created_at) return "";
+            try {
+              const d = new Date(ride.created_at);
+              if (isNaN(d.getTime())) return "";
+              return d.toLocaleString([], {
+                year: "numeric",
+                month: "short",
+                day: "numeric",
+                hour: "numeric",
+                minute: "2-digit",
+              });
+            } catch (e) {
+              console.error(
+                "[filteredRides] error parsing created_at for ride",
+                ride.ride_id,
+                e,
+                ride.created_at
+              );
+              return "";
+            }
+          })();
 
-      const pendingNamesJoined = getPendingDriverNames(ride.ride_id).join(", ");
+          const pendingNamesJoined = (() => {
+            try {
+              return getPendingDriverNames(ride.ride_id).join(", ");
+            } catch (e) {
+              console.error(
+                "[filteredRides] error in getPendingDriverNames",
+                ride.ride_id,
+                e
+              );
+              return "";
+            }
+          })();
 
-      const createdByName = (getDispatcherName(ride) || "").toLowerCase();
+          const createdByName = (() => {
+            try {
+              return (getDispatcherName(ride) || "").toLowerCase();
+            } catch (e) {
+              console.error(
+                "[filteredRides] error in getDispatcherName",
+                ride.ride_id,
+                e
+              );
+              return "";
+            }
+          })();
 
-      const matches =
-        !term ||
-        clientName.toLowerCase().includes(term) ||
-        driverName.toLowerCase().includes(term) ||
-        (ride.destination_name &&
-          ride.destination_name.toLowerCase().includes(term)) ||
-        (ride.alt_pickup_address &&
-          ride.alt_pickup_address.toLowerCase().includes(term)) ||
-        createdAtStr.toLowerCase().includes(term) ||
-        pendingNamesJoined.toLowerCase().includes(term) ||
-        createdByName.includes(term);
+          const matches =
+            !term ||
+            clientName.toLowerCase().includes(term) ||
+            driverName.toLowerCase().includes(term) ||
+            (ride.destination_name &&
+              String(ride.destination_name).toLowerCase().includes(term)) ||
+            (ride.alt_pickup_address &&
+              String(ride.alt_pickup_address).toLowerCase().includes(term)) ||
+            createdAtStr.toLowerCase().includes(term) ||
+            pendingNamesJoined.toLowerCase().includes(term) ||
+            createdByName.includes(term);
 
-      let matchesTab = false;
-      if (activeTab === "requested") matchesTab = ride.status === "Requested";
-      else if (activeTab === "active")
-        matchesTab = ["Scheduled", "Assigned", "In Progress"].includes(
-          ride.status
-        );
-      else if (activeTab === "completed")
-        matchesTab = ["Completed", "Cancelled"].includes(ride.status);
+          let matchesTab = false;
+          if (tab === "requested") {
+            matchesTab = ride.status === "Requested";
+          } else if (tab === "active") {
+            matchesTab = ["Scheduled", "Assigned", "In Progress"].includes(
+              ride.status
+            );
+          } else if (tab === "completed") {
+            matchesTab = ["Completed", "Cancelled"].includes(ride.status);
+          }
 
-      return matches && matchesTab;
-    });
+          return matches && matchesTab;
+        } catch (e) {
+          console.error(
+            "[filteredRides] error for ride index",
+            index,
+            "ride_id",
+            ride?.ride_id,
+            e,
+            ride
+          );
+          return false;
+        }
+      });
+    } catch (outer) {
+      console.error("[filteredRides] outer error", outer, {
+        rides: data?.rides,
+      });
+      return [];
+    }
   });
 
 
@@ -354,21 +417,33 @@ function validateMinDays(localDateTime: string, label: string): string | null {
     }
   }
 
-  const formatDate = (ts: string) => {
-    if (!ts) return "";
+const formatDate = (ts: string) => {
+  if (!ts) return "";
+  try {
     // Strip 'Z' to prevent UTC interpretation
     const cleaned = ts.replace(/Z$/, "");
-    return new Date(cleaned).toLocaleDateString();
-  };
-  const formatTime = (ts: string) => {
-    if (!ts) return "";
+    const d = new Date(cleaned);
+    if (isNaN(d.getTime())) return "";
+    return d.toLocaleDateString();
+  } catch {
+    return "";
+  }
+};
+const formatTime = (ts: string) => {
+  if (!ts) return "";
+  try {
     // Strip 'Z' to prevent UTC interpretation
     const cleaned = ts.replace(/Z$/, "");
-    return new Date(cleaned).toLocaleTimeString([], {
+    const d = new Date(cleaned);
+    if (isNaN(d.getTime())) return "";
+    return d.toLocaleTimeString([], {
       hour: "2-digit",
       minute: "2-digit",
     });
-  };
+  } catch {
+    return "";
+  }
+};
   const getClientName = (ride: any) =>
     ride.clients
       ? `${ride.clients.first_name} ${ride.clients.last_name}`
@@ -1714,8 +1789,11 @@ function goToEditStep(target: number) {
     <div class="bg-white rounded-lg shadow-sm border">
       <div class="border-b border-gray-200">
         <div class="flex space-x-8 px-6">
-          <button
-            onclick={() => (activeTab = "requested")}
+        <button
+          onclick={() => {
+            console.log("[TAB] switching to requested");
+            activeTab = "requested";
+          }}
             class="py-4 px-1 border-b-2 font-medium text-sm transition-colors {activeTab ===
             'requested'
               ? 'border-blue-500 text-blue-600'
@@ -1732,7 +1810,10 @@ function goToEditStep(target: number) {
           </button>
 
           <button
-            onclick={() => (activeTab = "active")}
+            onclick={() => {
+              console.log("[TAB] switching to active (Scheduled/In Progress)");
+              activeTab = "active";
+            }}
             class="py-4 px-1 border-b-2 font-medium text-sm transition-colors {activeTab ===
             'active'
               ? 'border-blue-500 text-blue-600'
@@ -1749,7 +1830,10 @@ function goToEditStep(target: number) {
           </button>
 
           <button
-            onclick={() => (activeTab = "completed")}
+            onclick={() => {
+              console.log("[TAB] switching to completed");
+              activeTab = "completed";
+            }}
             class="py-4 px-1 border-b-2 font-medium text-sm transition-colors {activeTab ===
             'completed'
               ? 'border-blue-500 text-blue-600'
@@ -1847,15 +1931,20 @@ function goToEditStep(target: number) {
                 </div>
 
                 <div class="mt-1 flex flex-wrap items-center gap-4 text-xs text-gray-500">
-                <p>
-                  Created: {new Date(ride.created_at).toLocaleString([], {
-                    year: "numeric",
-                    month: "short",
-                    day: "numeric",
-                    hour: "numeric",
-                    minute: "2-digit",
-                  })}
-                </p>
+                  <p>
+                    Created:
+                    {#if ride.created_at}
+                      {new Date(ride.created_at).toLocaleString([], {
+                        year: "numeric",
+                        month: "short",
+                        day: "numeric",
+                        hour: "numeric",
+                        minute: "2-digit",
+                      })}
+                    {:else}
+                      —
+                    {/if}
+                  </p>
                 <p>
                   Created by: {getDispatcherName(ride)}
                 </p>
