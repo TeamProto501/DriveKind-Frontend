@@ -48,7 +48,6 @@
     {:else}
       <form
         method="POST"
-        action="?/reset-password"
         use:enhance={() => {
           loading = true;
           return async ({ update, result }) => {
