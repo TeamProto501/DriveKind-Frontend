@@ -6,25 +6,33 @@ export const GET: RequestHandler = async (event) => {
 	const supabase = createSupabaseServerClient(event);
 	const code = event.url.searchParams.get('code');
 	const type = event.url.searchParams.get('type'); // 'recovery' for password reset
+	const error = event.url.searchParams.get('error');
 
-	console.log('Auth callback - code:', !!code, 'type:', type);
+	console.log('Auth callback - code:', !!code, 'type:', type, 'error:', error);
 
-	// For PKCE flow (password reset with PKCE), we need to let the client handle it
-	// Server-side exchange won't work for PKCE because code_verifier is stored in browser
-	// Check if this is a recovery flow - redirect to reset-password and let client handle code exchange
-	if (code && type === 'recovery') {
-		console.log('Recovery code detected, redirecting to reset-password for client-side PKCE exchange');
-		// Pass the code and type to reset-password page so client can handle PKCE exchange
-		throw redirect(303, `/reset-password?code=${code}&type=recovery`);
+	// If there's an error, redirect to reset-password with error
+	if (error && type === 'recovery') {
+		throw redirect(303, `/reset-password?error=${error}`);
+	}
+
+	// For recovery (password reset) flows, always redirect to reset-password
+	// The reset-password page will handle code exchange (if hash fragments) or show appropriate error
+	if (type === 'recovery') {
+		console.log('Recovery flow detected, redirecting to reset-password');
+		// Pass code if present (for PKCE flow - client will handle it)
+		const redirectUrl = code 
+			? `/reset-password?code=${code}&type=recovery`
+			: '/reset-password';
+		throw redirect(303, redirectUrl);
 	}
 
 	if (code) {
-		// For non-PKCE flows, try server-side exchange
+		// For non-recovery flows, try server-side exchange
 		try {
-			const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+			const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
 			
-			if (error) {
-				console.error('Error exchanging code for session:', error);
+			if (exchangeError) {
+				console.error('Error exchanging code for session:', exchangeError);
 				throw redirect(303, '/login?error=auth_failed');
 			}
 

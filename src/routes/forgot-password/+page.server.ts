@@ -31,14 +31,14 @@ export const actions: Actions = {
       return fail(400, { error: 'Please enter a valid email address' });
     }
 
-    // Redirect directly to reset-password page
-    // Supabase will handle verification and redirect with tokens/code in URL
-    const resetPasswordUrl = `${event.url.origin}/reset-password`;
-    console.log('Sending password reset email with redirect URL:', resetPasswordUrl);
+    // Redirect to auth callback which will handle the flow properly
+    // Supabase will redirect email links through the callback first
+    const authCallbackUrl = `${event.url.origin}/auth/callback`;
+    console.log('Sending password reset email with redirect URL:', authCallbackUrl);
     console.log('Event URL origin:', event.url.origin);
     
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: resetPasswordUrl,
+      redirectTo: authCallbackUrl,
     });
 
     if (error) {
