@@ -6,55 +6,136 @@
   import type { PageData, ActionData } from './$types';
   import { page } from '$app/stores';
 
-  let { data }: { data: PageData } = $props();
+  let { data }: { data: PageData } = $props();  // <-- Add this line
 
   let form = $derived($page.form as ActionData);
   let loading = $state(false);
   let showPassword = $state(false);
   let showConfirmPassword = $state(false);
   
-  // Main states - only one should be true at a time
   let status = $state<'loading' | 'ready' | 'error' | 'pkce-error'>('loading');
   let errorMessage = $state<string | null>(null);
 
-  onMount(async () => {
+  onMount(() => {
     console.log('=== Reset Password Page Mount ===');
     console.log('URL:', window.location.href);
-    console.log('Server data:', JSON.stringify(data));
-    
-    // Check if server already validated token
-    if (data?.hasValidToken) {
-      console.log('Server validated token - ready for password reset');
+
+    // Check if we already have a session from layout - this takes priority over PKCE errors
+    if (data?.session?.user) {
+      console.log('Found session from layout - ready for password reset');
       status = 'ready';
+      // Clean up URL if there's a code in it
+      if (window.location.search.includes('code=')) {
+        window.history.replaceState(null, '', window.location.pathname);
+      }
       return;
     }
     
-    // Check if server detected PKCE error
-    if (data?.isPKCEError) {
-      console.log('Server detected PKCE error');
-      status = 'pkce-error';
-      return;
-    }
-    
-    // Check if server returned an error
-    if (data?.error) {
-      console.log('Server returned error:', data.error);
-      status = 'error';
-      errorMessage = data.error;
-      return;
-    }
-    
+    // Listen for auth state changes - this catches the recovery event
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('Auth event:', event, 'Has session:', !!session);
+      
+      if (event === 'PASSWORD_RECOVERY') {
+        console.log('PASSWORD_RECOVERY event - ready to reset');
+        status = 'ready';
+        // Clean URL
+        window.history.replaceState(null, '', window.location.pathname);
+        await invalidateAll();
+      } else if (event === 'SIGNED_IN' && session) {
+        // Check if this is from a recovery flow
+        const hash = window.location.hash;
+        if (hash.includes('type=recovery') || status === 'loading') {
+          console.log('SIGNED_IN from recovery flow - ready to reset');
+          status = 'ready';
+          window.history.replaceState(null, '', window.location.pathname);
+          await invalidateAll();
+        }
+      }
+    });
+
     // Check for existing session first
-    const { data: sessionData } = await supabase.auth.getSession();
-    if (sessionData?.session) {
+    checkSession();
+    
+    return () => {
+      subscription.unsubscribe();
+    };
+  });
+
+  async function checkSession() {
+    // First check if we already have a session
+    const { data: { session } } = await supabase.auth.getSession();
+    
+    if (session) {
       console.log('Found existing session');
       status = 'ready';
       return;
     }
-    
+
+    // Check for hash tokens (implicit flow / magic link style)
+    const hash = window.location.hash.substring(1);
+    if (hash) {
+      console.log('Found hash in URL, letting Supabase handle it...');
+      const hashParams = new URLSearchParams(hash);
+      const accessToken = hashParams.get('access_token');
+      const refreshToken = hashParams.get('refresh_token');
+      const hashType = hashParams.get('type');
+      const errorParam = hashParams.get('error');
+      const errorDescription = hashParams.get('error_description');
+      
+      if (errorParam) {
+        console.error('Error in hash:', errorParam, errorDescription);
+        status = 'error';
+        errorMessage = errorDescription || 'Invalid or expired reset link.';
+        return;
+      }
+      
+      if (accessToken && refreshToken && hashType === 'recovery') {
+        try {
+          const { data: { session: newSession }, error: sessionError } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken,
+          });
+          
+          if (newSession) {
+            console.log('Session set from hash tokens');
+            window.history.replaceState(null, '', window.location.pathname);
+            await invalidateAll();
+            status = 'ready';
+            return;
+          }
+          
+          if (sessionError) {
+            console.error('Session error:', sessionError.message);
+            if (sessionError.message?.includes('expired')) {
+              status = 'error';
+              errorMessage = 'This reset link has expired. Please request a new one.';
+            } else {
+              status = 'error';
+              errorMessage = 'Failed to verify reset link. Please try again.';
+            }
+            return;
+          }
+        } catch (e) {
+          console.error('Hash token error:', e);
+          status = 'error';
+          errorMessage = 'Failed to process reset link.';
+          return;
+        }
+      }
+    }
+
     // Check for code in URL (PKCE flow)
     const urlParams = new URLSearchParams(window.location.search);
     const code = urlParams.get('code');
+    const urlError = urlParams.get('error');
+    const urlErrorDescription = urlParams.get('error_description');
+    
+    if (urlError) {
+      console.error('Error in URL:', urlError, urlErrorDescription);
+      status = 'error';
+      errorMessage = urlErrorDescription || 'Invalid or expired reset link.';
+      return;
+    }
     
     if (code) {
       console.log('Found code in URL, attempting exchange...');
@@ -62,18 +143,14 @@
       try {
         const { data: exchangeData, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
         
-        console.log('Exchange result:', { 
-          hasSession: !!exchangeData?.session, 
-          error: exchangeError?.message 
-        });
-        
         if (exchangeError) {
           console.error('Exchange error:', exchangeError.message, exchangeError.status);
           
-          // Any 400 error or verifier-related error = PKCE problem
+          // PKCE verifier mismatch = different browser
           if (exchangeError.status === 400 || 
               exchangeError.message?.toLowerCase().includes('verifier') ||
-              exchangeError.message?.toLowerCase().includes('non-empty')) {
+              exchangeError.message?.toLowerCase().includes('non-empty') ||
+              exchangeError.message?.toLowerCase().includes('code_verifier')) {
             status = 'pkce-error';
             return;
           }
@@ -85,64 +162,33 @@
         
         if (exchangeData?.session) {
           console.log('Exchange successful!');
-          // Clean up URL
           window.history.replaceState(null, '', window.location.pathname);
           await invalidateAll();
           status = 'ready';
           return;
         }
-        
-        // No session returned
-        status = 'error';
-        errorMessage = 'Failed to verify reset link. Please request a new one.';
-        return;
-        
       } catch (e) {
         console.error('Exchange exception:', e);
-        // Default to PKCE error for any exception during exchange
         status = 'pkce-error';
         return;
       }
     }
+
+    // No tokens in URL - check one more time for session (race condition with onAuthStateChange)
+    await new Promise(resolve => setTimeout(resolve, 500));
     
-    // Check for hash tokens (implicit flow)
-    const hash = window.location.hash.substring(1);
-    if (hash) {
-      console.log('Found hash tokens...');
-      const hashParams = new URLSearchParams(hash);
-      const accessToken = hashParams.get('access_token');
-      const refreshToken = hashParams.get('refresh_token');
-      const hashType = hashParams.get('type');
-      
-      if (accessToken && refreshToken && hashType === 'recovery') {
-        try {
-          const { data: { session }, error: sessionError } = await supabase.auth.setSession({
-            access_token: accessToken,
-            refresh_token: refreshToken,
-          });
-          
-          if (session) {
-            console.log('Session set from hash tokens');
-            window.history.replaceState(null, '', window.location.pathname);
-            await invalidateAll();
-            status = 'ready';
-            return;
-          }
-          
-          if (sessionError) {
-            console.error('Session error:', sessionError);
-          }
-        } catch (e) {
-          console.error('Hash token error:', e);
-        }
-      }
+    const { data: { session: finalCheck } } = await supabase.auth.getSession();
+    if (finalCheck) {
+      console.log('Found session on final check');
+      status = 'ready';
+      return;
     }
-    
-    // No valid tokens found
-    console.log('No valid tokens found');
+
+    // Nothing worked
+    console.log('No valid tokens or session found');
     status = 'error';
     errorMessage = 'Invalid or expired reset link. Please request a new password reset.';
-  });
+  }
 </script>
 
 <div class="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50 to-emerald-100">
@@ -168,7 +214,7 @@
             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
             <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
           </svg>
-          <span class="text-sm text-green-800">Verifying reset token...</span>
+          <span class="text-sm text-green-800">Verifying reset link...</span>
         </div>
       </div>
       
@@ -197,8 +243,8 @@
               </ul>
             </div>
             <div class="mt-4">
-              <a
-                href="/forgot-password"
+              
+                <a href="/forgot-password"
                 class="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-amber-700 bg-amber-100 hover:bg-amber-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500"
               >
                 Request New Reset Link
@@ -214,8 +260,8 @@
           {errorMessage || 'An error occurred. Please try again.'}
         </div>
         <div class="mt-4">
-          <a
-            href="/forgot-password"
+          
+            <a href="/forgot-password"
             class="text-sm text-green-600 hover:text-green-700 hover:underline"
           >
             Request a new reset link
