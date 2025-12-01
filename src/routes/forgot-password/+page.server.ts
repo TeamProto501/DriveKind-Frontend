@@ -26,7 +26,7 @@ export const actions: Actions = {
       });
     }
 
-    const redirectTo = `${event.url.origin}/reset-password`;
+    const redirectTo = `https://drivekind.info/reset-password`;
     
     console.log('Sending password reset email to:', email);
     console.log('Redirect URL:', redirectTo);
