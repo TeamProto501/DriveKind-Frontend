@@ -143,22 +143,40 @@ import {
         return false;
       }
 
+      const term = searchTerm.toLowerCase();
+
       const clientName = ride.clients
         ? `${ride.clients.first_name} ${ride.clients.last_name}`
         : "Unknown Client";
+
       const driverName = ride.drivers
         ? `${ride.drivers.first_name} ${ride.drivers.last_name}`
         : "";
+
+      // Pending driver names – use the array we attached on the server
+      const pendingNames = Array.isArray(ride.pendingDrivers)
+        ? ride.pendingDrivers
+            .map(
+              (d: any) => `${d.first_name ?? ""} ${d.last_name ?? ""}`.trim()
+            )
+            .join(" ")
+        // Fallback to helper if for some reason pendingDrivers isn't present
+        : hasPendingRequests(ride.ride_id)
+          ? getPendingDriverNames(ride.ride_id).join(" ")
+          : "";
+
+      // Created-at timestamp as a searchable string
+      const createdAtStr = ride.created_at
+        ? new Date(ride.created_at).toLocaleString().toLowerCase()
+        : "";
+
       const matches =
-        clientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        ride.destination_name
-          ?.toLowerCase()
-          .includes(searchTerm.toLowerCase()) ||
-        (ride.alt_pickup_address &&
-          ride.alt_pickup_address
-            .toLowerCase()
-            .includes(searchTerm.toLowerCase())) ||
-        driverName.toLowerCase().includes(searchTerm.toLowerCase());
+        clientName.toLowerCase().includes(term) ||
+        driverName.toLowerCase().includes(term) ||
+        pendingNames.toLowerCase().includes(term) ||
+        (ride.destination_name?.toLowerCase() || "").includes(term) ||
+        (ride.alt_pickup_address?.toLowerCase() || "").includes(term) ||
+        createdAtStr.includes(term);
 
       let matchesTab = false;
       if (activeTab === "requested") matchesTab = ride.status === "Requested";
