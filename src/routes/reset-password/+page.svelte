@@ -3,8 +3,10 @@
   import { onMount } from 'svelte';
   import { supabase } from '$lib/supabase';
   import { invalidateAll } from '$app/navigation';
-  import type { ActionData } from './$types';
+  import type { PageData, ActionData } from './$types';
   import { page } from '$app/stores';
+
+  let { data }: { data: PageData } = $props();  // <-- Add this line
 
   let form = $derived($page.form as ActionData);
   let loading = $state(false);
@@ -17,6 +19,17 @@
   onMount(() => {
     console.log('=== Reset Password Page Mount ===');
     console.log('URL:', window.location.href);
+
+    // Check if we already have a session from layout - this takes priority over PKCE errors
+    if (data?.session?.user) {
+      console.log('Found session from layout - ready for password reset');
+      status = 'ready';
+      // Clean up URL if there's a code in it
+      if (window.location.search.includes('code=')) {
+        window.history.replaceState(null, '', window.location.pathname);
+      }
+      return;
+    }
     
     // Listen for auth state changes - this catches the recovery event
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
