@@ -23,7 +23,7 @@
     console.log('Server data:', JSON.stringify(data));
     
     // Check if server already validated token
-    if (data?.hasValidToken) {
+    if (data?.hasValidToken || data?.session?.user) {
       console.log('Server validated token - ready for password reset');
       status = 'ready';
       return;
