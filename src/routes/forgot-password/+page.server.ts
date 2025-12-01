@@ -31,11 +31,21 @@ export const actions: Actions = {
       return fail(400, { error: 'Please enter a valid email address' });
     }
 
+    // Use www subdomain consistently - normalize the origin to include www
+    // This ensures the redirect URL matches what Supabase expects
+    let baseUrl = event.url.origin;
+    
+    // If origin doesn't have www but we're on production, add it
+    if (baseUrl.includes('drivekind.info') && !baseUrl.includes('www.')) {
+      baseUrl = baseUrl.replace('https://drivekind.info', 'https://www.drivekind.info');
+    }
+    
     // Redirect through auth callback which will handle token exchange and redirect to reset-password
     // Using auth callback ensures proper handling of both PKCE and hash fragment flows
-    const callbackUrl = `${event.url.origin}/auth/callback`;
+    const callbackUrl = `${baseUrl}/auth/callback`;
     console.log('Sending password reset email with redirect URL:', callbackUrl);
     console.log('Event URL origin:', event.url.origin);
+    console.log('Normalized base URL:', baseUrl);
     
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: callbackUrl,
