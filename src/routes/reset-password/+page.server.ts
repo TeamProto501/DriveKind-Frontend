@@ -77,9 +77,11 @@ export const load: PageServerLoad = async (event) => {
   if (session) {
     console.log('Found existing session for user:', session.user?.email);
     return {
-      hasValidToken: true,
+      hasValidToken: false,
+      error: null, // Client will handle the PKCE exchange
     };
   }
+  
 
   // No code, no session - could be:
   // 1. Direct navigation to page (show error)

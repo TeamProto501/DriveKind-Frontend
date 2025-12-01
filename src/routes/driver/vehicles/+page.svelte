@@ -1,7 +1,6 @@
 <script lang="ts">
   import { supabase } from "$lib/supabase";
-  import { invalidateAll } from "$app/navigation";
-  import { invalidate } from "$app/navigation";
+  import { invalidateAll, invalidate } from "$app/navigation";
   import RoleGuard from "$lib/components/RoleGuard.svelte";
   import Breadcrumbs from "$lib/components/Breadcrumbs.svelte";
   import {
@@ -11,19 +10,48 @@
     Pencil,
     Trash2,
     X,
-    Plus,
+    Plus
   } from "@lucide/svelte";
 
-  let { data } = $props();
+  // ---- Types ----
+  type Vehicle = {
+    vehicle_id: number;
+    user_id: string;
+    nondriver_seats: number | null;
+    vehicle_color: string | null;
+    // allow any string value so org can define custom types
+    type_of_vehicle_enum: string | null;
+    org_id: number | null;
+    active: boolean | null;
+  };
+
+  interface PageData {
+    vehicles: Vehicle[];
+    session?: { user?: { id: string } | null } | null;
+    userOrgId: number | null;
+    error: string | null;
+    vehicleTypes?: string[];
+  }
+
+  const DEFAULT_VEHICLE_TYPES = ["SUV", "Sedan", "Van", "Truck", "Coupe"];
+
+  let { data }: { data: PageData } = $props();
 
   // Use server-loaded data
-  let vehicles = $state(data.vehicles || []);
-  let uid = $state(data.session?.user?.id || null);
-  let userOrgId = $state(data.userOrgId);
+  let vehicles = $state<Vehicle[]>(data.vehicles || []);
+  let uid = $state<string | null>(data.session?.user?.id || null);
+  let userOrgId = $state<number | null>(data.userOrgId);
   let loadError = $state(data.error || "");
   let isLoading = $state(false);
 
-  // Reactively update vehicles when data changes
+  // Vehicle types from org (fallback to default list)
+  let vehicleTypes = $state<string[]>(
+    data.vehicleTypes && data.vehicleTypes.length > 0
+      ? data.vehicleTypes
+      : DEFAULT_VEHICLE_TYPES
+  );
+
+  // Reactively update when data changes
   $effect(() => {
     if (data.vehicles) {
       vehicles = data.vehicles;
@@ -37,33 +65,11 @@
     if (data.error !== undefined) {
       loadError = data.error || "";
     }
+    if (Array.isArray(data.vehicleTypes)) {
+      vehicleTypes =
+        data.vehicleTypes.length > 0 ? data.vehicleTypes : DEFAULT_VEHICLE_TYPES;
+    }
   });
-
-  type Vehicle = {
-    vehicle_id: number;
-    user_id: string;
-    nondriver_seats: number | null;
-    vehicle_color: string | null;
-    type_of_vehicle_enum:
-      | "SUV"
-      | "Sedan"
-      | "Van"
-      | "Motorcycle"
-      | "Truck"
-      | "Coupe"
-      | null;
-    org_id: number | null;
-    active: boolean | null;
-  };
-
-  const VEHICLE_TYPES = [
-    "SUV",
-    "Sedan",
-    "Van",
-    "Motorcycle",
-    "Truck",
-    "Coupe",
-  ] as const;
 
   let toast = $state("");
   let toastOk = $state(true);
@@ -78,12 +84,8 @@
     return active ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-800";
   }
 
-  // --- Normalize active vehicle ---
-  // REMOVED: No longer enforcing single active vehicle
-  // Drivers can now have multiple active vehicles
+  // --- Normalize active vehicle (kept for compatibility) ---
   async function normalizeActives() {
-    // This function is kept for compatibility but no longer enforces single active vehicle
-    // If no vehicles are active and there's at least one vehicle, activate the first one
     if (!uid) return;
     const { data, error } = await supabase
       .from("vehicles")
@@ -96,12 +98,11 @@
 
     const actives = list.filter((v) => !!v.active);
     if (actives.length === 0 && list.length > 0) {
-      // If no vehicles are active, activate the first one as a default
       try {
         await fetch("/driver/vehicles/set-active", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ vehicle_id: list[0].vehicle_id }),
+          body: JSON.stringify({ vehicle_id: list[0].vehicle_id })
         });
       } catch (e) {
         console.error("Failed to set default active vehicle:", e);
@@ -112,9 +113,7 @@
   async function loadVehicles() {
     isLoading = true;
     try {
-      // Invalidate the page data to trigger a reload
       await invalidate("/driver/vehicles");
-      // Also invalidate all to ensure everything refreshes
       await invalidateAll();
     } catch (error) {
       console.error("Error reloading vehicles:", error);
@@ -129,7 +128,7 @@
       const res = await fetch("/driver/vehicles/set-active", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ vehicle_id }),
+        body: JSON.stringify({ vehicle_id })
       });
 
       const result = await res.json();
@@ -156,7 +155,7 @@
   let addForm = $state({
     type_of_vehicle_enum: "" as "" | Vehicle["type_of_vehicle_enum"],
     vehicle_color: "",
-    nondriver_seats: "" as number | "",
+    nondriver_seats: "" as number | ""
   });
   let addErrors = $state<{ type?: string; color?: string; seats?: string }>({});
 
@@ -164,7 +163,7 @@
     vehicle_id: 0,
     type_of_vehicle_enum: "" as "" | Vehicle["type_of_vehicle_enum"],
     vehicle_color: "",
-    nondriver_seats: "" as number | "",
+    nondriver_seats: "" as number | ""
   });
   let editErrors = $state<{ type?: string; color?: string; seats?: string }>(
     {}
@@ -176,7 +175,7 @@
     addForm = {
       type_of_vehicle_enum: "",
       vehicle_color: "",
-      nondriver_seats: "",
+      nondriver_seats: ""
     };
     addErrors = {};
     showAddModal = true;
@@ -187,7 +186,7 @@
       vehicle_id: v.vehicle_id,
       type_of_vehicle_enum: (v.type_of_vehicle_enum ?? "") as any,
       vehicle_color: v.vehicle_color ?? "",
-      nondriver_seats: v.nondriver_seats == null ? "" : v.nondriver_seats,
+      nondriver_seats: v.nondriver_seats == null ? "" : v.nondriver_seats
     };
     editErrors = {};
     showEditModal = true;
@@ -264,13 +263,13 @@
         type_of_vehicle_enum: addForm.type_of_vehicle_enum,
         vehicle_color: addForm.vehicle_color.trim(),
         nondriver_seats: seats,
-        org_id: userOrgId,
+        org_id: userOrgId
       };
 
       const res = await fetch("/driver/vehicles/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(payload)
       });
 
       const result = await res.json();
@@ -321,7 +320,7 @@
       const payload = {
         type_of_vehicle_enum: editForm.type_of_vehicle_enum,
         vehicle_color: editForm.vehicle_color.trim(),
-        nondriver_seats: seats,
+        nondriver_seats: seats
       };
 
       const res = await fetch(
@@ -329,7 +328,7 @@
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
+          body: JSON.stringify(payload)
         }
       );
 
@@ -351,13 +350,13 @@
   // ---- DELETE ----
   async function confirmDelete() {
     if (!toDelete) return;
-    isDeleting = true; // <-- fix: do NOT use $state() here
+    isDeleting = true;
     try {
       const res = await fetch(
         `/driver/vehicles/delete/${toDelete.vehicle_id}`,
         {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json" }
         }
       );
 
@@ -549,8 +548,10 @@
           <h2 class="text-xl font-semibold">Add Vehicle</h2>
           <button
             class="text-gray-400 hover:text-gray-600"
-            onclick={() => (showAddModal = false)}><X class="w-5 h-5" /></button
+            onclick={() => (showAddModal = false)}
           >
+            <X class="w-5 h-5" />
+          </button>
         </div>
         <form onsubmit={onAddSubmit} class="space-y-4">
           <div>
@@ -565,11 +566,13 @@
               bind:value={addForm.type_of_vehicle_enum}
             >
               <option value="">—</option>
-              {#each VEHICLE_TYPES as t}<option value={t}>{t}</option>{/each}
+              {#each vehicleTypes as t}
+                <option value={t}>{t}</option>
+              {/each}
             </select>
-            {#if addErrors.type}<p class="text-xs text-red-600 mt-1">
-                {addErrors.type}
-              </p>{/if}
+            {#if addErrors.type}
+              <p class="text-xs text-red-600 mt-1">{addErrors.type}</p>
+            {/if}
           </div>
 
           <div>
@@ -584,9 +587,9 @@
                   : "border-gray-300")}
               bind:value={addForm.vehicle_color}
             />
-            {#if addErrors.color}<p class="text-xs text-red-600 mt-1">
-                {addErrors.color}
-              </p>{/if}
+            {#if addErrors.color}
+              <p class="text-xs text-red-600 mt-1">{addErrors.color}</p>
+            {/if}
           </div>
 
           <div>
@@ -603,9 +606,9 @@
                   : "border-gray-300")}
               bind:value={addForm.nondriver_seats}
             />
-            {#if addErrors.seats}<p class="text-xs text-red-600 mt-1">
-                {addErrors.seats}
-              </p>{/if}
+            {#if addErrors.seats}
+              <p class="text-xs text-red-600 mt-1">{addErrors.seats}</p>
+            {/if}
           </div>
 
           <div class="flex justify-end gap-3 pt-2">
@@ -613,8 +616,9 @@
               type="button"
               onclick={() => (showAddModal = false)}
               class="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
-              >Cancel</button
             >
+              Cancel
+            </button>
             <button
               type="submit"
               disabled={isSaving}
@@ -638,9 +642,12 @@
           <h3 class="text-lg font-semibold text-gray-900">
             Edit Vehicle #{editForm.vehicle_id}
           </h3>
-          <button class="text-gray-400 hover:text-gray-600" onclick={closeEdit}
-            ><X class="w-5 h-5" /></button
+          <button
+            class="text-gray-400 hover:text-gray-600"
+            onclick={closeEdit}
           >
+            <X class="w-5 h-5" />
+          </button>
         </div>
         <form onsubmit={onEditSubmit} class="space-y-4">
           <div>
@@ -655,11 +662,13 @@
               bind:value={editForm.type_of_vehicle_enum}
             >
               <option value="">—</option>
-              {#each VEHICLE_TYPES as t}<option value={t}>{t}</option>{/each}
+              {#each vehicleTypes as t}
+                <option value={t}>{t}</option>
+              {/each}
             </select>
-            {#if editErrors.type}<p class="text-xs text-red-600 mt-1">
-                {editErrors.type}
-              </p>{/if}
+            {#if editErrors.type}
+              <p class="text-xs text-red-600 mt-1">{editErrors.type}</p>
+            {/if}
           </div>
 
           <div>
@@ -674,9 +683,9 @@
                   : "border-gray-300")}
               bind:value={editForm.vehicle_color}
             />
-            {#if editErrors.color}<p class="text-xs text-red-600 mt-1">
-                {editErrors.color}
-              </p>{/if}
+            {#if editErrors.color}
+              <p class="text-xs text-red-600 mt-1">{editErrors.color}</p>
+            {/if}
           </div>
 
           <div>
@@ -693,9 +702,9 @@
                   : "border-gray-300")}
               bind:value={editForm.nondriver_seats}
             />
-            {#if editErrors.seats}<p class="text-xs text-red-600 mt-1">
-                {editErrors.seats}
-              </p>{/if}
+            {#if editErrors.seats}
+              <p class="text-xs text-red-600 mt-1">{editErrors.seats}</p>
+            {/if}
           </div>
 
           <div class="flex justify-end gap-3 pt-2">
@@ -703,8 +712,9 @@
               type="button"
               onclick={closeEdit}
               class="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
-              >Cancel</button
             >
+              Cancel
+            </button>
             <button
               type="submit"
               disabled={isSaving}
@@ -718,7 +728,7 @@
     </div>
   {/if}
 
-  <!-- DELETE MODAL  here-->
+  <!-- DELETE MODAL -->
   {#if showDeleteModal}
     <div
       class="fixed inset-0 flex items-center justify-center bg-black/50 z-50"
@@ -728,8 +738,10 @@
           <h2 class="text-lg font-semibold">Confirm Delete</h2>
           <button
             class="text-gray-400 hover:text-gray-600"
-            onclick={closeDelete}><X class="w-5 h-5" /></button
+            onclick={closeDelete}
           >
+            <X class="w-5 h-5" />
+          </button>
         </div>
         <p class="mb-4">Are you sure you want to delete this vehicle?</p>
         <div class="flex justify-end gap-2">
@@ -737,14 +749,16 @@
             type="button"
             onclick={closeDelete}
             class="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
-            >Cancel</button
           >
+            Cancel
+          </button>
           <button
             type="button"
             onclick={confirmDelete}
             class="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-60"
-            >Delete</button
           >
+            Delete
+          </button>
         </div>
       </div>
     </div>

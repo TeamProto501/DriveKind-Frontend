@@ -28,19 +28,32 @@
     return days[dayNum] || "";
   }
 
-  function formatDate(dateStr: string | null): string {
-    if (!dateStr) return "—";
-    try {
-      const d = new Date(dateStr);
-      return d.toLocaleDateString("en-US", {
-        month: "short",
-        day: "numeric",
-        year: "numeric"
-      });
-    } catch {
-      return dateStr;
-    }
+function formatDate(dateStr: string | null): string {
+  if (!dateStr) return "—";
+
+  try {
+    // Handle both "YYYY-MM-DD" and "YYYY-MM-DDTHH:MM:SS" formats
+    const [datePart] = dateStr.split("T");
+    const [yearStr, monthStr, dayStr] = datePart.split("-");
+
+    const year = Number(yearStr);
+    const month = Number(monthStr); // 1–12
+    const day = Number(dayStr);
+
+    if (!year || !month || !day) return dateStr;
+
+    // Create a local date at *noon* to avoid any timezone edge issues
+    const d = new Date(year, month - 1, day, 12, 0, 0);
+
+    return d.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric"
+    });
+  } catch {
+    return dateStr;
   }
+}
 
   function formatTime(timeStr: string | null): string {
     if (!timeStr) return "—";
