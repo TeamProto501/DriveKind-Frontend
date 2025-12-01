@@ -73,7 +73,9 @@
           return;
         } else {
           console.log('Code exchanged but no session returned');
+          error = 'This reset link has expired or already been used. Please request a new one.';
           isProcessing = false;
+          return;
         }
       } catch (e) {
         console.error('Error in client-side code exchange:', e);
