@@ -2,7 +2,6 @@
 import { fail } from '@sveltejs/kit';
 import type { Actions } from './$types';
 import { createSupabaseServerClient } from '$lib/supabase.server';
-import { PUBLIC_APP_URL } from '$env/static/public';
 
 export const actions: Actions = {
   default: async (event) => {
@@ -27,10 +26,7 @@ export const actions: Actions = {
       });
     }
 
-    // Get the base URL for redirect
-    // Use PUBLIC_APP_URL if set, otherwise construct from request
-    const baseUrl = PUBLIC_APP_URL || `${event.url.protocol}//${event.url.host}`;
-    const redirectTo = `${baseUrl}/reset-password`;
+    const redirectTo = `${event.url.origin}/reset-password`;
     
     console.log('Sending password reset email to:', email);
     console.log('Redirect URL:', redirectTo);
@@ -42,17 +38,12 @@ export const actions: Actions = {
     if (error) {
       console.error('Password reset error:', error);
       
-      // Don't reveal if email exists or not for security
-      // But log the actual error for debugging
       if (error.message?.includes('rate limit')) {
         return fail(429, { 
           error: 'Too many requests. Please wait a few minutes before trying again.',
           email 
         });
       }
-      
-      // Generic success message even on error (security best practice)
-      // This prevents email enumeration attacks
     }
 
     // Always show success message (don't reveal if email exists)
