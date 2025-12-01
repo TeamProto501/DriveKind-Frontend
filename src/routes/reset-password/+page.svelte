@@ -15,6 +15,7 @@
   let hasValidToken = $state(data.hasValidToken || false);
   let error = $state(data.error || null);
   let isProcessing = $state(false);
+  let showSameBrowserWarning = $state(false);
   
   // If server already validated the token, we're good
   if (data.hasValidToken) {
@@ -34,16 +35,26 @@
     const type = urlParams.get('type');
     
     // If we have a code parameter and server-side exchange failed, try client-side
-    // Note: We check for code even without type='recovery' since we're on the reset-password page
     if (code && !data.hasValidToken) {
       isProcessing = true;
       console.log('Attempting client-side code exchange...', { code, type });
+      
       try {
         const { data: exchangeData, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
         
         if (exchangeError) {
           console.error('Client-side code exchange error:', exchangeError);
-          error = `Invalid or expired reset token: ${exchangeError.message}. Please request a new password reset link.`;
+          
+          // Check if it's a PKCE verifier error (different browser issue)
+          if (exchangeError.message?.includes('code verifier') || 
+              exchangeError.message?.includes('code_verifier') ||
+              exchangeError.message?.includes('non-empty')) {
+            showSameBrowserWarning = true;
+            isProcessing = false;
+            return;
+          }
+          
+          error = 'This reset link has expired or already been used. Please request a new one.';
           isProcessing = false;
           return;
         }
@@ -66,29 +77,34 @@
         }
       } catch (e) {
         console.error('Error in client-side code exchange:', e);
-        error = 'Invalid or expired reset token. Please request a new password reset link.';
+        // Check for PKCE error in caught exception
+        if (e instanceof Error && (e.message?.includes('verifier') || e.message?.includes('non-empty'))) {
+          showSameBrowserWarning = true;
+        } else {
+          error = 'Invalid or expired reset token. Please request a new password reset link.';
+        }
         isProcessing = false;
         return;
       }
     }
     
-    // Check if there are hash fragments in the URL
+    // Check if there are hash fragments in the URL (implicit flow)
     const hash = window.location.hash.substring(1);
     
     if (hash) {
       const hashParams = new URLSearchParams(hash);
       const accessToken = hashParams.get('access_token');
-      const type = hashParams.get('type');
+      const hashType = hashParams.get('type');
       const refreshToken = hashParams.get('refresh_token');
 
       console.log('Token params found:', { 
         hasAccessToken: !!accessToken, 
-        type, 
+        type: hashType, 
         hasRefreshToken: !!refreshToken 
       });
 
-      if (accessToken && type === 'recovery' && refreshToken) {
-        // Exchange the tokens for a session
+      if (accessToken && hashType === 'recovery' && refreshToken) {
+        // Exchange the tokens for a session (implicit flow)
         isProcessing = true;
         try {
           console.log('Attempting to set session with recovery tokens...');
@@ -99,7 +115,7 @@
 
           if (sessionError) {
             console.error('Session error:', sessionError);
-            error = `Invalid or expired reset token: ${sessionError.message}. Please request a new password reset link.`;
+            error = 'Invalid or expired reset token. Please request a new password reset link.';
             isProcessing = false;
             return;
           }
@@ -122,38 +138,33 @@
           error = 'Invalid or expired reset token. Please request a new password reset link.';
           isProcessing = false;
         }
-      } else {
-        console.error('Missing required token parameters:', { accessToken: !!accessToken, type, refreshToken: !!refreshToken });
+      } else if (accessToken || refreshToken) {
+        console.error('Incomplete token parameters');
         error = 'Invalid reset link format. Please request a new password reset link.';
+        isProcessing = false;
       }
-    } else {
-      // No hash fragments - check if we already have a valid session (might have been set by server-side code exchange)
-      console.log('No hash fragments, checking existing session...');
+    } else if (!code) {
+      // No hash fragments and no code - check existing session
+      console.log('No hash fragments or code, checking existing session...');
       const { data: { session } } = await supabase.auth.getSession();
       if (session) {
         console.log('Found existing session');
         hasValidToken = true;
         isProcessing = false;
-      } else if (!data.hasValidToken && !code) {
-        // Only show error if server didn't already validate and we don't have a code to process
-        console.error('No session found and no hash fragments');
+      } else if (!data.hasValidToken) {
+        console.error('No session found and no tokens in URL');
         error = data.error || 'Invalid or expired reset token. Please click the link from your email or request a new password reset link.';
-        isProcessing = false;
-      } else if (code) {
-        // We have a code, processing will happen above
-        isProcessing = true;
-      } else {
         isProcessing = false;
       }
     }
   });
 </script>
 
-<div class="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
+<div class="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50 to-emerald-100">
   <div class="max-w-md w-full space-y-8 p-8 bg-white rounded-2xl shadow-xl">
     <div>
       <div class="flex items-center justify-center mb-4">
-        <div class="w-12 h-12 bg-blue-600 rounded-lg flex items-center justify-center">
+        <div class="w-12 h-12 bg-green-600 rounded-lg flex items-center justify-center">
           <span class="text-white font-bold text-xl">DK</span>
         </div>
       </div>
@@ -165,7 +176,43 @@
       </p>
     </div>
 
-    {#if error}
+    {#if showSameBrowserWarning}
+      <!-- PKCE same-browser warning -->
+      <div class="rounded-md bg-amber-50 border border-amber-200 p-4">
+        <div class="flex">
+          <div class="flex-shrink-0">
+            <svg class="h-5 w-5 text-amber-400" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+            </svg>
+          </div>
+          <div class="ml-3">
+            <h3 class="text-sm font-medium text-amber-800">
+              Different Browser Detected
+            </h3>
+            <div class="mt-2 text-sm text-amber-700">
+              <p>
+                For security, you must open this link in the <strong>same browser</strong> where you requested the password reset.
+              </p>
+              <p class="mt-2">
+                Please try one of these options:
+              </p>
+              <ul class="list-disc list-inside mt-1 space-y-1">
+                <li>Copy this link and paste it in your original browser</li>
+                <li>Request a new password reset from this browser</li>
+              </ul>
+            </div>
+            <div class="mt-4">
+              <a
+                href="/forgot-password"
+                class="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-amber-700 bg-amber-100 hover:bg-amber-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500"
+              >
+                Request New Reset Link
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+    {:else if error}
       <div class="rounded-md bg-red-50 p-4">
         <div class="text-sm text-red-800">
           {error}
@@ -173,16 +220,20 @@
         <div class="mt-4">
           <a
             href="/forgot-password"
-            class="text-sm text-blue-600 hover:text-blue-500 hover:underline"
+            class="text-sm text-green-600 hover:text-green-700 hover:underline"
           >
             Request a new reset link
           </a>
         </div>
       </div>
-    {:else if isProcessing || (!hasValidToken && !error)}
-      <div class="rounded-md bg-yellow-50 p-4">
-        <div class="text-sm text-yellow-800">
-          Verifying reset token...
+    {:else if isProcessing || (!hasValidToken && !error && !showSameBrowserWarning)}
+      <div class="rounded-md bg-green-50 p-4">
+        <div class="flex items-center">
+          <svg class="animate-spin h-5 w-5 text-green-600 mr-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+          <span class="text-sm text-green-800">Verifying reset token...</span>
         </div>
       </div>
     {:else}
@@ -211,7 +262,7 @@
                 required
                 autocomplete="new-password"
                 minlength="6"
-                class="relative block w-full px-3 py-2 pr-10 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-lg focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                class="relative block w-full px-3 py-2 pr-10 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-lg focus:outline-none focus:ring-green-500 focus:border-green-500"
                 placeholder="Enter your new password"
               />
               <button
@@ -237,7 +288,7 @@
                 required
                 autocomplete="new-password"
                 minlength="6"
-                class="relative block w-full px-3 py-2 pr-10 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-lg focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                class="relative block w-full px-3 py-2 pr-10 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-lg focus:outline-none focus:ring-green-500 focus:border-green-500"
                 placeholder="Confirm your new password"
               />
               <button
@@ -263,7 +314,7 @@
           <button
             type="submit"
             disabled={loading}
-            class="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-lg text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 transition-colors"
+            class="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-lg text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 transition-colors"
           >
             {loading ? 'Updating Password...' : 'Update Password'}
           </button>
@@ -272,4 +323,3 @@
     {/if}
   </div>
 </div>
-

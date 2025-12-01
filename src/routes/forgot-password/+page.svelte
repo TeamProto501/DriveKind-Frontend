@@ -10,11 +10,11 @@
   let showSuccess = $state(false);
 </script>
 
-<div class="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
+<div class="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50 to-emerald-100">
   <div class="max-w-md w-full space-y-8 p-8 bg-white rounded-2xl shadow-xl">
     <div>
       <div class="flex items-center justify-center mb-4">
-        <div class="w-12 h-12 bg-blue-600 rounded-lg flex items-center justify-center">
+        <div class="w-12 h-12 bg-green-600 rounded-lg flex items-center justify-center">
           <span class="text-white font-bold text-xl">DK</span>
         </div>
       </div>
@@ -27,14 +27,19 @@
     </div>
 
     {#if showSuccess || form?.success}
-      <div class="rounded-md bg-green-50 p-4">
+      <div class="rounded-md bg-green-50 border border-green-200 p-4">
         <div class="text-sm text-green-800">
           {form?.message || 'If an account with that email exists, a password reset link has been sent to your email.'}
+        </div>
+        <div class="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-md">
+          <p class="text-xs text-amber-800 font-medium">
+            ⚠️ Important: Open the reset link in the same browser you're using now.
+          </p>
         </div>
         <div class="mt-4">
           <a
             href="/login"
-            class="text-sm text-blue-600 hover:text-blue-500 hover:underline"
+            class="text-sm text-green-600 hover:text-green-700 hover:underline"
           >
             ← Back to Login
           </a>
@@ -66,7 +71,7 @@
             type="email"
             required
             autocomplete="email"
-            class="mt-1 relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-lg focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+            class="mt-1 relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-lg focus:outline-none focus:ring-green-500 focus:border-green-500"
             placeholder="Enter your email"
           />
         </div>
@@ -83,14 +88,14 @@
           <button
             type="submit"
             disabled={loading}
-            class="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-lg text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 transition-colors"
+            class="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-lg text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 transition-colors"
           >
             {loading ? 'Sending...' : 'Send Reset Link'}
           </button>
 
           <a
             href="/login"
-            class="text-center text-sm text-blue-600 hover:text-blue-500 hover:underline"
+            class="text-center text-sm text-green-600 hover:text-green-700 hover:underline"
           >
             ← Back to Login
           </a>
@@ -99,4 +104,3 @@
     {/if}
   </div>
 </div>
-
