@@ -48,7 +48,7 @@
           // This happens because Supabase is using PKCE flow which requires browser-stored code_verifier
           // Email links can't work with PKCE because the code_verifier isn't stored
           if (exchangeError.message?.includes('code verifier') || exchangeError.message?.includes('PKCE') || exchangeError.message?.includes('non-empty')) {
-            error = 'This password reset link cannot be used because it requires a security code that isn\'t available when clicking from email. This is a known limitation. Please contact your administrator or try requesting a new password reset link - Supabase configuration may need to be updated to use hash fragments instead of PKCE.';
+            error = 'Password reset link error: This link uses a security method that doesn\'t work when clicking from email. Please request a new password reset link. If this problem continues, your administrator needs to configure Supabase to use hash fragments instead of PKCE for password reset emails.';
           } else {
             error = `Invalid or expired reset token: ${exchangeError.message}. Please request a new password reset link.`;
           }
