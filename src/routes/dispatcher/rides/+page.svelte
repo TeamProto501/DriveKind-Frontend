@@ -1760,6 +1760,15 @@ function goToEditStep(target: number) {
                   <h3 class="text-lg font-semibold text-gray-900">
                     {getClientName(ride)}
                   </h3>
+                    <p class="text-xs text-gray-500 mt-1">
+                      Created: {new Date(ride.created_at).toLocaleString([], { 
+                        year: "numeric",
+                        month: "short",
+                        day: "numeric",
+                        hour: "numeric",
+                        minute: "2-digit"
+                      })}
+                    </p>
                     <span
                       class="px-2 py-1 text-xs font-medium rounded-full {getStatusColor(
                         ride.status === 'Requested' && ride.hasPendingRequests
