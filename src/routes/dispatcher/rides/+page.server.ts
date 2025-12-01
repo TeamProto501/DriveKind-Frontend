@@ -32,7 +32,9 @@ export const load: PageServerLoad = async (event) => {
         clients: [],
         calls: [],
         destinations: [],
+        rideRequests: [],
         profile: null,
+        organization: null,
         error: "Profile not found. Please contact your administrator.",
       };
     }
@@ -183,6 +185,15 @@ export const load: PageServerLoad = async (event) => {
       console.error("Error loading destinations:", destinationsError);
     }
 
+    // Ride Requests (used for pending/denied indicators on dispatcher view)
+    const { data: rideRequests, error: rideRequestsError } = await supabase
+      .from("ride_requests")
+      .select("ride_id, driver_user_id, denied");
+
+    if (rideRequestsError) {
+      console.error("Error loading ride requests:", rideRequestsError);
+    }
+
     return {
       session,
       rides: rides || [],
@@ -190,6 +201,7 @@ export const load: PageServerLoad = async (event) => {
       clients: clients || [],
       calls: calls || [],
       destinations: destinations || [],
+      rideRequests: rideRequests || [],
       profile,
       organization,
       error: null,
@@ -204,7 +216,9 @@ export const load: PageServerLoad = async (event) => {
       clients: [],
       calls: [],
       destinations: [],
+      rideRequests: [],
       profile: null,
+      organization: null,
       error: "Failed to load rides data",
     };
   }

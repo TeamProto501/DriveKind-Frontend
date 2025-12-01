@@ -49,6 +49,43 @@ import {
   let selectedRideForMatch: any = null;
   let editRideIdFromUrl = $state<number | null>(null);
 
+    // ---- Ride request / pending helpers ----
+
+  const rideRequestsByRide = $derived(() => {
+    const all = ((data as any)?.rideRequests ?? []) as any[];
+    const byRide: Record<number, { driver_user_id: string; denied: boolean }[]> = {};
+    for (const r of all) {
+      const rideId = Number(r.ride_id);
+      if (!rideId) continue;
+      if (!byRide[rideId]) byRide[rideId] = [];
+      byRide[rideId].push(r);
+    }
+    return byRide;
+  });
+
+  const driverNameByUserId = $derived(() => {
+    const map: Record<string, string> = {};
+    for (const d of (data.drivers || []) as any[]) {
+      map[String(d.user_id)] = `${d.first_name} ${d.last_name}`;
+    }
+    return map;
+  });
+
+  function hasPendingRequests(rideId: number): boolean {
+    const rows = rideRequestsByRide()[rideId] ?? [];
+    return rows.some((r) => !r.denied);
+  }
+
+  function getPendingDriverNames(rideId: number): string[] {
+    const rows = rideRequestsByRide()[rideId] ?? [];
+    return rows
+      .filter((r) => !r.denied)
+      .map(
+        (r) =>
+          driverNameByUserId()[String(r.driver_user_id)] || "Unknown driver"
+      );
+  }
+
   const dispatcherName = $derived(() =>
     data?.profile ? `${data.profile.first_name} ${data.profile.last_name}` : ""
   );
@@ -1721,13 +1758,17 @@ function goToEditStep(target: number) {
                   <h3 class="text-lg font-semibold text-gray-900">
                     {getClientName(ride)}
                   </h3>
-                  <span
-                    class="px-2 py-1 text-xs font-medium rounded-full {getStatusColor(
-                      ride.status
-                    )}"
-                  >
-                    {ride.status.toUpperCase()}
-                  </span>
+                    <span
+                      class="px-2 py-1 text-xs font-medium rounded-full {getStatusColor(
+                        ride.status === 'Requested' && hasPendingRequests(ride.ride_id)
+                          ? 'Pending'
+                          : ride.status
+                      )}"
+                    >
+                      {(ride.status === 'Requested' && hasPendingRequests(ride.ride_id)
+                        ? 'Pending'
+                        : ride.status).toUpperCase()}
+                    </span>
                   <span
                     class="px-2 py-1 text-xs font-medium rounded-full {getTripTypeColor(
                       ride.completion_status || 'Completed Round Trip'
@@ -1788,8 +1829,19 @@ function goToEditStep(target: number) {
                   <div class="flex items-center gap-2">
                     <User class="w-4 h-4 text-gray-400" />
                     <div>
-                      <span class="font-medium">Driver:</span>
-                      <span class="ml-1">{getDriverName(ride)}</span>
+                      {#if activeTab === "requested"}
+                        <span class="font-medium">Pending Drivers:</span>
+                        <span class="ml-1">
+                          {#if getPendingDriverNames(ride.ride_id).length}
+                            {getPendingDriverNames(ride.ride_id).join(", ")}
+                          {:else}
+                            None
+                          {/if}
+                        </span>
+                      {:else}
+                        <span class="font-medium">Driver:</span>
+                        <span class="ml-1">{getDriverName(ride)}</span>
+                      {/if}
                     </div>
                   </div>
                   <div class="flex items-start gap-2">
