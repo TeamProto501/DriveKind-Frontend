@@ -508,13 +508,17 @@
 
           <div class="grid grid-cols-1 gap-2">
             <div>
-              <div class="text-xs text-gray-500">Destination Limitation</div>
+              <div class="text-xs text-gray-500">
+                Destination Limitation (destinations they cannot drive to)
+              </div>
               <div class="font-medium">
                 {user.destination_limitation || "—"}
               </div>
             </div>
             <div>
-              <div class="text-xs text-gray-500">Town Preference</div>
+              <div class="text-xs text-gray-500">
+                Town Preference (pickup towns they prefer)
+              </div>
               <div class="font-medium">{user.town_preference || "—"}</div>
             </div>
             <div>
@@ -938,20 +942,36 @@
           </div>
 
           <div>
-            <label class="block text-base font-medium"
-              >Destination Limitation</label
-            ><textarea
+            <label class="block text-base font-medium">
+              Destination Limitation
+            </label>
+            <textarea
               rows="2"
               class="mt-1 w-full border rounded px-3 py-2 text-base"
               bind:value={form.destination_limitation}
+              placeholder="Example: Geneva, Newark"
             />
+            <p class="text-xs text-gray-500 mt-1">
+              Comma-separated list of destination towns this driver
+              <strong>cannot</strong> drive to. If a ride’s dropoff town is in
+              this list, the driver will be excluded from matching for that ride.
+            </p>
           </div>
+
           <div>
-            <label class="block text-base font-medium">Town Preference</label
-            ><input
+            <label class="block text-base font-medium">
+              Town Preference
+            </label>
+            <input
               class="mt-1 w-full border rounded px-3 py-2 text-base"
               bind:value={form.town_preference}
+              placeholder="Example: Clifton Springs, Phelps"
             />
+            <p class="text-xs text-gray-500 mt-1">
+              Comma-separated list of pickup towns this driver
+              <strong>prefers</strong>. Matching still works for other towns, but
+              rides that start in these towns will give this driver higher priority.
+            </p>
           </div>
           <div>
             <label class="block text-base font-medium">Allergens</label
