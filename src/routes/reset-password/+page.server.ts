@@ -5,6 +5,18 @@ import { createSupabaseServerClient } from '$lib/supabase.server';
 export const load: PageServerLoad = async (event) => {
   const supabase = createSupabaseServerClient(event);
   
+  // Check if there's already a valid session first (might have been set by auth callback)
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
+  if (session) {
+    console.log('Valid session found, user can reset password');
+    return {
+      hasValidToken: true,
+    };
+  }
+
   // Check if there's a code parameter (from Supabase redirect)
   const code = event.url.searchParams.get('code');
   const type = event.url.searchParams.get('type');
@@ -12,57 +24,17 @@ export const load: PageServerLoad = async (event) => {
   
   console.log('Reset password page load - code:', !!code, 'type:', type, 'error:', urlError);
   
-  // If there's a code, try to exchange it for a session
-  // We try server-side first, but if it fails, client-side will handle it
-  if (code) {
-    console.log('Attempting server-side code exchange...');
-    try {
-      const { data, error } = await supabase.auth.exchangeCodeForSession(code);
-      
-      if (error) {
-        console.error('Server-side code exchange error:', error);
-        console.error('Error details:', JSON.stringify(error, null, 2));
-        // Don't return error immediately - let client-side handle it
-        // The code might be for PKCE flow which needs client-side handling
-        return {
-          hasValidToken: false,
-          error: null, // Let client-side code try to handle it
-        };
-      }
-      
-      if (data?.session) {
-        console.log('Server-side code exchange successful, session created');
-        return {
-          hasValidToken: true,
-        };
-      } else {
-        console.log('Server-side code exchanged but no session returned');
-        // Let client-side try
-        return {
-          hasValidToken: false,
-          error: null,
-        };
-      }
-    } catch (e) {
-      console.error('Exception during server-side code exchange:', e);
-      // Let client-side try
-      return {
-        hasValidToken: false,
-        error: null,
-      };
-    }
-  }
-  
-  // Check if there's already a valid session
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-
-  if (session) {
+  // For PKCE flow (recovery codes), we need client-side exchange
+  // Server-side exchange won't work because code_verifier is stored in browser
+  // So we skip server-side exchange and let client handle it
+  if (code && type === 'recovery') {
+    console.log('PKCE recovery code detected, will be handled client-side');
     return {
-      hasValidToken: true,
+      hasValidToken: false,
+      error: null, // Client will handle the PKCE exchange
     };
   }
+  
 
   // If there's an error parameter, show it
   if (urlError) {

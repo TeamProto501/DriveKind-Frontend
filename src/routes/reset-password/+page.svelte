@@ -34,7 +34,7 @@
     const type = urlParams.get('type');
     
     // If we have a code parameter and server-side exchange failed, try client-side
-    // Note: We check for code even without type='recovery' since we're on the reset-password page
+    // Note: PKCE codes require client-side exchange as code_verifier is stored in browser
     if (code && !data.hasValidToken) {
       isProcessing = true;
       console.log('Attempting client-side code exchange...', { code, type });
@@ -43,7 +43,13 @@
         
         if (exchangeError) {
           console.error('Client-side code exchange error:', exchangeError);
-          error = `Invalid or expired reset token: ${exchangeError.message}. Please request a new password reset link.`;
+          
+          // Check if it's a PKCE error - this means the code verifier is missing
+          if (exchangeError.message?.includes('code verifier') || exchangeError.message?.includes('PKCE')) {
+            error = 'This reset link cannot be used directly. Please click the link from your email again, or request a new password reset link.';
+          } else {
+            error = `Invalid or expired reset token: ${exchangeError.message}. Please request a new password reset link.`;
+          }
           isProcessing = false;
           return;
         }
