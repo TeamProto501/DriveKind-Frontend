@@ -12,184 +12,136 @@
   let loading = $state(false);
   let showPassword = $state(false);
   let showConfirmPassword = $state(false);
-  let hasValidToken = $state(data.hasValidToken || false);
-  let error = $state(data.error || null);
-  let isProcessing = $state(false);
-  let showSameBrowserWarning = $state(false);
   
-  // If server already validated the token, we're good
-  if (data.hasValidToken) {
-    hasValidToken = true;
-  }
-  
-  // If server detected PKCE error, show same-browser warning immediately
-  if (data.isPKCEError) {
-    showSameBrowserWarning = true;
-  }
+  // Main states - only one should be true at a time
+  let status = $state<'loading' | 'ready' | 'error' | 'pkce-error'>('loading');
+  let errorMessage = $state<string | null>(null);
 
-  // Handle hash fragments and code query params on client side
   onMount(async () => {
-    console.log('Reset password page loaded');
-    console.log('Current URL:', window.location.href);
-    console.log('Hash:', window.location.hash);
-    console.log('Search params:', window.location.search);
+    console.log('=== Reset Password Page Mount ===');
+    console.log('URL:', window.location.href);
+    console.log('Server data:', JSON.stringify(data));
     
-    // If server already detected PKCE error, don't try again
-    if (data.isPKCEError || showSameBrowserWarning) {
-      console.log('PKCE error already detected, showing same-browser warning');
-      showSameBrowserWarning = true;
+    // Check if server already validated token
+    if (data?.hasValidToken) {
+      console.log('Server validated token - ready for password reset');
+      status = 'ready';
       return;
     }
     
-    // If we already have a valid token, nothing to do
-    if (data.hasValidToken || hasValidToken) {
-      console.log('Already have valid token');
+    // Check if server detected PKCE error
+    if (data?.isPKCEError) {
+      console.log('Server detected PKCE error');
+      status = 'pkce-error';
       return;
     }
     
-    // Check for code in query parameters (PKCE flow)
+    // Check if server returned an error
+    if (data?.error) {
+      console.log('Server returned error:', data.error);
+      status = 'error';
+      errorMessage = data.error;
+      return;
+    }
+    
+    // Check for existing session first
+    const { data: sessionData } = await supabase.auth.getSession();
+    if (sessionData?.session) {
+      console.log('Found existing session');
+      status = 'ready';
+      return;
+    }
+    
+    // Check for code in URL (PKCE flow)
     const urlParams = new URLSearchParams(window.location.search);
     const code = urlParams.get('code');
-    const type = urlParams.get('type');
     
-    // If we have a code parameter, try client-side exchange
     if (code) {
-      isProcessing = true;
-      console.log('Attempting client-side code exchange...', { code, type });
+      console.log('Found code in URL, attempting exchange...');
       
       try {
         const { data: exchangeData, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
         
+        console.log('Exchange result:', { 
+          hasSession: !!exchangeData?.session, 
+          error: exchangeError?.message 
+        });
+        
         if (exchangeError) {
-          console.error('Client-side code exchange error:', exchangeError);
-          console.error('Error message:', exchangeError.message);
-          console.error('Error status:', exchangeError.status);
+          console.error('Exchange error:', exchangeError.message, exchangeError.status);
           
-          // Check if it's a PKCE verifier error (different browser issue)
-          // This happens when the code_verifier stored in localStorage doesn't exist
-          // because the user opened the link in a different browser/context
-          const errorMsg = exchangeError.message?.toLowerCase() || '';
-          if (errorMsg.includes('code verifier') || 
-              errorMsg.includes('code_verifier') ||
-              errorMsg.includes('verifier') ||
-              errorMsg.includes('non-empty') ||
-              errorMsg.includes('pkce') ||
-              exchangeError.status === 400) {
-            // Most 400 errors on PKCE exchange are due to missing verifier
-            console.log('Detected PKCE/verifier error, showing same-browser warning');
-            showSameBrowserWarning = true;
-            isProcessing = false;
+          // Any 400 error or verifier-related error = PKCE problem
+          if (exchangeError.status === 400 || 
+              exchangeError.message?.toLowerCase().includes('verifier') ||
+              exchangeError.message?.toLowerCase().includes('non-empty')) {
+            status = 'pkce-error';
             return;
           }
           
-          error = 'This reset link has expired or already been used. Please request a new one.';
-          isProcessing = false;
+          status = 'error';
+          errorMessage = 'This reset link has expired or already been used.';
           return;
         }
         
         if (exchangeData?.session) {
-          console.log('Client-side code exchange successful, session created');
-          hasValidToken = true;
-          error = null;
-          isProcessing = false;
-          // Remove code from URL
-          urlParams.delete('code');
-          urlParams.delete('type');
-          const newSearch = urlParams.toString();
-          window.history.replaceState(null, '', window.location.pathname + (newSearch ? `?${newSearch}` : ''));
+          console.log('Exchange successful!');
+          // Clean up URL
+          window.history.replaceState(null, '', window.location.pathname);
           await invalidateAll();
-          return;
-        } else {
-          console.log('Code exchanged but no session returned');
-          error = 'This reset link has expired or already been used. Please request a new one.';
-          isProcessing = false;
+          status = 'ready';
           return;
         }
+        
+        // No session returned
+        status = 'error';
+        errorMessage = 'Failed to verify reset link. Please request a new one.';
+        return;
+        
       } catch (e) {
-        console.error('Error in client-side code exchange:', e);
-        // Check for PKCE error in caught exception
-        const errorMsg = e instanceof Error ? e.message?.toLowerCase() : '';
-        if (errorMsg.includes('verifier') || errorMsg.includes('non-empty') || errorMsg.includes('pkce')) {
-          showSameBrowserWarning = true;
-        } else {
-          // Default to same-browser warning for code exchange failures
-          // since the most common cause is missing PKCE verifier
-          showSameBrowserWarning = true;
-        }
-        isProcessing = false;
+        console.error('Exchange exception:', e);
+        // Default to PKCE error for any exception during exchange
+        status = 'pkce-error';
         return;
       }
     }
     
-    // Check if there are hash fragments in the URL (implicit flow)
+    // Check for hash tokens (implicit flow)
     const hash = window.location.hash.substring(1);
-    
     if (hash) {
+      console.log('Found hash tokens...');
       const hashParams = new URLSearchParams(hash);
       const accessToken = hashParams.get('access_token');
-      const hashType = hashParams.get('type');
       const refreshToken = hashParams.get('refresh_token');
-
-      console.log('Token params found:', { 
-        hasAccessToken: !!accessToken, 
-        type: hashType, 
-        hasRefreshToken: !!refreshToken 
-      });
-
-      if (accessToken && hashType === 'recovery' && refreshToken) {
-        // Exchange the tokens for a session (implicit flow)
-        isProcessing = true;
+      const hashType = hashParams.get('type');
+      
+      if (accessToken && refreshToken && hashType === 'recovery') {
         try {
-          console.log('Attempting to set session with recovery tokens...');
           const { data: { session }, error: sessionError } = await supabase.auth.setSession({
             access_token: accessToken,
             refresh_token: refreshToken,
           });
-
-          if (sessionError) {
-            console.error('Session error:', sessionError);
-            error = 'Invalid or expired reset token. Please request a new password reset link.';
-            isProcessing = false;
+          
+          if (session) {
+            console.log('Session set from hash tokens');
+            window.history.replaceState(null, '', window.location.pathname);
+            await invalidateAll();
+            status = 'ready';
             return;
           }
-
-          if (session) {
-            console.log('Session created successfully, user:', session.user?.email);
-            hasValidToken = true;
-            error = null;
-            isProcessing = false;
-            // Remove hash from URL
-            window.history.replaceState(null, '', window.location.pathname + window.location.search);
-            await invalidateAll();
-          } else {
-            console.error('No session returned after setSession');
-            error = 'Invalid or expired reset token. Please request a new password reset link.';
-            isProcessing = false;
+          
+          if (sessionError) {
+            console.error('Session error:', sessionError);
           }
         } catch (e) {
-          console.error('Error setting session:', e);
-          error = 'Invalid or expired reset token. Please request a new password reset link.';
-          isProcessing = false;
+          console.error('Hash token error:', e);
         }
-      } else if (accessToken || refreshToken) {
-        console.error('Incomplete token parameters');
-        error = 'Invalid reset link format. Please request a new password reset link.';
-        isProcessing = false;
-      }
-    } else if (!code) {
-      // No hash fragments and no code - check existing session
-      console.log('No hash fragments or code, checking existing session...');
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        console.log('Found existing session');
-        hasValidToken = true;
-        isProcessing = false;
-      } else {
-        console.error('No session found and no tokens in URL');
-        error = data.error || 'Invalid or expired reset token. Please click the link from your email or request a new password reset link.';
-        isProcessing = false;
       }
     }
+    
+    // No valid tokens found
+    console.log('No valid tokens found');
+    status = 'error';
+    errorMessage = 'Invalid or expired reset link. Please request a new password reset.';
   });
 </script>
 
@@ -209,8 +161,18 @@
       </p>
     </div>
 
-    {#if showSameBrowserWarning}
-      <!-- PKCE same-browser warning -->
+    {#if status === 'loading'}
+      <div class="rounded-md bg-green-50 p-4">
+        <div class="flex items-center">
+          <svg class="animate-spin h-5 w-5 text-green-600 mr-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+          <span class="text-sm text-green-800">Verifying reset token...</span>
+        </div>
+      </div>
+      
+    {:else if status === 'pkce-error'}
       <div class="rounded-md bg-amber-50 border border-amber-200 p-4">
         <div class="flex">
           <div class="flex-shrink-0">
@@ -245,10 +207,11 @@
           </div>
         </div>
       </div>
-    {:else if error}
+      
+    {:else if status === 'error'}
       <div class="rounded-md bg-red-50 p-4">
         <div class="text-sm text-red-800">
-          {error}
+          {errorMessage || 'An error occurred. Please try again.'}
         </div>
         <div class="mt-4">
           <a
@@ -259,17 +222,8 @@
           </a>
         </div>
       </div>
-    {:else if isProcessing || (!hasValidToken && !error && !showSameBrowserWarning)}
-      <div class="rounded-md bg-green-50 p-4">
-        <div class="flex items-center">
-          <svg class="animate-spin h-5 w-5 text-green-600 mr-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-          </svg>
-          <span class="text-sm text-green-800">Verifying reset token...</span>
-        </div>
-      </div>
-    {:else}
+      
+    {:else if status === 'ready'}
       <form
         method="POST"
         action="?/updatePassword"
