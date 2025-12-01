@@ -31,14 +31,14 @@ export const actions: Actions = {
       return fail(400, { error: 'Please enter a valid email address' });
     }
 
-    // Redirect directly to reset-password page
-    // Supabase's verify endpoint will redirect here after verifying the token
-    const resetPasswordUrl = `${event.url.origin}/reset-password`;
-    console.log('Sending password reset email with redirect URL:', resetPasswordUrl);
+    // Redirect through auth callback which will handle token exchange and redirect to reset-password
+    // Using auth callback ensures proper handling of both PKCE and hash fragment flows
+    const callbackUrl = `${event.url.origin}/auth/callback`;
+    console.log('Sending password reset email with redirect URL:', callbackUrl);
     console.log('Event URL origin:', event.url.origin);
     
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: resetPasswordUrl,
+      redirectTo: callbackUrl,
     });
 
     if (error) {

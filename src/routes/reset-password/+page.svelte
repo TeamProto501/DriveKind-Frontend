@@ -80,6 +80,48 @@
       }
     }
     
+    // Check for token_hash in query params (alternative flow)
+    const tokenHash = urlParams.get('token_hash');
+    if (tokenHash && type === 'recovery' && !data.hasValidToken) {
+      isProcessing = true;
+      console.log('Attempting to verify OTP with token_hash...', { tokenHash, type });
+      try {
+        const { data: verifyData, error: verifyError } = await supabase.auth.verifyOtp({
+          token_hash: tokenHash,
+          type: 'recovery'
+        });
+
+        if (verifyError) {
+          console.error('OTP verification error:', verifyError);
+          error = `Invalid or expired reset token: ${verifyError.message}. Please request a new password reset link.`;
+          isProcessing = false;
+          return;
+        }
+
+        if (verifyData?.session) {
+          console.log('OTP verification successful, session created');
+          hasValidToken = true;
+          error = null;
+          isProcessing = false;
+          // Remove token_hash from URL
+          urlParams.delete('token_hash');
+          urlParams.delete('type');
+          const newSearch = urlParams.toString();
+          window.history.replaceState(null, '', window.location.pathname + (newSearch ? `?${newSearch}` : ''));
+          await invalidateAll();
+          return;
+        } else {
+          console.log('Token hash verified but no session returned');
+          isProcessing = false;
+        }
+      } catch (e) {
+        console.error('Error verifying OTP:', e);
+        error = 'Invalid or expired reset token. Please request a new password reset link.';
+        isProcessing = false;
+        return;
+      }
+    }
+    
     // Check if there are hash fragments in the URL
     const hash = window.location.hash.substring(1);
     
