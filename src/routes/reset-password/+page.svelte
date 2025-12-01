@@ -21,6 +21,11 @@
   if (data.hasValidToken) {
     hasValidToken = true;
   }
+  
+  // If server detected PKCE error, show same-browser warning immediately
+  if (data.isPKCEError) {
+    showSameBrowserWarning = true;
+  }
 
   // Handle hash fragments and code query params on client side
   onMount(async () => {
@@ -29,13 +34,26 @@
     console.log('Hash:', window.location.hash);
     console.log('Search params:', window.location.search);
     
+    // If server already detected PKCE error, don't try again
+    if (data.isPKCEError || showSameBrowserWarning) {
+      console.log('PKCE error already detected, showing same-browser warning');
+      showSameBrowserWarning = true;
+      return;
+    }
+    
+    // If we already have a valid token, nothing to do
+    if (data.hasValidToken || hasValidToken) {
+      console.log('Already have valid token');
+      return;
+    }
+    
     // Check for code in query parameters (PKCE flow)
     const urlParams = new URLSearchParams(window.location.search);
     const code = urlParams.get('code');
     const type = urlParams.get('type');
     
-    // If we have a code parameter and server-side exchange failed, try client-side
-    if (code && !data.hasValidToken) {
+    // If we have a code parameter, try client-side exchange
+    if (code) {
       isProcessing = true;
       console.log('Attempting client-side code exchange...', { code, type });
       
@@ -44,11 +62,21 @@
         
         if (exchangeError) {
           console.error('Client-side code exchange error:', exchangeError);
+          console.error('Error message:', exchangeError.message);
+          console.error('Error status:', exchangeError.status);
           
           // Check if it's a PKCE verifier error (different browser issue)
-          if (exchangeError.message?.includes('code verifier') || 
-              exchangeError.message?.includes('code_verifier') ||
-              exchangeError.message?.includes('non-empty')) {
+          // This happens when the code_verifier stored in localStorage doesn't exist
+          // because the user opened the link in a different browser/context
+          const errorMsg = exchangeError.message?.toLowerCase() || '';
+          if (errorMsg.includes('code verifier') || 
+              errorMsg.includes('code_verifier') ||
+              errorMsg.includes('verifier') ||
+              errorMsg.includes('non-empty') ||
+              errorMsg.includes('pkce') ||
+              exchangeError.status === 400) {
+            // Most 400 errors on PKCE exchange are due to missing verifier
+            console.log('Detected PKCE/verifier error, showing same-browser warning');
             showSameBrowserWarning = true;
             isProcessing = false;
             return;
@@ -80,10 +108,13 @@
       } catch (e) {
         console.error('Error in client-side code exchange:', e);
         // Check for PKCE error in caught exception
-        if (e instanceof Error && (e.message?.includes('verifier') || e.message?.includes('non-empty'))) {
+        const errorMsg = e instanceof Error ? e.message?.toLowerCase() : '';
+        if (errorMsg.includes('verifier') || errorMsg.includes('non-empty') || errorMsg.includes('pkce')) {
           showSameBrowserWarning = true;
         } else {
-          error = 'Invalid or expired reset token. Please request a new password reset link.';
+          // Default to same-browser warning for code exchange failures
+          // since the most common cause is missing PKCE verifier
+          showSameBrowserWarning = true;
         }
         isProcessing = false;
         return;
@@ -153,7 +184,7 @@
         console.log('Found existing session');
         hasValidToken = true;
         isProcessing = false;
-      } else if (!data.hasValidToken) {
+      } else {
         console.error('No session found and no tokens in URL');
         error = data.error || 'Invalid or expired reset token. Please click the link from your email or request a new password reset link.';
         isProcessing = false;
