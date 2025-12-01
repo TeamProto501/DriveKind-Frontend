@@ -1,3 +1,4 @@
+// src/routes/reset-password/+page.server.ts
 import { fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { createSupabaseServerClient } from '$lib/supabase.server';
@@ -5,30 +6,76 @@ import { createSupabaseServerClient } from '$lib/supabase.server';
 export const load: PageServerLoad = async (event) => {
   const supabase = createSupabaseServerClient(event);
   
-  // Check if there's already a valid session first (might have been set by auth callback)
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-
-  if (session) {
-    console.log('Valid session found, user can reset password');
-    return {
-      hasValidToken: true,
-    };
-  }
-
-  // Check if there's a code parameter (from Supabase redirect)
+  // Check URL parameters
   const code = event.url.searchParams.get('code');
   const type = event.url.searchParams.get('type');
   const urlError = event.url.searchParams.get('error');
+  const errorDescription = event.url.searchParams.get('error_description');
   
-  console.log('Reset password page load - code:', !!code, 'type:', type, 'error:', urlError);
+  console.log('Reset password page load:', { 
+    hasCode: !!code, 
+    type, 
+    error: urlError,
+    errorDescription 
+  });
   
-  // For PKCE flow (recovery codes), we need client-side exchange
-  // Server-side exchange won't work because code_verifier is stored in browser
-  // So we skip server-side exchange and let client handle it
-  if (code && type === 'recovery') {
-    console.log('PKCE recovery code detected, will be handled client-side');
+  // Handle error from Supabase redirect
+  if (urlError) {
+    console.error('URL error from Supabase:', urlError, errorDescription);
+    return {
+      hasValidToken: false,
+      error: errorDescription || 'Invalid or expired reset token. Please request a new password reset link.',
+    };
+  }
+  
+  // If there's a code, attempt server-side exchange
+  // Note: This will only work if using PKCE and cookies contain the verifier
+  // For implicit flow, tokens come in the URL hash which client-side handles
+  if (code) {
+    console.log('Attempting server-side code exchange...');
+    try {
+      const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+      
+      if (error) {
+        console.error('Server-side code exchange error:', error.message);
+        
+        // If it's a verifier error, let client handle it
+        // Client can show appropriate message about same-browser requirement
+        if (error.message?.includes('verifier') || error.message?.includes('code_verifier')) {
+          return {
+            hasValidToken: false,
+            error: null, // Let client detect and show same-browser warning
+            isPKCEError: true,
+          };
+        }
+        
+        // Other errors - token expired, already used, etc.
+        return {
+          hasValidToken: false,
+          error: 'This reset link has expired or already been used. Please request a new one.',
+        };
+      }
+      
+      if (data?.session) {
+        console.log('Server-side code exchange successful');
+        return {
+          hasValidToken: true,
+        };
+      }
+    } catch (e) {
+      console.error('Exception during code exchange:', e);
+      return {
+        hasValidToken: false,
+        error: null, // Let client-side try
+      };
+    }
+  }
+  
+  // Check for existing session (might be set from previous page load or client-side)
+  const { data: { session } } = await supabase.auth.getSession();
+
+  if (session) {
+    console.log('Found existing session for user:', session.user?.email);
     return {
       hasValidToken: false,
       error: null, // Client will handle the PKCE exchange
@@ -36,18 +83,14 @@ export const load: PageServerLoad = async (event) => {
   }
   
 
-  // If there's an error parameter, show it
-  if (urlError) {
-    return {
-      hasValidToken: false,
-      error: 'Invalid or expired reset token. Please request a new password reset link.',
-    };
-  }
-
-  // No valid session - user needs to request a new reset link
+  // No code, no session - could be:
+  // 1. Direct navigation to page (show error)
+  // 2. Implicit flow with tokens in hash (client handles)
+  // 3. User needs to request new link
+  console.log('No code or session found, letting client-side check URL hash');
   return {
     hasValidToken: false,
-    error: null, // Don't show error yet - let client-side code check for hash fragments
+    error: null, // Client will check for hash tokens or show appropriate error
   };
 };
 
@@ -59,6 +102,7 @@ export const actions: Actions = {
     const password = formData.get('password')?.toString() || '';
     const confirmPassword = formData.get('confirmPassword')?.toString() || '';
 
+    // Validation
     if (!password || !confirmPassword) {
       return fail(400, { error: 'Please fill in all fields' });
     }
@@ -71,18 +115,46 @@ export const actions: Actions = {
       return fail(400, { error: 'Passwords do not match' });
     }
 
+    // Check if we have a valid session
+    const { data: { session } } = await supabase.auth.getSession();
+    
+    if (!session) {
+      console.error('No session found when trying to update password');
+      return fail(401, { 
+        error: 'Your session has expired. Please request a new password reset link.' 
+      });
+    }
+
+    // Update the password
     const { error } = await supabase.auth.updateUser({
       password: password,
     });
 
     if (error) {
       console.error('Password update error:', error);
+      
+      // Handle specific errors
+      if (error.message?.includes('expired')) {
+        return fail(400, {
+          error: 'Your reset session has expired. Please request a new password reset link.',
+        });
+      }
+      
+      if (error.message?.includes('same password')) {
+        return fail(400, {
+          error: 'New password cannot be the same as your current password.',
+        });
+      }
+      
       return fail(400, {
-        error: error.message || 'Failed to update password. The reset link may have expired.',
+        error: error.message || 'Failed to update password. Please try again.',
       });
     }
 
+    // Sign out after password change for security
+    await supabase.auth.signOut();
+
+    // Redirect to login with success message
     throw redirect(302, '/login?passwordReset=success');
   },
 };
-
