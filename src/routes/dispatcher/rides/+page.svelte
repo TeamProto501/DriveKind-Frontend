@@ -53,7 +53,7 @@ import {
 
   const rideRequestsByRide = $derived(() => {
     const all = ((data as any)?.rideRequests ?? []) as any[];
-    const byRide: Record<number, { driver_user_id: string; denied: boolean }[]> = {};
+    const byRide: Record<number, { driver_id: string; denied: boolean }[]> = {};
     for (const r of all) {
       const rideId = Number(r.ride_id);
       if (!rideId) continue;
@@ -72,17 +72,17 @@ import {
   });
 
   function hasPendingRequests(rideId: number): boolean {
-    const rows = rideRequestsByRide()[rideId] ?? [];
+    const rows = rideRequestsByRide[rideId] ?? [];
     return rows.some((r) => !r.denied);
   }
 
   function getPendingDriverNames(rideId: number): string[] {
-    const rows = rideRequestsByRide()[rideId] ?? [];
+    const rows = rideRequestsByRide[rideId] ?? [];
     return rows
       .filter((r) => !r.denied)
       .map(
         (r) =>
-          driverNameByUserId()[String(r.driver_user_id)] || "Unknown driver"
+          driverNameByUserId[String(r.driver_id)] || "Unknown driver"
       );
   }
 
@@ -189,6 +189,8 @@ import {
 
   function getStatusColor(status: string) {
     switch (status) {
+      case "Pending":
+        return "bg-yellow-100 text-yellow-800";
       case "Requested":
         return "bg-gray-100 text-gray-800";
       case "Scheduled":
@@ -1760,12 +1762,12 @@ function goToEditStep(target: number) {
                   </h3>
                     <span
                       class="px-2 py-1 text-xs font-medium rounded-full {getStatusColor(
-                        ride.status === 'Requested' && hasPendingRequests(ride.ride_id)
+                        ride.status === 'Requested' && ride.hasPendingRequests
                           ? 'Pending'
                           : ride.status
                       )}"
                     >
-                      {(ride.status === 'Requested' && hasPendingRequests(ride.ride_id)
+                      {(ride.status === 'Requested' && ride.hasPendingRequests
                         ? 'Pending'
                         : ride.status).toUpperCase()}
                     </span>
@@ -1832,8 +1834,10 @@ function goToEditStep(target: number) {
                       {#if activeTab === "requested"}
                         <span class="font-medium">Pending Drivers:</span>
                         <span class="ml-1">
-                          {#if getPendingDriverNames(ride.ride_id).length}
-                            {getPendingDriverNames(ride.ride_id).join(", ")}
+                          {#if ride.pendingDrivers && ride.pendingDrivers.length}
+                            {ride.pendingDrivers
+                              .map((d) => `${d.first_name} ${d.last_name}`)
+                              .join(", ")}
                           {:else}
                             None
                           {/if}

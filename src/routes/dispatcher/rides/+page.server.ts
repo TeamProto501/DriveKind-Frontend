@@ -1,7 +1,7 @@
 import type { PageServerLoad } from "./$types";
 import { createSupabaseServerClient } from "$lib/supabase.server";
 import { redirect } from "@sveltejs/kit";
-import { canManageRides } from '$lib/utils/permissions';
+import { canManageRides } from "$lib/utils/permissions";
 
 export const load: PageServerLoad = async (event) => {
   const supabase = createSupabaseServerClient(event);
@@ -24,7 +24,6 @@ export const load: PageServerLoad = async (event) => {
       .single();
 
     if (profileError || !profile) {
-      console.error("Profile error:", profileError);
       return {
         session,
         rides: [],
@@ -32,25 +31,27 @@ export const load: PageServerLoad = async (event) => {
         clients: [],
         calls: [],
         destinations: [],
-        rideRequests: [],
         profile: null,
         organization: null,
+        rideRequests: [],
         error: "Profile not found. Please contact your administrator.",
       };
     }
 
     // Get user roles
-    const userRoles = Array.isArray(profile.role) 
-      ? profile.role 
-      : profile.role ? [profile.role] : [];
+    const userRoles = Array.isArray(profile.role)
+      ? profile.role
+      : profile.role
+      ? [profile.role]
+      : [];
 
-    // Check if user can manage rides
+    // Check permissions
     if (!canManageRides(userRoles)) {
-      throw redirect(302, '/');
+      throw redirect(302, "/");
     }
 
-    // Rides (notes included; nested clients include other_limitations)
-    const { data: rides, error: ridesError } = await supabase
+    // Rides
+    const { data: rawRides, error: ridesError } = await supabase
       .from("rides")
       .select(
         `
@@ -106,23 +107,81 @@ export const load: PageServerLoad = async (event) => {
       .eq("org_id", profile.org_id)
       .order("appointment_time", { ascending: true });
 
-    if (ridesError) {
-      console.error("Error loading rides:", ridesError);
-    }
+    const rides = rawRides || [];
 
-    // Drivers
-    const { data: drivers, error: driversError } = await supabase
+    // Drivers (needed for pending request name resolution)
+    const { data: drivers } = await supabase
       .from("staff_profiles")
       .select("user_id, first_name, last_name, role")
       .eq("org_id", profile.org_id)
       .contains("role", ["Driver"]);
 
-    if (driversError) {
-      console.error("Error loading drivers:", driversError);
+    // Ride Requests
+    type RideRequestRow = {
+      ride_id: number;
+      driver_id: string;
+      denied: boolean | null;
+    };
+
+    let rideRequests: RideRequestRow[] = [];
+
+    if (rides.length > 0) {
+      const rideIds = rides.map((r) => r.ride_id);
+
+      const { data: rrData } = await supabase
+        .from("ride_requests")
+        .select("ride_id, driver_id, denied")
+        .in("ride_id", rideIds);
+
+      rideRequests = (rrData as RideRequestRow[]) ?? [];
     }
 
+    // Build driver-name lookup
+    const driverNameMap = new Map<
+      string,
+      { first_name: string | null; last_name: string | null }
+    >();
+    (drivers || []).forEach((d) => {
+      driverNameMap.set(d.user_id, {
+        first_name: d.first_name,
+        last_name: d.last_name,
+      });
+    });
+
+    // Attach pending driver info to each ride
+    const ridesWithPending = rides.map((ride) => {
+      const pendingReqs = rideRequests.filter(
+        (rr) =>
+          Number(rr.ride_id) === Number(ride.ride_id) &&
+          (rr.denied === false || rr.denied === null)
+      );
+
+      const pendingDrivers = pendingReqs
+        .map((rr) => {
+          const name = driverNameMap.get(rr.driver_id);
+          if (!name) return null;
+          return {
+            driver_id: rr.driver_id,
+            first_name: name.first_name,
+            last_name: name.last_name,
+          };
+        })
+        .filter((x) => x !== null) as {
+        driver_id: string;
+        first_name: string | null;
+        last_name: string | null;
+      }[];
+
+      return {
+        ...ride,
+        hasPendingRequests: pendingDrivers.length > 0,
+        pendingDrivers,
+        pendingRequestsCount: pendingDrivers.length,
+      };
+    });
+
     // Clients
-    const { data: clients, error: clientsError } = await supabase
+    const { data: clients } = await supabase
       .from("clients")
       .select(
         `
@@ -144,15 +203,14 @@ export const load: PageServerLoad = async (event) => {
       .eq("org_id", profile.org_id)
       .order("first_name", { ascending: true });
 
-    if (clientsError) {
-      console.error("Error loading clients:", clientsError);
-    }
-
+    // Organization
     let organization = null;
     if (profile?.org_id) {
       const { data: orgData } = await supabase
         .from("organization")
-        .select('org_id, "days-off", min_days_in_advance_for_ride_requests, client_max_weekly_rides')
+        .select(
+          `org_id, "days-off", min_days_in_advance_for_ride_requests, client_max_weekly_rides`
+        )
         .eq("org_id", profile.org_id)
         .single();
 
@@ -160,7 +218,7 @@ export const load: PageServerLoad = async (event) => {
     }
 
     // Calls
-    const { data: calls, error: callsError } = await supabase
+    const { data: calls } = await supabase
       .from("calls")
       .select(
         "call_id, org_id, call_time, call_type, caller_first_name, caller_last_name"
@@ -168,12 +226,8 @@ export const load: PageServerLoad = async (event) => {
       .eq("org_id", profile.org_id)
       .order("call_time", { ascending: false });
 
-    if (callsError) {
-      console.error("Error loading calls:", callsError);
-    }
-
     // Destinations
-    const { data: destinations, error: destinationsError } = await supabase
+    const { data: destinations } = await supabase
       .from("destinations")
       .select(
         "destination_id, org_id, location_name, address, address2, city, state, zipcode"
@@ -181,33 +235,19 @@ export const load: PageServerLoad = async (event) => {
       .eq("org_id", profile.org_id)
       .order("location_name", { ascending: true });
 
-    if (destinationsError) {
-      console.error("Error loading destinations:", destinationsError);
-    }
-
-    // Ride Requests (used for pending/denied indicators on dispatcher view)
-    const { data: rideRequests, error: rideRequestsError } = await supabase
-      .from("ride_requests")
-      .select("ride_id, driver_user_id, denied");
-
-    if (rideRequestsError) {
-      console.error("Error loading ride requests:", rideRequestsError);
-    }
-
     return {
       session,
-      rides: rides || [],
+      rides: ridesWithPending,
       drivers: drivers || [],
       clients: clients || [],
       calls: calls || [],
       destinations: destinations || [],
-      rideRequests: rideRequests || [],
       profile,
       organization,
+      rideRequests,
       error: null,
     };
   } catch (error) {
-    console.error("Error in dispatcher rides page load:", error);
     if (error instanceof Response) throw error;
     return {
       session: null,
@@ -216,9 +256,9 @@ export const load: PageServerLoad = async (event) => {
       clients: [],
       calls: [],
       destinations: [],
-      rideRequests: [],
       profile: null,
       organization: null,
+      rideRequests: [],
       error: "Failed to load rides data",
     };
   }
