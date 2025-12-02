@@ -51,7 +51,7 @@ export const POST: RequestHandler = async (event) => {
     // Check for pending request
     const { data: requestRow, error: reqErr } = await supabase
       .from('ride_requests')
-      .select('ride_id, driver_id, denied, org_id')
+      .select('ride_id, driver_id, denied, org_id, sent_by')
       .eq('ride_id', rideId)
       .eq('driver_id', user.id)
       .maybeSingle();
@@ -99,10 +99,14 @@ export const POST: RequestHandler = async (event) => {
       assignedVehicleId = vehicle.vehicle_id;
     }
 
+    // Who assigned this driver? → dispatcher who sent the request
+    const assignedBy = requestRow.sent_by ?? null;
+
     // Update ride
     const updateData: any = {
       driver_user_id: user.id,
       status: 'Scheduled',
+      driver_assigned_by: assignedBy,   // ✅ set from sent_by
     };
 
     if (assignedVehicleId) {
