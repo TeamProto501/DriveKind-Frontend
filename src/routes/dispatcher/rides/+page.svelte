@@ -488,6 +488,13 @@ const formatTime = (ts: string) => {
     return "Unknown";
   };
 
+  const getDriverName = (ride: any) => {
+    if (ride.drivers) {
+      return `${ride.drivers.first_name} ${ride.drivers.last_name}`
+    }
+    return "No Driver Assigned";
+  };
+
 
   /* ---------------- Searchable Client Picker ---------------- */
   let clientQueryCreate = $state("");
