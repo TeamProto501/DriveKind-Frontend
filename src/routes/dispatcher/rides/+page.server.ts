@@ -63,6 +63,11 @@ export const load: PageServerLoad = async (event) => {
           first_name,
           last_name
         ),
+        driver_assigned_by,
+        assigner:driver_assigned_by (
+          first_name,
+          last_name
+        ),
         created_at,
         alt_pickup_address,
         dropoff_address,

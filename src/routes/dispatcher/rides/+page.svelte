@@ -488,6 +488,16 @@ const formatTime = (ts: string) => {
     return "Unknown";
   };
 
+  const getDriverAssignedByName = (ride: any) => {
+    if (ride.assigner) {
+      const first = ride.assigner.first_name ?? "";
+      const last = ride.assigner.last_name ?? "";
+      const name = `${first} ${last}`.trim();
+      return name || "None";
+    }
+    return "None";
+  };
+
   const getDriverName = (ride: any) => {
     if (ride.drivers) {
       return `${ride.drivers.first_name} ${ride.drivers.last_name}`
@@ -1952,10 +1962,16 @@ function goToEditStep(target: number) {
                       —
                     {/if}
                   </p>
-                <p>
-                  Created by: {getDispatcherName(ride)}
-                </p>
-              </div>
+                  <p>
+                    Created by: {getDispatcherName(ride)}
+                  </p>
+
+                  {#if activeTab === "active" || activeTab === "completed"}
+                    <p>
+                      Driver Assigned By: {getDriverAssignedByName(ride)}
+                    </p>
+                  {/if}
+                </div>
 
                 <!-- 2 columns × 3 rows -->
                 <div
