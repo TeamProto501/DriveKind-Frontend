@@ -120,12 +120,13 @@ export const POST: RequestHandler = async (event) => {
       .eq('org_id', profile.org_id)
       .single();
     
-    // Update ride: assign driver and set status to Scheduled
+    // Update ride: assign driver, set status to Scheduled, and track who assigned
     const { error: updateError } = await supabase
       .from('rides')
       .update({
         driver_user_id: driver_user_id,
-        status: 'Scheduled'
+        status: 'Scheduled',
+        driver_assigned_by: user.id
       })
       .eq('ride_id', rideId);
     
