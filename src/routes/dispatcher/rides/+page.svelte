@@ -2014,16 +2014,31 @@ function goToEditStep(target: number) {
                     <User class="w-4 h-4 text-gray-400" />
                     <div>
                       {#if activeTab === "requested"}
-                        <span class="font-medium">Pending Drivers:</span>
-                        <span class="ml-1">
-                          {#if ride.pendingDrivers && ride.pendingDrivers.length}
-                            {ride.pendingDrivers
-                              .map((d) => `${d.first_name} ${d.last_name}`)
-                              .join(", ")}
-                          {:else}
-                            None
-                          {/if}
-                        </span>
+                        <div>
+                          <span class="font-medium">Pending Drivers:</span>
+                          <span class="ml-1">
+                            {#if ride.pendingDrivers && ride.pendingDrivers.length}
+                              {ride.pendingDrivers
+                                .map((d) => `${d.first_name} ${d.last_name}`)
+                                .join(", ")}
+                            {:else}
+                              None
+                            {/if}
+                          </span>
+                        </div>
+
+                        <div class="mt-1">
+                          <span class="font-medium">Denied Drivers:</span>
+                          <span class="ml-1">
+                            {#if ride.deniedDrivers && ride.deniedDrivers.length}
+                              {ride.deniedDrivers
+                                .map((d) => `${d.first_name} ${d.last_name}`)
+                                .join(", ")}
+                            {:else}
+                              None
+                            {/if}
+                          </span>
+                        </div>
                       {:else}
                         <span class="font-medium">Driver:</span>
                         <span class="ml-1">{getDriverName(ride)}</span>

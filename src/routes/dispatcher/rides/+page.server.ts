@@ -119,7 +119,7 @@ export const load: PageServerLoad = async (event) => {
 
     const rides = rawRides || [];
 
-    // Drivers (needed for pending request name resolution)
+    // Drivers (needed for pending/denied request name resolution)
     const { data: drivers } = await supabase
       .from("staff_profiles")
       .select("user_id, first_name, last_name, role")
@@ -158,15 +158,37 @@ export const load: PageServerLoad = async (event) => {
       });
     });
 
-    // Attach pending driver info to each ride
+    // Attach pending + denied driver info to each ride
     const ridesWithPending = rides.map((ride) => {
+      const rideIdNum = Number(ride.ride_id);
+
       const pendingReqs = rideRequests.filter(
         (rr) =>
-          Number(rr.ride_id) === Number(ride.ride_id) &&
+          Number(rr.ride_id) === rideIdNum &&
           (rr.denied === false || rr.denied === null)
       );
 
+      const deniedReqs = rideRequests.filter(
+        (rr) => Number(rr.ride_id) === rideIdNum && rr.denied === true
+      );
+
       const pendingDrivers = pendingReqs
+        .map((rr) => {
+          const name = driverNameMap.get(rr.driver_id);
+          if (!name) return null;
+          return {
+            driver_id: rr.driver_id,
+            first_name: name.first_name,
+            last_name: name.last_name,
+          };
+        })
+        .filter((x) => x !== null) as {
+        driver_id: string;
+        first_name: string | null;
+        last_name: string | null;
+      }[];
+
+      const deniedDrivers = deniedReqs
         .map((rr) => {
           const name = driverNameMap.get(rr.driver_id);
           if (!name) return null;
@@ -187,6 +209,8 @@ export const load: PageServerLoad = async (event) => {
         hasPendingRequests: pendingDrivers.length > 0,
         pendingDrivers,
         pendingRequestsCount: pendingDrivers.length,
+        deniedDrivers,
+        deniedRequestsCount: deniedDrivers.length,
       };
     });
 
